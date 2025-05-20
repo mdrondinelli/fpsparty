@@ -8,7 +8,6 @@
 #include <iostream>
 #include <limits>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_enums.hpp>
 #include <vulkan/vulkan_funcs.hpp>
 #include <vulkan/vulkan_handles.hpp>
@@ -271,10 +270,21 @@ int main() {
       std::span{vk_swapchain_images.data(), vk_swapchain_images.size()},
       vk_swapchain_image_format);
   std::cout << "Created Vulkan swapchain image views.\n";
+  const auto vk_image_acquire_semaphore = vk_device->createSemaphoreUnique({});
+  const auto vk_image_release_semaphore = vk_device->createSemaphoreUnique({});
+  const auto vk_work_done_fence = vk_device->createFenceUnique(
+      {.flags = vk::FenceCreateFlagBits::eSignaled});
+  std::cout << "Created per-frame Vulkan synchronization primitives.\n";
+  const auto vk_command_pool = vk_device->createCommandPoolUnique(
+      {.flags = vk::CommandPoolCreateFlagBits::eTransient,
+       .queueFamilyIndex = vk_queue_family_index});
+  const auto vk_command_buffer =
+      std::move(vk_device->allocateCommandBuffersUnique(
+          {.commandPool = *vk_command_pool,
+           .level = vk::CommandBufferLevel::ePrimary,
+           .commandBufferCount = 1})[0]);
   const auto enet_guard = enet::Initialization_guard{{}};
-  const auto client = enet::make_client_host_unique({
-      .max_channel_count = 1,
-  });
+  const auto client = enet::make_client_host_unique({.max_channel_count = 1});
   client->connect({.host = *enet::parse_ip(server_ip), .port = constants::port},
                   1, 0);
   std::cout << "Connecting to " << server_ip << " on port " << constants::port
@@ -289,15 +299,101 @@ int main() {
   auto connected = true;
   while (!signal_status && !window->should_close() && connected) {
     glfw::poll_events();
-    const auto event = client->service(0);
-    switch (event.type) {
-    case enet::Event_type::disconnect:
-      std::cout << "Got disconnect event.\n";
-      connected = false;
-      continue;
-    default:
-      break;
+    for (;;) {
+      const auto event = client->service(0);
+      switch (event.type) {
+      default:
+        continue;
+      case enet::Event_type::disconnect:
+        std::cout << "Got disconnect event.\n";
+        connected = false;
+        continue;
+      case enet::Event_type::none:
+        goto after_enet_event_loop;
+      }
     }
+  after_enet_event_loop:
+    auto vk_swapchain_image_index = std::uint32_t{};
+    std::ignore = vk_device->acquireNextImageKHR(
+        *vk_swapchain, std::numeric_limits<std::uint64_t>::max(),
+        *vk_image_acquire_semaphore, {}, &vk_swapchain_image_index);
+    std::ignore =
+        vk_device->waitForFences(1, &*vk_work_done_fence, true,
+                                 std::numeric_limits<std::uint64_t>::max());
+    std::ignore = vk_device->resetFences(1, &*vk_work_done_fence);
+    vk_device->resetCommandPool(*vk_command_pool);
+    vk_command_buffer->begin(vk::CommandBufferBeginInfo{
+        .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+    const auto vk_swapchain_image_barrier_1 = vk::ImageMemoryBarrier2{
+        .srcStageMask = vk::PipelineStageFlagBits2::eTopOfPipe,
+        .srcAccessMask = {},
+        .dstStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        .dstAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
+        .oldLayout = vk::ImageLayout::eUndefined,
+        .newLayout = vk::ImageLayout::eColorAttachmentOptimal,
+        .srcQueueFamilyIndex = vk::QueueFamilyIgnored,
+        .dstQueueFamilyIndex = vk::QueueFamilyIgnored,
+        .image = vk_swapchain_images[vk_swapchain_image_index],
+        .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eColor,
+                             .baseMipLevel = 0,
+                             .levelCount = 1,
+                             .baseArrayLayer = 0,
+                             .layerCount = 1}};
+    vk_command_buffer->pipelineBarrier2(
+        {.imageMemoryBarrierCount = 1,
+         .pImageMemoryBarriers = &vk_swapchain_image_barrier_1});
+    const auto vk_color_attachment = vk::RenderingAttachmentInfo{
+        .imageView = *vk_swapchain_image_views[vk_swapchain_image_index],
+        .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+        .loadOp = vk::AttachmentLoadOp::eClear,
+        .storeOp = vk::AttachmentStoreOp::eStore,
+        .clearValue = {{1.0f, 0.0f, 1.0f, 1.0f}}};
+    const auto framebuffer_size = window->get_framebuffer_size();
+    vk_command_buffer->beginRendering(
+        {.renderArea = {.offset = {0, 0},
+                        .extent = {.width = static_cast<std::uint32_t>(
+                                       framebuffer_size[0]),
+                                   .height = static_cast<std::uint32_t>(
+                                       framebuffer_size[1])}},
+         .layerCount = 1,
+         .colorAttachmentCount = 1,
+         .pColorAttachments = &vk_color_attachment});
+    vk_command_buffer->endRendering();
+    const auto vk_swapchain_image_barrier_2 = vk::ImageMemoryBarrier2{
+        .srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        .srcAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
+        .dstStageMask = vk::PipelineStageFlagBits2::eBottomOfPipe,
+        .dstAccessMask = {},
+        .oldLayout = vk::ImageLayout::eColorAttachmentOptimal,
+        .newLayout = vk::ImageLayout::ePresentSrcKHR,
+        .srcQueueFamilyIndex = vk::QueueFamilyIgnored,
+        .dstQueueFamilyIndex = vk::QueueFamilyIgnored,
+        .image = vk_swapchain_images[vk_swapchain_image_index],
+        .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eColor,
+                             .baseMipLevel = 0,
+                             .levelCount = 1,
+                             .baseArrayLayer = 0,
+                             .layerCount = 1}};
+    vk_command_buffer->pipelineBarrier2(
+        {.imageMemoryBarrierCount = 1,
+         .pImageMemoryBarriers = &vk_swapchain_image_barrier_2});
+    vk_command_buffer->end();
+    const auto vk_image_acquire_wait_stage =
+        vk::PipelineStageFlags{vk::PipelineStageFlagBits::eTopOfPipe};
+    vk_queue.submit({{.waitSemaphoreCount = 1,
+                      .pWaitSemaphores = &*vk_image_acquire_semaphore,
+                      .pWaitDstStageMask = &vk_image_acquire_wait_stage,
+                      .commandBufferCount = 1,
+                      .pCommandBuffers = &*vk_command_buffer,
+                      .signalSemaphoreCount = 1,
+                      .pSignalSemaphores = &*vk_image_release_semaphore}},
+                    *vk_work_done_fence);
+    std::ignore =
+        vk_queue.presentKHR({.waitSemaphoreCount = 1,
+                             .pWaitSemaphores = &*vk_image_release_semaphore,
+                             .swapchainCount = 1,
+                             .pSwapchains = &*vk_swapchain,
+                             .pImageIndices = &vk_swapchain_image_index});
   }
   vk_device->waitIdle();
   std::cout << "Exiting.\n";
