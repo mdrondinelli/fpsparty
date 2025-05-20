@@ -1,9 +1,9 @@
 
-if (NOT EXISTS "/home/marlonrondinelli/repos/gridgame/glfw-3.4/install_manifest.txt")
-    message(FATAL_ERROR "Cannot find install manifest: \"/home/marlonrondinelli/repos/gridgame/glfw-3.4/install_manifest.txt\"")
+if (NOT EXISTS "/home/marlonrondinelli/repos/fpsparty/extern/glfw-3.4/install_manifest.txt")
+    message(FATAL_ERROR "Cannot find install manifest: \"/home/marlonrondinelli/repos/fpsparty/extern/glfw-3.4/install_manifest.txt\"")
 endif()
 
-file(READ "/home/marlonrondinelli/repos/gridgame/glfw-3.4/install_manifest.txt" files)
+file(READ "/home/marlonrondinelli/repos/fpsparty/extern/glfw-3.4/install_manifest.txt" files)
 string(REGEX REPLACE "\n" ";" files "${files}")
 
 foreach (file ${files})

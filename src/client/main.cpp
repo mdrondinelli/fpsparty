@@ -2,36 +2,52 @@
 #include "enet.hpp"
 #include "glfw.hpp"
 #include <algorithm>
+#include <bit>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <limits>
+#include <tuple>
+#include <volk.h>
 #include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_enums.hpp>
 #include <vulkan/vulkan_funcs.hpp>
 #include <vulkan/vulkan_handles.hpp>
 
 using namespace fpsparty;
 
+namespace vk {
+DispatchLoaderDynamic defaultDispatchLoaderDynamic;
+}
+
 namespace {
-const auto vk_device_extensions = std::array{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+const auto vk_device_extensions = std::array{vk::KHRSwapchainExtensionName};
 constexpr auto server_ip = "127.0.0.1";
 
 volatile std::sig_atomic_t signal_status{};
 void handle_signal(int signal) { signal_status = signal; }
 
 vk::UniqueInstance make_vk_instance() {
+  volkInitialize();
   const auto app_info = vk::ApplicationInfo{
       .pApplicationName = "FPS Party",
       .pEngineName = "FPS Party",
-      .apiVersion = VK_API_VERSION_1_3,
+      .apiVersion = vk::ApiVersion13,
   };
 #ifndef NDEBUG
   std::cout << "Enabling Vulkan validation layers.\n";
   const auto layers = std::array{"VK_LAYER_KHRONOS_validation"};
 #endif
+#ifndef NDEBUG
+  const auto glfw_extensions = glfw::get_required_instance_extensions();
+  std::cout << "Enabling Vulkan debug extension.\n";
+  auto extensions = std::vector<const char *>(std::from_range, glfw_extensions);
+  extensions.push_back(vk::EXTDebugUtilsExtensionName);
+#else
   const auto extensions = glfw::get_required_instance_extensions();
+#endif
   const auto create_info = vk::InstanceCreateInfo{
       .pApplicationInfo = &app_info,
 #ifndef NDEBUG
@@ -41,7 +57,14 @@ vk::UniqueInstance make_vk_instance() {
       .enabledExtensionCount = static_cast<std::uint32_t>(extensions.size()),
       .ppEnabledExtensionNames = extensions.data(),
   };
-  return vk::createInstanceUnique(create_info);
+  auto instance = VkInstance{};
+  vkCreateInstance(reinterpret_cast<const VkInstanceCreateInfo *>(&create_info),
+                   nullptr, &instance);
+  volkLoadInstance(instance);
+  vk::defaultDispatchLoaderDynamic.init(
+      instance, vk::DynamicLoader{}.getProcAddress<PFN_vkGetInstanceProcAddr>(
+                    "vkGetInstanceProcAddr"));
+  return vk::UniqueInstance{instance};
 }
 
 /**
@@ -52,7 +75,7 @@ find_vk_physical_device(vk::Instance instance, vk::SurfaceKHR surface) {
   const auto physical_devices = instance.enumeratePhysicalDevices();
   for (const auto physical_device : physical_devices) {
     const auto properties = physical_device.getProperties();
-    if (properties.apiVersion < VK_API_VERSION_1_3) {
+    if (properties.apiVersion < vk::ApiVersion13) {
       std::cout << "Skipping VkPhysicalDevice '" << properties.deviceName
                 << "' because it does not support Vulkan 1.3.\n";
       continue;
@@ -234,6 +257,80 @@ make_vk_swapchain_image_views(vk::Device device,
   }
   return retval;
 }
+
+void remake_vk_swapchain_and_image_views(
+    vk::PhysicalDevice physical_device, vk::Device device, glfw::Window window,
+    vk::SurfaceKHR surface, vk::UniqueSwapchainKHR &swapchain,
+    vk::Format &swapchain_image_format, vk::Extent2D &swapchain_image_extent,
+    std::vector<vk::Image> &swapchain_images,
+    std::vector<vk::UniqueImageView> &swapchain_image_views) {
+  device.waitIdle();
+  swapchain_image_views.clear();
+  swapchain_images.clear();
+  swapchain.reset();
+  std::tie(swapchain, swapchain_image_format, swapchain_image_extent) =
+      make_vk_swapchain(physical_device, device, window, surface);
+  swapchain_images = device.getSwapchainImagesKHR(*swapchain);
+  swapchain_image_views = make_vk_swapchain_image_views(
+      device, swapchain_images, swapchain_image_format);
+}
+
+void record_vk_command_buffer(vk::CommandBuffer command_buffer,
+                              vk::Image swapchain_image,
+                              vk::ImageView swapchain_image_view,
+                              const vk::Extent2D &swapchain_image_extent) {
+  command_buffer.begin(vk::CommandBufferBeginInfo{
+      .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+  const auto swapchain_image_barrier_1 = vk::ImageMemoryBarrier2{
+      .srcStageMask = vk::PipelineStageFlagBits2::eTopOfPipe,
+      .srcAccessMask = {},
+      .dstStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+      .dstAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
+      .oldLayout = vk::ImageLayout::eUndefined,
+      .newLayout = vk::ImageLayout::eColorAttachmentOptimal,
+      .srcQueueFamilyIndex = vk::QueueFamilyIgnored,
+      .dstQueueFamilyIndex = vk::QueueFamilyIgnored,
+      .image = swapchain_image,
+      .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eColor,
+                           .baseMipLevel = 0,
+                           .levelCount = 1,
+                           .baseArrayLayer = 0,
+                           .layerCount = 1}};
+  command_buffer.pipelineBarrier2(
+      {.imageMemoryBarrierCount = 1,
+       .pImageMemoryBarriers = &swapchain_image_barrier_1});
+  const auto color_attachment = vk::RenderingAttachmentInfo{
+      .imageView = swapchain_image_view,
+      .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+      .loadOp = vk::AttachmentLoadOp::eClear,
+      .storeOp = vk::AttachmentStoreOp::eStore,
+      .clearValue = {{1.0f, 0.0f, 1.0f, 1.0f}}};
+  command_buffer.beginRendering(
+      {.renderArea = {.offset = {0, 0}, .extent = swapchain_image_extent},
+       .layerCount = 1,
+       .colorAttachmentCount = 1,
+       .pColorAttachments = &color_attachment});
+  command_buffer.endRendering();
+  const auto swapchain_image_barrier_2 = vk::ImageMemoryBarrier2{
+      .srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+      .srcAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
+      .dstStageMask = vk::PipelineStageFlagBits2::eBottomOfPipe,
+      .dstAccessMask = {},
+      .oldLayout = vk::ImageLayout::eColorAttachmentOptimal,
+      .newLayout = vk::ImageLayout::ePresentSrcKHR,
+      .srcQueueFamilyIndex = vk::QueueFamilyIgnored,
+      .dstQueueFamilyIndex = vk::QueueFamilyIgnored,
+      .image = swapchain_image,
+      .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eColor,
+                           .baseMipLevel = 0,
+                           .levelCount = 1,
+                           .baseArrayLayer = 0,
+                           .layerCount = 1}};
+  command_buffer.pipelineBarrier2(
+      {.imageMemoryBarrierCount = 1,
+       .pImageMemoryBarriers = &swapchain_image_barrier_2});
+  command_buffer.end();
+}
 } // namespace
 
 int main() {
@@ -244,7 +341,7 @@ int main() {
       .width = 1920,
       .height = 1080,
       .title = "FPS Party",
-      .resizable = false,
+      .resizable = true,
       .client_api = glfw::Client_api::no_api,
   });
   std::cout << "Opened window.\n";
@@ -258,20 +355,28 @@ int main() {
   const auto [vk_device, vk_queue] =
       make_vk_device(vk_physical_device, vk_queue_family_index);
   std::cout << "Created VkDevice.\n";
-  const auto [vk_swapchain, vk_swapchain_image_format,
-              vk_swapchain_image_extent] =
+  auto [vk_swapchain, vk_swapchain_image_format, vk_swapchain_image_extent] =
       make_vk_swapchain(vk_physical_device, *vk_device, *window, *vk_surface);
   std::cout << "Created VkSwapchainKHR.\n";
-  const auto vk_swapchain_images =
-      vk_device->getSwapchainImagesKHR(*vk_swapchain);
+  auto vk_swapchain_images = vk_device->getSwapchainImagesKHR(*vk_swapchain);
   std::cout << "Got Vulkan swapchain images.\n";
-  const auto vk_swapchain_image_views = make_vk_swapchain_image_views(
+  auto vk_swapchain_image_views = make_vk_swapchain_image_views(
       *vk_device,
       std::span{vk_swapchain_images.data(), vk_swapchain_images.size()},
       vk_swapchain_image_format);
   std::cout << "Created Vulkan swapchain image views.\n";
   const auto vk_image_acquire_semaphore = vk_device->createSemaphoreUnique({});
+  vk_device->setDebugUtilsObjectNameEXT(
+      {.objectType = vk::ObjectType::eSemaphore,
+       .objectHandle =
+           std::bit_cast<std::uint64_t>(*vk_image_acquire_semaphore),
+       .pObjectName = "vk_image_acquire_semaphore"});
   const auto vk_image_release_semaphore = vk_device->createSemaphoreUnique({});
+  vk_device->setDebugUtilsObjectNameEXT(
+      {.objectType = vk::ObjectType::eSemaphore,
+       .objectHandle =
+           std::bit_cast<std::uint64_t>(*vk_image_release_semaphore),
+       .pObjectName = "vk_image_release_semaphore"});
   const auto vk_work_done_fence = vk_device->createFenceUnique(
       {.flags = vk::FenceCreateFlagBits::eSignaled});
   std::cout << "Created per-frame Vulkan synchronization primitives.\n";
@@ -313,87 +418,45 @@ int main() {
       }
     }
   after_enet_event_loop:
-    auto vk_swapchain_image_index = std::uint32_t{};
-    std::ignore = vk_device->acquireNextImageKHR(
-        *vk_swapchain, std::numeric_limits<std::uint64_t>::max(),
-        *vk_image_acquire_semaphore, {}, &vk_swapchain_image_index);
-    std::ignore =
-        vk_device->waitForFences(1, &*vk_work_done_fence, true,
-                                 std::numeric_limits<std::uint64_t>::max());
-    std::ignore = vk_device->resetFences(1, &*vk_work_done_fence);
-    vk_device->resetCommandPool(*vk_command_pool);
-    vk_command_buffer->begin(vk::CommandBufferBeginInfo{
-        .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-    const auto vk_swapchain_image_barrier_1 = vk::ImageMemoryBarrier2{
-        .srcStageMask = vk::PipelineStageFlagBits2::eTopOfPipe,
-        .srcAccessMask = {},
-        .dstStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-        .dstAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
-        .oldLayout = vk::ImageLayout::eUndefined,
-        .newLayout = vk::ImageLayout::eColorAttachmentOptimal,
-        .srcQueueFamilyIndex = vk::QueueFamilyIgnored,
-        .dstQueueFamilyIndex = vk::QueueFamilyIgnored,
-        .image = vk_swapchain_images[vk_swapchain_image_index],
-        .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eColor,
-                             .baseMipLevel = 0,
-                             .levelCount = 1,
-                             .baseArrayLayer = 0,
-                             .layerCount = 1}};
-    vk_command_buffer->pipelineBarrier2(
-        {.imageMemoryBarrierCount = 1,
-         .pImageMemoryBarriers = &vk_swapchain_image_barrier_1});
-    const auto vk_color_attachment = vk::RenderingAttachmentInfo{
-        .imageView = *vk_swapchain_image_views[vk_swapchain_image_index],
-        .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
-        .loadOp = vk::AttachmentLoadOp::eClear,
-        .storeOp = vk::AttachmentStoreOp::eStore,
-        .clearValue = {{1.0f, 0.0f, 1.0f, 1.0f}}};
-    const auto framebuffer_size = window->get_framebuffer_size();
-    vk_command_buffer->beginRendering(
-        {.renderArea = {.offset = {0, 0},
-                        .extent = {.width = static_cast<std::uint32_t>(
-                                       framebuffer_size[0]),
-                                   .height = static_cast<std::uint32_t>(
-                                       framebuffer_size[1])}},
-         .layerCount = 1,
-         .colorAttachmentCount = 1,
-         .pColorAttachments = &vk_color_attachment});
-    vk_command_buffer->endRendering();
-    const auto vk_swapchain_image_barrier_2 = vk::ImageMemoryBarrier2{
-        .srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-        .srcAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
-        .dstStageMask = vk::PipelineStageFlagBits2::eBottomOfPipe,
-        .dstAccessMask = {},
-        .oldLayout = vk::ImageLayout::eColorAttachmentOptimal,
-        .newLayout = vk::ImageLayout::ePresentSrcKHR,
-        .srcQueueFamilyIndex = vk::QueueFamilyIgnored,
-        .dstQueueFamilyIndex = vk::QueueFamilyIgnored,
-        .image = vk_swapchain_images[vk_swapchain_image_index],
-        .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eColor,
-                             .baseMipLevel = 0,
-                             .levelCount = 1,
-                             .baseArrayLayer = 0,
-                             .layerCount = 1}};
-    vk_command_buffer->pipelineBarrier2(
-        {.imageMemoryBarrierCount = 1,
-         .pImageMemoryBarriers = &vk_swapchain_image_barrier_2});
-    vk_command_buffer->end();
-    const auto vk_image_acquire_wait_stage =
-        vk::PipelineStageFlags{vk::PipelineStageFlagBits::eTopOfPipe};
-    vk_queue.submit({{.waitSemaphoreCount = 1,
-                      .pWaitSemaphores = &*vk_image_acquire_semaphore,
-                      .pWaitDstStageMask = &vk_image_acquire_wait_stage,
-                      .commandBufferCount = 1,
-                      .pCommandBuffers = &*vk_command_buffer,
-                      .signalSemaphoreCount = 1,
-                      .pSignalSemaphores = &*vk_image_release_semaphore}},
-                    *vk_work_done_fence);
-    std::ignore =
-        vk_queue.presentKHR({.waitSemaphoreCount = 1,
-                             .pWaitSemaphores = &*vk_image_release_semaphore,
-                             .swapchainCount = 1,
-                             .pSwapchains = &*vk_swapchain,
-                             .pImageIndices = &vk_swapchain_image_index});
+    try {
+      auto vk_swapchain_image_index = std::uint32_t{};
+      std::ignore = vk_device->acquireNextImageKHR(
+          *vk_swapchain, std::numeric_limits<std::uint64_t>::max(),
+          *vk_image_acquire_semaphore, {}, &vk_swapchain_image_index);
+      std::ignore =
+          vk_device->waitForFences(1, &*vk_work_done_fence, true,
+                                   std::numeric_limits<std::uint64_t>::max());
+      std::ignore = vk_device->resetFences(1, &*vk_work_done_fence);
+      vk_device->resetCommandPool(*vk_command_pool);
+      record_vk_command_buffer(
+          *vk_command_buffer, vk_swapchain_images[vk_swapchain_image_index],
+          *vk_swapchain_image_views[vk_swapchain_image_index],
+          vk_swapchain_image_extent);
+      const auto vk_image_acquire_wait_stage =
+          vk::PipelineStageFlags{vk::PipelineStageFlagBits::eTopOfPipe};
+      vk_queue.submit({{.waitSemaphoreCount = 1,
+                        .pWaitSemaphores = &*vk_image_acquire_semaphore,
+                        .pWaitDstStageMask = &vk_image_acquire_wait_stage,
+                        .commandBufferCount = 1,
+                        .pCommandBuffers = &*vk_command_buffer,
+                        .signalSemaphoreCount = 1,
+                        .pSignalSemaphores = &*vk_image_release_semaphore}},
+                      *vk_work_done_fence);
+      const auto vk_queue_present_result =
+          vk_queue.presentKHR({.waitSemaphoreCount = 1,
+                               .pWaitSemaphores = &*vk_image_release_semaphore,
+                               .swapchainCount = 1,
+                               .pSwapchains = &*vk_swapchain,
+                               .pImageIndices = &vk_swapchain_image_index});
+      if (vk_queue_present_result == vk::Result::eSuboptimalKHR) {
+        throw vk::OutOfDateKHRError{"Subobtimal queue present result"};
+      }
+    } catch (const vk::OutOfDateKHRError &e) {
+      remake_vk_swapchain_and_image_views(
+          vk_physical_device, *vk_device, *window, *vk_surface, vk_swapchain,
+          vk_swapchain_image_format, vk_swapchain_image_extent,
+          vk_swapchain_images, vk_swapchain_image_views);
+    }
   }
   vk_device->waitIdle();
   std::cout << "Exiting.\n";

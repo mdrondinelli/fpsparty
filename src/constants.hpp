@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <cstdint>
 
 namespace fpsparty::constants {

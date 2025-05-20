@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.22.0)
-project(gridgame VERSION 0.1.0 LANGUAGES C CXX)
+project(fpsparty VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # dependencies
 add_subdirectory(extern/glfw-3.4)
+add_subdirectory(extern/volk-1.4.304)
 
 # client
 add_executable(
@@ -14,6 +15,7 @@ target_compile_definitions(
   client
   PRIVATE
   GLFW_INCLUDE_VULKAN
+  VK_NO_PROTOTYPES
   VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
 )
 target_include_directories(
@@ -28,7 +30,7 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/src
 )
 target_link_directories(client PRIVATE ${CMAKE_SOURCE_DIR}/extern/enet/.libs)
-target_link_libraries(client enet glfw vulkan)
+target_link_libraries(client enet glfw volk)
 
 # server
 add_executable(
@@ -57,6 +59,8 @@ if (MSVC)
   target_compile_options(client PRIVATE /W4 /WX)
   target_compile_options(server PRIVATE /W4 /WX)
 else()
-  target_compile_options(client PRIVATE -Wall -Wextra -Wpedantic -Werror)
-  target_compile_options(server PRIVATE -Wall -Wextra -Wpedantic -Werror)
+  target_compile_options(client PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++)
+  target_compile_options(server PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++)
+  target_link_options(client PRIVATE -stdlib=libc++ -lc++abi)
+  target_link_options(server PRIVATE -stdlib=libc++ -lc++abi)
 endif()
