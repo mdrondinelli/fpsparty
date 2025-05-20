@@ -1,19 +1,22 @@
 #include "constants.hpp"
 #include "enet.hpp"
 #include "glfw.hpp"
+#include <algorithm>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan_enums.hpp>
 #include <vulkan/vulkan_funcs.hpp>
+#include <vulkan/vulkan_handles.hpp>
 
 using namespace fpsparty;
 
 namespace {
-const auto vulkan_device_extensions =
-    std::array{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+const auto vk_device_extensions = std::array{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 constexpr auto server_ip = "127.0.0.1";
 
 volatile std::sig_atomic_t signal_status{};
@@ -74,7 +77,7 @@ find_vk_physical_device(vk::Instance instance, vk::SurfaceKHR surface) {
     const auto has_extensions = [&]() {
       const auto available_extensions =
           physical_device.enumerateDeviceExtensionProperties();
-      for (const auto extension : vulkan_device_extensions) {
+      for (const auto extension : vk_device_extensions) {
         auto extension_found = false;
         for (const auto &available_extension : available_extensions) {
           if (std::strcmp(available_extension.extensionName, extension) == 0) {
@@ -141,11 +144,96 @@ make_vk_device(vk::PhysicalDevice physical_device,
       .queueCreateInfoCount = 1,
       .pQueueCreateInfos = &queue_create_info,
       .enabledExtensionCount =
-          static_cast<std::uint32_t>(vulkan_device_extensions.size()),
-      .ppEnabledExtensionNames = vulkan_device_extensions.data(),
+          static_cast<std::uint32_t>(vk_device_extensions.size()),
+      .ppEnabledExtensionNames = vk_device_extensions.data(),
   });
   const auto queue = device->getQueue(queue_family_index, 0);
   return std::tuple{std::move(device), queue};
+}
+
+std::tuple<vk::UniqueSwapchainKHR, vk::Format, vk::Extent2D>
+make_vk_swapchain(vk::PhysicalDevice physical_device, vk::Device device,
+                  glfw::Window window, vk::SurfaceKHR surface) {
+  const auto capabilities = physical_device.getSurfaceCapabilitiesKHR(surface);
+  const auto image_count =
+      capabilities.maxImageCount > 0
+          ? std::min(capabilities.maxImageCount, capabilities.minImageCount + 1)
+          : (capabilities.minImageCount + 1);
+  const auto surface_format = [&]() {
+    const auto surface_formats = physical_device.getSurfaceFormatsKHR(surface);
+    for (const auto &surface_format : surface_formats) {
+      if (surface_format.format == vk::Format::eB8G8R8A8Srgb &&
+          surface_format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
+        std::cout << "Using ideal Vulkan surface format.\n";
+        return surface_format;
+      }
+    }
+    std::cout << "Using suboptimal Vulkan surface format.\n";
+    return surface_formats[0];
+  }();
+  auto const extent = [&]() {
+    if (capabilities.currentExtent.width !=
+        std::numeric_limits<std::uint32_t>::max()) {
+      return capabilities.currentExtent;
+    } else {
+      const auto framebuffer_size = window.get_framebuffer_size();
+      return vk::Extent2D{
+          .width = std::clamp(static_cast<std::uint32_t>(framebuffer_size[0]),
+                              capabilities.minImageExtent.width,
+                              capabilities.maxImageExtent.width),
+          .height = std::clamp(static_cast<std::uint32_t>(framebuffer_size[1]),
+                               capabilities.minImageExtent.height,
+                               capabilities.maxImageExtent.height)};
+    }
+  }();
+  auto const present_mode = [&]() {
+    const auto present_modes =
+        physical_device.getSurfacePresentModesKHR(surface);
+    for (const auto present_mode : present_modes) {
+      if (present_mode == vk::PresentModeKHR::eMailbox) {
+        return present_mode;
+      }
+    }
+    return vk::PresentModeKHR::eFifo;
+  }();
+  return std::tuple{
+      device.createSwapchainKHRUnique({
+          .surface = surface,
+          .minImageCount = image_count,
+          .imageFormat = surface_format.format,
+          .imageColorSpace = surface_format.colorSpace,
+          .imageExtent = extent,
+          .imageArrayLayers = 1,
+          .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
+          .imageSharingMode = vk::SharingMode::eExclusive,
+          .preTransform = capabilities.currentTransform,
+          .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
+          .presentMode = present_mode,
+          .clipped = true,
+      }),
+      surface_format.format, extent};
+}
+
+std::vector<vk::UniqueImageView>
+make_vk_swapchain_image_views(vk::Device device,
+                              std::span<const vk::Image> swapchain_images,
+                              vk::Format swapchain_image_format) {
+  auto retval = std::vector<vk::UniqueImageView>{};
+  retval.reserve(swapchain_images.size());
+  for (const auto image : swapchain_images) {
+    retval.emplace_back(device.createImageViewUnique(
+        {.image = image,
+         .viewType = vk::ImageViewType::e2D,
+         .format = swapchain_image_format,
+         .subresourceRange = {
+             .aspectMask = vk::ImageAspectFlagBits::eColor,
+             .baseMipLevel = 0,
+             .levelCount = 1,
+             .baseArrayLayer = 0,
+             .layerCount = 1,
+         }}));
+  }
+  return retval;
 }
 } // namespace
 
@@ -153,33 +241,45 @@ int main() {
   std::signal(SIGINT, handle_signal);
   std::signal(SIGTERM, handle_signal);
   const auto glfw_guard = glfw::Initialization_guard{{}};
-  const auto window = glfw::Window{{
+  const auto window = glfw::create_window_unique({
       .width = 1920,
       .height = 1080,
       .title = "FPS Party",
       .resizable = false,
       .client_api = glfw::Client_api::no_api,
-  }};
+  });
   std::cout << "Opened window.\n";
   const auto vk_instance = make_vk_instance();
   std::cout << "Created VkInstance.\n";
   const auto vk_surface =
-      glfw::create_window_surface_unique(*vk_instance, window);
+      glfw::create_window_surface_unique(*vk_instance, *window);
   std::cout << "Created VkSurfaceKHR.\n";
   const auto [vk_physical_device, vk_queue_family_index] =
       find_vk_physical_device(*vk_instance, *vk_surface);
   const auto [vk_device, vk_queue] =
       make_vk_device(vk_physical_device, vk_queue_family_index);
   std::cout << "Created VkDevice.\n";
+  const auto [vk_swapchain, vk_swapchain_image_format,
+              vk_swapchain_image_extent] =
+      make_vk_swapchain(vk_physical_device, *vk_device, *window, *vk_surface);
+  std::cout << "Created VkSwapchainKHR.\n";
+  const auto vk_swapchain_images =
+      vk_device->getSwapchainImagesKHR(*vk_swapchain);
+  std::cout << "Got Vulkan swapchain images.\n";
+  const auto vk_swapchain_image_views = make_vk_swapchain_image_views(
+      *vk_device,
+      std::span{vk_swapchain_images.data(), vk_swapchain_images.size()},
+      vk_swapchain_image_format);
+  std::cout << "Created Vulkan swapchain image views.\n";
   const auto enet_guard = enet::Initialization_guard{{}};
-  const auto client = enet::make_client_host({
+  const auto client = enet::make_client_host_unique({
       .max_channel_count = 1,
   });
-  client.connect({.host = *enet::parse_ip(server_ip), .port = constants::port},
-                 1, 0);
+  client->connect({.host = *enet::parse_ip(server_ip), .port = constants::port},
+                  1, 0);
   std::cout << "Connecting to " << server_ip << " on port " << constants::port
             << ".\n";
-  const auto connect_event = client.service(5000);
+  const auto connect_event = client->service(5000);
   if (connect_event.type == enet::Event_type::connect) {
     std::cout << "Connection successful.\n";
   } else {
@@ -187,9 +287,9 @@ int main() {
     return 0;
   }
   auto connected = true;
-  while (!signal_status && !window.should_close() && connected) {
+  while (!signal_status && !window->should_close() && connected) {
     glfw::poll_events();
-    const auto event = client.service(0);
+    const auto event = client->service(0);
     switch (event.type) {
     case enet::Event_type::disconnect:
       std::cout << "Got disconnect event.\n";
@@ -199,6 +299,7 @@ int main() {
       break;
     }
   }
+  vk_device->waitIdle();
   std::cout << "Exiting.\n";
   return 0;
 }

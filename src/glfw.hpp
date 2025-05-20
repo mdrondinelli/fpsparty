@@ -200,93 +200,119 @@ public:
 
   constexpr Window() noexcept = default;
 
-  explicit Window(const Create_info &create_info) {
-    glfwWindowHint(GLFW_RESIZABLE, create_info.resizable);
-    glfwWindowHint(GLFW_VISIBLE, create_info.visible);
-    glfwWindowHint(GLFW_DECORATED, create_info.decorated);
-    glfwWindowHint(GLFW_FOCUSED, create_info.focused);
-    glfwWindowHint(GLFW_AUTO_ICONIFY, create_info.auto_iconify);
-    glfwWindowHint(GLFW_FLOATING, create_info.floating);
-    glfwWindowHint(GLFW_MAXIMIZED, create_info.maximized);
-    glfwWindowHint(GLFW_CENTER_CURSOR, create_info.center_cursor);
-    glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER,
-                   create_info.transparent_framebuffer);
-    glfwWindowHint(GLFW_FOCUS_ON_SHOW, create_info.focus_on_show);
-    glfwWindowHint(GLFW_SCALE_TO_MONITOR, create_info.scale_to_monitor);
-    glfwWindowHint(GLFW_SCALE_FRAMEBUFFER, create_info.scale_framebuffer);
-    glfwWindowHint(GLFW_MOUSE_PASSTHROUGH, create_info.mouse_passthrough);
-    glfwWindowHint(GLFW_POSITION_X, create_info.position_x);
-    glfwWindowHint(GLFW_POSITION_Y, create_info.position_y);
-    glfwWindowHint(GLFW_RED_BITS, create_info.red_bits);
-    glfwWindowHint(GLFW_GREEN_BITS, create_info.green_bits);
-    glfwWindowHint(GLFW_BLUE_BITS, create_info.blue_bits);
-    glfwWindowHint(GLFW_ALPHA_BITS, create_info.alpha_bits);
-    glfwWindowHint(GLFW_DEPTH_BITS, create_info.depth_bits);
-    glfwWindowHint(GLFW_STENCIL_BITS, create_info.stencil_bits);
-    glfwWindowHint(GLFW_ACCUM_RED_BITS, create_info.accum_red_bits);
-    glfwWindowHint(GLFW_ACCUM_GREEN_BITS, create_info.accum_green_bits);
-    glfwWindowHint(GLFW_ACCUM_BLUE_BITS, create_info.accum_blue_bits);
-    glfwWindowHint(GLFW_ACCUM_ALPHA_BITS, create_info.accum_alpha_bits);
-    glfwWindowHint(GLFW_AUX_BUFFERS, create_info.aux_buffers);
-    glfwWindowHint(GLFW_SAMPLES, create_info.samples);
-    glfwWindowHint(GLFW_REFRESH_RATE, create_info.refresh_rate);
-    glfwWindowHint(GLFW_STEREO, create_info.stereo);
-    glfwWindowHint(GLFW_SRGB_CAPABLE, create_info.srgb_capable);
-    glfwWindowHint(GLFW_DOUBLEBUFFER, create_info.doublebuffer);
-    glfwWindowHint(GLFW_CLIENT_API, static_cast<int>(create_info.client_api));
-    glfwWindowHint(GLFW_CONTEXT_CREATION_API,
-                   static_cast<int>(create_info.context_creation_api));
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,
-                   create_info.context_version_major);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,
-                   create_info.context_version_minor);
-    glfwWindowHint(GLFW_CONTEXT_ROBUSTNESS,
-                   static_cast<int>(create_info.context_robustness));
-    glfwWindowHint(GLFW_CONTEXT_RELEASE_BEHAVIOR,
-                   static_cast<int>(create_info.context_release_behavior));
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT,
-                   create_info.opengl_forward_compat);
-    glfwWindowHint(GLFW_CONTEXT_DEBUG, create_info.context_debug);
-    glfwWindowHint(GLFW_OPENGL_PROFILE,
-                   static_cast<int>(create_info.opengl_profile));
-    glfwWindowHint(GLFW_WIN32_KEYBOARD_MENU, create_info.win32_keyboard_menu);
-    glfwWindowHint(GLFW_WIN32_SHOWDEFAULT, create_info.win32_showdefault);
-    glfwWindowHintString(GLFW_COCOA_FRAME_NAME, create_info.cocoa_frame_name);
-    glfwWindowHint(GLFW_COCOA_GRAPHICS_SWITCHING,
-                   create_info.cocoa_graphics_switching);
-    glfwWindowHintString(GLFW_WAYLAND_APP_ID, create_info.wayland_app_id);
-    glfwWindowHintString(GLFW_X11_CLASS_NAME, create_info.x11_class_name);
-    glfwWindowHintString(GLFW_X11_INSTANCE_NAME, create_info.x11_instance_name);
-    _value = glfwCreateWindow(create_info.width, create_info.height,
-                              create_info.title, nullptr, nullptr);
-  }
-
-  constexpr Window(Window &&other) noexcept
-      : _value{std::exchange(other._value, nullptr)} {}
-
-  Window &operator=(Window &&other) noexcept {
-    auto temp{std::move(other)};
-    swap(temp);
-    return *this;
-  }
-
-  ~Window() {
-    if (_value) {
-      glfwDestroyWindow(_value);
-    }
-  }
+  constexpr Window(GLFWwindow *value) noexcept : _value{value} {}
 
   constexpr operator GLFWwindow *() const noexcept { return _value; }
 
   bool should_close() const { return glfwWindowShouldClose(_value); }
 
+  std::array<int, 2> get_framebuffer_size() const {
+    auto retval = std::array<int, 2>{};
+    glfwGetFramebufferSize(_value, &retval[0], &retval[1]);
+    return retval;
+  }
+
 private:
-  constexpr void swap(Window &other) noexcept {
+  GLFWwindow *_value{};
+};
+
+inline Window create_window(const Window::Create_info &create_info) {
+  glfwWindowHint(GLFW_RESIZABLE, create_info.resizable);
+  glfwWindowHint(GLFW_VISIBLE, create_info.visible);
+  glfwWindowHint(GLFW_DECORATED, create_info.decorated);
+  glfwWindowHint(GLFW_FOCUSED, create_info.focused);
+  glfwWindowHint(GLFW_AUTO_ICONIFY, create_info.auto_iconify);
+  glfwWindowHint(GLFW_FLOATING, create_info.floating);
+  glfwWindowHint(GLFW_MAXIMIZED, create_info.maximized);
+  glfwWindowHint(GLFW_CENTER_CURSOR, create_info.center_cursor);
+  glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER,
+                 create_info.transparent_framebuffer);
+  glfwWindowHint(GLFW_FOCUS_ON_SHOW, create_info.focus_on_show);
+  glfwWindowHint(GLFW_SCALE_TO_MONITOR, create_info.scale_to_monitor);
+  glfwWindowHint(GLFW_SCALE_FRAMEBUFFER, create_info.scale_framebuffer);
+  glfwWindowHint(GLFW_MOUSE_PASSTHROUGH, create_info.mouse_passthrough);
+  glfwWindowHint(GLFW_POSITION_X, create_info.position_x);
+  glfwWindowHint(GLFW_POSITION_Y, create_info.position_y);
+  glfwWindowHint(GLFW_RED_BITS, create_info.red_bits);
+  glfwWindowHint(GLFW_GREEN_BITS, create_info.green_bits);
+  glfwWindowHint(GLFW_BLUE_BITS, create_info.blue_bits);
+  glfwWindowHint(GLFW_ALPHA_BITS, create_info.alpha_bits);
+  glfwWindowHint(GLFW_DEPTH_BITS, create_info.depth_bits);
+  glfwWindowHint(GLFW_STENCIL_BITS, create_info.stencil_bits);
+  glfwWindowHint(GLFW_ACCUM_RED_BITS, create_info.accum_red_bits);
+  glfwWindowHint(GLFW_ACCUM_GREEN_BITS, create_info.accum_green_bits);
+  glfwWindowHint(GLFW_ACCUM_BLUE_BITS, create_info.accum_blue_bits);
+  glfwWindowHint(GLFW_ACCUM_ALPHA_BITS, create_info.accum_alpha_bits);
+  glfwWindowHint(GLFW_AUX_BUFFERS, create_info.aux_buffers);
+  glfwWindowHint(GLFW_SAMPLES, create_info.samples);
+  glfwWindowHint(GLFW_REFRESH_RATE, create_info.refresh_rate);
+  glfwWindowHint(GLFW_STEREO, create_info.stereo);
+  glfwWindowHint(GLFW_SRGB_CAPABLE, create_info.srgb_capable);
+  glfwWindowHint(GLFW_DOUBLEBUFFER, create_info.doublebuffer);
+  glfwWindowHint(GLFW_CLIENT_API, static_cast<int>(create_info.client_api));
+  glfwWindowHint(GLFW_CONTEXT_CREATION_API,
+                 static_cast<int>(create_info.context_creation_api));
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, create_info.context_version_major);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, create_info.context_version_minor);
+  glfwWindowHint(GLFW_CONTEXT_ROBUSTNESS,
+                 static_cast<int>(create_info.context_robustness));
+  glfwWindowHint(GLFW_CONTEXT_RELEASE_BEHAVIOR,
+                 static_cast<int>(create_info.context_release_behavior));
+  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, create_info.opengl_forward_compat);
+  glfwWindowHint(GLFW_CONTEXT_DEBUG, create_info.context_debug);
+  glfwWindowHint(GLFW_OPENGL_PROFILE,
+                 static_cast<int>(create_info.opengl_profile));
+  glfwWindowHint(GLFW_WIN32_KEYBOARD_MENU, create_info.win32_keyboard_menu);
+  glfwWindowHint(GLFW_WIN32_SHOWDEFAULT, create_info.win32_showdefault);
+  glfwWindowHintString(GLFW_COCOA_FRAME_NAME, create_info.cocoa_frame_name);
+  glfwWindowHint(GLFW_COCOA_GRAPHICS_SWITCHING,
+                 create_info.cocoa_graphics_switching);
+  glfwWindowHintString(GLFW_WAYLAND_APP_ID, create_info.wayland_app_id);
+  glfwWindowHintString(GLFW_X11_CLASS_NAME, create_info.x11_class_name);
+  glfwWindowHintString(GLFW_X11_INSTANCE_NAME, create_info.x11_instance_name);
+  return glfwCreateWindow(create_info.width, create_info.height,
+                          create_info.title, nullptr, nullptr);
+}
+
+inline void destroy_window(Window window) { glfwDestroyWindow(window); }
+
+class Unique_window {
+public:
+  constexpr Unique_window() noexcept = default;
+
+  constexpr explicit Unique_window(Window value) noexcept : _value{value} {}
+
+  constexpr Unique_window(Unique_window &&other) noexcept
+      : _value{std::exchange(other._value, nullptr)} {}
+
+  Unique_window &operator=(Unique_window &&other) noexcept {
+    auto temp{std::move(other)};
+    swap(temp);
+    return *this;
+  }
+
+  ~Unique_window() {
+    if (_value) {
+      destroy_window(_value);
+    }
+  }
+
+  constexpr Window operator*() const noexcept { return _value; }
+
+  constexpr const Window *operator->() const noexcept { return &_value; }
+
+private:
+  constexpr void swap(Unique_window &other) noexcept {
     std::swap(_value, other._value);
   }
 
-  GLFWwindow *_value{};
+  Window _value{};
 };
+
+inline Unique_window
+create_window_unique(const Window::Create_info &create_info) {
+  return Unique_window{create_window(create_info)};
+}
 
 inline void poll_events() { glfwPollEvents(); }
 } // namespace fpsparty::glfw

@@ -12,7 +12,8 @@
 
 namespace fpsparty::enet {
 template <class T>
-requires(std::is_enum_v<T>) class Flags {
+  requires(std::is_enum_v<T>)
+class Flags {
 public:
   using Value = std::underlying_type_t<T>;
 
@@ -118,8 +119,6 @@ constexpr Packet_flags operator|(Packet_flag_bits lhs,
 }
 
 class Packet {
-  friend class Host;
-
 public:
   struct Create_info {
     const void *data;
@@ -131,40 +130,64 @@ public:
 
   constexpr Packet() noexcept = default;
 
-  explicit Packet(const Create_info &create_info)
-      : _value{enet_packet_create(create_info.data, create_info.data_length,
-                                  create_info.flags)} {
-    if (!_value) {
-      throw Construction_error{};
-    }
-  }
+  constexpr Packet(ENetPacket *value) noexcept : _value{value} {}
 
-  constexpr Packet(Packet &&other) noexcept
+  constexpr operator ENetPacket *() const noexcept { return _value; }
+
+private:
+  ENetPacket *_value{};
+};
+
+inline Packet create_packet(const Packet::Create_info &create_info) {
+  const auto value = enet_packet_create(
+      create_info.data, create_info.data_length, create_info.flags);
+  if (!value) {
+    throw Packet::Construction_error{};
+  }
+  return value;
+}
+
+inline void destroy_packet(Packet packet) { enet_packet_destroy(packet); }
+
+class Unique_packet {
+  friend class Host;
+
+public:
+  constexpr Unique_packet() noexcept = default;
+
+  constexpr explicit Unique_packet(Packet packet) : _value{packet} {}
+
+  constexpr Unique_packet(Unique_packet &&other) noexcept
       : _value{std::exchange(other._value, nullptr)} {}
 
-  Packet &operator=(Packet &&other) noexcept {
+  Unique_packet &operator=(Unique_packet &&other) noexcept {
     auto temp{std::move(other)};
     swap(temp);
     return *this;
   }
 
-  ~Packet() {
+  ~Unique_packet() {
     if (_value) {
-      enet_packet_destroy(_value);
+      destroy_packet(_value);
     }
   }
 
-  constexpr operator ENetPacket *() const noexcept { return _value; }
+  constexpr operator bool() const noexcept { return _value; }
+
+  constexpr Packet operator*() const noexcept { return _value; }
 
 private:
-  constexpr explicit Packet(ENetPacket *value) noexcept : _value{value} {}
-
-  constexpr void swap(Packet &other) noexcept {
+  constexpr void swap(Unique_packet &other) noexcept {
     std::swap(_value, other._value);
   }
 
-  ENetPacket *_value{};
+  Packet _value;
 };
+
+inline Unique_packet
+create_packet_unique(const Packet::Create_info &create_info) {
+  return Unique_packet{create_packet(create_info)};
+}
 
 using Address = ENetAddress;
 
@@ -189,7 +212,7 @@ struct Event {
   Peer peer;
   std::uint8_t channel_id;
   std::uint32_t data;
-  Packet packet;
+  Unique_packet packet;
 };
 
 class Host {
@@ -210,31 +233,7 @@ public:
 
   constexpr Host() noexcept = default;
 
-  explicit Host(const Create_info &create_info)
-      : _value{enet_host_create(
-            create_info.address.has_value() ? &create_info.address.value()
-                                            : nullptr,
-            create_info.max_peer_count, create_info.max_channel_count,
-            create_info.incoming_bandwidth, create_info.outgoing_bandwidth)} {
-    if (!_value) {
-      throw Construction_error{};
-    }
-  }
-
-  constexpr Host(Host &&other) noexcept
-      : _value{std::exchange(other._value, nullptr)} {}
-
-  Host &operator=(Host &&other) noexcept {
-    auto temp{std::move(other)};
-    swap(temp);
-    return *this;
-  }
-
-  ~Host() {
-    if (_value) {
-      enet_host_destroy(_value);
-    }
-  }
+  constexpr Host(ENetHost *value) noexcept : _value{value} {}
 
   constexpr operator ENetHost *() const noexcept { return _value; }
 
@@ -249,7 +248,7 @@ public:
         .peer = Peer{event.peer},
         .channel_id = event.channelID,
         .data = event.data,
-        .packet = Packet{event.packet},
+        .packet = Unique_packet{event.packet},
     };
   }
 
@@ -263,10 +262,58 @@ public:
   }
 
 private:
-  constexpr void swap(Host &other) noexcept { std::swap(_value, other._value); }
-
   ENetHost *_value{};
 };
+
+inline Host create_host(const Host::Create_info &create_info) {
+  const auto value = enet_host_create(
+      create_info.address.has_value() ? &create_info.address.value() : nullptr,
+      create_info.max_peer_count, create_info.max_channel_count,
+      create_info.incoming_bandwidth, create_info.outgoing_bandwidth);
+  if (!value) {
+    throw Host::Construction_error{};
+  }
+  return value;
+}
+
+inline void destroy_host(Host host) { enet_host_destroy(host); }
+
+class Unique_host {
+public:
+  constexpr Unique_host() noexcept = default;
+
+  constexpr explicit Unique_host(Host value) noexcept : _value{value} {}
+
+  constexpr Unique_host(Unique_host &&other) noexcept
+      : _value{std::exchange(other._value, nullptr)} {}
+
+  Unique_host &operator=(Unique_host &&other) noexcept {
+    auto temp{std::move(other)};
+    swap(temp);
+    return *this;
+  }
+
+  ~Unique_host() {
+    if (_value) {
+      enet_host_destroy(_value);
+    }
+  }
+
+  constexpr Host operator*() const noexcept { return _value; }
+
+  constexpr const Host *operator->() const noexcept { return &_value; }
+
+private:
+  constexpr void swap(Unique_host &other) noexcept {
+    std::swap(_value, other._value);
+  }
+
+  Host _value{};
+};
+
+inline Unique_host create_host_unique(const Host::Create_info &create_info) {
+  return Unique_host{create_host(create_info)};
+}
 
 struct Server_create_info {
   std::uint16_t port;
@@ -277,13 +324,18 @@ struct Server_create_info {
 };
 
 inline Host make_server_host(const Server_create_info &create_info) {
-  return Host{{
+  return create_host({
       .address = Address{.host = ENET_HOST_ANY, .port = create_info.port},
       .max_peer_count = create_info.max_clients,
       .max_channel_count = create_info.max_channels,
       .incoming_bandwidth = create_info.incoming_bandwidth,
       .outgoing_bandwidth = create_info.outgoing_bandwidth,
-  }};
+  });
+}
+
+inline Unique_host
+make_server_host_unique(const Server_create_info &create_info) {
+  return Unique_host{make_server_host(create_info)};
 }
 
 struct Client_create_info {
@@ -293,13 +345,18 @@ struct Client_create_info {
 };
 
 inline Host make_client_host(const Client_create_info &create_info) {
-  return Host{{
+  return create_host({
       .address = {},
       .max_peer_count = 1,
       .max_channel_count = create_info.max_channel_count,
       .incoming_bandwidth = create_info.incoming_bandwidth,
       .outgoing_bandwidth = create_info.outgoing_bandwidth,
-  }};
+  });
+}
+
+inline Unique_host
+make_client_host_unique(const Client_create_info &create_info) {
+  return Unique_host{make_client_host(create_info)};
 }
 } // namespace fpsparty::enet
 
