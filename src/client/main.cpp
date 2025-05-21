@@ -419,10 +419,12 @@ int main() {
     }
   after_enet_event_loop:
     try {
-      auto vk_swapchain_image_index = std::uint32_t{};
-      std::ignore = vk_device->acquireNextImageKHR(
-          *vk_swapchain, std::numeric_limits<std::uint64_t>::max(),
-          *vk_image_acquire_semaphore, {}, &vk_swapchain_image_index);
+      const auto vk_swapchain_image_index =
+          vk_device
+              ->acquireNextImageKHR(*vk_swapchain,
+                                    std::numeric_limits<std::uint64_t>::max(),
+                                    *vk_image_acquire_semaphore, {})
+              .value;
       std::ignore =
           vk_device->waitForFences(1, &*vk_work_done_fence, true,
                                    std::numeric_limits<std::uint64_t>::max());
