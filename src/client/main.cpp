@@ -57,14 +57,14 @@ vk::UniqueInstance make_vk_instance() {
       .enabledExtensionCount = static_cast<std::uint32_t>(extensions.size()),
       .ppEnabledExtensionNames = extensions.data(),
   };
-  auto instance = VkInstance{};
-  vkCreateInstance(reinterpret_cast<const VkInstanceCreateInfo *>(&create_info),
-                   nullptr, &instance);
-  volkLoadInstance(instance);
-  vk::defaultDispatchLoaderDynamic.init(
-      instance, vk::DynamicLoader{}.getProcAddress<PFN_vkGetInstanceProcAddr>(
-                    "vkGetInstanceProcAddr"));
-  return vk::UniqueInstance{instance};
+  const auto vkGetInstanceProcAddr =
+      vk::DynamicLoader{}.getProcAddress<PFN_vkGetInstanceProcAddr>(
+          "vkGetInstanceProcAddr");
+  vk::defaultDispatchLoaderDynamic.init(vkGetInstanceProcAddr);
+  auto instance = vk::createInstanceUnique(create_info);
+  volkLoadInstance(*instance);
+  vk::defaultDispatchLoaderDynamic.init(*instance, vkGetInstanceProcAddr);
+  return instance;
 }
 
 /**
@@ -186,11 +186,9 @@ make_vk_swapchain(vk::PhysicalDevice physical_device, vk::Device device,
     for (const auto &surface_format : surface_formats) {
       if (surface_format.format == vk::Format::eB8G8R8A8Srgb &&
           surface_format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
-        std::cout << "Using ideal Vulkan surface format.\n";
         return surface_format;
       }
     }
-    std::cout << "Using suboptimal Vulkan surface format.\n";
     return surface_formats[0];
   }();
   auto const extent = [&]() {
