@@ -169,6 +169,7 @@ make_vk_device(vk::PhysicalDevice physical_device,
           static_cast<std::uint32_t>(vk_device_extensions.size()),
       .ppEnabledExtensionNames = vk_device_extensions.data(),
   });
+  volkLoadDevice(*device);
   const auto queue = device->getQueue(queue_family_index, 0);
   return std::tuple{std::move(device), queue};
 }
