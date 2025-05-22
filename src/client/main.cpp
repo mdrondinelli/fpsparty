@@ -6,6 +6,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <tuple>
@@ -15,6 +16,7 @@
 #include <vulkan/vulkan_enums.hpp>
 #include <vulkan/vulkan_funcs.hpp>
 #include <vulkan/vulkan_handles.hpp>
+#include <vulkan/vulkan_structs.hpp>
 
 using namespace fpsparty;
 
@@ -257,21 +259,111 @@ make_vk_swapchain_image_views(vk::Device device,
   return retval;
 }
 
-void remake_vk_swapchain_and_image_views(
-    vk::PhysicalDevice physical_device, vk::Device device, glfw::Window window,
-    vk::SurfaceKHR surface, vk::UniqueSwapchainKHR &swapchain,
-    vk::Format &swapchain_image_format, vk::Extent2D &swapchain_image_extent,
-    std::vector<vk::Image> &swapchain_images,
-    std::vector<vk::UniqueImageView> &swapchain_image_views) {
-  device.waitIdle();
-  swapchain_image_views.clear();
-  swapchain_images.clear();
-  swapchain.reset();
-  std::tie(swapchain, swapchain_image_format, swapchain_image_extent) =
-      make_vk_swapchain(physical_device, device, window, surface);
-  swapchain_images = device.getSwapchainImagesKHR(*swapchain);
-  swapchain_image_views = make_vk_swapchain_image_views(
-      device, swapchain_images, swapchain_image_format);
+vk::UniquePipelineLayout make_vk_pipeline_layout(vk::Device device) {
+  return device.createPipelineLayoutUnique({});
+}
+
+class Bad_vk_shader_module_size_error : std::exception {};
+
+vk::UniqueShaderModule load_vk_shader_module(vk::Device device,
+                                             const char *path) {
+  auto input_stream = std::ifstream{};
+  input_stream.exceptions(std::ios::badbit | std::ios::failbit);
+  input_stream.open(path, std::ios::binary | std::ios::ate);
+  const auto size = input_stream.tellg();
+  if (size % sizeof(std::uint32_t) != 0) {
+    throw Bad_vk_shader_module_size_error{};
+  }
+  auto bytecode = std::vector<std::uint32_t>{};
+  bytecode.resize(size / sizeof(std::uint32_t));
+  input_stream.seekg(0);
+  input_stream.read(reinterpret_cast<char *>(bytecode.data()), size);
+  return device.createShaderModuleUnique(
+      {.codeSize = static_cast<std::uint32_t>(size), .pCode = bytecode.data()});
+}
+
+vk::UniquePipeline make_vk_pipeline(vk::Device device,
+                                    vk::PipelineLayout layout,
+                                    vk::Format swapchain_image_format) {
+  const auto vert_shader_module =
+      load_vk_shader_module(device, "./assets/shaders/shader.vert.spv");
+  const auto frag_shader_module =
+      load_vk_shader_module(device, "./assets/shaders/shader.frag.spv");
+  const auto shader_stages = std::vector<vk::PipelineShaderStageCreateInfo>{
+      {.stage = vk::ShaderStageFlagBits::eVertex,
+       .module = *vert_shader_module,
+       .pName = "main"},
+      {.stage = vk::ShaderStageFlagBits::eFragment,
+       .module = *frag_shader_module,
+       .pName = "main"}};
+  const auto vertex_binding = vk::VertexInputBindingDescription{
+      .binding = 0,
+      .stride = 5 * sizeof(float),
+      .inputRate = vk::VertexInputRate::eVertex};
+  const auto vertex_attributes =
+      std::vector<vk::VertexInputAttributeDescription>{
+          {.location = 0,
+           .binding = 0,
+           .format = vk::Format::eR32G32Sfloat,
+           .offset = 0},
+          {.location = 1,
+           .binding = 0,
+           .format = vk::Format::eR32G32B32Sfloat,
+           .offset = 2 * sizeof(float)}};
+  const auto vertex_input_state = vk::PipelineVertexInputStateCreateInfo{
+      .vertexBindingDescriptionCount = 1,
+      .pVertexBindingDescriptions = &vertex_binding,
+      .vertexAttributeDescriptionCount =
+          static_cast<std::uint32_t>(vertex_attributes.size()),
+      .pVertexAttributeDescriptions = vertex_attributes.data()};
+  const auto input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo{
+      .topology = vk::PrimitiveTopology::eTriangleList,
+      .primitiveRestartEnable = vk::False};
+  const auto rasterization_state = vk::PipelineRasterizationStateCreateInfo{
+      .depthClampEnable = vk::False,
+      .rasterizerDiscardEnable = vk::False,
+      .polygonMode = vk::PolygonMode::eFill,
+      .depthBiasEnable = vk::False,
+      .lineWidth = 1.0f};
+  const auto blend_attachment = vk::PipelineColorBlendAttachmentState{
+      .colorWriteMask =
+          vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+          vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
+  const auto color_blend_state = vk::PipelineColorBlendStateCreateInfo{
+      .attachmentCount = 1, .pAttachments = &blend_attachment};
+  const auto viewport_state = vk::PipelineViewportStateCreateInfo{
+      .viewportCount = 1, .scissorCount = 1};
+  const auto depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo{
+      .depthCompareOp = vk::CompareOp::eAlways};
+  const auto multisample_state = vk::PipelineMultisampleStateCreateInfo{
+      .rasterizationSamples = vk::SampleCountFlagBits::e1};
+  const auto dynamic_states = std::vector<vk::DynamicState>{
+      vk::DynamicState::eViewport, vk::DynamicState::eScissor,
+      vk::DynamicState::eCullMode, vk::DynamicState::eFrontFace,
+      vk::DynamicState::ePrimitiveTopology};
+  const auto dynamic_state = vk::PipelineDynamicStateCreateInfo{
+      .dynamicStateCount = static_cast<std::uint32_t>(dynamic_states.size()),
+      .pDynamicStates = dynamic_states.data()};
+  const auto rendering_info = vk::PipelineRenderingCreateInfo{
+      .colorAttachmentCount = 1,
+      .pColorAttachmentFormats = &swapchain_image_format};
+  return std::move(device
+                       .createGraphicsPipelinesUnique(
+                           {}, {vk::GraphicsPipelineCreateInfo{
+                                   .pNext = &rendering_info,
+                                   .stageCount = static_cast<std::uint32_t>(
+                                       shader_stages.size()),
+                                   .pStages = shader_stages.data(),
+                                   .pVertexInputState = &vertex_input_state,
+                                   .pInputAssemblyState = &input_assembly_state,
+                                   .pViewportState = &viewport_state,
+                                   .pRasterizationState = &rasterization_state,
+                                   .pMultisampleState = &multisample_state,
+                                   .pDepthStencilState = &depth_stencil_state,
+                                   .pColorBlendState = &color_blend_state,
+                                   .pDynamicState = &dynamic_state,
+                                   .layout = layout}})
+                       .value[0]);
 }
 
 void record_vk_command_buffer(vk::CommandBuffer command_buffer,
@@ -364,6 +456,11 @@ int main() {
       std::span{vk_swapchain_images.data(), vk_swapchain_images.size()},
       vk_swapchain_image_format);
   std::cout << "Created Vulkan swapchain image views.\n";
+  const auto vk_pipeline_layout = make_vk_pipeline_layout(*vk_device);
+  std::cout << "Created VkPipelineLayout.\n";
+  auto vk_pipeline = make_vk_pipeline(*vk_device, *vk_pipeline_layout,
+                                      vk_swapchain_image_format);
+  std::cout << "Created VkPipeline.\n";
   const auto vk_image_acquire_semaphore = vk_device->createSemaphoreUnique({});
   vk_device->setDebugUtilsObjectNameEXT(
       {.objectType = vk::ObjectType::eSemaphore,
@@ -453,10 +550,23 @@ int main() {
         throw vk::OutOfDateKHRError{"Subobtimal queue present result"};
       }
     } catch (const vk::OutOfDateKHRError &e) {
-      remake_vk_swapchain_and_image_views(
-          vk_physical_device, *vk_device, *window, *vk_surface, vk_swapchain,
-          vk_swapchain_image_format, vk_swapchain_image_extent,
-          vk_swapchain_images, vk_swapchain_image_views);
+      vk_device->waitIdle();
+      vk_swapchain_image_views.clear();
+      vk_swapchain_images.clear();
+      vk_swapchain.reset();
+      const auto previous_vk_swapchain_image_format = vk_swapchain_image_format;
+      std::tie(vk_swapchain, vk_swapchain_image_format,
+               vk_swapchain_image_extent) =
+          make_vk_swapchain(vk_physical_device, *vk_device, *window,
+                            *vk_surface);
+      vk_swapchain_images = vk_device->getSwapchainImagesKHR(*vk_swapchain);
+      vk_swapchain_image_views = make_vk_swapchain_image_views(
+          *vk_device, vk_swapchain_images, vk_swapchain_image_format);
+      if (vk_swapchain_image_format != previous_vk_swapchain_image_format) {
+        std::cout << "Swapchain changed image format.\n";
+        vk_pipeline = make_vk_pipeline(*vk_device, *vk_pipeline_layout,
+                                       vk_swapchain_image_format);
+      }
     }
   }
   vk_device->waitIdle();
