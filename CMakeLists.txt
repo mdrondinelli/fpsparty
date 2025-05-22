@@ -5,6 +5,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # dependencies
 add_subdirectory(extern/glfw-3.4)
 add_subdirectory(extern/volk-1.4.304)
+add_subdirectory(extern/VulkanMemoryAllocator-3.3.0)
 
 # client
 add_executable(
@@ -30,7 +31,7 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/src
 )
 target_link_directories(client PRIVATE ${CMAKE_SOURCE_DIR}/extern/enet/.libs)
-target_link_libraries(client enet glfw volk)
+target_link_libraries(client enet glfw volk GPUOpen::VulkanMemoryAllocator)
 
 # server
 add_executable(
