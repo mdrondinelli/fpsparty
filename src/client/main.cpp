@@ -1,6 +1,7 @@
 #include "constants.hpp"
 #include "enet.hpp"
 #include "glfw.hpp"
+#include "vma.hpp"
 #include <algorithm>
 #include <bit>
 #include <csignal>
@@ -174,6 +175,26 @@ make_vk_device(vk::PhysicalDevice physical_device,
   volkLoadDevice(*device);
   const auto queue = device->getQueue(queue_family_index, 0);
   return std::tuple{std::move(device), queue};
+}
+
+vma::Unique_allocator make_vma_allocator(vk::Instance instance,
+                                         vk::PhysicalDevice physical_device,
+                                         vk::Device device) {
+  auto create_info =
+      vma::Allocator::Create_info{.flags = {},
+                                  .physicalDevice = physical_device,
+                                  .device = device,
+                                  .preferredLargeHeapBlockSize = 0,
+                                  .pAllocationCallbacks = nullptr,
+                                  .pDeviceMemoryCallbacks = nullptr,
+                                  .pHeapSizeLimit = nullptr,
+                                  .pVulkanFunctions = nullptr,
+                                  .instance = instance,
+                                  .vulkanApiVersion = vk::ApiVersion13,
+                                  .pTypeExternalMemoryHandleTypes = nullptr};
+  const auto vulkan_functions = vma::import_functions_from_volk(create_info);
+  create_info.pVulkanFunctions = &vulkan_functions;
+  return vma::create_allocator_unique(create_info);
 }
 
 std::tuple<vk::UniqueSwapchainKHR, vk::Format, vk::Extent2D>
@@ -446,6 +467,9 @@ int main() {
   const auto [vk_device, vk_queue] =
       make_vk_device(vk_physical_device, vk_queue_family_index);
   std::cout << "Created VkDevice.\n";
+  const auto vma_allocator =
+      make_vma_allocator(*vk_instance, vk_physical_device, *vk_device);
+  std::cout << "Created VmaAllocator.\n";
   auto [vk_swapchain, vk_swapchain_image_format, vk_swapchain_image_extent] =
       make_vk_swapchain(vk_physical_device, *vk_device, *window, *vk_surface);
   std::cout << "Created VkSwapchainKHR.\n";
@@ -479,11 +503,13 @@ int main() {
   const auto vk_command_pool = vk_device->createCommandPoolUnique(
       {.flags = vk::CommandPoolCreateFlagBits::eTransient,
        .queueFamilyIndex = vk_queue_family_index});
+  std::cout << "Created VkCommandPool.\n";
   const auto vk_command_buffer =
       std::move(vk_device->allocateCommandBuffersUnique(
           {.commandPool = *vk_command_pool,
            .level = vk::CommandBufferLevel::ePrimary,
            .commandBufferCount = 1})[0]);
+  std::cout << "Allocated VkCommandBuffer.\n";
   const auto enet_guard = enet::Initialization_guard{{}};
   const auto client = enet::make_client_host_unique({.max_channel_count = 1});
   client->connect({.host = *enet::parse_ip(server_ip), .port = constants::port},

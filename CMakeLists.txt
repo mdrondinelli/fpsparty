@@ -10,6 +10,7 @@ add_subdirectory(extern/VulkanMemoryAllocator-3.3.0)
 # client
 add_executable(
   client
+  src/vma.cpp
   src/client/main.cpp
 )
 target_compile_definitions(
@@ -18,6 +19,8 @@ target_compile_definitions(
   GLFW_INCLUDE_VULKAN
   VK_NO_PROTOTYPES
   VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
+  VMA_STATIC_VULKAN_FUNCTIONS=0
+  VMA_DYNAMIC_VULKAN_FUNCTIONS=0
 )
 target_include_directories(
   client
