@@ -7,7 +7,6 @@
 #include <utility>
 #include <volk.h>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_handles.hpp>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wnullability-extension"
