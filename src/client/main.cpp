@@ -1,3 +1,4 @@
+#include "client/vertex_buffer.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
 #include "glfw.hpp"
@@ -20,6 +21,7 @@
 #include <vulkan/vulkan_structs.hpp>
 
 using namespace fpsparty;
+using namespace fpsparty::client;
 
 namespace vk {
 DispatchLoaderDynamic defaultDispatchLoaderDynamic;
@@ -195,6 +197,22 @@ vma::Unique_allocator make_vma_allocator(vk::Instance instance,
   const auto vulkan_functions = vma::import_functions_from_volk(create_info);
   create_info.pVulkanFunctions = &vulkan_functions;
   return vma::create_allocator_unique(create_info);
+}
+
+struct Vertex {
+  float x;
+  float y;
+  float r;
+  float g;
+  float b;
+};
+
+Vertex_buffer upload_vertex_buffer(vma::Allocator allocator, vk::Device device,
+                                   vk::Queue queue,
+                                   vk::CommandPool command_pool,
+                                   std::span<const Vertex> vertices) {
+  return Vertex_buffer{allocator,    device,          queue,
+                       command_pool, vertices.data(), vertices.size_bytes()};
 }
 
 std::tuple<vk::UniqueSwapchainKHR, vk::Format, vk::Extent2D>
@@ -470,21 +488,18 @@ int main() {
   const auto vma_allocator =
       make_vma_allocator(*vk_instance, vk_physical_device, *vk_device);
   std::cout << "Created VmaAllocator.\n";
-  auto [vk_swapchain, vk_swapchain_image_format, vk_swapchain_image_extent] =
-      make_vk_swapchain(vk_physical_device, *vk_device, *window, *vk_surface);
-  std::cout << "Created VkSwapchainKHR.\n";
-  auto vk_swapchain_images = vk_device->getSwapchainImagesKHR(*vk_swapchain);
-  std::cout << "Got Vulkan swapchain images.\n";
-  auto vk_swapchain_image_views = make_vk_swapchain_image_views(
-      *vk_device,
-      std::span{vk_swapchain_images.data(), vk_swapchain_images.size()},
-      vk_swapchain_image_format);
-  std::cout << "Created Vulkan swapchain image views.\n";
-  const auto vk_pipeline_layout = make_vk_pipeline_layout(*vk_device);
-  std::cout << "Created VkPipelineLayout.\n";
-  auto vk_pipeline = make_vk_pipeline(*vk_device, *vk_pipeline_layout,
-                                      vk_swapchain_image_format);
-  std::cout << "Created VkPipeline.\n";
+  const auto vk_command_pool = vk_device->createCommandPoolUnique(
+      {.flags = vk::CommandPoolCreateFlagBits::eTransient,
+       .queueFamilyIndex = vk_queue_family_index});
+  std::cout << "Created VkCommandPool.\n";
+  auto const triangle_vertices = std::vector<Vertex>{
+      {.x = 0.0f, .y = -0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},
+      {.x = -0.5f, .y = 0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f},
+      {.x = 0.5f, .y = 0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f}};
+  auto const triangle_vertex_buffer =
+      upload_vertex_buffer(*vma_allocator, *vk_device, vk_queue,
+                           *vk_command_pool, triangle_vertices);
+  std::cout << "Uploaded triangle vertex buffer.\n";
   const auto vk_image_acquire_semaphore = vk_device->createSemaphoreUnique({});
   vk_device->setDebugUtilsObjectNameEXT(
       {.objectType = vk::ObjectType::eSemaphore,
@@ -500,16 +515,27 @@ int main() {
   const auto vk_work_done_fence = vk_device->createFenceUnique(
       {.flags = vk::FenceCreateFlagBits::eSignaled});
   std::cout << "Created per-frame Vulkan synchronization primitives.\n";
-  const auto vk_command_pool = vk_device->createCommandPoolUnique(
-      {.flags = vk::CommandPoolCreateFlagBits::eTransient,
-       .queueFamilyIndex = vk_queue_family_index});
-  std::cout << "Created VkCommandPool.\n";
   const auto vk_command_buffer =
       std::move(vk_device->allocateCommandBuffersUnique(
           {.commandPool = *vk_command_pool,
            .level = vk::CommandBufferLevel::ePrimary,
            .commandBufferCount = 1})[0]);
-  std::cout << "Allocated VkCommandBuffer.\n";
+  std::cout << "Allocated per-frame VkCommandBuffer.\n";
+  auto [vk_swapchain, vk_swapchain_image_format, vk_swapchain_image_extent] =
+      make_vk_swapchain(vk_physical_device, *vk_device, *window, *vk_surface);
+  std::cout << "Created VkSwapchainKHR.\n";
+  auto vk_swapchain_images = vk_device->getSwapchainImagesKHR(*vk_swapchain);
+  std::cout << "Got Vulkan swapchain images.\n";
+  auto vk_swapchain_image_views = make_vk_swapchain_image_views(
+      *vk_device,
+      std::span{vk_swapchain_images.data(), vk_swapchain_images.size()},
+      vk_swapchain_image_format);
+  std::cout << "Created Vulkan swapchain image views.\n";
+  const auto vk_pipeline_layout = make_vk_pipeline_layout(*vk_device);
+  std::cout << "Created VkPipelineLayout.\n";
+  auto vk_pipeline = make_vk_pipeline(*vk_device, *vk_pipeline_layout,
+                                      vk_swapchain_image_format);
+  std::cout << "Created VkPipeline.\n";
   const auto enet_guard = enet::Initialization_guard{{}};
   const auto client = enet::make_client_host_unique({.max_channel_count = 1});
   client->connect({.host = *enet::parse_ip(server_ip), .port = constants::port},

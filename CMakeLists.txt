@@ -12,6 +12,7 @@ add_executable(
   client
   src/vma.cpp
   src/client/main.cpp
+  src/client/vertex_buffer.cpp
 )
 target_compile_definitions(
   client

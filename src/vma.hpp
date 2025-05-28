@@ -1,6 +1,7 @@
 #ifndef FPSPARTY_VMA_HPP
 #define FPSPARTY_VMA_HPP
 
+#include "flags.hpp"
 #include <cstring>
 #include <exception>
 #include <tuple>
@@ -19,6 +20,50 @@
 #pragma clang diagnostic pop
 
 namespace fpsparty::vma {
+enum class Memory_usage : std::underlying_type_t<VmaMemoryUsage> {
+  e_gpu_lazily_allocated = VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED,
+  e_auto = VMA_MEMORY_USAGE_AUTO,
+  e_auto_prefer_device = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+  e_auto_prefer_host = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+};
+
+constexpr VmaMemoryUsage c_repr(Memory_usage usage) {
+  return static_cast<VmaMemoryUsage>(usage);
+}
+
+enum class Allocation_create_flag_bits {
+  e_dedicated_memory = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+  e_never_allocate = VMA_ALLOCATION_CREATE_NEVER_ALLOCATE_BIT,
+  e_mapped = VMA_ALLOCATION_CREATE_MAPPED_BIT,
+  e_upper_address = VMA_ALLOCATION_CREATE_UPPER_ADDRESS_BIT,
+  e_dont_bind = VMA_ALLOCATION_CREATE_DONT_BIND_BIT,
+  e_within_budget = VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT,
+  e_can_alias = VMA_ALLOCATION_CREATE_CAN_ALIAS_BIT,
+  e_host_access_sequential_write =
+      VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+  e_host_access_random = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
+  e_host_access_allow_transfer_instead =
+      VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT,
+  e_strategy_min_memory = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT,
+  e_strategy_min_offset = VMA_ALLOCATION_CREATE_STRATEGY_MIN_OFFSET_BIT,
+  e_strategy_best_fit = VMA_ALLOCATION_CREATE_STRATEGY_BEST_FIT_BIT,
+  e_strategy_first_fit = VMA_ALLOCATION_CREATE_STRATEGY_FIRST_FIT_BIT,
+};
+
+using Allocation_create_flags = Flags<Allocation_create_flag_bits>;
+
+constexpr Allocation_create_flags
+operator|(Allocation_create_flag_bits lhs,
+          Allocation_create_flag_bits rhs) noexcept {
+  return Allocation_create_flags{
+      static_cast<Allocation_create_flags::Value>(lhs) |
+      static_cast<Allocation_create_flags::Value>(rhs)};
+}
+
+constexpr VmaAllocationCreateFlags c_repr(Allocation_create_flags flags) {
+  return static_cast<VmaAllocationCreateFlags>(flags);
+}
+
 using Allocation_create_info = VmaAllocationCreateInfo;
 using Allocation_info = VmaAllocationInfo;
 
@@ -33,6 +78,10 @@ public:
   using Create_info = VmaAllocatorCreateInfo;
 
   class Creation_error : public std::exception {};
+
+  class Memory_mapping_error : public std::exception {};
+
+  class Memory_unmapping_error : public std::exception {};
 
   constexpr Allocator() noexcept = default;
 
@@ -49,6 +98,10 @@ public:
   create_buffer_unique(const vk::BufferCreateInfo &buffer_create_info,
                        const Allocation_create_info &allocation_create_info,
                        Allocation_info *allocation_info = nullptr) const;
+
+  void *map_memory(Allocation allocation) const;
+
+  void unmap_memory(Allocation allocation) const;
 
 private:
   VmaAllocator _value{};
@@ -86,6 +139,10 @@ public:
   ~Unique_allocator() { destroy_allocator(_value); }
 
   constexpr operator bool() const noexcept { return _value; }
+
+  constexpr Allocator operator*() const noexcept { return _value; }
+
+  constexpr const Allocator *operator->() const noexcept { return &_value; }
 
 private:
   constexpr void swap(Unique_allocator &other) noexcept {
@@ -139,6 +196,10 @@ public:
 
   constexpr operator bool() const noexcept { return _value != nullptr; }
 
+  constexpr Allocation operator*() const noexcept { return _value; }
+
+  constexpr const Allocation *operator->() const noexcept { return &_value; }
+
 private:
   constexpr void swap(Unique_allocation &other) noexcept {
     std::swap(_value, other._value);
@@ -178,6 +239,19 @@ Allocator::create_buffer_unique(
       buffer_create_info, allocation_create_info, allocation_info);
   return std::tuple{vk::UniqueBuffer{buffer, vk::Device{allocator_info.device}},
                     Unique_allocation{allocation, *this}};
+}
+
+inline void *Allocator::map_memory(Allocation allocation) const {
+  auto retval = (void *)nullptr;
+  const auto result = vmaMapMemory(_value, allocation, &retval);
+  if (vk::Result{result} != vk::Result::eSuccess) {
+    throw Memory_mapping_error{};
+  }
+  return retval;
+}
+
+inline void Allocator::unmap_memory(Allocation allocation) const {
+  vmaUnmapMemory(_value, allocation);
 }
 
 using Vulkan_functions = VmaVulkanFunctions;
