@@ -408,7 +408,9 @@ vk::UniquePipeline make_vk_pipeline(vk::Device device,
 void record_vk_command_buffer(vk::CommandBuffer command_buffer,
                               vk::Image swapchain_image,
                               vk::ImageView swapchain_image_view,
-                              const vk::Extent2D &swapchain_image_extent) {
+                              const vk::Extent2D &swapchain_image_extent,
+                              vk::Pipeline pipeline, vk::Buffer vertex_buffer,
+                              std::size_t vertex_count) {
   command_buffer.begin(vk::CommandBufferBeginInfo{
       .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
   const auto swapchain_image_barrier_1 = vk::ImageMemoryBarrier2{
@@ -440,6 +442,20 @@ void record_vk_command_buffer(vk::CommandBuffer command_buffer,
        .layerCount = 1,
        .colorAttachmentCount = 1,
        .pColorAttachments = &color_attachment});
+  command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
+  command_buffer.setViewport(
+      0, {{
+             .width = static_cast<float>(swapchain_image_extent.width),
+             .height = static_cast<float>(swapchain_image_extent.height),
+             .minDepth = 0.0f,
+             .maxDepth = 1.0f,
+         }});
+  command_buffer.setScissor(0, {{.extent = swapchain_image_extent}});
+  command_buffer.setCullMode(vk::CullModeFlagBits::eNone);
+  command_buffer.setFrontFace(vk::FrontFace::eClockwise);
+  command_buffer.setPrimitiveTopology(vk::PrimitiveTopology::eTriangleList);
+  command_buffer.bindVertexBuffers(0, {vertex_buffer}, {0});
+  command_buffer.draw(vertex_count, 1, 0, 0);
   command_buffer.endRendering();
   const auto swapchain_image_barrier_2 = vk::ImageMemoryBarrier2{
       .srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
@@ -581,7 +597,8 @@ int main() {
       record_vk_command_buffer(
           *vk_command_buffer, vk_swapchain_images[vk_swapchain_image_index],
           *vk_swapchain_image_views[vk_swapchain_image_index],
-          vk_swapchain_image_extent);
+          vk_swapchain_image_extent, *vk_pipeline,
+          triangle_vertex_buffer.get_buffer(), triangle_vertices.size());
       const auto vk_image_acquire_wait_stage =
           vk::PipelineStageFlags{vk::PipelineStageFlagBits::eTopOfPipe};
       vk_queue.submit({{.waitSemaphoreCount = 1,

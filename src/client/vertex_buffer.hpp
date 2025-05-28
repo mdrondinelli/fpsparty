@@ -13,6 +13,8 @@ public:
                          vk::Queue queue, vk::CommandPool command_pool,
                          const void *data, std::size_t size);
 
+  constexpr vk::Buffer get_buffer() const noexcept { return *_buffer; }
+
 private:
   vk::UniqueBuffer _buffer;
   vma::Unique_allocation _allocation;
