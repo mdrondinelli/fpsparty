@@ -53,6 +53,10 @@ class Peer {
 public:
   constexpr operator ENetPeer *() const noexcept { return _value; }
 
+  void *get_data() const noexcept { return _value->data; }
+
+  void set_data(void *data) const noexcept { _value->data = data; }
+
   void disconnect(std::uint32_t data) const noexcept {
     enet_peer_disconnect(_value, data);
   }
