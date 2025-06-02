@@ -153,6 +153,12 @@ public:
 
   constexpr Packet operator*() const noexcept { return _value; }
 
+  constexpr Packet release() noexcept {
+    const auto temp = _value;
+    _value = nullptr;
+    return temp;
+  }
+
 private:
   constexpr void swap(Unique_packet &other) noexcept {
     std::swap(_value, other._value);
@@ -249,6 +255,14 @@ public:
       throw Out_of_peers_error{};
     }
     return Peer{peer};
+  }
+
+  void broadcast(std::uint8_t channel_id, Packet packet) const noexcept {
+    enet_host_broadcast(_value, channel_id, packet);
+  }
+
+  void broadcast(std::uint8_t channel_id, Unique_packet packet) const noexcept {
+    broadcast(channel_id, packet.release());
   }
 
 private:
