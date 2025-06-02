@@ -568,20 +568,16 @@ int main() {
   auto connected = true;
   while (!signal_status && !window->should_close() && connected) {
     glfw::poll_events();
-    for (;;) {
-      const auto event = client->service(0);
-      switch (event.type) {
-      default:
-        continue;
+    client->service_each([&](const enet::Event &e) {
+      switch (e.type) {
       case enet::Event_type::disconnect:
         std::cout << "Got disconnect event.\n";
         connected = false;
-        continue;
-      case enet::Event_type::none:
-        goto after_enet_event_loop;
+        break;
+      default:
+        break;
       }
-    }
-  after_enet_event_loop:
+    });
     try {
       const auto vk_swapchain_image_index =
           vk_device

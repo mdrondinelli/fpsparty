@@ -229,6 +229,19 @@ public:
     };
   }
 
+  template <typename F> void service_each(F &&f) const {
+    for (;;) {
+      const auto event = service(0);
+      switch (event.type) {
+      case enet::Event_type::none:
+        return;
+      default:
+        f(event);
+        continue;
+      }
+    }
+  }
+
   Peer connect(const Address &address, std::size_t channel_count,
                std::uint32_t data) const {
     const auto peer = enet_host_connect(_value, &address, channel_count, data);

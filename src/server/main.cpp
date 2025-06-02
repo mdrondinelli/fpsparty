@@ -14,20 +14,6 @@ using namespace fpsparty;
 namespace {
 volatile std::sig_atomic_t signal_status{};
 void handle_signal(int signal) { signal_status = signal; }
-
-template <typename F> void service_enet_events(enet::Host host, F &&f) {
-  for (;;) {
-    const auto event = host.service(0);
-    switch (event.type) {
-    case enet::Event_type::none:
-      return;
-    default:
-      f(event);
-      continue;
-    }
-  }
-}
-
 } // namespace
 
 int main() {
@@ -49,7 +35,7 @@ int main() {
   auto game_loop_duration = Duration{};
   auto game_loop_time = Clock::now();
   while (!signal_status) {
-    service_enet_events(*server, [&](const enet::Event &e) {
+    server->service_each([&](const enet::Event &e) {
       switch (e.type) {
       case enet::Event_type::connect:
         std::cout << "Got connect event.\n";
