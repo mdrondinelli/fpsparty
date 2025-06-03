@@ -1,6 +1,9 @@
 #ifndef FPSPARTY_GAME_GAME_HPP
 #define FPSPARTY_GAME_GAME_HPP
 
+#include "net/writer.hpp"
+#include <bit>
+#include <exception>
 #include <span>
 
 namespace fpsparty::game {
@@ -27,6 +30,10 @@ public:
 private:
   friend class Game;
 
+  friend constexpr bool operator==(Player lhs, Player rhs) noexcept = default;
+
+  friend struct std::hash<Player>;
+
   Impl *_impl{};
 };
 
@@ -39,6 +46,8 @@ public:
   struct Simulate_player_input_info;
 
   struct Simulate_info;
+
+  class Snapshotting_error;
 
   constexpr Game() noexcept = default;
 
@@ -57,10 +66,16 @@ public:
 
   void simulate(const Simulate_info &info) const;
 
+  void snapshot(net::Writer &writer) const;
+
 private:
+  friend constexpr bool operator==(Game lhs, Game rhs) noexcept = default;
+
   friend Game create_game(const Create_info &info);
 
   friend void destroy_game(Game game) noexcept;
+
+  friend struct std::hash<Game>;
 
   Impl *_impl{};
 };
@@ -85,6 +100,8 @@ struct Game::Simulate_info {
   std::span<const Simulate_player_input_info> player_inputs;
   float duration;
 };
+
+class Game::Snapshotting_error : public std::exception {};
 
 class Unique_player {
 public:
@@ -159,5 +176,20 @@ inline Unique_game create_game_unique(const Game::Create_info &info) {
   return Unique_game{create_game(info)};
 }
 } // namespace fpsparty::game
+
+namespace std {
+template <> struct hash<fpsparty::game::Player> {
+  constexpr std::size_t
+  operator()(fpsparty::game::Player value) const noexcept {
+    return static_cast<std::size_t>(std::bit_cast<std::uintptr_t>(value._impl));
+  }
+};
+
+template <> struct hash<fpsparty::game::Game> {
+  constexpr std::size_t operator()(fpsparty::game::Game value) const noexcept {
+    return static_cast<std::size_t>(std::bit_cast<std::uintptr_t>(value._impl));
+  }
+};
+} // namespace std
 
 #endif

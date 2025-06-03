@@ -1,6 +1,7 @@
 #include "constants.hpp"
 #include "enet.hpp"
 #include "game/game.hpp"
+#include "net/ostream_writer.hpp"
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -71,6 +72,8 @@ int main() {
           std::chrono::duration<float>{constants::tick_duration});
       game->simulate(
           {.player_inputs = {}, .duration = constants::tick_duration});
+      auto packet_writer = net::Ostringstream_writer{};
+      game->snapshot(packet_writer);
     }
   }
   if (signal_status == SIGINT) {
