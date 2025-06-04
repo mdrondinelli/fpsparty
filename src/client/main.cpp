@@ -570,6 +570,9 @@ int main() {
     glfw::poll_events();
     client->service_each([&](const enet::Event &e) {
       switch (e.type) {
+      case enet::Event_type::receive:
+        std::cout << "Got receive event.\n";
+        break;
       case enet::Event_type::disconnect:
         std::cout << "Got disconnect event.\n";
         connected = false;

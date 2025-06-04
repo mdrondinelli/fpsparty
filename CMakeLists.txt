@@ -37,7 +37,7 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/src
 )
 target_link_directories(server PRIVATE ${CMAKE_SOURCE_DIR}/extern/enet/.libs)
-target_link_libraries(server enet)
+target_link_libraries(server enet game)
 
 # client
 add_executable(

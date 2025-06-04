@@ -74,6 +74,10 @@ int main() {
           {.player_inputs = {}, .duration = constants::tick_duration});
       auto packet_writer = net::Ostringstream_writer{};
       game->snapshot(packet_writer);
+      server->broadcast(
+          0, enet::create_packet_unique(
+                 {.data = packet_writer.stream().view().data(),
+                  .data_length = packet_writer.stream().view().length()}));
     }
   }
   if (signal_status == SIGINT) {
