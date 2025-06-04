@@ -18,6 +18,8 @@ class Player {
 public:
   struct Create_info;
 
+  struct Input_state;
+
   constexpr Player() noexcept = default;
 
   constexpr explicit Player(void *impl) noexcept
@@ -26,6 +28,10 @@ public:
   constexpr operator bool() const noexcept { return _impl != nullptr; }
 
   constexpr explicit operator void *() const noexcept { return _impl; }
+
+  Input_state get_input_state() const noexcept;
+
+  void set_input_state(const Input_state &input_state) const noexcept;
 
 private:
   friend class Game;
@@ -86,18 +92,16 @@ void destroy_game(Game game) noexcept;
 
 struct Player::Create_info {};
 
-struct Game::Create_info {};
-
-struct Game::Simulate_player_input_info {
-  Player player;
-  bool move_left;
-  bool move_right;
-  bool move_forward;
-  bool move_backward;
+struct Player::Input_state {
+  bool move_left{};
+  bool move_right{};
+  bool move_forward{};
+  bool move_backward{};
 };
 
+struct Game::Create_info {};
+
 struct Game::Simulate_info {
-  std::span<const Simulate_player_input_info> player_inputs;
   float duration;
 };
 

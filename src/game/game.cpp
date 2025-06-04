@@ -11,7 +11,16 @@ struct Game::Impl {
 
 struct Player::Impl {
   Eigen::Vector2f position;
+  Input_state input_state;
 };
+
+Player::Input_state Player::get_input_state() const noexcept {
+  return _impl->input_state;
+}
+
+void Player::set_input_state(const Input_state &input_state) const noexcept {
+  _impl->input_state = input_state;
+}
 
 Game create_game(const Game::Create_info &) { return Game{new Game::Impl}; }
 
@@ -37,22 +46,23 @@ Game::create_player_unique(const Player::Create_info &info) const {
 }
 
 void Game::simulate(const Simulate_info &info) const {
-  for (const auto &player_input : info.player_inputs) {
+  for (const auto &player : _impl->players) {
+    const auto input_state = player.get_input_state();
     auto movement_vector = Eigen::Vector2f{0.0f, 0.0f};
-    if (player_input.move_left) {
+    if (input_state.move_left) {
       movement_vector -= Eigen::Vector2f{1.0f, 0.0f};
     }
-    if (player_input.move_right) {
+    if (input_state.move_right) {
       movement_vector += Eigen::Vector2f{1.0f, 0.0f};
     }
-    if (player_input.move_forward) {
+    if (input_state.move_forward) {
       movement_vector += Eigen::Vector2f{0.0f, 1.0f};
     }
-    if (player_input.move_backward) {
+    if (input_state.move_backward) {
       movement_vector -= Eigen::Vector2f{1.0f, 0.0f};
     }
     movement_vector.normalize();
-    player_input.player._impl->position +=
+    player._impl->position +=
         movement_vector * constants::player_movement_speed * info.duration;
   }
 }

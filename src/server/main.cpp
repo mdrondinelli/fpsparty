@@ -70,8 +70,7 @@ int main() {
         std::chrono::duration<float>{constants::tick_duration}) {
       game_loop_duration -= std::chrono::duration_cast<Duration>(
           std::chrono::duration<float>{constants::tick_duration});
-      game->simulate(
-          {.player_inputs = {}, .duration = constants::tick_duration});
+      game->simulate({.duration = constants::tick_duration});
       auto packet_writer = net::Ostringstream_writer{};
       game->snapshot(packet_writer);
       server->broadcast(
