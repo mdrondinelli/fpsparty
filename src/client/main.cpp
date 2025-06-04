@@ -2,6 +2,8 @@
 #include "constants.hpp"
 #include "enet.hpp"
 #include "glfw.hpp"
+#include "net/ostream_writer.hpp"
+#include "net/serialize.hpp"
 #include "vma.hpp"
 #include <algorithm>
 #include <bit>
@@ -559,15 +561,57 @@ int main() {
   std::cout << "Connecting to " << server_ip << " on port " << constants::port
             << ".\n";
   const auto connect_event = client->service(5000);
-  if (connect_event.type == enet::Event_type::connect) {
-    std::cout << "Connection successful.\n";
-  } else {
+  if (connect_event.type != enet::Event_type::connect) {
     std::cout << "Connection failed.\n";
     return 0;
   }
+  std::cout << "Connection successful.\n";
+  const auto server = connect_event.peer;
   auto connected = true;
+  using Clock = std::chrono::high_resolution_clock;
+  using Duration = Clock::duration;
+  auto input_duration = Duration{};
+  auto input_time = Clock::now();
   while (!signal_status && !window->should_close() && connected) {
     glfw::poll_events();
+    const auto now = Clock::now();
+    input_duration += now - input_time;
+    input_time = now;
+    if (input_duration >=
+        std::chrono::duration<float>(constants::input_duration)) {
+      input_duration -= std::chrono::duration_cast<Duration>(
+          std::chrono::duration<float>(constants::input_duration));
+      const auto move_left =
+          window->get_key(glfw::Key::k_a) == glfw::Key_state::press;
+      const auto move_right =
+          window->get_key(glfw::Key::k_d) == glfw::Key_state::press;
+      const auto move_forward =
+          window->get_key(glfw::Key::k_w) == glfw::Key_state::press;
+      const auto move_backward =
+          window->get_key(glfw::Key::k_s) == glfw::Key_state::press;
+      const auto movement_flags = [&]() {
+        auto retval = std::uint8_t{};
+        if (move_left) {
+          retval |= 1 << 0;
+        }
+        if (move_right) {
+          retval |= 1 << 1;
+        }
+        if (move_forward) {
+          retval |= 1 << 2;
+        }
+        if (move_backward) {
+          retval |= 1 << 3;
+        }
+        return retval;
+      }();
+      auto packet_writer = net::Ostringstream_writer{};
+      net::serialize<std::uint8_t>(packet_writer, movement_flags);
+      server.send(0,
+                  enet::create_packet_unique(
+                      {.data = packet_writer.stream().view().data(),
+                       .data_length = packet_writer.stream().view().length()}));
+    }
     client->service_each([&](const enet::Event &e) {
       switch (e.type) {
       case enet::Event_type::receive:

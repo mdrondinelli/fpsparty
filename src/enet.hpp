@@ -47,38 +47,6 @@ private:
   bool _owning{};
 };
 
-class Peer {
-  friend class Host;
-
-public:
-  constexpr operator ENetPeer *() const noexcept { return _value; }
-
-  void *get_data() const noexcept { return _value->data; }
-
-  void set_data(void *data) const noexcept { _value->data = data; }
-
-  void disconnect(std::uint32_t data) const noexcept {
-    enet_peer_disconnect(_value, data);
-  }
-
-  void disconnect_later(std::uint32_t data) const noexcept {
-    enet_peer_disconnect_later(_value, data);
-  }
-
-  void disconnect_now(std::uint32_t data) const noexcept {
-    enet_peer_disconnect_now(_value, data);
-  }
-
-  friend constexpr bool operator==(Peer lhs, Peer rhs) noexcept {
-    return lhs._value == rhs._value;
-  }
-
-private:
-  explicit constexpr Peer(ENetPeer *value) noexcept : _value{value} {}
-
-  ENetPeer *_value;
-};
-
 enum class Packet_flag_bits {
   reliable = ENET_PACKET_FLAG_RELIABLE,
   unsequenced = ENET_PACKET_FLAG_UNSEQUENCED,
@@ -153,6 +121,8 @@ public:
 
   constexpr Packet operator*() const noexcept { return _value; }
 
+  constexpr Packet get() const noexcept { return _value; }
+
   constexpr Packet release() noexcept {
     const auto temp = _value;
     _value = nullptr;
@@ -171,6 +141,51 @@ inline Unique_packet
 create_packet_unique(const Packet::Create_info &create_info) {
   return Unique_packet{create_packet(create_info)};
 }
+
+class Peer {
+  friend class Host;
+
+public:
+  class Sending_error : std::exception {};
+
+  constexpr operator ENetPeer *() const noexcept { return _value; }
+
+  void *get_data() const noexcept { return _value->data; }
+
+  void set_data(void *data) const noexcept { _value->data = data; }
+
+  void disconnect(std::uint32_t data) const noexcept {
+    enet_peer_disconnect(_value, data);
+  }
+
+  void disconnect_later(std::uint32_t data) const noexcept {
+    enet_peer_disconnect_later(_value, data);
+  }
+
+  void disconnect_now(std::uint32_t data) const noexcept {
+    enet_peer_disconnect_now(_value, data);
+  }
+
+  void send(std::uint8_t channel_id, Packet packet) const {
+    if (enet_peer_send(_value, channel_id, packet) < 0) {
+      throw Sending_error{};
+    }
+  }
+
+  void send(std::uint8_t channel_id, Unique_packet packet) const {
+    send(channel_id, packet.get());
+    packet.release();
+  }
+
+  friend constexpr bool operator==(Peer lhs, Peer rhs) noexcept {
+    return lhs._value == rhs._value;
+  }
+
+private:
+  explicit constexpr Peer(ENetPeer *value) noexcept : _value{value} {}
+
+  ENetPeer *_value;
+};
 
 using Address = ENetAddress;
 

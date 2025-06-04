@@ -141,6 +141,131 @@ enum class Opengl_profile {
   core = GLFW_OPENGL_CORE_PROFILE
 };
 
+enum class Key {
+  k_space = 32,
+  k_apostrophe = 39, /* ' */
+  k_comma = 44,      /* , */
+  k_minus = 45,      /* - */
+  k_period = 46,     /* . */
+  k_slash = 47,      /* / */
+  k_0 = 48,
+  k_1 = 49,
+  k_2 = 50,
+  k_3 = 51,
+  k_4 = 52,
+  k_5 = 53,
+  k_6 = 54,
+  k_7 = 55,
+  k_8 = 56,
+  k_9 = 57,
+  k_semicolon = 59, /* ; */
+  k_equal = 61,     /* = */
+  k_a = 65,
+  k_b = 66,
+  k_c = 67,
+  k_d = 68,
+  k_e = 69,
+  k_f = 70,
+  k_g = 71,
+  k_h = 72,
+  k_i = 73,
+  k_j = 74,
+  k_k = 75,
+  k_l = 76,
+  k_m = 77,
+  k_n = 78,
+  k_o = 79,
+  k_p = 80,
+  k_q = 81,
+  k_r = 82,
+  k_s = 83,
+  k_t = 84,
+  k_u = 85,
+  k_v = 86,
+  k_w = 87,
+  k_x = 88,
+  k_y = 89,
+  k_z = 90,
+  k_left_bracket = 91,  /* [ */
+  k_backslash = 92,     /* \ */
+  k_right_bracket = 93, /* ] */
+  k_grave_accent = 96,  /* ` */
+  k_world_1 = 161,      /* non-us #1 */
+  k_world_2 = 162,      /* non-us #2 */
+  k_escape = 256,
+  k_enter = 257,
+  k_tab = 258,
+  k_backspace = 259,
+  k_insert = 260,
+  k_delete = 261,
+  k_right = 262,
+  k_left = 263,
+  k_down = 264,
+  k_up = 265,
+  k_page_up = 266,
+  k_page_down = 267,
+  k_home = 268,
+  k_end = 269,
+  k_caps_lock = 280,
+  k_scroll_lock = 281,
+  k_num_lock = 282,
+  k_print_screen = 283,
+  k_pause = 284,
+  k_f1 = 290,
+  k_f2 = 291,
+  k_f3 = 292,
+  k_f4 = 293,
+  k_f5 = 294,
+  k_f6 = 295,
+  k_f7 = 296,
+  k_f8 = 297,
+  k_f9 = 298,
+  k_f10 = 299,
+  k_f11 = 300,
+  k_f12 = 301,
+  k_f13 = 302,
+  k_f14 = 303,
+  k_f15 = 304,
+  k_f16 = 305,
+  k_f17 = 306,
+  k_f18 = 307,
+  k_f19 = 308,
+  k_f20 = 309,
+  k_f21 = 310,
+  k_f22 = 311,
+  k_f23 = 312,
+  k_f24 = 313,
+  k_f25 = 314,
+  k_kp_0 = 320,
+  k_kp_1 = 321,
+  k_kp_2 = 322,
+  k_kp_3 = 323,
+  k_kp_4 = 324,
+  k_kp_5 = 325,
+  k_kp_6 = 326,
+  k_kp_7 = 327,
+  k_kp_8 = 328,
+  k_kp_9 = 329,
+  k_kp_decimal = 330,
+  k_kp_divide = 331,
+  k_kp_multiply = 332,
+  k_kp_subtract = 333,
+  k_kp_add = 334,
+  k_kp_enter = 335,
+  k_kp_equal = 336,
+  k_left_shift = 340,
+  k_left_control = 341,
+  k_left_alt = 342,
+  k_left_super = 343,
+  k_right_shift = 344,
+  k_right_control = 345,
+  k_right_alt = 346,
+  k_right_super = 347,
+  k_menu = 348,
+};
+
+enum class Key_state { press = GLFW_PRESS, release = GLFW_RELEASE };
+
 class Window {
 public:
   struct Create_info {
@@ -210,6 +335,10 @@ public:
     auto retval = std::array<int, 2>{};
     glfwGetFramebufferSize(_value, &retval[0], &retval[1]);
     return retval;
+  }
+
+  Key_state get_key(Key key) const {
+    return static_cast<Key_state>(glfwGetKey(_value, static_cast<int>(key)));
   }
 
 private:
@@ -315,6 +444,7 @@ create_window_unique(const Window::Create_info &create_info) {
 }
 
 inline void poll_events() { glfwPollEvents(); }
+
 } // namespace fpsparty::glfw
 
 #endif
