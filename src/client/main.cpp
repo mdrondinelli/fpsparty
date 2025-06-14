@@ -2,8 +2,9 @@
 #include "constants.hpp"
 #include "enet.hpp"
 #include "glfw.hpp"
-#include "net/ostream_writer.hpp"
-#include "net/serialize.hpp"
+#include "net/message_type.hpp"
+#include "serial/ostream_writer.hpp"
+#include "serial/serialize.hpp"
 #include "vma.hpp"
 #include <algorithm>
 #include <bit>
@@ -24,6 +25,7 @@
 
 using namespace fpsparty;
 using namespace fpsparty::client;
+using namespace fpsparty::net;
 
 namespace vk {
 DispatchLoaderDynamic defaultDispatchLoaderDynamic;
@@ -605,8 +607,10 @@ int main() {
         }
         return retval;
       }();
-      auto packet_writer = net::Ostringstream_writer{};
-      net::serialize<std::uint8_t>(packet_writer, movement_flags);
+      auto packet_writer = serial::Ostringstream_writer{};
+      serial::serialize<net::Message_type>(
+          packet_writer, net::Message_type::player_input_state);
+      serial::serialize<std::uint8_t>(packet_writer, movement_flags);
       server.send(0,
                   enet::create_packet_unique(
                       {.data = packet_writer.stream().view().data(),

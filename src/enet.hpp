@@ -7,6 +7,7 @@
 #include <enet/enet.h>
 #include <exception>
 #include <optional>
+#include <span>
 #include <utility>
 
 namespace fpsparty::enet {
@@ -79,6 +80,10 @@ public:
 
   constexpr operator ENetPacket *() const noexcept { return _value; }
 
+  std::span<std::uint8_t> get_data() const noexcept {
+    return std::span{_value->data, _value->dataLength};
+  }
+
 private:
   ENetPacket *_value{};
 };
@@ -120,6 +125,8 @@ public:
   constexpr operator bool() const noexcept { return _value; }
 
   constexpr Packet operator*() const noexcept { return _value; }
+
+  constexpr const Packet *operator->() const noexcept { return &_value; }
 
   constexpr Packet get() const noexcept { return _value; }
 

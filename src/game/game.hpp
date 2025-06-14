@@ -1,10 +1,10 @@
 #ifndef FPSPARTY_GAME_GAME_HPP
 #define FPSPARTY_GAME_GAME_HPP
 
-#include "net/writer.hpp"
+#include "serial/serialize.hpp"
+#include "serial/writer.hpp"
 #include <bit>
 #include <exception>
-#include <span>
 
 namespace fpsparty::game {
 class Game;
@@ -72,7 +72,7 @@ public:
 
   void simulate(const Simulate_info &info) const;
 
-  void snapshot(net::Writer &writer) const;
+  void snapshot(serial::Writer &writer) const;
 
 private:
   friend constexpr bool operator==(Game lhs, Game rhs) noexcept = default;
@@ -179,7 +179,39 @@ private:
 inline Unique_game create_game_unique(const Game::Create_info &info) {
   return Unique_game{create_game(info)};
 }
+
 } // namespace fpsparty::game
+namespace fpsparty::serial {
+template <> struct Serializer<game::Player::Input_state> {
+  void write(Writer &writer, const game::Player::Input_state &value) const {
+    auto flags = std::uint8_t{};
+    if (value.move_left) {
+      flags |= 1 << 0;
+    }
+    if (value.move_right) {
+      flags |= 1 << 1;
+    }
+    if (value.move_forward) {
+      flags |= 1 << 2;
+    }
+    if (value.move_backward) {
+      flags |= 1 << 3;
+    }
+    serialize<std::uint8_t>(writer, flags);
+  }
+
+  std::optional<game::Player::Input_state> read(Reader &reader) const {
+    auto flags = deserialize<std::uint8_t>(reader);
+    if (!flags) {
+      return std::nullopt;
+    }
+    return game::Player::Input_state{.move_left = (*flags & (1 << 0)) != 0,
+                                     .move_right = (*flags & (1 << 1)) != 0,
+                                     .move_forward = (*flags & (1 << 2)) != 0,
+                                     .move_backward = (*flags & (1 << 3)) != 0};
+  }
+};
+} // namespace fpsparty::serial
 
 namespace std {
 template <> struct hash<fpsparty::game::Player> {

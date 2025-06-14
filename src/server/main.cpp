@@ -1,8 +1,7 @@
 #include "constants.hpp"
 #include "enet.hpp"
 #include "game/game.hpp"
-#include "net/ostream_writer.hpp"
-#include <algorithm>
+#include "net/server.hpp"
 #include <cassert>
 #include <chrono>
 #include <csignal>
@@ -15,6 +14,32 @@ using namespace fpsparty;
 namespace {
 volatile std::sig_atomic_t signal_status{};
 void handle_signal(int signal) { signal_status = signal; }
+
+class Server : public net::Server {
+public:
+  explicit Server(const net::Server_create_info &create_info)
+      : net::Server{create_info} {}
+
+protected:
+  void on_peer_connect(enet::Peer peer) override {
+    std::cout << "Peer connected.\n";
+    const auto player = get_game().create_player({});
+    peer.set_data(static_cast<void *>(player));
+  }
+
+  void on_peer_disconnect(enet::Peer peer) override {
+    std::cout << "Peer disconnected.\n";
+    const auto player = static_cast<game::Player>(peer.get_data());
+    get_game().destroy_player(player);
+  }
+
+  void
+  on_player_input_state(enet::Peer peer,
+                        const game::Player::Input_state &input_state) override {
+    const auto player = static_cast<game::Player>(peer.get_data());
+    player.set_input_state(input_state);
+  }
+};
 } // namespace
 
 int main() {
@@ -23,11 +48,11 @@ int main() {
   auto game = game::create_game_unique({});
   std::cout << "Initialized game.\n";
   const auto enet_guard = enet::Initialization_guard{{}};
-  const auto server = enet::make_server_host_unique({
+  auto server = Server{{
       .port = constants::port,
       .max_clients = constants::max_clients,
-      .max_channels = 1,
-  });
+      .game = *game,
+  }};
   auto peers = std::vector<enet::Peer>{};
   peers.reserve(constants::max_clients);
   std::cout << "Server running on port " << constants::port << ".\n";
@@ -36,33 +61,7 @@ int main() {
   auto game_loop_duration = Duration{};
   auto game_loop_time = Clock::now();
   while (!signal_status) {
-    server->service_each([&](const enet::Event &e) {
-      switch (e.type) {
-      case enet::Event_type::connect:
-        std::cout << "Got connect event.\n";
-        {
-          peers.emplace_back(e.peer);
-          const auto player = game->create_player({});
-          e.peer.set_data(static_cast<void *>(player));
-        }
-        break;
-      case enet::Event_type::disconnect:
-        std::cout << "Got disconnect event.\n";
-        {
-          const auto it = std::ranges::find(peers, e.peer);
-          assert(it != peers.end());
-          const auto player = static_cast<game::Player>(it->get_data());
-          game->destroy_player(player);
-          peers.erase(it);
-        }
-        break;
-      case enet::Event_type::receive:
-        std::cout << "Got receive event.\n";
-        break;
-      default:
-        break;
-      }
-    });
+    server.poll_events();
     const auto now = Clock::now();
     game_loop_duration += now - game_loop_time;
     game_loop_time = now;
@@ -71,30 +70,11 @@ int main() {
       game_loop_duration -= std::chrono::duration_cast<Duration>(
           std::chrono::duration<float>{constants::tick_duration});
       game->simulate({.duration = constants::tick_duration});
-      auto packet_writer = net::Ostringstream_writer{};
-      game->snapshot(packet_writer);
-      server->broadcast(
-          0, enet::create_packet_unique(
-                 {.data = packet_writer.stream().view().data(),
-                  .data_length = packet_writer.stream().view().length()}));
+      server.broadcast_game_state();
     }
   }
   if (signal_status == SIGINT) {
-    if (!peers.empty()) {
-      std::cout << "Disconnecting " << peers.size() << " clients.\n";
-      for (const auto peer : peers) {
-        peer.disconnect(0);
-      }
-      do {
-        const auto event = server->service(1000);
-        if (event.type == enet::Event_type::disconnect) {
-          std::cout << "Got disconnect event.\n";
-          const auto it = std::ranges::find(peers, event.peer);
-          assert(it != peers.end());
-          peers.erase(it);
-        }
-      } while (!peers.empty());
-    }
+    server.disconnect();
   }
   std::cout << "Exiting.\n";
   return 0;

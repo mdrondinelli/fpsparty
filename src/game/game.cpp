@@ -1,8 +1,8 @@
 #include "game.hpp"
 #include "constants.hpp"
+#include "serial/serialize.hpp"
 #include <Eigen/Dense>
 #include <algorithm>
-#include <net/serialize.hpp>
 
 namespace fpsparty::game {
 struct Game::Impl {
@@ -67,8 +67,8 @@ void Game::simulate(const Simulate_info &info) const {
   }
 }
 
-void Game::snapshot(net::Writer &writer) const {
-  using net::serialize;
+void Game::snapshot(serial::Writer &writer) const {
+  using serial::serialize;
   serialize<std::uint8_t>(writer, _impl->players.size());
   for (const auto &player : _impl->players) {
     serialize<float>(writer, player._impl->position.x());

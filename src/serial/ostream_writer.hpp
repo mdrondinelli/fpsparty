@@ -1,14 +1,14 @@
-#ifndef FPSPARTY_NET_OSTREAM_WRITER_HPP
-#define FPSPARTY_NET_OSTREAM_WRITER_HPP
+#ifndef FPSPARTY_SERIAL_OSTREAM_WRITER_HPP
+#define FPSPARTY_SERIAL_OSTREAM_WRITER_HPP
 
-#include "net/writer.hpp"
+#include "writer.hpp"
 #include <concepts>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <utility>
 
-namespace fpsparty::net {
+namespace fpsparty::serial {
 template <typename T, typename CharT = T::char_type,
           typename Traits = std::char_traits<CharT>>
 requires std::derived_from<T, std::basic_ostream<CharT, Traits>>
@@ -32,6 +32,6 @@ private:
 
 using Ofstream_writer = Ostream_writer<std::ofstream>;
 using Ostringstream_writer = Ostream_writer<std::ostringstream>;
-} // namespace fpsparty::net
+} // namespace fpsparty::serial
 
 #endif
