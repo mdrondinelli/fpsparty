@@ -42,6 +42,8 @@ public:
   get_players(std::pmr::memory_resource *memory_resource =
                   std::pmr::get_default_resource()) const;
 
+  Replicated_player get_player(std::uint32_t id) const noexcept;
+
 private:
   struct Impl;
 

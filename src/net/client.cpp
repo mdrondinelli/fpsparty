@@ -70,11 +70,13 @@ void Client::handle_event(const enet::Event &e) {
   case enet::Event_type::connect: {
     assert(_server == e.peer);
     _connecting = false;
+    on_connect();
     return;
   }
   case enet::Event_type::disconnect: {
     _server = {};
     _connecting = false;
+    on_disconnect();
     return;
   }
   case enet::Event_type::receive: {
@@ -85,6 +87,15 @@ void Client::handle_event(const enet::Event &e) {
       return;
     }
     switch (*message_type) {
+    case Message_type::player_id: {
+      const auto player_id = deserialize<std::uint32_t>(reader);
+      if (!player_id) {
+        std::cerr << "Received malformed player_id message.\n";
+        return;
+      }
+      on_player_id(*player_id);
+      return;
+    }
     case Message_type::game_state:
       on_game_state(reader);
       return;

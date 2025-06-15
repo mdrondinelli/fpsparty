@@ -493,19 +493,26 @@ public:
         _game{create_info.game} {}
 
 protected:
+  void on_disconnect() override { _player_id = std::nullopt; }
+
+  void on_player_id(std::uint32_t player_id) override {
+    _player_id = player_id;
+    std::cout << "Got player id: " << player_id << ".\n";
+  }
+
   void on_game_state(serial::Reader &reader) override {
     _game.update(reader);
-    const auto players = _game.get_players();
-    std::cout << "Player count: " << players.size() << ".\n";
-    for (const auto &player : players) {
+    if (_player_id) {
+      const auto player = _game.get_player(*_player_id);
       const auto &player_position = player.get_position();
-      std::cout << "Player position: (" << player_position.x() << ", "
-                << player_position.y() << ").\n";
+      std::cout << "Client player position: (" << player_position.x() << ", "
+                << player_position.y() << ", " << player_position.z() << ").\n";
     }
   }
 
 private:
-  game::Replicated_game _game;
+  game::Replicated_game _game{};
+  std::optional<std::uint32_t> _player_id{};
 };
 } // namespace
 
@@ -514,8 +521,8 @@ int main() {
   std::signal(SIGTERM, handle_signal);
   const auto glfw_guard = glfw::Initialization_guard{{}};
   const auto glfw_window = glfw::create_window_unique({
-      .width = 1920,
-      .height = 1080,
+      .width = 1280,
+      .height = 720,
       .title = "FPS Party",
       .resizable = true,
       .client_api = glfw::Client_api::no_api,

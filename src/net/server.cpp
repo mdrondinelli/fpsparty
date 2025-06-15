@@ -76,6 +76,18 @@ void Server::disconnect() {
   }
 }
 
+void Server::send_player_id(enet::Peer peer, std::uint32_t player_id) {
+  auto writer = serial::Ostringstream_writer{};
+  using serial::serialize;
+  serialize<Message_type>(writer, Message_type::player_id);
+  serialize<std::uint32_t>(writer, player_id);
+  peer.send(
+      constants::player_id_channel_id,
+      enet::create_packet_unique({.data = writer.stream().view().data(),
+                                  .data_length = writer.stream().view().size(),
+                                  .flags = enet::Packet_flag_bits::reliable}));
+}
+
 void Server::broadcast_game_state(game::Game game) {
   auto packet_writer = serial::Ostringstream_writer{};
   serial::serialize<Message_type>(packet_writer, Message_type::game_state);

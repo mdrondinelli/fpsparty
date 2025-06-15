@@ -67,6 +67,11 @@ Replicated_game::get_players(std::pmr::memory_resource *memory_resource) const {
   return retval;
 }
 
+Replicated_player Replicated_game::get_player(std::uint32_t id) const noexcept {
+  const auto it = _impl->players.find(id);
+  return Replicated_player{it != _impl->players.end() ? &it->second : nullptr};
+}
+
 Replicated_game create_replicated_game(const Replicated_game::Create_info &) {
   return Replicated_game{new Replicated_game::Impl};
 }

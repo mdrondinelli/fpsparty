@@ -30,6 +30,12 @@ public:
   void send_player_input_state(const game::Player::Input_state &input_state);
 
 protected:
+  virtual void on_connect() {}
+
+  virtual void on_disconnect() {}
+
+  virtual void on_player_id(std::uint32_t) {}
+
   virtual void on_game_state(serial::Reader &) {}
 
 private:

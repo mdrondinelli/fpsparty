@@ -11,10 +11,12 @@ struct Game::Impl {
 };
 
 struct Player::Impl {
-  std::uint32_t id{};
-  Eigen::Vector3f position{};
+  std::uint32_t id;
+  Eigen::Vector3f position{0.0f, 0.0f, 0.0f};
   Input_state input_state{};
 };
+
+std::uint32_t Player::get_id() const noexcept { return _impl->id; }
 
 Player::Input_state Player::get_input_state() const noexcept {
   return _impl->input_state;
@@ -65,7 +67,7 @@ void Game::simulate(const Simulate_info &info) const {
       movement_vector += Eigen::Vector3f{0.0f, 0.0f, 1.0f};
     }
     if (input_state.move_backward) {
-      movement_vector -= Eigen::Vector2f{0.0f, 0.0f, 1.0f};
+      movement_vector -= Eigen::Vector3f{0.0f, 0.0f, 1.0f};
     }
     movement_vector.normalize();
     player._impl->position +=
