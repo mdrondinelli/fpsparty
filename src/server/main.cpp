@@ -21,7 +21,6 @@ public:
     std::size_t max_clients;
     std::uint32_t incoming_bandwidth{};
     std::uint32_t outgoing_bandwidth{};
-    game::Game game;
   };
 
   explicit Server(const Create_info &create_info)
@@ -29,21 +28,24 @@ public:
                      .max_clients = create_info.max_clients,
                      .incoming_bandwidth = create_info.incoming_bandwidth,
                      .outgoing_bandwidth = create_info.outgoing_bandwidth}},
-        _game{create_info.game} {}
+        _game{{}} {}
 
-  void broadcast_game_state() { net::Server::broadcast_game_state(_game); }
+  constexpr game::Game get_game() const noexcept { return *_game; }
+
+  void broadcast_game_state() { net::Server::broadcast_game_state(*_game); }
 
 protected:
   void on_peer_connect(enet::Peer peer) override {
     std::cout << "Peer connected.\n";
-    const auto player = _game.create_player({});
+    const auto player = _game->create_player({});
     peer.set_data(static_cast<void *>(player));
+    send_player_id(peer, player.get_id());
   }
 
   void on_peer_disconnect(enet::Peer peer) override {
     std::cout << "Peer disconnected.\n";
     const auto player = static_cast<game::Player>(peer.get_data());
-    _game.destroy_player(player);
+    _game->destroy_player(player);
   }
 
   void
@@ -53,20 +55,18 @@ protected:
     player.set_input_state(input_state);
   }
 
-  game::Game _game;
+private:
+  game::Unique_game _game;
 };
 } // namespace
 
 int main() {
   std::signal(SIGINT, handle_signal);
   std::signal(SIGTERM, handle_signal);
-  auto game = game::create_game_unique({});
-  std::cout << "Initialized game.\n";
   const auto enet_guard = enet::Initialization_guard{{}};
   auto server = Server{{
       .port = constants::port,
       .max_clients = constants::max_clients,
-      .game = *game,
   }};
   std::cout << "Server running on port " << constants::port << ".\n";
   using Clock = std::chrono::high_resolution_clock;
@@ -82,7 +82,7 @@ int main() {
         std::chrono::duration<float>{constants::tick_duration}) {
       game_loop_duration -= std::chrono::duration_cast<Duration>(
           std::chrono::duration<float>{constants::tick_duration});
-      game->simulate({.duration = constants::tick_duration});
+      server.get_game().simulate({.duration = constants::tick_duration});
       server.broadcast_game_state();
     }
   }
@@ -90,7 +90,7 @@ int main() {
     server.disconnect();
     do {
       server.wait_events(100);
-    } while (game->get_player_count() > 0);
+    } while (server.get_game().get_player_count() > 0);
   }
   std::cout << "Exiting.\n";
   return 0;
