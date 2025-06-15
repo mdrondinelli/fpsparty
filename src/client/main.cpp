@@ -1,3 +1,4 @@
+#include "client/perspective_projection.hpp"
 #include "client/vertex_buffer.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
@@ -203,6 +204,7 @@ vma::Unique_allocator make_vma_allocator(vk::Instance instance,
 struct Vertex {
   float x;
   float y;
+  float z;
   float r;
   float g;
   float b;
@@ -300,7 +302,13 @@ make_vk_swapchain_image_views(vk::Device device,
 }
 
 vk::UniquePipelineLayout make_vk_pipeline_layout(vk::Device device) {
-  return device.createPipelineLayoutUnique({});
+  auto push_constant_range = vk::PushConstantRange{};
+  push_constant_range.stageFlags = vk::ShaderStageFlagBits::eVertex;
+  push_constant_range.offset = 0;
+  push_constant_range.size = 64;
+  return device.createPipelineLayoutUnique(
+      {.pushConstantRangeCount = 1,
+       .pPushConstantRanges = &push_constant_range});
 }
 
 class Bad_vk_shader_module_size_error : std::exception {};
@@ -338,18 +346,18 @@ vk::UniquePipeline make_vk_pipeline(vk::Device device,
        .pName = "main"}};
   const auto vertex_binding = vk::VertexInputBindingDescription{
       .binding = 0,
-      .stride = 5 * sizeof(float),
+      .stride = 6 * sizeof(float),
       .inputRate = vk::VertexInputRate::eVertex};
   const auto vertex_attributes =
       std::vector<vk::VertexInputAttributeDescription>{
           {.location = 0,
            .binding = 0,
-           .format = vk::Format::eR32G32Sfloat,
+           .format = vk::Format::eR32G32B32Sfloat,
            .offset = 0},
           {.location = 1,
            .binding = 0,
            .format = vk::Format::eR32G32B32Sfloat,
-           .offset = 2 * sizeof(float)}};
+           .offset = 3 * sizeof(float)}};
   const auto vertex_input_state = vk::PipelineVertexInputStateCreateInfo{
       .vertexBindingDescriptionCount = 1,
       .pVertexBindingDescriptions = &vertex_binding,
@@ -410,6 +418,7 @@ void record_vk_command_buffer(vk::CommandBuffer command_buffer,
                               vk::Image swapchain_image,
                               vk::ImageView swapchain_image_view,
                               const vk::Extent2D &swapchain_image_extent,
+                              vk::PipelineLayout pipeline_layout,
                               vk::Pipeline pipeline, vk::Buffer vertex_buffer,
                               std::size_t vertex_count) {
   command_buffer.begin(vk::CommandBufferBeginInfo{
@@ -456,6 +465,11 @@ void record_vk_command_buffer(vk::CommandBuffer command_buffer,
   command_buffer.setFrontFace(vk::FrontFace::eClockwise);
   command_buffer.setPrimitiveTopology(vk::PrimitiveTopology::eTriangleList);
   command_buffer.bindVertexBuffers(0, {vertex_buffer}, {0});
+  const auto projection_matrix =
+      make_perspective_projection_matrix(1.0f, 1.0f, 0.01f);
+  command_buffer.pushConstants(pipeline_layout,
+                               vk::ShaderStageFlagBits::eVertex, 0, 64,
+                               projection_matrix.data());
   command_buffer.draw(vertex_count, 1, 0, 0);
   command_buffer.endRendering();
   const auto swapchain_image_barrier_2 = vk::ImageMemoryBarrier2{
@@ -484,13 +498,12 @@ public:
   struct Create_info {
     std::uint32_t incoming_bandwidth{};
     std::uint32_t outgoing_bandwidth{};
-    game::Replicated_game game;
   };
 
   explicit Client(const Create_info &create_info)
       : net::Client{{.incoming_bandwidth = create_info.incoming_bandwidth,
                      .outgoing_bandwidth = create_info.outgoing_bandwidth}},
-        _game{create_info.game} {}
+        _game{game::create_replicated_game_unique({})} {}
 
 protected:
   void on_disconnect() override { _player_id = std::nullopt; }
@@ -501,9 +514,9 @@ protected:
   }
 
   void on_game_state(serial::Reader &reader) override {
-    _game.update(reader);
+    _game->apply_snapshot(reader);
     if (_player_id) {
-      const auto player = _game.get_player(*_player_id);
+      const auto player = _game->get_player(*_player_id);
       const auto &player_position = player.get_position();
       std::cout << "Client player position: (" << player_position.x() << ", "
                 << player_position.y() << ", " << player_position.z() << ").\n";
@@ -511,9 +524,10 @@ protected:
   }
 
 private:
-  game::Replicated_game _game{};
+  game::Unique_replicated_game _game{};
   std::optional<std::uint32_t> _player_id{};
 };
+
 } // namespace
 
 int main() {
@@ -546,9 +560,9 @@ int main() {
        .queueFamilyIndex = vk_queue_family_index});
   std::cout << "Created VkCommandPool.\n";
   auto const triangle_vertices = std::vector<Vertex>{
-      {.x = 0.0f, .y = -0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},
-      {.x = -0.5f, .y = 0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f},
-      {.x = 0.5f, .y = 0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f}};
+      {.x = 0.0f, .y = -0.5f, .z = 1.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},
+      {.x = -0.5f, .y = 0.5f, .z = 1.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},
+      {.x = 0.5f, .y = 0.5f, .z = 1.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f}};
   auto const triangle_vertex_buffer =
       upload_vertex_buffer(*vma_allocator, *vk_device, vk_queue,
                            *vk_command_pool, triangle_vertices);
@@ -591,8 +605,7 @@ int main() {
                                       vk_swapchain_image_format);
   std::cout << "Created VkPipeline.\n";
   const auto enet_guard = enet::Initialization_guard{{}};
-  auto game = game::create_replicated_game_unique({});
-  auto client = Client{{.game = *game}};
+  auto client = Client{{}};
   client.connect({.host = *enet::parse_ip(server_ip), .port = constants::port});
   std::cout << "Connecting to " << server_ip << " on port " << constants::port
             << ".\n";
@@ -645,7 +658,7 @@ int main() {
       record_vk_command_buffer(
           *vk_command_buffer, vk_swapchain_images[vk_swapchain_image_index],
           *vk_swapchain_image_views[vk_swapchain_image_index],
-          vk_swapchain_image_extent, *vk_pipeline,
+          vk_swapchain_image_extent, *vk_pipeline_layout, *vk_pipeline,
           triangle_vertex_buffer.get_buffer(), triangle_vertices.size());
       const auto vk_image_acquire_wait_stage =
           vk::PipelineStageFlags{vk::PipelineStageFlagBits::eTopOfPipe};

@@ -16,7 +16,7 @@ struct Replicated_game::Impl {
   std::unordered_map<std::uint32_t, Replicated_player::Impl> players{};
 };
 
-void Replicated_game::update(serial::Reader &reader) const {
+void Replicated_game::apply_snapshot(serial::Reader &reader) const {
   using serial::deserialize;
   const auto player_count = deserialize<std::uint8_t>(reader);
   if (!player_count) {
@@ -57,6 +57,11 @@ void Replicated_game::update(serial::Reader &reader) const {
   }
 }
 
+Replicated_player Replicated_game::get_player(std::uint32_t id) const noexcept {
+  const auto it = _impl->players.find(id);
+  return Replicated_player{it != _impl->players.end() ? &it->second : nullptr};
+}
+
 std::pmr::vector<Replicated_player>
 Replicated_game::get_players(std::pmr::memory_resource *memory_resource) const {
   auto retval = std::pmr::vector<Replicated_player>(memory_resource);
@@ -65,11 +70,6 @@ Replicated_game::get_players(std::pmr::memory_resource *memory_resource) const {
     retval.emplace_back(Replicated_player{&player});
   }
   return retval;
-}
-
-Replicated_player Replicated_game::get_player(std::uint32_t id) const noexcept {
-  const auto it = _impl->players.find(id);
-  return Replicated_player{it != _impl->players.end() ? &it->second : nullptr};
 }
 
 Replicated_game create_replicated_game(const Replicated_game::Create_info &) {
