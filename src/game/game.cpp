@@ -3,7 +3,6 @@
 #include "serial/serialize.hpp"
 #include <Eigen/Dense>
 #include <algorithm>
-#include <iostream>
 
 namespace fpsparty::game {
 struct Game::Impl {
