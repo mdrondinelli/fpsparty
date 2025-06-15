@@ -12,7 +12,7 @@ class Replicated_player {
 public:
   explicit operator void *() const noexcept { return _impl; }
 
-  const Eigen::Vector2f &get_position() const noexcept;
+  const Eigen::Vector3f &get_position() const noexcept;
 
 private:
   friend class Replicated_game;

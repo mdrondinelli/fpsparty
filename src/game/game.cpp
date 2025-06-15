@@ -12,7 +12,7 @@ struct Game::Impl {
 
 struct Player::Impl {
   std::uint32_t id{};
-  Eigen::Vector2f position{};
+  Eigen::Vector3f position{};
   Input_state input_state{};
 };
 
@@ -54,18 +54,18 @@ std::size_t Game::get_player_count() const noexcept {
 void Game::simulate(const Simulate_info &info) const {
   for (const auto &player : _impl->players) {
     const auto input_state = player.get_input_state();
-    auto movement_vector = Eigen::Vector2f{0.0f, 0.0f};
+    auto movement_vector = Eigen::Vector3f{0.0f, 0.0f, 0.0f};
     if (input_state.move_left) {
-      movement_vector += Eigen::Vector2f{1.0f, 0.0f};
+      movement_vector += Eigen::Vector3f{1.0f, 0.0f, 0.0f};
     }
     if (input_state.move_right) {
-      movement_vector -= Eigen::Vector2f{1.0f, 0.0f};
+      movement_vector -= Eigen::Vector3f{1.0f, 0.0f, 0.0f};
     }
     if (input_state.move_forward) {
-      movement_vector += Eigen::Vector2f{0.0f, 1.0f};
+      movement_vector += Eigen::Vector3f{0.0f, 0.0f, 1.0f};
     }
     if (input_state.move_backward) {
-      movement_vector -= Eigen::Vector2f{0.0f, 1.0f};
+      movement_vector -= Eigen::Vector2f{0.0f, 0.0f, 1.0f};
     }
     movement_vector.normalize();
     player._impl->position +=
@@ -80,6 +80,7 @@ void Game::snapshot(serial::Writer &writer) const {
     serialize<std::uint32_t>(writer, player._impl->id);
     serialize<float>(writer, player._impl->position.x());
     serialize<float>(writer, player._impl->position.y());
+    serialize<float>(writer, player._impl->position.z());
   }
 }
 } // namespace fpsparty::game

@@ -6,10 +6,10 @@
 namespace fpsparty::game {
 struct Replicated_player::Impl {
   bool marked{};
-  Eigen::Vector2f position{0.0f, 0.0f};
+  Eigen::Vector3f position{0.0f, 0.0f, 0.0f};
 };
 
-const Eigen::Vector2f &Replicated_player::get_position() const noexcept {
+const Eigen::Vector3f &Replicated_player::get_position() const noexcept {
   return _impl->position;
 }
 
@@ -42,8 +42,13 @@ void Replicated_game::update(serial::Reader &reader) const {
     if (!player_position_y) {
       throw Updating_error{};
     }
+    const auto player_position_z = deserialize<float>(reader);
+    if (!player_position_z) {
+      throw Updating_error{};
+    }
     player.position.x() = *player_position_x;
     player.position.y() = *player_position_y;
+    player.position.z() = *player_position_z;
   }
   for (auto it = _impl->players.begin(); it != _impl->players.end();) {
     if (!it->second.marked) {

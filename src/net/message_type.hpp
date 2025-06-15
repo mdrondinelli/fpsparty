@@ -4,7 +4,11 @@
 #include <cstdint>
 
 namespace fpsparty::net {
-enum class Message_type : std::uint8_t { player_input_state, game_state };
+enum class Message_type : std::uint8_t {
+  player_id,
+  player_input_state,
+  game_state
+};
 } // namespace fpsparty::net
 
 #endif
