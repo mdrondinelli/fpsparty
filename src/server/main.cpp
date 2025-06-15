@@ -28,7 +28,7 @@ public:
                      .max_clients = create_info.max_clients,
                      .incoming_bandwidth = create_info.incoming_bandwidth,
                      .outgoing_bandwidth = create_info.outgoing_bandwidth}},
-        _game{{}} {}
+        _game{game::create_game_unique({})} {}
 
   constexpr game::Game get_game() const noexcept { return *_game; }
 
