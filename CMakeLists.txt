@@ -12,12 +12,18 @@ add_subdirectory(extern/magic_enum-0.9.7)
 add_library(
   game
   src/game/game.cpp
+  src/game/replicated_game.cpp
+)
+target_include_directories(
+  game
+  SYSTEM
+  PUBLIC
+  ${CMAKE_SOURCE_DIR}/extern/eigen-3.4.0
 )
 target_include_directories(
   game
   SYSTEM
   PRIVATE
-  ${CMAKE_SOURCE_DIR}/extern/eigen-3.4.0
   ${CMAKE_SOURCE_DIR}/extern/magic_enum-0.9.7/include
 )
 target_include_directories(
@@ -29,8 +35,8 @@ target_include_directories(
 # net
 add_library(
   net
+  src/net/client.cpp
   src/net/server.cpp
-  src/net/server_message_handler.cpp
 )
 target_include_directories(
   net
@@ -93,7 +99,7 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/src
 )
 target_link_directories(client PRIVATE ${CMAKE_SOURCE_DIR}/extern/enet/.libs)
-target_link_libraries(client enet glfw volk GPUOpen::VulkanMemoryAllocator)
+target_link_libraries(client enet glfw volk GPUOpen::VulkanMemoryAllocator game net)
 
 # compiler options
 set_property(TARGET game net server client PROPERTY CXX_STANDARD 23)

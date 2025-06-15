@@ -1,13 +1,11 @@
 #include "client/vertex_buffer.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
+#include "game/replicated_game.hpp"
 #include "glfw.hpp"
-#include "net/message_type.hpp"
-#include "serial/ostream_writer.hpp"
-#include "serial/serialize.hpp"
+#include "net/client.hpp"
 #include "vma.hpp"
 #include <algorithm>
-#include <bit>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
@@ -25,7 +23,6 @@
 
 using namespace fpsparty;
 using namespace fpsparty::client;
-using namespace fpsparty::net;
 
 namespace vk {
 DispatchLoaderDynamic defaultDispatchLoaderDynamic;
@@ -481,13 +478,42 @@ void record_vk_command_buffer(vk::CommandBuffer command_buffer,
        .pImageMemoryBarriers = &swapchain_image_barrier_2});
   command_buffer.end();
 }
+
+class Client : public net::Client {
+public:
+  struct Create_info {
+    std::uint32_t incoming_bandwidth{};
+    std::uint32_t outgoing_bandwidth{};
+    game::Replicated_game game;
+  };
+
+  explicit Client(const Create_info &create_info)
+      : net::Client{{.incoming_bandwidth = create_info.incoming_bandwidth,
+                     .outgoing_bandwidth = create_info.outgoing_bandwidth}},
+        _game{create_info.game} {}
+
+protected:
+  void on_game_state(serial::Reader &reader) override {
+    _game.update(reader);
+    const auto players = _game.get_players();
+    std::cout << "Player count: " << players.size() << ".\n";
+    for (const auto &player : players) {
+      const auto &player_position = player.get_position();
+      std::cout << "Player position: (" << player_position.x() << ", "
+                << player_position.y() << ").\n";
+    }
+  }
+
+private:
+  game::Replicated_game _game;
+};
 } // namespace
 
 int main() {
   std::signal(SIGINT, handle_signal);
   std::signal(SIGTERM, handle_signal);
   const auto glfw_guard = glfw::Initialization_guard{{}};
-  const auto window = glfw::create_window_unique({
+  const auto glfw_window = glfw::create_window_unique({
       .width = 1920,
       .height = 1080,
       .title = "FPS Party",
@@ -498,7 +524,7 @@ int main() {
   const auto vk_instance = make_vk_instance();
   std::cout << "Created VkInstance.\n";
   const auto vk_surface =
-      glfw::create_window_surface_unique(*vk_instance, *window);
+      glfw::create_window_surface_unique(*vk_instance, *glfw_window);
   std::cout << "Created VkSurfaceKHR.\n";
   const auto [vk_physical_device, vk_queue_family_index] =
       find_vk_physical_device(*vk_instance, *vk_surface);
@@ -542,7 +568,8 @@ int main() {
            .commandBufferCount = 1})[0]);
   std::cout << "Allocated per-frame VkCommandBuffer.\n";
   auto [vk_swapchain, vk_swapchain_image_format, vk_swapchain_image_extent] =
-      make_vk_swapchain(vk_physical_device, *vk_device, *window, *vk_surface);
+      make_vk_swapchain(vk_physical_device, *vk_device, *glfw_window,
+                        *vk_surface);
   std::cout << "Created VkSwapchainKHR.\n";
   auto vk_swapchain_images = vk_device->getSwapchainImagesKHR(*vk_swapchain);
   std::cout << "Got Vulkan swapchain images.\n";
@@ -557,24 +584,25 @@ int main() {
                                       vk_swapchain_image_format);
   std::cout << "Created VkPipeline.\n";
   const auto enet_guard = enet::Initialization_guard{{}};
-  const auto client = enet::make_client_host_unique({.max_channel_count = 1});
-  client->connect({.host = *enet::parse_ip(server_ip), .port = constants::port},
-                  1, 0);
+  auto game = game::create_replicated_game_unique({});
+  auto client = Client{{.game = *game}};
+  client.connect({.host = *enet::parse_ip(server_ip), .port = constants::port});
   std::cout << "Connecting to " << server_ip << " on port " << constants::port
             << ".\n";
-  const auto connect_event = client->service(5000);
-  if (connect_event.type != enet::Event_type::connect) {
+  while (client.is_connecting()) {
+    client.wait_events(100);
+  }
+  if (!client.is_connected()) {
     std::cout << "Connection failed.\n";
     return 0;
   }
   std::cout << "Connection successful.\n";
-  const auto server = connect_event.peer;
-  auto connected = true;
   using Clock = std::chrono::high_resolution_clock;
   using Duration = Clock::duration;
   auto input_duration = Duration{};
   auto input_time = Clock::now();
-  while (!signal_status && !window->should_close() && connected) {
+  while (!signal_status && !glfw_window->should_close() &&
+         client.is_connected()) {
     glfw::poll_events();
     const auto now = Clock::now();
     input_duration += now - input_time;
@@ -583,52 +611,18 @@ int main() {
         std::chrono::duration<float>(constants::input_duration)) {
       input_duration -= std::chrono::duration_cast<Duration>(
           std::chrono::duration<float>(constants::input_duration));
-      const auto move_left =
-          window->get_key(glfw::Key::k_a) == glfw::Key_state::press;
-      const auto move_right =
-          window->get_key(glfw::Key::k_d) == glfw::Key_state::press;
-      const auto move_forward =
-          window->get_key(glfw::Key::k_w) == glfw::Key_state::press;
-      const auto move_backward =
-          window->get_key(glfw::Key::k_s) == glfw::Key_state::press;
-      const auto movement_flags = [&]() {
-        auto retval = std::uint8_t{};
-        if (move_left) {
-          retval |= 1 << 0;
-        }
-        if (move_right) {
-          retval |= 1 << 1;
-        }
-        if (move_forward) {
-          retval |= 1 << 2;
-        }
-        if (move_backward) {
-          retval |= 1 << 3;
-        }
-        return retval;
-      }();
-      auto packet_writer = serial::Ostringstream_writer{};
-      serial::serialize<net::Message_type>(
-          packet_writer, net::Message_type::player_input_state);
-      serial::serialize<std::uint8_t>(packet_writer, movement_flags);
-      server.send(0,
-                  enet::create_packet_unique(
-                      {.data = packet_writer.stream().view().data(),
-                       .data_length = packet_writer.stream().view().length()}));
+      client.send_player_input_state(game::Player::Input_state{
+          .move_left =
+              glfw_window->get_key(glfw::Key::k_a) == glfw::Key_state::press,
+          .move_right =
+              glfw_window->get_key(glfw::Key::k_d) == glfw::Key_state::press,
+          .move_forward =
+              glfw_window->get_key(glfw::Key::k_w) == glfw::Key_state::press,
+          .move_backward =
+              glfw_window->get_key(glfw::Key::k_s) == glfw::Key_state::press,
+      });
     }
-    client->service_each([&](const enet::Event &e) {
-      switch (e.type) {
-      case enet::Event_type::receive:
-        std::cout << "Got receive event.\n";
-        break;
-      case enet::Event_type::disconnect:
-        std::cout << "Got disconnect event.\n";
-        connected = false;
-        break;
-      default:
-        break;
-      }
-    });
+    client.poll_events();
     try {
       const auto vk_swapchain_image_index =
           vk_device
@@ -673,7 +667,7 @@ int main() {
       const auto previous_vk_swapchain_image_format = vk_swapchain_image_format;
       std::tie(vk_swapchain, vk_swapchain_image_format,
                vk_swapchain_image_extent) =
-          make_vk_swapchain(vk_physical_device, *vk_device, *window,
+          make_vk_swapchain(vk_physical_device, *vk_device, *glfw_window,
                             *vk_surface);
       vk_swapchain_images = vk_device->getSwapchainImagesKHR(*vk_swapchain);
       vk_swapchain_image_views = make_vk_swapchain_image_views(

@@ -7,7 +7,6 @@
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
-#include <vector>
 
 using namespace fpsparty;
 
@@ -17,20 +16,34 @@ void handle_signal(int signal) { signal_status = signal; }
 
 class Server : public net::Server {
 public:
-  explicit Server(const net::Server_create_info &create_info)
-      : net::Server{create_info} {}
+  struct Create_info {
+    std::uint16_t port;
+    std::size_t max_clients;
+    std::uint32_t incoming_bandwidth{};
+    std::uint32_t outgoing_bandwidth{};
+    game::Game game;
+  };
+
+  explicit Server(const Create_info &create_info)
+      : net::Server{{.port = create_info.port,
+                     .max_clients = create_info.max_clients,
+                     .incoming_bandwidth = create_info.incoming_bandwidth,
+                     .outgoing_bandwidth = create_info.outgoing_bandwidth}},
+        _game{create_info.game} {}
+
+  void broadcast_game_state() { net::Server::broadcast_game_state(_game); }
 
 protected:
   void on_peer_connect(enet::Peer peer) override {
     std::cout << "Peer connected.\n";
-    const auto player = get_game().create_player({});
+    const auto player = _game.create_player({});
     peer.set_data(static_cast<void *>(player));
   }
 
   void on_peer_disconnect(enet::Peer peer) override {
     std::cout << "Peer disconnected.\n";
     const auto player = static_cast<game::Player>(peer.get_data());
-    get_game().destroy_player(player);
+    _game.destroy_player(player);
   }
 
   void
@@ -39,6 +52,8 @@ protected:
     const auto player = static_cast<game::Player>(peer.get_data());
     player.set_input_state(input_state);
   }
+
+  game::Game _game;
 };
 } // namespace
 
@@ -53,8 +68,6 @@ int main() {
       .max_clients = constants::max_clients,
       .game = *game,
   }};
-  auto peers = std::vector<enet::Peer>{};
-  peers.reserve(constants::max_clients);
   std::cout << "Server running on port " << constants::port << ".\n";
   using Clock = std::chrono::high_resolution_clock;
   using Duration = Clock::duration;
@@ -75,6 +88,9 @@ int main() {
   }
   if (signal_status == SIGINT) {
     server.disconnect();
+    do {
+      server.wait_events(100);
+    } while (game->get_player_count() > 0);
   }
   std::cout << "Exiting.\n";
   return 0;

@@ -17,20 +17,23 @@ class Serialization_error : public std::exception {};
 
 template <typename T> struct Serializer;
 
-template <> struct Serializer<std::uint8_t> {
-  template <std::integral T> void write(Writer &writer, T value) const {
-    if (value < 0 || value > std::numeric_limits<std::uint8_t>::max()) {
+template <std::integral T> struct Serializer<T> {
+  template <std::integral U> void write(Writer &writer, U value) const {
+    if (value < std::numeric_limits<T>::min() ||
+        value > std::numeric_limits<T>::max()) {
       throw Serialization_error{};
     }
-    const auto casted_value = static_cast<std::uint8_t>(value);
-    writer.write(std::as_bytes(std::span{&casted_value, 1}));
+    const auto casted_value = static_cast<T>(value);
+    const auto byteswapped_value = network_byteswap(casted_value);
+    writer.write(std::as_bytes(std::span{&byteswapped_value, 1}));
   }
 
-  std::optional<std::uint8_t> read(Reader &reader) const {
-    auto value = std::uint8_t{};
+  std::optional<T> read(Reader &reader) const {
+    auto value = T{};
     if (!reader.read(std::as_writable_bytes(std::span{&value, 1}))) {
       return std::nullopt;
     }
+    value = network_byteswap(value);
     return value;
   }
 };
@@ -49,7 +52,7 @@ template <> struct Serializer<float> {
     if (!reader.read(std::as_writable_bytes(std::span{&buffer, 1}))) {
       return std::nullopt;
     }
-    network_byteswap(buffer);
+    buffer = network_byteswap(buffer);
     return std::bit_cast<float>(buffer);
   }
 };

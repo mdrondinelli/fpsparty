@@ -6,29 +6,28 @@
 #include <cstdint>
 
 namespace fpsparty::net {
-struct Server_create_info {
-  std::uint16_t port;
-  std::size_t max_clients;
-  std::uint32_t incoming_bandwidth{};
-  std::uint32_t outgoing_bandwidth{};
-  game::Game game;
-};
-
 class Server {
 public:
-  explicit Server(const Server_create_info &create_info);
+  struct Create_info {
+    std::uint16_t port;
+    std::size_t max_clients;
+    std::uint32_t incoming_bandwidth{};
+    std::uint32_t outgoing_bandwidth{};
+  };
+
+  explicit Server(const Create_info &create_info);
 
   virtual ~Server() = default;
 
   void poll_events();
 
+  void wait_events(std::uint32_t timeout);
+
   void disconnect();
 
-  void broadcast_game_state();
+  void broadcast_game_state(game::Game game);
 
 protected:
-  game::Game get_game() const noexcept { return _game; }
-
   virtual void on_peer_connect(enet::Peer) {}
 
   virtual void on_peer_disconnect(enet::Peer) {}
@@ -37,9 +36,10 @@ protected:
                                      const game::Player::Input_state &) {}
 
 private:
+  void handle_event(const enet::Event &e);
+
   enet::Unique_host _host;
   std::vector<enet::Peer> _peers;
-  game::Game _game;
 };
 } // namespace fpsparty::net
 

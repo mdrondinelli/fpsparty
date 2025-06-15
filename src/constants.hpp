@@ -4,7 +4,9 @@
 namespace fpsparty::constants {
 constexpr auto port = std::uint16_t{1109};
 constexpr auto max_clients = std::size_t{32};
-constexpr auto snapshot_channel_id = std::uint8_t{0};
+constexpr auto max_channels = std::size_t{1};
+constexpr auto game_state_channel_id = std::uint8_t{0};
+constexpr auto player_input_state_channel_id = std::uint8_t{0};
 constexpr auto tick_rate = 64.0f;
 constexpr auto tick_duration = 1.0f / tick_rate;
 constexpr auto input_rate = 64.0f;

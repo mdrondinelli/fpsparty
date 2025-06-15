@@ -155,6 +155,8 @@ class Peer {
 public:
   class Sending_error : std::exception {};
 
+  constexpr Peer() noexcept = default;
+
   constexpr operator ENetPeer *() const noexcept { return _value; }
 
   void *get_data() const noexcept { return _value->data; }
@@ -191,7 +193,7 @@ public:
 private:
   explicit constexpr Peer(ENetPeer *value) noexcept : _value{value} {}
 
-  ENetPeer *_value;
+  ENetPeer *_value{};
 };
 
 using Address = ENetAddress;
@@ -365,7 +367,7 @@ make_server_host_unique(const Server_create_info &create_info) {
 }
 
 struct Client_create_info {
-  std::size_t max_channel_count;
+  std::size_t max_channels;
   std::uint32_t incoming_bandwidth{};
   std::uint32_t outgoing_bandwidth{};
 };
@@ -374,7 +376,7 @@ inline Host make_client_host(const Client_create_info &create_info) {
   return create_host({
       .address = {},
       .max_peer_count = 1,
-      .max_channel_count = create_info.max_channel_count,
+      .max_channel_count = create_info.max_channels,
       .incoming_bandwidth = create_info.incoming_bandwidth,
       .outgoing_bandwidth = create_info.outgoing_bandwidth,
   });

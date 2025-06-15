@@ -70,6 +70,8 @@ public:
 
   Unique_player create_player_unique(const Player::Create_info &info) const;
 
+  std::size_t get_player_count() const noexcept;
+
   void simulate(const Simulate_info &info) const;
 
   void snapshot(serial::Writer &writer) const;
