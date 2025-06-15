@@ -1,6 +1,5 @@
 #include "replicated_game.hpp"
 #include "serial/serialize.hpp"
-#include <iostream>
 #include <vector>
 
 namespace fpsparty::game {
@@ -31,7 +30,6 @@ void Replicated_game::update(serial::Reader &reader) const {
     if (!player_id) {
       throw Updating_error{};
     }
-    std::cout << *player_id << "\n";
     auto &player = _impl->players.try_emplace(*player_id).first->second;
     player.marked = true;
     const auto player_position_x = deserialize<float>(reader);
