@@ -2,6 +2,7 @@
 #define FPSPARTY_CLIENT_VERTEX_BUFFER_HPP
 
 #include "vma.hpp"
+#include <span>
 #include <vulkan/vulkan.hpp>
 
 namespace fpsparty::client {
@@ -11,7 +12,7 @@ public:
 
   explicit Vertex_buffer(vma::Allocator allocator, vk::Device device,
                          vk::Queue queue, vk::CommandPool command_pool,
-                         const void *data, std::size_t size);
+                         std::span<const std::byte> data);
 
   constexpr vk::Buffer get_buffer() const noexcept { return *_buffer; }
 

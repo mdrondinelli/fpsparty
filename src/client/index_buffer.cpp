@@ -1,18 +1,18 @@
-#include "vertex_buffer.hpp"
+#include "index_buffer.hpp"
 #include "staging_buffer.hpp"
 #include <cstdint>
 #include <limits>
 #include <span>
 
 namespace fpsparty::client {
-Vertex_buffer::Vertex_buffer(vma::Allocator allocator, vk::Device device,
-                             vk::Queue queue, vk::CommandPool command_pool,
-                             std::span<const std::byte> data) {
+Index_buffer::Index_buffer(vma::Allocator allocator, vk::Device device,
+                           vk::Queue queue, vk::CommandPool command_pool,
+                           std::span<const std::byte> data) {
   const auto staging_buffer = Staging_buffer{allocator, data};
   std::tie(_buffer, _allocation) = allocator.create_buffer_unique(
       {.size = static_cast<vk::DeviceSize>(data.size()),
        .usage = vk::BufferUsageFlagBits::eTransferDst |
-                vk::BufferUsageFlagBits::eVertexBuffer,
+                vk::BufferUsageFlagBits::eIndexBuffer,
        .sharingMode = vk::SharingMode::eExclusive},
       {.flags = {},
        .usage = c_repr(vma::Memory_usage::e_auto),

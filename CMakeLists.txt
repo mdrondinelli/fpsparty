@@ -77,6 +77,7 @@ add_executable(
   src/client/main.cpp
   src/client/staging_buffer.cpp
   src/client/vertex_buffer.cpp
+  src/client/index_buffer.cpp
 )
 target_compile_definitions(
   client
