@@ -1,5 +1,5 @@
 #include "client/index_buffer.hpp"
-#include "client/perspective_projection.hpp"
+#include "client/transformation_matrices.hpp"
 #include "client/vertex_buffer.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
@@ -649,11 +649,15 @@ private:
         0, {_floor_vertex_buffer.get_buffer()}, {0});
     _vk_command_buffer->bindIndexBuffer(_floor_index_buffer.get_buffer(), 0,
                                         vk::IndexType::eUint16);
+    const auto view_matrix =
+        translation_matrix(-_game->get_player(*_player_id).get_position());
     const auto projection_matrix =
-        make_perspective_projection_matrix(1.0f, 1.0f, 0.01f);
+        perspective_projection_matrix(1.0f, 1.0f, 0.01f);
+    const auto view_projection_matrix =
+        Eigen::Matrix4f{projection_matrix * view_matrix};
     _vk_command_buffer->pushConstants(*_vk_pipeline_layout,
                                       vk::ShaderStageFlagBits::eVertex, 0, 64,
-                                      projection_matrix.data());
+                                      view_projection_matrix.data());
     const auto floor_index_count = 6;
     _vk_command_buffer->drawIndexed(floor_index_count, 1, 0, 0, 0);
     _vk_command_buffer->endRendering();
