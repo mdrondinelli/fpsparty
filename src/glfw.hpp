@@ -329,6 +329,12 @@ public:
 
   constexpr operator GLFWwindow *() const noexcept { return _value; }
 
+  void *get_user_pointer() const { return glfwGetWindowUserPointer(_value); }
+
+  void set_user_pointer(void *pointer) const {
+    glfwSetWindowUserPointer(_value, pointer);
+  }
+
   bool should_close() const { return glfwWindowShouldClose(_value); }
 
   std::array<int, 2> get_framebuffer_size() const {
