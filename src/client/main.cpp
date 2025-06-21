@@ -518,7 +518,7 @@ private:
           0, {_floor_vertex_buffer.get_buffer()}, {0});
       _vk_command_buffer->bindIndexBuffer(_floor_index_buffer.get_buffer(), 0,
                                           vk::IndexType::eUint16);
-      const auto view_matrix = translation_matrix(player.get_position());
+      const auto view_matrix = translation_matrix(-player.get_position());
       const auto projection_matrix =
           perspective_projection_matrix(1.0f, 1.0f, 0.01f);
       const auto view_projection_matrix =
