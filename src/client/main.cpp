@@ -1,11 +1,11 @@
 #include "client/global_vulkan_state.hpp"
 #include "client/index_buffer.hpp"
-#include "client/transformation_matrices.hpp"
 #include "client/vertex_buffer.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
 #include "game/replicated_game.hpp"
 #include "glfw.hpp"
+#include "math/transformation_matrices.hpp"
 #include "net/client.hpp"
 #include "vma.hpp"
 #include <algorithm>
@@ -215,6 +215,11 @@ public:
 
   bool is_connected() const noexcept { return net::Client::is_connected(); }
 
+  game::Replicated_player get_player() const noexcept {
+    return _player_id ? _game->get_player(*_player_id)
+                      : game::Replicated_player{};
+  }
+
   void send_player_input_state(const game::Player::Input_state &input_state) {
     net::Client::send_player_input_state(input_state);
   }
@@ -284,10 +289,16 @@ public:
   constexpr glfw::Window get_window() const noexcept { return _glfw_window; }
 
 protected:
-  void on_disconnect() override { _player_id = std::nullopt; }
+  void on_disconnect() override {
+    if (_player_id) {
+      _game->set_player_locally_controlled(*_player_id, false);
+      _player_id = std::nullopt;
+    }
+  }
 
   void on_player_id(std::uint32_t player_id) override {
     _player_id = player_id;
+    _game->set_player_locally_controlled(player_id, true);
     std::cout << "Got player id: " << player_id << ".\n";
   }
 
@@ -584,9 +595,15 @@ private:
     const auto player =
         _player_id ? _game->get_player(*_player_id) : game::Replicated_player{};
     if (player) {
-      const auto view_matrix = translation_matrix(-player.get_position());
-      const auto projection_matrix =
-          perspective_projection_matrix(1.0f, 1.0f, 0.01f);
+      const auto view_matrix = math::x_rotation_matrix(-player.get_pitch()) *
+                               math::y_rotation_matrix(-player.get_yaw()) *
+                               math::translation_matrix(-player.get_position());
+      const auto framebuffer_size = _glfw_window.get_framebuffer_size();
+      const auto framebuffer_aspect = static_cast<float>(framebuffer_size[0]) /
+                                      static_cast<float>(framebuffer_size[1]);
+      const auto projection_matrix = math::perspective_projection_matrix(
+          framebuffer_aspect > 1.0f ? 1.0f : framebuffer_aspect,
+          framebuffer_aspect > 1.0f ? 1.0f / framebuffer_aspect : 1.0f, 0.01f);
       const auto view_projection_matrix =
           Eigen::Matrix4f{projection_matrix * view_matrix};
       _vk_command_buffer->bindPipeline(vk::PipelineBindPoint::eGraphics,
@@ -622,7 +639,7 @@ private:
       for (const auto &other_player : _game->get_players()) {
         if (other_player != player) {
           const auto model_matrix =
-              translation_matrix(other_player.get_position());
+              math::translation_matrix(other_player.get_position());
           const auto model_view_projection_matrix =
               Eigen::Matrix4f{view_projection_matrix * model_matrix};
           _vk_command_buffer->pushConstants(
@@ -733,16 +750,29 @@ int main() {
         std::chrono::duration<float>(constants::input_duration)) {
       input_duration -= std::chrono::duration_cast<Duration>(
           std::chrono::duration<float>(constants::input_duration));
-      client.send_player_input_state(game::Player::Input_state{
-          .move_left = client.get_window().get_key(glfw::Key::k_a) ==
-                       glfw::Key_state::press,
-          .move_right = client.get_window().get_key(glfw::Key::k_d) ==
-                        glfw::Key_state::press,
-          .move_forward = client.get_window().get_key(glfw::Key::k_w) ==
+      if (const auto player = client.get_player()) {
+        auto delta_yaw = 0.0f;
+        if (client.get_window().get_key(glfw::Key::k_left) ==
+            glfw::Key_state::press) {
+          delta_yaw += 1.0f * constants::input_duration;
+        }
+        if (client.get_window().get_key(glfw::Key::k_right) ==
+            glfw::Key_state::press) {
+          delta_yaw -= 1.0f * constants::input_duration;
+        }
+        player.set_yaw(player.get_yaw() + delta_yaw);
+        client.send_player_input_state(game::Player::Input_state{
+            .move_left = client.get_window().get_key(glfw::Key::k_a) ==
+                         glfw::Key_state::press,
+            .move_right = client.get_window().get_key(glfw::Key::k_d) ==
                           glfw::Key_state::press,
-          .move_backward = client.get_window().get_key(glfw::Key::k_s) ==
-                           glfw::Key_state::press,
-      });
+            .move_forward = client.get_window().get_key(glfw::Key::k_w) ==
+                            glfw::Key_state::press,
+            .move_backward = client.get_window().get_key(glfw::Key::k_s) ==
+                             glfw::Key_state::press,
+            .yaw = player.get_yaw(),
+        });
+      }
     }
     client.poll_network_events();
     client.render();

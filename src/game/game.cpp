@@ -1,8 +1,10 @@
 #include "game.hpp"
 #include "constants.hpp"
+#include "math/transformation_matrices.hpp"
 #include "serial/serialize.hpp"
 #include <Eigen/Dense>
 #include <algorithm>
+#include <iostream>
 
 namespace fpsparty::game {
 struct Game::Impl {
@@ -56,18 +58,19 @@ std::size_t Game::get_player_count() const noexcept {
 void Game::simulate(const Simulate_info &info) const {
   for (const auto &player : _impl->players) {
     const auto input_state = player.get_input_state();
+    const auto basis_matrix = math::y_rotation_matrix(input_state.yaw);
     auto movement_vector = Eigen::Vector3f{0.0f, 0.0f, 0.0f};
     if (input_state.move_left) {
-      movement_vector += Eigen::Vector3f{1.0f, 0.0f, 0.0f};
+      movement_vector += basis_matrix.col(0).head<3>();
     }
     if (input_state.move_right) {
-      movement_vector -= Eigen::Vector3f{1.0f, 0.0f, 0.0f};
+      movement_vector -= basis_matrix.col(0).head<3>();
     }
     if (input_state.move_forward) {
-      movement_vector += Eigen::Vector3f{0.0f, 0.0f, 1.0f};
+      movement_vector += basis_matrix.col(2).head<3>();
     }
     if (input_state.move_backward) {
-      movement_vector -= Eigen::Vector3f{0.0f, 0.0f, 1.0f};
+      movement_vector -= basis_matrix.col(2).head<3>();
     }
     movement_vector.normalize();
     player._impl->position +=
@@ -83,6 +86,8 @@ void Game::snapshot(serial::Writer &writer) const {
     serialize<float>(writer, player._impl->position.x());
     serialize<float>(writer, player._impl->position.y());
     serialize<float>(writer, player._impl->position.z());
+    serialize<float>(writer, player._impl->input_state.yaw);
+    serialize<float>(writer, player._impl->input_state.pitch);
   }
 }
 } // namespace fpsparty::game

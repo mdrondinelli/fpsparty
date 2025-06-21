@@ -18,6 +18,14 @@ public:
 
   const Eigen::Vector3f &get_position() const noexcept;
 
+  float get_yaw() const noexcept;
+
+  void set_yaw(float yaw) const noexcept;
+
+  float get_pitch() const noexcept;
+
+  void set_pitch(float pitch) const noexcept;
+
   friend constexpr bool operator==(Replicated_player lhs,
                                    Replicated_player rhs) noexcept = default;
 
@@ -35,7 +43,7 @@ class Replicated_game {
 public:
   struct Create_info;
 
-  class Updating_error;
+  class Snapshot_application_error;
 
   constexpr Replicated_game() noexcept = default;
 
@@ -51,6 +59,10 @@ public:
   get_players(std::pmr::memory_resource *memory_resource =
                   std::pmr::get_default_resource()) const;
 
+  bool is_player_locally_controlled(std::uint32_t id) const noexcept;
+
+  void set_player_locally_controlled(std::uint32_t id, bool b) const noexcept;
+
 private:
   struct Impl;
 
@@ -65,7 +77,7 @@ private:
 
 struct Replicated_game::Create_info {};
 
-class Replicated_game::Updating_error : std::exception {};
+class Replicated_game::Snapshot_application_error : std::exception {};
 
 Replicated_game
 create_replicated_game(const Replicated_game::Create_info &info);

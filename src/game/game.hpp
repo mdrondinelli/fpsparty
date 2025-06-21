@@ -101,6 +101,8 @@ struct Player::Input_state {
   bool move_right{};
   bool move_forward{};
   bool move_backward{};
+  float yaw{};
+  float pitch{};
 };
 
 struct Game::Create_info {};
@@ -202,17 +204,31 @@ template <> struct Serializer<game::Player::Input_state> {
       flags |= 1 << 3;
     }
     serialize<std::uint8_t>(writer, flags);
+    serialize<float>(writer, value.yaw);
+    serialize<float>(writer, value.pitch);
   }
 
   std::optional<game::Player::Input_state> read(Reader &reader) const {
-    auto flags = deserialize<std::uint8_t>(reader);
+    const auto flags = deserialize<std::uint8_t>(reader);
     if (!flags) {
       return std::nullopt;
     }
-    return game::Player::Input_state{.move_left = (*flags & (1 << 0)) != 0,
-                                     .move_right = (*flags & (1 << 1)) != 0,
-                                     .move_forward = (*flags & (1 << 2)) != 0,
-                                     .move_backward = (*flags & (1 << 3)) != 0};
+    const auto yaw = deserialize<float>(reader);
+    if (!yaw) {
+      return std::nullopt;
+    }
+    const auto pitch = deserialize<float>(reader);
+    if (!pitch) {
+      return std::nullopt;
+    }
+    return game::Player::Input_state{
+        .move_left = (*flags & (1 << 0)) != 0,
+        .move_right = (*flags & (1 << 1)) != 0,
+        .move_forward = (*flags & (1 << 2)) != 0,
+        .move_backward = (*flags & (1 << 3)) != 0,
+        .yaw = *yaw,
+        .pitch = *pitch,
+    };
   }
 };
 } // namespace fpsparty::serial

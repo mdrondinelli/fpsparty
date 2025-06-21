@@ -39,26 +39,11 @@ bool Client::is_connected() const noexcept {
 
 void Client::send_player_input_state(
     const game::Player::Input_state &input_state) {
-  const auto movement_flags = [&]() {
-    auto retval = std::uint8_t{};
-    if (input_state.move_left) {
-      retval |= 1 << 0;
-    }
-    if (input_state.move_right) {
-      retval |= 1 << 1;
-    }
-    if (input_state.move_forward) {
-      retval |= 1 << 2;
-    }
-    if (input_state.move_backward) {
-      retval |= 1 << 3;
-    }
-    return retval;
-  }();
   auto packet_writer = serial::Ostringstream_writer{};
-  serial::serialize<net::Message_type>(packet_writer,
-                                       net::Message_type::player_input_state);
-  serial::serialize<std::uint8_t>(packet_writer, movement_flags);
+  using serial::serialize;
+  serialize<net::Message_type>(packet_writer,
+                               net::Message_type::player_input_state);
+  serialize<game::Player::Input_state>(packet_writer, input_state);
   _server.send(constants::player_input_state_channel_id,
                enet::create_packet_unique(
                    {.data = packet_writer.stream().view().data(),
