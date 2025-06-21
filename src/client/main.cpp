@@ -65,6 +65,84 @@ const auto floor_mesh_vertices = std::vector<Vertex>{
 
 const auto floor_mesh_indices = std::vector<std::uint16_t>{0, 1, 2, 3, 2, 1};
 
+const auto player_mesh_vertices = std::vector<Vertex>{
+    // +x face
+    {.x = 0.5f, .y = 0.5f, .z = 0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},   // 1
+    {.x = 0.5f, .y = -0.5f, .z = 0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f},  // 2
+    {.x = 0.5f, .y = 0.5f, .z = -0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f},  // 3
+    {.x = 0.5f, .y = -0.5f, .z = -0.5f, .r = 1.0f, .g = 1.0f, .b = 0.0f}, // 4
+    // -x face
+    {.x = -0.5f, .y = 0.5f, .z = -0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},  // 1
+    {.x = -0.5f, .y = -0.5f, .z = -0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f}, // 2
+    {.x = -0.5f, .y = 0.5f, .z = 0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f},   // 3
+    {.x = -0.5f, .y = -0.5f, .z = 0.5f, .r = 1.0f, .g = 1.0f, .b = 0.0f},  // 4
+    // +y face
+    {.x = 0.5f, .y = 0.5f, .z = 0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},   // 1
+    {.x = 0.5f, .y = 0.5f, .z = -0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f},  // 2
+    {.x = -0.5f, .y = 0.5f, .z = 0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f},  // 3
+    {.x = -0.5f, .y = 0.5f, .z = -0.5f, .r = 1.0f, .g = 1.0f, .b = 0.0f}, // 4
+    // -y face
+    {.x = 0.5f, .y = -0.5f, .z = -0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f},  // 2
+    {.x = 0.5f, .y = -0.5f, .z = 0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},   // 1
+    {.x = -0.5f, .y = -0.5f, .z = -0.5f, .r = 1.0f, .g = 1.0f, .b = 0.0f}, // 4
+    {.x = -0.5f, .y = -0.5f, .z = 0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f},  // 3
+    // +z face
+    {.x = -0.5f, .y = 0.5f, .z = 0.5f, .r = 1.0f, .g = 1.0f, .b = 0.0f},  // 3
+    {.x = -0.5f, .y = -0.5f, .z = 0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f}, // 4
+    {.x = 0.5f, .y = 0.5f, .z = 0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f},   // 1
+    {.x = 0.5f, .y = -0.5f, .z = 0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},  // 2
+    // -z face
+    {.x = 0.5f, .y = 0.5f, .z = -0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f},   // 1
+    {.x = 0.5f, .y = -0.5f, .z = -0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},  // 2
+    {.x = -0.5f, .y = 0.5f, .z = -0.5f, .r = 1.0f, .g = 1.0f, .b = 0.0f},  // 3
+    {.x = -0.5f, .y = -0.5f, .z = -0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f}, // 4
+};
+
+const auto player_mesh_indices = std::vector<std::uint16_t>{
+    // +x face
+    0,
+    1,
+    2,
+    3,
+    2,
+    1,
+    // -x face
+    4,
+    5,
+    6,
+    7,
+    6,
+    5,
+    // +y face
+    8,
+    9,
+    10,
+    11,
+    10,
+    9,
+    // -y face
+    12,
+    13,
+    14,
+    15,
+    14,
+    13,
+    // +z face
+    16,
+    17,
+    18,
+    19,
+    18,
+    17,
+    // -z face
+    20,
+    21,
+    22,
+    23,
+    22,
+    21,
+};
+
 class Client : net::Client {
 public:
   struct Create_info {
@@ -89,6 +167,12 @@ public:
     _floor_index_buffer =
         upload_indices(std::as_bytes(std::span{floor_mesh_indices}));
     std::cout << "Uploaded floor index buffer.\n";
+    _player_vertex_buffer =
+        upload_vertices(std::as_bytes(std::span{player_mesh_vertices}));
+    std::cout << "Uploaded player vertex buffer.\n";
+    _player_index_buffer =
+        upload_indices(std::as_bytes(std::span{player_mesh_indices}));
+    std::cout << "Uploaded player index buffer.\n";
     _vk_image_acquire_semaphore = make_vk_semaphore("image_acquire_semaphore");
     _vk_image_release_semaphore = make_vk_semaphore("image_release_semaphore");
     _vk_work_done_fence =
@@ -500,6 +584,11 @@ private:
     const auto player =
         _player_id ? _game->get_player(*_player_id) : game::Replicated_player{};
     if (player) {
+      const auto view_matrix = translation_matrix(-player.get_position());
+      const auto projection_matrix =
+          perspective_projection_matrix(1.0f, 1.0f, 0.01f);
+      const auto view_projection_matrix =
+          Eigen::Matrix4f{projection_matrix * view_matrix};
       _vk_command_buffer->bindPipeline(vk::PipelineBindPoint::eGraphics,
                                        *_vk_pipeline);
       _vk_command_buffer->setViewport(
@@ -512,23 +601,37 @@ private:
           }});
       _vk_command_buffer->setScissor(0,
                                      {{.extent = _vk_swapchain_image_extent}});
-      _vk_command_buffer->setCullMode(vk::CullModeFlagBits::eNone);
-      _vk_command_buffer->setFrontFace(vk::FrontFace::eClockwise);
+      _vk_command_buffer->setCullMode(vk::CullModeFlagBits::eBack);
+      _vk_command_buffer->setFrontFace(vk::FrontFace::eCounterClockwise);
       _vk_command_buffer->setPrimitiveTopology(
           vk::PrimitiveTopology::eTriangleList);
+      // draw floor
       _vk_command_buffer->bindVertexBuffers(
           0, {_floor_vertex_buffer.get_buffer()}, {0});
       _vk_command_buffer->bindIndexBuffer(_floor_index_buffer.get_buffer(), 0,
                                           vk::IndexType::eUint16);
-      const auto view_matrix = translation_matrix(-player.get_position());
-      const auto projection_matrix =
-          perspective_projection_matrix(1.0f, 1.0f, 0.01f);
-      const auto view_projection_matrix =
-          Eigen::Matrix4f{projection_matrix * view_matrix};
       _vk_command_buffer->pushConstants(*_vk_pipeline_layout,
                                         vk::ShaderStageFlagBits::eVertex, 0, 64,
                                         view_projection_matrix.data());
       _vk_command_buffer->drawIndexed(floor_mesh_indices.size(), 1, 0, 0, 0);
+      // draw other players
+      _vk_command_buffer->bindVertexBuffers(
+          0, {_player_vertex_buffer.get_buffer()}, {0});
+      _vk_command_buffer->bindIndexBuffer(_player_index_buffer.get_buffer(), 0,
+                                          vk::IndexType::eUint16);
+      for (const auto &other_player : _game->get_players()) {
+        if (other_player != player) {
+          const auto model_matrix =
+              translation_matrix(other_player.get_position());
+          const auto model_view_projection_matrix =
+              Eigen::Matrix4f{view_projection_matrix * model_matrix};
+          _vk_command_buffer->pushConstants(
+              *_vk_pipeline_layout, vk::ShaderStageFlagBits::eVertex, 0, 64,
+              model_view_projection_matrix.data());
+          _vk_command_buffer->drawIndexed(player_mesh_indices.size(), 1, 0, 0,
+                                          0);
+        }
+      }
     }
     _vk_command_buffer->endRendering();
     const auto swapchain_image_barrier_2 = vk::ImageMemoryBarrier2{
@@ -563,6 +666,8 @@ private:
   vk::UniqueCommandPool _vk_command_pool{};
   Vertex_buffer _floor_vertex_buffer{};
   Index_buffer _floor_index_buffer{};
+  Vertex_buffer _player_vertex_buffer{};
+  Index_buffer _player_index_buffer{};
   vk::UniqueSemaphore _vk_image_acquire_semaphore{};
   vk::UniqueSemaphore _vk_image_release_semaphore{};
   vk::UniqueFence _vk_work_done_fence{};

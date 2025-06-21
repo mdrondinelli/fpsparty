@@ -18,6 +18,9 @@ public:
 
   const Eigen::Vector3f &get_position() const noexcept;
 
+  friend constexpr bool operator==(Replicated_player lhs,
+                                   Replicated_player rhs) noexcept = default;
+
 private:
   friend class Replicated_game;
 
