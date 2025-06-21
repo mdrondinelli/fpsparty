@@ -10,7 +10,11 @@
 namespace fpsparty::game {
 class Replicated_player {
 public:
-  explicit operator void *() const noexcept { return _impl; }
+  constexpr Replicated_player() noexcept = default;
+
+  constexpr operator bool() const noexcept { return _impl != nullptr; }
+
+  constexpr explicit operator void *() const noexcept { return _impl; }
 
   const Eigen::Vector3f &get_position() const noexcept;
 
@@ -21,7 +25,7 @@ private:
 
   constexpr explicit Replicated_player(Impl *impl) : _impl{impl} {}
 
-  Impl *_impl;
+  Impl *_impl{};
 };
 
 class Replicated_game {

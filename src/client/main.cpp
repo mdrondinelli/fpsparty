@@ -207,8 +207,9 @@ protected:
 
   void on_game_state(serial::Reader &reader) override {
     _game->apply_snapshot(reader);
-    if (_player_id) {
-      const auto player = _game->get_player(*_player_id);
+    const auto player =
+        _player_id ? _game->get_player(*_player_id) : game::Replicated_player{};
+    if (player) {
       const auto &player_position = player.get_position();
       std::cout << "Client player position: (" << player_position.x() << ", "
                 << player_position.y() << ", " << player_position.z() << ").\n";
@@ -494,35 +495,40 @@ private:
         .colorAttachmentCount = 1,
         .pColorAttachments = &color_attachment,
     });
-    _vk_command_buffer->bindPipeline(vk::PipelineBindPoint::eGraphics,
-                                     *_vk_pipeline);
-    _vk_command_buffer->setViewport(
-        0, {{
-               .width = static_cast<float>(_vk_swapchain_image_extent.width),
-               .height = static_cast<float>(_vk_swapchain_image_extent.height),
-               .minDepth = 0.0f,
-               .maxDepth = 1.0f,
-           }});
-    _vk_command_buffer->setScissor(0, {{.extent = _vk_swapchain_image_extent}});
-    _vk_command_buffer->setCullMode(vk::CullModeFlagBits::eNone);
-    _vk_command_buffer->setFrontFace(vk::FrontFace::eClockwise);
-    _vk_command_buffer->setPrimitiveTopology(
-        vk::PrimitiveTopology::eTriangleList);
-    _vk_command_buffer->bindVertexBuffers(
-        0, {_floor_vertex_buffer.get_buffer()}, {0});
-    _vk_command_buffer->bindIndexBuffer(_floor_index_buffer.get_buffer(), 0,
-                                        vk::IndexType::eUint16);
-    const auto view_matrix =
-        translation_matrix(-_game->get_player(*_player_id).get_position());
-    const auto projection_matrix =
-        perspective_projection_matrix(1.0f, 1.0f, 0.01f);
-    const auto view_projection_matrix =
-        Eigen::Matrix4f{projection_matrix * view_matrix};
-    _vk_command_buffer->pushConstants(*_vk_pipeline_layout,
-                                      vk::ShaderStageFlagBits::eVertex, 0, 64,
-                                      view_projection_matrix.data());
-    const auto floor_index_count = 6;
-    _vk_command_buffer->drawIndexed(floor_index_count, 1, 0, 0, 0);
+    const auto player =
+        _player_id ? _game->get_player(*_player_id) : game::Replicated_player{};
+    if (player) {
+      _vk_command_buffer->bindPipeline(vk::PipelineBindPoint::eGraphics,
+                                       *_vk_pipeline);
+      _vk_command_buffer->setViewport(
+          0,
+          {{
+              .width = static_cast<float>(_vk_swapchain_image_extent.width),
+              .height = static_cast<float>(_vk_swapchain_image_extent.height),
+              .minDepth = 0.0f,
+              .maxDepth = 1.0f,
+          }});
+      _vk_command_buffer->setScissor(0,
+                                     {{.extent = _vk_swapchain_image_extent}});
+      _vk_command_buffer->setCullMode(vk::CullModeFlagBits::eNone);
+      _vk_command_buffer->setFrontFace(vk::FrontFace::eClockwise);
+      _vk_command_buffer->setPrimitiveTopology(
+          vk::PrimitiveTopology::eTriangleList);
+      _vk_command_buffer->bindVertexBuffers(
+          0, {_floor_vertex_buffer.get_buffer()}, {0});
+      _vk_command_buffer->bindIndexBuffer(_floor_index_buffer.get_buffer(), 0,
+                                          vk::IndexType::eUint16);
+      const auto view_matrix = translation_matrix(player.get_position());
+      const auto projection_matrix =
+          perspective_projection_matrix(1.0f, 1.0f, 0.01f);
+      const auto view_projection_matrix =
+          Eigen::Matrix4f{projection_matrix * view_matrix};
+      _vk_command_buffer->pushConstants(*_vk_pipeline_layout,
+                                        vk::ShaderStageFlagBits::eVertex, 0, 64,
+                                        view_projection_matrix.data());
+      const auto floor_index_count = 6;
+      _vk_command_buffer->drawIndexed(floor_index_count, 1, 0, 0, 0);
+    }
     _vk_command_buffer->endRendering();
     const auto swapchain_image_barrier_2 = vk::ImageMemoryBarrier2{
         .srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
