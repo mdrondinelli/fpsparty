@@ -528,8 +528,7 @@ private:
       _vk_command_buffer->pushConstants(*_vk_pipeline_layout,
                                         vk::ShaderStageFlagBits::eVertex, 0, 64,
                                         view_projection_matrix.data());
-      const auto floor_index_count = 6;
-      _vk_command_buffer->drawIndexed(floor_index_count, 1, 0, 0, 0);
+      _vk_command_buffer->drawIndexed(floor_mesh_indices.size(), 1, 0, 0, 0);
     }
     _vk_command_buffer->endRendering();
     const auto swapchain_image_barrier_2 = vk::ImageMemoryBarrier2{
