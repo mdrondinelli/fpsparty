@@ -75,6 +75,7 @@ add_executable(
   client
   src/vma.cpp
   src/client/main.cpp
+  src/client/global_vulkan_state.cpp
   src/client/staging_buffer.cpp
   src/client/vertex_buffer.cpp
   src/client/index_buffer.cpp
