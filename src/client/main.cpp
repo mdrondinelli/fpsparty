@@ -15,6 +15,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <numbers>
 #include <span>
 #include <tuple>
 #include <volk.h>
@@ -143,7 +144,10 @@ const auto player_mesh_indices = std::vector<std::uint16_t>{
     21,
 };
 
-class Client : net::Client {
+class Client : net::Client,
+               glfw::Key_callback,
+               glfw::Mouse_button_callback,
+               glfw::Cursor_pos_callback {
 public:
   struct Create_info {
     net::Client::Create_info client_info;
@@ -155,6 +159,9 @@ public:
       : net::Client{create_info.client_info},
         _glfw_window{create_info.glfw_window}, _vk_surface{
                                                    create_info.vk_surface} {
+    _glfw_window.set_key_callback(this);
+    _glfw_window.set_mouse_button_callback(this);
+    _glfw_window.set_cursor_pos_callback(this);
     _vma_allocator = make_vma_allocator();
     _vk_command_pool =
         Global_vulkan_state::get().device().createCommandPoolUnique({
@@ -310,6 +317,38 @@ protected:
       const auto &player_position = player.get_position();
       std::cout << "Client player position: (" << player_position.x() << ", "
                 << player_position.y() << ", " << player_position.z() << ").\n";
+    }
+  }
+
+  void on_key(glfw::Window, glfw::Key key, int, glfw::Press_action action,
+              int) override {
+    if (key == glfw::Key::k_escape && action == glfw::Press_action::press) {
+      _glfw_window.set_cursor_input_mode(glfw::Cursor_input_mode::normal);
+    }
+  }
+
+  void on_mouse_button(glfw::Window, glfw::Mouse_button button,
+                       glfw::Press_state action, int) override {
+    if (button == glfw::Mouse_button::mb_left &&
+        action == glfw::Press_state::press) {
+      _glfw_window.set_cursor_input_mode(glfw::Cursor_input_mode::disabled);
+    }
+  }
+
+  void on_cursor_pos(glfw::Window, double, double, double dxpos,
+                     double dypos) override {
+    if (const auto player = get_player()) {
+      if (_glfw_window.get_cursor_input_mode() ==
+          glfw::Cursor_input_mode::disabled) {
+        player.set_yaw(
+            player.get_yaw() -
+            static_cast<float>(dxpos * constants::mouselook_sensititvity));
+        player.set_pitch(std::clamp(
+            player.get_pitch() +
+                static_cast<float>(dypos * constants::mouselook_sensititvity),
+            -0.5f * std::numbers::pi_v<float>,
+            0.5f * std::numbers::pi_v<float>));
+      }
     }
   }
 
@@ -753,34 +792,38 @@ int main() {
           std::chrono::duration<float>(constants::input_duration));
       if (const auto player = client.get_player()) {
         auto delta_yaw = 0.0f;
-        if (client.get_window().get_key(glfw::Key::k_left) ==
-            glfw::Key_state::press) {
-          delta_yaw += 1.0f * constants::input_duration;
-        }
-        if (client.get_window().get_key(glfw::Key::k_right) ==
-            glfw::Key_state::press) {
-          delta_yaw -= 1.0f * constants::input_duration;
-        }
         auto delta_pitch = 0.0f;
-        if (client.get_window().get_key(glfw::Key::k_down) ==
-            glfw::Key_state::press) {
-          delta_pitch += 1.0f * constants::input_duration;
-        }
-        if (client.get_window().get_key(glfw::Key::k_up) ==
-            glfw::Key_state::press) {
-          delta_pitch -= 1.0f * constants::input_duration;
+        if (client.get_window().get_cursor_input_mode() ==
+            glfw::Cursor_input_mode::normal) {
+          if (client.get_window().get_key(glfw::Key::k_left) ==
+              glfw::Press_state::press) {
+            delta_yaw += 1.0f * constants::input_duration;
+          }
+          if (client.get_window().get_key(glfw::Key::k_right) ==
+              glfw::Press_state::press) {
+            delta_yaw -= 1.0f * constants::input_duration;
+          }
+          if (client.get_window().get_key(glfw::Key::k_down) ==
+              glfw::Press_state::press) {
+            delta_pitch += 1.0f * constants::input_duration;
+          }
+          if (client.get_window().get_key(glfw::Key::k_up) ==
+              glfw::Press_state::press) {
+            delta_pitch -= 1.0f * constants::input_duration;
+          }
+        } else {
         }
         player.set_yaw(player.get_yaw() + delta_yaw);
         player.set_pitch(player.get_pitch() + delta_pitch);
         client.send_player_input_state(game::Player::Input_state{
             .move_left = client.get_window().get_key(glfw::Key::k_a) ==
-                         glfw::Key_state::press,
+                         glfw::Press_state::press,
             .move_right = client.get_window().get_key(glfw::Key::k_d) ==
-                          glfw::Key_state::press,
+                          glfw::Press_state::press,
             .move_forward = client.get_window().get_key(glfw::Key::k_w) ==
-                            glfw::Key_state::press,
+                            glfw::Press_state::press,
             .move_backward = client.get_window().get_key(glfw::Key::k_s) ==
-                             glfw::Key_state::press,
+                             glfw::Press_state::press,
             .yaw = player.get_yaw(),
             .pitch = player.get_pitch(),
         });
