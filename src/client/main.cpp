@@ -760,7 +760,17 @@ int main() {
             glfw::Key_state::press) {
           delta_yaw -= 1.0f * constants::input_duration;
         }
+        auto delta_pitch = 0.0f;
+        if (client.get_window().get_key(glfw::Key::k_down) ==
+            glfw::Key_state::press) {
+          delta_pitch += 1.0f * constants::input_duration;
+        }
+        if (client.get_window().get_key(glfw::Key::k_up) ==
+            glfw::Key_state::press) {
+          delta_pitch -= 1.0f * constants::input_duration;
+        }
         player.set_yaw(player.get_yaw() + delta_yaw);
+        player.set_pitch(player.get_pitch() + delta_pitch);
         client.send_player_input_state(game::Player::Input_state{
             .move_left = client.get_window().get_key(glfw::Key::k_a) ==
                          glfw::Key_state::press,
@@ -771,6 +781,7 @@ int main() {
             .move_backward = client.get_window().get_key(glfw::Key::k_s) ==
                              glfw::Key_state::press,
             .yaw = player.get_yaw(),
+            .pitch = player.get_pitch(),
         });
       }
     }
