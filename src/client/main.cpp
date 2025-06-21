@@ -56,6 +56,15 @@ struct Vertex {
   float b;
 };
 
+const auto floor_mesh_vertices = std::vector<Vertex>{
+    {.x = 10.0f, .y = -0.5f, .z = 10.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},
+    {.x = 10.0f, .y = -0.5f, .z = -10.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},
+    {.x = -10.0f, .y = -0.5f, .z = 10.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},
+    {.x = -10.0f, .y = -0.5f, .z = -10.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f},
+};
+
+const auto floor_mesh_indices = std::vector<std::uint16_t>{0, 1, 2, 3, 2, 1};
+
 class Client : net::Client {
 public:
   struct Create_info {
@@ -74,19 +83,12 @@ public:
             .flags = vk::CommandPoolCreateFlagBits::eTransient,
             .queueFamilyIndex = Global_vulkan_state::get().queue_family_index(),
         });
-    const auto floor_vertices = std::vector<Vertex>{
-        {.x = 10.0f, .y = -0.5f, .z = 10.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},
-        {.x = -10.0f, .y = -0.5f, .z = 10.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},
-        {.x = 10.0f, .y = -0.5f, .z = -10.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},
-        {.x = -10.0f, .y = -0.5f, .z = -10.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f},
-    };
-    const auto floor_indices = std::vector<std::uint16_t>{0, 1, 2, 2, 3, 1};
     _floor_vertex_buffer =
-        upload_vertices(std::as_bytes(std::span{floor_vertices}));
-    std::cout << "Uploaded vertex buffer.\n";
+        upload_vertices(std::as_bytes(std::span{floor_mesh_vertices}));
+    std::cout << "Uploaded floor vertex buffer.\n";
     _floor_index_buffer =
-        upload_indices(std::as_bytes(std::span{floor_indices}));
-    std::cout << "Uploaded index buffer.\n";
+        upload_indices(std::as_bytes(std::span{floor_mesh_indices}));
+    std::cout << "Uploaded floor index buffer.\n";
     _vk_image_acquire_semaphore = make_vk_semaphore("image_acquire_semaphore");
     _vk_image_release_semaphore = make_vk_semaphore("image_release_semaphore");
     _vk_work_done_fence =
