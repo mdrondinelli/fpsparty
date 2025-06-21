@@ -12,5 +12,5 @@ constexpr auto tick_rate = 64.0f;
 constexpr auto tick_duration = 1.0f / tick_rate;
 constexpr auto input_rate = 64.0f;
 constexpr auto input_duration = 1.0f / input_rate;
-constexpr auto player_movement_speed = 1.0f;
+constexpr auto player_movement_speed = 2.0f;
 } // namespace fpsparty::constants
