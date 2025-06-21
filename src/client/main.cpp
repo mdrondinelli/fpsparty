@@ -486,7 +486,7 @@ private:
         .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eStore,
-        .clearValue = {{1.0f, 0.0f, 1.0f, 1.0f}},
+        .clearValue = {{0.4196f, 0.6196f, 0.7451f, 1.0f}},
     };
     _vk_command_buffer->beginRendering({
         .renderArea = {.offset = {0, 0}, .extent = _vk_swapchain_image_extent},
