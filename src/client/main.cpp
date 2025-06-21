@@ -639,7 +639,8 @@ private:
       for (const auto &other_player : _game->get_players()) {
         if (other_player != player) {
           const auto model_matrix =
-              math::translation_matrix(other_player.get_position());
+              math::translation_matrix(other_player.get_position()) *
+              math::y_rotation_matrix(other_player.get_yaw());
           const auto model_view_projection_matrix =
               Eigen::Matrix4f{view_projection_matrix * model_matrix};
           _vk_command_buffer->pushConstants(
