@@ -46,6 +46,14 @@ constexpr Eigen::Matrix4f z_rotation_matrix(float a) {
   return retval;
 }
 
+constexpr Eigen::Matrix4f axis_aligned_scale_matrix(const Eigen::Vector3f &s) {
+  auto retval = Eigen::Matrix4f{Eigen::Matrix4f::Identity()};
+  retval(0, 0) = s[0];
+  retval(1, 1) = s[1];
+  retval(2, 2) = s[2];
+  return retval;
+}
+
 constexpr Eigen::Matrix4f perspective_projection_matrix(float zoom_x,
                                                         float zoom_y,
                                                         float z_near) noexcept {

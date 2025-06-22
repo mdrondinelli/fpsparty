@@ -16,8 +16,8 @@ public:
   constexpr vk::Buffer get_buffer() const noexcept { return *_buffer; }
 
 private:
-  vk::UniqueBuffer _buffer;
-  vma::Unique_allocation _allocation;
+  vk::UniqueBuffer _buffer{};
+  vma::Unique_allocation _allocation{};
 };
 } // namespace fpsparty::client
 

@@ -295,8 +295,6 @@ public:
         ++_input_sequence_number;
       }
       _game->simulate({.duration = constants::tick_duration});
-      // std::cout << "Client x: " << player.get_position().x()
-      //          << " (service_game_state)\n";
     }
   }
 
@@ -423,12 +421,18 @@ private:
     return Index_buffer{*_vma_allocator, *_vk_command_pool, data};
   }
 
-  vk::UniqueSemaphore make_vk_semaphore(const char *debug_name) {
+  vk::UniqueSemaphore make_vk_semaphore(const char *
+#ifndef FPSPARTY_VULKAN_NDEBUG
+                                            debug_name
+#endif
+  ) {
     auto retval = Global_vulkan_state::get().device().createSemaphoreUnique({});
+#ifndef FPSPARTY_VULKAN_NDEBUG
     Global_vulkan_state::get().device().setDebugUtilsObjectNameEXT(
         {.objectType = vk::ObjectType::eSemaphore,
          .objectHandle = std::bit_cast<std::uint64_t>(*retval),
          .pObjectName = debug_name});
+#endif
     return retval;
   }
 
@@ -635,7 +639,8 @@ private:
   void record_vk_command_buffer(vk::Image swapchain_image,
                                 vk::ImageView swapchain_image_view) {
     _vk_command_buffer->begin(vk::CommandBufferBeginInfo{
-        .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+        .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+    });
     const auto swapchain_image_barrier_1 = vk::ImageMemoryBarrier2{
         .srcStageMask = vk::PipelineStageFlagBits2::eTopOfPipe,
         .srcAccessMask = {},
@@ -676,9 +681,10 @@ private:
         _player_id ? _game->get_player(*_player_id) : game::Replicated_player{};
     if (player) {
       const auto view_matrix =
-          math::x_rotation_matrix(-player.get_input_state().pitch) *
-          math::y_rotation_matrix(-player.get_input_state().yaw) *
-          math::translation_matrix(-player.get_position());
+          (math::x_rotation_matrix(-player.get_input_state().pitch) *
+           math::y_rotation_matrix(-player.get_input_state().yaw) *
+           math::translation_matrix(-player.get_position()))
+              .eval();
       const auto framebuffer_size = _glfw_window.get_framebuffer_size();
       const auto framebuffer_aspect = static_cast<float>(framebuffer_size[0]) /
                                       static_cast<float>(framebuffer_size[1]);
@@ -686,7 +692,7 @@ private:
           framebuffer_aspect > 1.0f ? 1.0f : framebuffer_aspect,
           framebuffer_aspect > 1.0f ? 1.0f / framebuffer_aspect : 1.0f, 0.01f);
       const auto view_projection_matrix =
-          Eigen::Matrix4f{projection_matrix * view_matrix};
+          (projection_matrix * view_matrix).eval();
       _vk_command_buffer->bindPipeline(vk::PipelineBindPoint::eGraphics,
                                        *_vk_pipeline);
       _vk_command_buffer->setViewport(
@@ -720,10 +726,12 @@ private:
       for (const auto &other_player : _game->get_players()) {
         if (other_player != player) {
           const auto model_matrix =
-              math::translation_matrix(other_player.get_position()) *
-              math::y_rotation_matrix(other_player.get_input_state().yaw);
+              (math::translation_matrix(other_player.get_position()) *
+               math::y_rotation_matrix(other_player.get_input_state().yaw) *
+               math::axis_aligned_scale_matrix({0.5f, 1.0f, 0.5f}))
+                  .eval();
           const auto model_view_projection_matrix =
-              Eigen::Matrix4f{view_projection_matrix * model_matrix};
+              (view_projection_matrix * model_matrix).eval();
           _vk_command_buffer->pushConstants(
               *_vk_pipeline_layout, vk::ShaderStageFlagBits::eVertex, 0, 64,
               model_view_projection_matrix.data());

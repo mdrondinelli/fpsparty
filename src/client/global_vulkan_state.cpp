@@ -17,11 +17,11 @@ vk::UniqueInstance make_vk_instance() {
       .pEngineName = "FPS Party",
       .apiVersion = vk::ApiVersion13,
   };
-#ifndef NDEBUG
+#ifndef FPSPARTY_VULKAN_NDEBUG
   std::cout << "Enabling Vulkan validation layers.\n";
   const auto layers = std::array{"VK_LAYER_KHRONOS_validation"};
 #endif
-#ifndef NDEBUG
+#ifndef FPSPARTY_VULKAN_NDEBUG
   const auto glfw_extensions = glfw::get_required_instance_extensions();
   std::cout << "Enabling Vulkan debug extension.\n";
   auto extensions = std::vector<const char *>(std::from_range, glfw_extensions);
@@ -31,7 +31,7 @@ vk::UniqueInstance make_vk_instance() {
 #endif
   const auto create_info = vk::InstanceCreateInfo{
       .pApplicationInfo = &app_info,
-#ifndef NDEBUG
+#ifndef FPSPARTY_VULKAN_NDEBUG
       .enabledLayerCount = static_cast<std::uint32_t>(layers.size()),
       .ppEnabledLayerNames = layers.data(),
 #endif

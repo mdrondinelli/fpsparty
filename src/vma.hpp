@@ -206,8 +206,8 @@ private:
     std::swap(_owner, other._owner);
   }
 
-  Allocation _value;
-  Allocator _owner;
+  Allocation _value{};
+  Allocator _owner{};
 };
 
 inline std::tuple<vk::Buffer, vma::Allocation>
