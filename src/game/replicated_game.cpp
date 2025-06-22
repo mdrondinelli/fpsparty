@@ -105,10 +105,8 @@ void Replicated_game::apply_snapshot(serial::Reader &reader) const {
     player_impl->position.x() = *player_position_x;
     player_impl->position.y() = *player_position_y;
     player_impl->position.z() = *player_position_z;
-    if (!is_player_locally_controlled(*player_id)) {
-      player_impl->input_state = *input_state;
-      player_impl->input_sequence_number = *input_sequence_number;
-    }
+    player_impl->input_state = *input_state;
+    player_impl->input_sequence_number = *input_sequence_number;
   }
   for (auto it = _impl->players.begin(); it != _impl->players.end();) {
     if (!it->second->marked) {

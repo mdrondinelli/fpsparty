@@ -29,8 +29,8 @@ void Player::set_input_state(
     const Input_state &input_state,
     std::uint16_t input_sequence_number) const noexcept {
   if (_impl->input_sequence_number) {
-    const auto difference =
-        input_sequence_number - *_impl->input_sequence_number;
+    const auto difference = static_cast<std::int16_t>(
+        input_sequence_number - *_impl->input_sequence_number);
     if (difference < 0) {
       return;
     }

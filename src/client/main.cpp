@@ -291,9 +291,11 @@ public:
         };
         net::Client::send_player_input_state(input_state,
                                              _input_sequence_number);
-        player.set_input_state(input_state, _input_sequence_number);
         _in_flight_input_states.emplace_back(input_state,
                                              _input_sequence_number);
+        std::cout << "Sent input state " << _input_sequence_number << ", now "
+                  << _in_flight_input_states.size() << " in flight.\n";
+        player.set_input_state(input_state, _input_sequence_number);
         ++_input_sequence_number;
       }
       _game->simulate({.duration = constants::tick_duration});
@@ -328,6 +330,9 @@ protected:
     _player_id = std::nullopt;
     _game->clear();
     _has_game_state = false;
+    _tick_timer = 0.0f;
+    _input_sequence_number = 0;
+    _in_flight_input_states.clear();
   }
 
   void on_player_id(std::uint32_t player_id) override {
@@ -343,20 +348,21 @@ protected:
       const auto acknowledged_input_sequence_number =
           player.get_input_sequence_number();
       if (acknowledged_input_sequence_number) {
+        std::cout << "Server acked input "
+                  << *acknowledged_input_sequence_number << "\n";
         while (_in_flight_input_states.size() > 0 &&
                _in_flight_input_states[0].second <=
-                   acknowledged_input_sequence_number) {
+                   *acknowledged_input_sequence_number) {
           _in_flight_input_states.erase(_in_flight_input_states.begin());
         }
-        for (const auto &[input_state, input_sequence_number] :
-             _in_flight_input_states) {
-          player.set_input_state(input_state, input_sequence_number);
-          _game->simulate({.duration = constants::tick_duration});
-        }
       }
-      const auto &player_position = player.get_position();
-      std::cout << "Client player position: (" << player_position.x() << ", "
-                << player_position.y() << ", " << player_position.z() << ").\n";
+      for (const auto &[input_state, input_sequence_number] :
+           _in_flight_input_states) {
+        player.set_input_state(input_state, input_sequence_number);
+        _game->simulate({.duration = constants::tick_duration});
+      }
+      std::cout << "Replayed " << _in_flight_input_states.size()
+                << " inputs.\n";
     }
   }
 
