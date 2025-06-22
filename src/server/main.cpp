@@ -34,12 +34,16 @@ public:
     _tick_timer -= duration;
     if (_tick_timer <= 0.0f) {
       _tick_timer += constants::tick_duration;
-      for (const auto &player : _game->get_players()) {
+      const auto players = _game->get_players();
+      for (const auto &player : players) {
         if (player.is_input_stale()) {
           player.increment_input_sequence_number();
         }
       }
       _game->simulate({.duration = constants::tick_duration});
+      for (const auto &player : players) {
+        player.mark_input_stale();
+      }
       return true;
     } else {
       return false;
