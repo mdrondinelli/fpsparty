@@ -293,12 +293,12 @@ public:
                                              _input_sequence_number);
         _in_flight_input_states.emplace_back(input_state,
                                              _input_sequence_number);
-        std::cout << "Sent input state " << _input_sequence_number << ", now "
-                  << _in_flight_input_states.size() << " in flight.\n";
         player.set_input_state(input_state, _input_sequence_number);
         ++_input_sequence_number;
       }
       _game->simulate({.duration = constants::tick_duration});
+      // std::cout << "Client x: " << player.get_position().x()
+      //          << " (service_game_state)\n";
     }
   }
 
@@ -348,8 +348,6 @@ protected:
       const auto acknowledged_input_sequence_number =
           player.get_input_sequence_number();
       if (acknowledged_input_sequence_number) {
-        std::cout << "Server acked input "
-                  << *acknowledged_input_sequence_number << "\n";
         while (_in_flight_input_states.size() > 0 &&
                _in_flight_input_states[0].second <=
                    *acknowledged_input_sequence_number) {
@@ -361,8 +359,6 @@ protected:
         player.set_input_state(input_state, input_sequence_number);
         _game->simulate({.duration = constants::tick_duration});
       }
-      std::cout << "Replayed " << _in_flight_input_states.size()
-                << " inputs.\n";
     }
   }
 
@@ -854,52 +850,6 @@ int main() {
     const auto now = Clock::now();
     loop_duration = now - loop_time;
     loop_time = now;
-
-    /*
-    if (input_duration >=
-        std::chrono::duration<float>(constants::input_duration)) {
-      input_duration -= std::chrono::duration_cast<Duration>(
-          std::chrono::duration<float>(constants::input_duration));
-      if (const auto player = client.get_player()) {
-        auto delta_yaw = 0.0f;
-        auto delta_pitch = 0.0f;
-        if (client.get_window().get_cursor_input_mode() ==
-            glfw::Cursor_input_mode::normal) {
-          if (client.get_window().get_key(glfw::Key::k_left) ==
-              glfw::Press_state::press) {
-            delta_yaw += 1.0f * constants::input_duration;
-          }
-          if (client.get_window().get_key(glfw::Key::k_right) ==
-              glfw::Press_state::press) {
-            delta_yaw -= 1.0f * constants::input_duration;
-          }
-          if (client.get_window().get_key(glfw::Key::k_down) ==
-              glfw::Press_state::press) {
-            delta_pitch += 1.0f * constants::input_duration;
-          }
-          if (client.get_window().get_key(glfw::Key::k_up) ==
-              glfw::Press_state::press) {
-            delta_pitch -= 1.0f * constants::input_duration;
-          }
-        } else {
-        }
-        player.set_yaw(player.get_yaw() + delta_yaw);
-        player.set_pitch(player.get_pitch() + delta_pitch);
-        client.send_player_input_state(game::Player::Input_state{
-            .move_left = client.get_window().get_key(glfw::Key::k_a) ==
-                         glfw::Press_state::press,
-            .move_right = client.get_window().get_key(glfw::Key::k_d) ==
-                          glfw::Press_state::press,
-            .move_forward = client.get_window().get_key(glfw::Key::k_w) ==
-                            glfw::Press_state::press,
-            .move_backward = client.get_window().get_key(glfw::Key::k_s) ==
-                             glfw::Press_state::press,
-            .yaw = player.get_yaw(),
-            .pitch = player.get_pitch(),
-        });
-      }
-    }
-    */
   }
   Global_vulkan_state::get().device().waitIdle();
   std::cout << "Exiting.\n";

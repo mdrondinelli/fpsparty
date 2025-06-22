@@ -3,8 +3,10 @@
 
 #include "serial/serialize.hpp"
 #include "serial/writer.hpp"
+#include <Eigen/Dense>
 #include <bit>
 #include <exception>
+#include <memory_resource>
 
 namespace fpsparty::game {
 class Game;
@@ -34,7 +36,16 @@ public:
   Input_state get_input_state() const noexcept;
 
   void set_input_state(const Input_state &input_state,
-                       std::uint16_t input_sequence_number) const noexcept;
+                       std::uint16_t input_sequence_number,
+                       bool input_fresh) const noexcept;
+
+  void increment_input_sequence_number() const noexcept;
+
+  bool is_input_stale() const noexcept;
+
+  void mark_input_stale() const noexcept;
+
+  const Eigen::Vector3f &get_position() const noexcept;
 
 private:
   friend class Game;
@@ -67,6 +78,10 @@ public:
 
   constexpr explicit operator void *() const noexcept { return _impl; }
 
+  void simulate(const Simulate_info &info) const;
+
+  void snapshot(serial::Writer &writer) const;
+
   Player create_player(const Player::Create_info &info) const;
 
   void destroy_player(Player player) const noexcept;
@@ -75,9 +90,9 @@ public:
 
   std::size_t get_player_count() const noexcept;
 
-  void simulate(const Simulate_info &info) const;
-
-  void snapshot(serial::Writer &writer) const;
+  std::pmr::vector<Player>
+  get_players(std::pmr::memory_resource *memory_resource =
+                  std::pmr::get_default_resource()) const;
 
 private:
   friend constexpr bool operator==(Game lhs, Game rhs) noexcept = default;

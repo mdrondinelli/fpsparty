@@ -43,6 +43,7 @@ target_include_directories(
   net
   SYSTEM
   PUBLIC
+  ${CMAKE_SOURCE_DIR}/extern/eigen-3.4.0
   ${CMAKE_SOURCE_DIR}/extern/magic_enum-0.9.7/include
   ${CMAKE_SOURCE_DIR}/extern/enet/include
 )

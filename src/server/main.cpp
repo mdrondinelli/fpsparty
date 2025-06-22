@@ -30,9 +30,25 @@ public:
                      .outgoing_bandwidth = create_info.outgoing_bandwidth}},
         _game{game::create_game_unique({})} {}
 
-  constexpr game::Game get_game() const noexcept { return *_game; }
+  bool service_game_state(float duration) {
+    _tick_timer -= duration;
+    if (_tick_timer <= 0.0f) {
+      _tick_timer += constants::tick_duration;
+      for (const auto &player : _game->get_players()) {
+        if (player.is_input_stale()) {
+          player.increment_input_sequence_number();
+        }
+      }
+      _game->simulate({.duration = constants::tick_duration});
+      return true;
+    } else {
+      return false;
+    }
+  }
 
   void broadcast_game_state() { net::Server::broadcast_game_state(*_game); }
+
+  constexpr game::Game get_game() const noexcept { return *_game; }
 
 protected:
   void on_peer_connect(enet::Peer peer) override {
@@ -52,11 +68,12 @@ protected:
                              const game::Player::Input_state &input_state,
                              std::uint16_t input_sequence_number) override {
     const auto player = static_cast<game::Player>(peer.get_data());
-    player.set_input_state(input_state, input_sequence_number);
+    player.set_input_state(input_state, input_sequence_number, true);
   }
 
 private:
-  game::Unique_game _game;
+  game::Unique_game _game{};
+  float _tick_timer{};
 };
 } // namespace
 
@@ -71,20 +88,19 @@ int main() {
   std::cout << "Server running on port " << constants::port << ".\n";
   using Clock = std::chrono::high_resolution_clock;
   using Duration = Clock::duration;
-  auto game_loop_duration = Duration{};
-  auto game_loop_time = Clock::now();
+  auto loop_duration = Duration{};
+  auto loop_time = Clock::now();
   while (!signal_status) {
     server.poll_events();
-    const auto now = Clock::now();
-    game_loop_duration += now - game_loop_time;
-    game_loop_time = now;
-    if (game_loop_duration >=
-        std::chrono::duration<float>{constants::tick_duration}) {
-      game_loop_duration -= std::chrono::duration_cast<Duration>(
-          std::chrono::duration<float>{constants::tick_duration});
-      server.get_game().simulate({.duration = constants::tick_duration});
+    if (server.service_game_state(
+            std::chrono::duration_cast<std::chrono::duration<float>>(
+                loop_duration)
+                .count())) {
       server.broadcast_game_state();
     }
+    const auto now = Clock::now();
+    loop_duration = now - loop_time;
+    loop_time = now;
   }
   if (signal_status == SIGINT) {
     server.disconnect();
