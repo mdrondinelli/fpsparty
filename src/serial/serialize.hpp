@@ -17,6 +17,21 @@ class Serialization_error : public std::exception {};
 
 template <typename T> struct Serializer;
 
+template <> struct Serializer<bool> {
+  void write(Writer &writer, bool value) const {
+    const auto int_value = value ? std::uint8_t{1} : std::uint8_t{0};
+    writer.write(std::as_bytes(std::span{&int_value, 1}));
+  }
+
+  std::optional<bool> read(Reader &reader) const {
+    auto int_value = std::uint8_t{};
+    if (!reader.read(std::as_writable_bytes(std::span{&int_value, 1}))) {
+      return std::nullopt;
+    }
+    return int_value ? true : false;
+  }
+};
+
 template <std::integral T> struct Serializer<T> {
   template <std::integral U> void write(Writer &writer, U value) const {
     if (value < std::numeric_limits<T>::min() ||
@@ -79,6 +94,27 @@ struct Serializer<T> {
       return std::nullopt;
     }
     return enum_value;
+  }
+};
+
+template <typename T> struct Serializer<std::optional<T>> {
+  void write(Writer &writer, const std::optional<T> &value) const {
+    Serializer<bool>{}.write(writer, value.has_value());
+    if (value) {
+      Serializer<T>{}.write(writer, *value);
+    }
+  }
+
+  std::optional<std::optional<T>> read(Reader &reader) const {
+    const auto has_value = Serializer<bool>{}.read(reader);
+    if (!has_value) {
+      return std::nullopt;
+    }
+    if (*has_value) {
+      return Serializer<T>{}.read(reader);
+    } else {
+      return std::optional{std::optional<T>{}};
+    }
   }
 };
 

@@ -15,7 +15,6 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
-#include <numbers>
 #include <span>
 #include <tuple>
 #include <volk.h>
@@ -34,7 +33,7 @@ DispatchLoaderDynamic defaultDispatchLoaderDynamic;
 }
 
 namespace {
-constexpr auto server_ip = "127.0.0.1";
+constexpr auto server_ip = "192.168.1.64";
 
 volatile std::sig_atomic_t signal_status{};
 void handle_signal(int signal) { signal_status = signal; }
@@ -209,28 +208,6 @@ public:
     std::cout << "Created VkPipeline.\n";
     _game = game::create_replicated_game_unique({});
   }
-
-  void poll_network_events() { net::Client::poll_events(); }
-
-  void wait_network_events(std::uint32_t timeout) {
-    net::Client::wait_events(timeout);
-  }
-
-  void connect(const enet::Address &address) { net::Client::connect(address); }
-
-  bool is_connecting() const noexcept { return net::Client::is_connecting(); }
-
-  bool is_connected() const noexcept { return net::Client::is_connected(); }
-
-  game::Replicated_player get_player() const noexcept {
-    return _player_id ? _game->get_player(*_player_id)
-                      : game::Replicated_player{};
-  }
-
-  void send_player_input_state(const game::Player::Input_state &input_state) {
-    net::Client::send_player_input_state(input_state);
-  }
-
   void render() {
     try {
       const auto vk_swapchain_image_index =
@@ -293,14 +270,64 @@ public:
     }
   }
 
+  void service_game_state(float duration) {
+    assert(_has_game_state);
+    _tick_timer -= duration;
+    if (_tick_timer <= 0) {
+      _tick_timer += constants::tick_duration;
+      const auto player = get_player();
+      if (player) {
+        const auto input_state = game::Player::Input_state{
+            .move_left = _glfw_window.get_key(glfw::Key::k_a) ==
+                         glfw::Press_state::press,
+            .move_right = _glfw_window.get_key(glfw::Key::k_d) ==
+                          glfw::Press_state::press,
+            .move_forward = _glfw_window.get_key(glfw::Key::k_w) ==
+                            glfw::Press_state::press,
+            .move_backward = _glfw_window.get_key(glfw::Key::k_s) ==
+                             glfw::Press_state::press,
+            .yaw = 0.0f,
+            .pitch = 0.0f,
+        };
+        net::Client::send_player_input_state(input_state,
+                                             _input_sequence_number);
+        player.set_input_state(input_state, _input_sequence_number);
+        _in_flight_input_states.emplace_back(input_state,
+                                             _input_sequence_number);
+        ++_input_sequence_number;
+      }
+      _game->simulate({.duration = constants::tick_duration});
+    }
+  }
+
+  void poll_network_events() { net::Client::poll_events(); }
+
+  void wait_network_events(std::uint32_t timeout) {
+    net::Client::wait_events(timeout);
+  }
+
+  void connect(const enet::Address &address) { net::Client::connect(address); }
+
+  bool is_connecting() const noexcept { return net::Client::is_connecting(); }
+
+  bool is_connected() const noexcept { return net::Client::is_connected(); }
+
+  bool has_game_state() const noexcept { return _has_game_state; }
+
+  game::Replicated_player get_player() const noexcept {
+    return _player_id ? _game->get_player(*_player_id)
+                      : game::Replicated_player{};
+  }
+
   constexpr glfw::Window get_window() const noexcept { return _glfw_window; }
 
 protected:
+  void on_connect() override {}
+
   void on_disconnect() override {
-    if (_player_id) {
-      _game->set_player_locally_controlled(*_player_id, false);
-      _player_id = std::nullopt;
-    }
+    _player_id = std::nullopt;
+    _game->clear();
+    _has_game_state = false;
   }
 
   void on_player_id(std::uint32_t player_id) override {
@@ -310,10 +337,23 @@ protected:
   }
 
   void on_game_state(serial::Reader &reader) override {
+    _has_game_state = true;
     _game->apply_snapshot(reader);
-    const auto player =
-        _player_id ? _game->get_player(*_player_id) : game::Replicated_player{};
-    if (player) {
+    if (const auto player = get_player()) {
+      const auto acknowledged_input_sequence_number =
+          player.get_input_sequence_number();
+      if (acknowledged_input_sequence_number) {
+        while (_in_flight_input_states.size() > 0 &&
+               _in_flight_input_states[0].second <=
+                   acknowledged_input_sequence_number) {
+          _in_flight_input_states.erase(_in_flight_input_states.begin());
+        }
+        for (const auto &[input_state, input_sequence_number] :
+             _in_flight_input_states) {
+          player.set_input_state(input_state, input_sequence_number);
+          _game->simulate({.duration = constants::tick_duration});
+        }
+      }
       const auto &player_position = player.get_position();
       std::cout << "Client player position: (" << player_position.x() << ", "
                 << player_position.y() << ", " << player_position.z() << ").\n";
@@ -335,19 +375,21 @@ protected:
     }
   }
 
-  void on_cursor_pos(glfw::Window, double, double, double dxpos,
-                     double dypos) override {
+  void on_cursor_pos(glfw::Window, double, double, double /*dxpos*/,
+                     double /*dypos*/) override {
     if (const auto player = get_player()) {
       if (_glfw_window.get_cursor_input_mode() ==
           glfw::Cursor_input_mode::disabled) {
-        player.set_yaw(
-            player.get_yaw() -
-            static_cast<float>(dxpos * constants::mouselook_sensititvity));
-        player.set_pitch(std::clamp(
-            player.get_pitch() +
-                static_cast<float>(dypos * constants::mouselook_sensititvity),
-            -0.5f * std::numbers::pi_v<float>,
-            0.5f * std::numbers::pi_v<float>));
+        /*
+      player.set_yaw(
+          player.get_yaw() -
+          static_cast<float>(dxpos * constants::mouselook_sensititvity));
+      player.set_pitch(std::clamp(
+          player.get_pitch() +
+              static_cast<float>(dypos * constants::mouselook_sensititvity),
+          -0.5f * std::numbers::pi_v<float>,
+          0.5f * std::numbers::pi_v<float>));
+          */
       }
     }
   }
@@ -634,9 +676,10 @@ private:
     const auto player =
         _player_id ? _game->get_player(*_player_id) : game::Replicated_player{};
     if (player) {
-      const auto view_matrix = math::x_rotation_matrix(-player.get_pitch()) *
-                               math::y_rotation_matrix(-player.get_yaw()) *
-                               math::translation_matrix(-player.get_position());
+      const auto view_matrix =
+          math::x_rotation_matrix(-player.get_input_state().pitch) *
+          math::y_rotation_matrix(-player.get_input_state().yaw) *
+          math::translation_matrix(-player.get_position());
       const auto framebuffer_size = _glfw_window.get_framebuffer_size();
       const auto framebuffer_aspect = static_cast<float>(framebuffer_size[0]) /
                                       static_cast<float>(framebuffer_size[1]);
@@ -679,7 +722,7 @@ private:
         if (other_player != player) {
           const auto model_matrix =
               math::translation_matrix(other_player.get_position()) *
-              math::y_rotation_matrix(other_player.get_yaw());
+              math::y_rotation_matrix(other_player.get_input_state().yaw);
           const auto model_view_projection_matrix =
               Eigen::Matrix4f{view_projection_matrix * model_matrix};
           _vk_command_buffer->pushConstants(
@@ -736,8 +779,13 @@ private:
   std::vector<vk::UniqueImageView> _vk_swapchain_image_views{};
   vk::UniquePipelineLayout _vk_pipeline_layout{};
   vk::UniquePipeline _vk_pipeline{};
+  bool _has_game_state{};
   game::Unique_replicated_game _game{};
   std::optional<std::uint32_t> _player_id{};
+  float _tick_timer{};
+  std::uint16_t _input_sequence_number{};
+  std::vector<std::pair<game::Player::Input_state, std::uint16_t>>
+      _in_flight_input_states{};
 };
 
 } // namespace
@@ -768,6 +816,7 @@ int main() {
   });
   std::cout << "Connecting to " << server_ip << " on port " << constants::port
             << ".\n";
+  /*
   while (client.is_connecting()) {
     client.wait_network_events(100);
   }
@@ -776,16 +825,31 @@ int main() {
     return 0;
   }
   std::cout << "Connection successful.\n";
+  */
   using Clock = std::chrono::high_resolution_clock;
   using Duration = Clock::duration;
-  auto input_duration = Duration{};
-  auto input_time = Clock::now();
-  while (!signal_status && !client.get_window().should_close() &&
-         client.is_connected()) {
+  auto loop_duration = Duration{};
+  auto loop_time = Clock::now();
+  // auto input_duration = Duration{};
+  // auto input_time = Clock::now();
+  while (!signal_status && !client.get_window().should_close()/* &&
+         client.is_connected()*/) {
     glfw::poll_events();
+    client.poll_network_events();
+    if (client.has_game_state()) {
+      client.service_game_state(
+          std::chrono::duration_cast<std::chrono::duration<float>>(
+              loop_duration)
+              .count());
+    } else if (!client.is_connecting() && !client.is_connected()) {
+      break;
+    }
+    client.render();
     const auto now = Clock::now();
-    input_duration += now - input_time;
-    input_time = now;
+    loop_duration = now - loop_time;
+    loop_time = now;
+
+    /*
     if (input_duration >=
         std::chrono::duration<float>(constants::input_duration)) {
       input_duration -= std::chrono::duration_cast<Duration>(
@@ -829,8 +893,7 @@ int main() {
         });
       }
     }
-    client.poll_network_events();
-    client.render();
+    */
   }
   Global_vulkan_state::get().device().waitIdle();
   std::cout << "Exiting.\n";

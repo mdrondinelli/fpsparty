@@ -1,6 +1,7 @@
 #ifndef FPSPARTY_GAME_REPLICATED_GAME_HPP
 #define FPSPARTY_GAME_REPLICATED_GAME_HPP
 
+#include "game/game.hpp"
 #include "serial/reader.hpp"
 #include <Eigen/Dense>
 #include <memory_resource>
@@ -16,15 +17,14 @@ public:
 
   constexpr explicit operator void *() const noexcept { return _impl; }
 
+  const Player::Input_state &get_input_state() const noexcept;
+
+  std::optional<std::uint16_t> get_input_sequence_number() const noexcept;
+
+  void set_input_state(const Player::Input_state &input_state,
+                       std::uint16_t input_sequence_number) const noexcept;
+
   const Eigen::Vector3f &get_position() const noexcept;
-
-  float get_yaw() const noexcept;
-
-  void set_yaw(float yaw) const noexcept;
-
-  float get_pitch() const noexcept;
-
-  void set_pitch(float pitch) const noexcept;
 
   friend constexpr bool operator==(Replicated_player lhs,
                                    Replicated_player rhs) noexcept = default;
@@ -43,6 +43,8 @@ class Replicated_game {
 public:
   struct Create_info;
 
+  struct Simulate_info;
+
   class Snapshot_application_error;
 
   constexpr Replicated_game() noexcept = default;
@@ -50,6 +52,10 @@ public:
   constexpr operator bool() const noexcept { return _impl != nullptr; }
 
   constexpr explicit operator void *() const noexcept { return _impl; }
+
+  void clear() const;
+
+  void simulate(const Simulate_info &info) const;
 
   void apply_snapshot(serial::Reader &reader) const;
 
@@ -76,6 +82,10 @@ private:
 };
 
 struct Replicated_game::Create_info {};
+
+struct Replicated_game::Simulate_info {
+  float duration;
+};
 
 class Replicated_game::Snapshot_application_error : std::exception {};
 

@@ -1,10 +1,10 @@
 #include "game.hpp"
 #include "constants.hpp"
+#include "game/humanoid_movement.hpp"
 #include "math/transformation_matrices.hpp"
 #include "serial/serialize.hpp"
 #include <Eigen/Dense>
 #include <algorithm>
-#include <iostream>
 
 namespace fpsparty::game {
 struct Game::Impl {
@@ -16,6 +16,7 @@ struct Player::Impl {
   std::uint32_t id;
   Eigen::Vector3f position{0.0f, 0.0f, 0.0f};
   Input_state input_state{};
+  std::optional<std::uint16_t> input_sequence_number{};
 };
 
 std::uint32_t Player::get_id() const noexcept { return _impl->id; }
@@ -24,8 +25,18 @@ Player::Input_state Player::get_input_state() const noexcept {
   return _impl->input_state;
 }
 
-void Player::set_input_state(const Input_state &input_state) const noexcept {
+void Player::set_input_state(
+    const Input_state &input_state,
+    std::uint16_t input_sequence_number) const noexcept {
+  if (_impl->input_sequence_number) {
+    const auto difference =
+        input_sequence_number - *_impl->input_sequence_number;
+    if (difference < 0) {
+      return;
+    }
+  }
   _impl->input_state = input_state;
+  _impl->input_sequence_number = input_sequence_number;
 }
 
 Game create_game(const Game::Create_info &) { return Game{new Game::Impl}; }
@@ -57,24 +68,12 @@ std::size_t Game::get_player_count() const noexcept {
 
 void Game::simulate(const Simulate_info &info) const {
   for (const auto &player : _impl->players) {
-    const auto input_state = player.get_input_state();
-    const auto basis_matrix = math::y_rotation_matrix(input_state.yaw);
-    auto movement_vector = Eigen::Vector3f{0.0f, 0.0f, 0.0f};
-    if (input_state.move_left) {
-      movement_vector += basis_matrix.col(0).head<3>();
-    }
-    if (input_state.move_right) {
-      movement_vector -= basis_matrix.col(0).head<3>();
-    }
-    if (input_state.move_forward) {
-      movement_vector += basis_matrix.col(2).head<3>();
-    }
-    if (input_state.move_backward) {
-      movement_vector -= basis_matrix.col(2).head<3>();
-    }
-    movement_vector.normalize();
-    player._impl->position +=
-        movement_vector * constants::player_movement_speed * info.duration;
+    const auto movement_result = simulate_humanoid_movement({
+        .initial_position = player._impl->position,
+        .input_state = player.get_input_state(),
+        .duration = info.duration,
+    });
+    player._impl->position = movement_result.final_position;
   }
 }
 
@@ -86,8 +85,9 @@ void Game::snapshot(serial::Writer &writer) const {
     serialize<float>(writer, player._impl->position.x());
     serialize<float>(writer, player._impl->position.y());
     serialize<float>(writer, player._impl->position.z());
-    serialize<float>(writer, player._impl->input_state.yaw);
-    serialize<float>(writer, player._impl->input_state.pitch);
+    serialize<Player::Input_state>(writer, player._impl->input_state);
+    serialize<std::optional<std::uint16_t>>(
+        writer, player._impl->input_sequence_number);
   }
 }
 } // namespace fpsparty::game

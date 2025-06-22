@@ -13,6 +13,7 @@ add_library(
   game
   src/game/game.cpp
   src/game/replicated_game.cpp
+  src/game/humanoid_movement.cpp
 )
 target_include_directories(
   game

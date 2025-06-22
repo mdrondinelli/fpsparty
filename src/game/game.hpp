@@ -33,7 +33,8 @@ public:
 
   Input_state get_input_state() const noexcept;
 
-  void set_input_state(const Input_state &input_state) const noexcept;
+  void set_input_state(const Input_state &input_state,
+                       std::uint16_t input_sequence_number) const noexcept;
 
 private:
   friend class Game;

@@ -27,7 +27,8 @@ public:
 
   bool is_connected() const noexcept;
 
-  void send_player_input_state(const game::Player::Input_state &input_state);
+  void send_player_input_state(const game::Player::Input_state &input_state,
+                               std::uint16_t sequence_number);
 
 protected:
   virtual void on_connect() {}

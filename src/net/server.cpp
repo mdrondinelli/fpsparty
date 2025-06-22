@@ -53,11 +53,17 @@ void Server::handle_event(const enet::Event &e) {
     }
     switch (*message_type) {
     case Message_type::player_input_state: {
-      const auto player_input_state =
-          deserialize<game::Player::Input_state>(reader);
-      if (player_input_state) {
-        on_player_input_state(e.peer, *player_input_state);
+      const auto input_state = deserialize<game::Player::Input_state>(reader);
+      if (!input_state) {
+        std::cerr << "Malformed player input state packet.\n";
+        return;
       }
+      const auto input_sequence_number = deserialize<std::uint16_t>(reader);
+      if (!input_sequence_number) {
+        std::cerr << "Malformed player input state packet.\n";
+        return;
+      }
+      on_player_input_state(e.peer, *input_state, *input_sequence_number);
       return;
     }
     default:

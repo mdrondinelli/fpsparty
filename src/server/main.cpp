@@ -48,11 +48,11 @@ protected:
     _game->destroy_player(player);
   }
 
-  void
-  on_player_input_state(enet::Peer peer,
-                        const game::Player::Input_state &input_state) override {
+  void on_player_input_state(enet::Peer peer,
+                             const game::Player::Input_state &input_state,
+                             std::uint16_t input_sequence_number) override {
     const auto player = static_cast<game::Player>(peer.get_data());
-    player.set_input_state(input_state);
+    player.set_input_state(input_state, input_sequence_number);
   }
 
 private:

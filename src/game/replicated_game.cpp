@@ -1,4 +1,6 @@
 #include "replicated_game.hpp"
+#include "game/game.hpp"
+#include "game/humanoid_movement.hpp"
 #include "serial/serialize.hpp"
 #include <algorithm>
 #include <vector>
@@ -6,23 +8,29 @@
 namespace fpsparty::game {
 struct Replicated_player::Impl {
   bool marked{};
+  Player::Input_state input_state{};
+  std::optional<std::uint16_t> input_sequence_number{};
   Eigen::Vector3f position{0.0f, 0.0f, 0.0f};
-  float yaw{};
-  float pitch{};
 };
+
+const Player::Input_state &Replicated_player::get_input_state() const noexcept {
+  return _impl->input_state;
+}
+
+std::optional<std::uint16_t>
+Replicated_player::get_input_sequence_number() const noexcept {
+  return _impl->input_sequence_number;
+}
+
+void Replicated_player::set_input_state(
+    const Player::Input_state &input_state,
+    std::uint16_t input_sequence_number) const noexcept {
+  _impl->input_state = input_state;
+  _impl->input_sequence_number = input_sequence_number;
+}
 
 const Eigen::Vector3f &Replicated_player::get_position() const noexcept {
   return _impl->position;
-}
-
-float Replicated_player::get_yaw() const noexcept { return _impl->yaw; }
-
-void Replicated_player::set_yaw(float yaw) const noexcept { _impl->yaw = yaw; }
-
-float Replicated_player::get_pitch() const noexcept { return _impl->pitch; }
-
-void Replicated_player::set_pitch(float pitch) const noexcept {
-  _impl->pitch = pitch;
 }
 
 struct Replicated_game::Impl {
@@ -31,6 +39,22 @@ struct Replicated_game::Impl {
       players{};
   std::vector<std::uint32_t> local_player_ids{};
 };
+
+void Replicated_game::clear() const {
+  _impl->players.clear();
+  _impl->local_player_ids.clear();
+}
+
+void Replicated_game::simulate(const Simulate_info &info) const {
+  for (const auto &player_node : _impl->players) {
+    const auto movement_result = simulate_humanoid_movement({
+        .initial_position = player_node.second->position,
+        .input_state = player_node.second->input_state,
+        .duration = info.duration,
+    });
+    player_node.second->position = movement_result.final_position;
+  }
+}
 
 void Replicated_game::apply_snapshot(serial::Reader &reader) const {
   using serial::deserialize;
@@ -69,20 +93,21 @@ void Replicated_game::apply_snapshot(serial::Reader &reader) const {
     if (!player_position_z) {
       throw Snapshot_application_error{};
     }
-    const auto yaw = deserialize<float>(reader);
-    if (!yaw) {
+    const auto input_state = deserialize<Player::Input_state>(reader);
+    if (!input_state) {
       throw Snapshot_application_error{};
     }
-    const auto pitch = deserialize<float>(reader);
-    if (!pitch) {
+    const auto input_sequence_number =
+        deserialize<std::optional<std::uint16_t>>(reader);
+    if (!input_sequence_number) {
       throw Snapshot_application_error{};
     }
     player_impl->position.x() = *player_position_x;
     player_impl->position.y() = *player_position_y;
     player_impl->position.z() = *player_position_z;
     if (!is_player_locally_controlled(*player_id)) {
-      player_impl->yaw = *yaw;
-      player_impl->pitch = *pitch;
+      player_impl->input_state = *input_state;
+      player_impl->input_sequence_number = *input_sequence_number;
     }
   }
   for (auto it = _impl->players.begin(); it != _impl->players.end();) {
