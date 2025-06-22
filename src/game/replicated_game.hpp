@@ -21,6 +21,8 @@ public:
 
   std::optional<std::uint16_t> get_input_sequence_number() const noexcept;
 
+  void set_input_state(const Player::Input_state &input_state) const noexcept;
+
   void set_input_state(const Player::Input_state &input_state,
                        std::uint16_t input_sequence_number) const noexcept;
 

@@ -277,18 +277,15 @@ public:
       _tick_timer += constants::tick_duration;
       const auto player = get_player();
       if (player) {
-        const auto input_state = game::Player::Input_state{
-            .move_left = _glfw_window.get_key(glfw::Key::k_a) ==
-                         glfw::Press_state::press,
-            .move_right = _glfw_window.get_key(glfw::Key::k_d) ==
-                          glfw::Press_state::press,
-            .move_forward = _glfw_window.get_key(glfw::Key::k_w) ==
-                            glfw::Press_state::press,
-            .move_backward = _glfw_window.get_key(glfw::Key::k_s) ==
-                             glfw::Press_state::press,
-            .yaw = 0.0f,
-            .pitch = 0.0f,
-        };
+        auto input_state = player.get_input_state();
+        input_state.move_left =
+            _glfw_window.get_key(glfw::Key::k_a) == glfw::Press_state::press;
+        input_state.move_right =
+            _glfw_window.get_key(glfw::Key::k_d) == glfw::Press_state::press;
+        input_state.move_forward =
+            _glfw_window.get_key(glfw::Key::k_w) == glfw::Press_state::press;
+        input_state.move_backward =
+            _glfw_window.get_key(glfw::Key::k_s) == glfw::Press_state::press;
         net::Client::send_player_input_state(input_state,
                                              _input_sequence_number);
         _in_flight_input_states.emplace_back(input_state,
@@ -377,21 +374,20 @@ protected:
     }
   }
 
-  void on_cursor_pos(glfw::Window, double, double, double /*dxpos*/,
-                     double /*dypos*/) override {
+  void on_cursor_pos(glfw::Window, double, double, double dxpos,
+                     double dypos) override {
     if (const auto player = get_player()) {
       if (_glfw_window.get_cursor_input_mode() ==
           glfw::Cursor_input_mode::disabled) {
-        /*
-      player.set_yaw(
-          player.get_yaw() -
-          static_cast<float>(dxpos * constants::mouselook_sensititvity));
-      player.set_pitch(std::clamp(
-          player.get_pitch() +
-              static_cast<float>(dypos * constants::mouselook_sensititvity),
-          -0.5f * std::numbers::pi_v<float>,
-          0.5f * std::numbers::pi_v<float>));
-          */
+        auto input_state = player.get_input_state();
+        input_state.yaw -=
+            static_cast<float>(dxpos * constants::mouselook_sensititvity);
+        input_state.pitch +=
+            static_cast<float>(dypos * constants::mouselook_sensititvity);
+        input_state.pitch =
+            std::clamp(input_state.pitch, -0.5f * std::numbers::pi_v<float>,
+                       0.5f * std::numbers::pi_v<float>);
+        player.set_input_state(input_state);
       }
     }
   }
@@ -836,8 +832,8 @@ int main() {
   // auto input_time = Clock::now();
   while (!signal_status && !client.get_window().should_close()/* &&
          client.is_connected()*/) {
-    glfw::poll_events();
     client.poll_network_events();
+    glfw::poll_events();
     if (client.has_game_state()) {
       client.service_game_state(
           std::chrono::duration_cast<std::chrono::duration<float>>(
