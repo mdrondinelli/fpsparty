@@ -11,12 +11,11 @@
 namespace fpsparty::game {
 class Game;
 class Player;
+class Projectile;
 class Unique_game;
 class Unique_player;
 
 class Player {
-  struct Impl;
-
 public:
   struct Create_info;
 
@@ -31,7 +30,7 @@ public:
 
   constexpr explicit operator void *() const noexcept { return _impl; }
 
-  std::uint32_t get_id() const noexcept;
+  std::uint32_t get_network_id() const noexcept;
 
   Input_state get_input_state() const noexcept;
 
@@ -39,13 +38,23 @@ public:
                        std::uint16_t input_sequence_number,
                        bool input_fresh) const noexcept;
 
+  std::optional<std::uint16_t> get_input_sequence_number() const noexcept;
+
   void increment_input_sequence_number() const noexcept;
 
   bool is_input_stale() const noexcept;
 
   void mark_input_stale() const noexcept;
 
+  float get_attack_cooldown() const noexcept;
+
+  void set_attack_cooldown(float value) const noexcept;
+
+  void decrease_attack_cooldown(float amount) const noexcept;
+
   const Eigen::Vector3f &get_position() const noexcept;
+
+  void set_position(const Eigen::Vector3f &position) const noexcept;
 
 private:
   friend class Game;
@@ -53,6 +62,52 @@ private:
   friend constexpr bool operator==(Player lhs, Player rhs) noexcept = default;
 
   friend struct std::hash<Player>;
+
+  struct Impl;
+
+  static Impl *new_impl(std::uint32_t network_id);
+
+  static void delete_impl(Impl *impl);
+
+  Impl *_impl{};
+};
+
+class Projectile {
+public:
+  struct Create_info;
+
+  constexpr Projectile() noexcept = default;
+
+  constexpr explicit Projectile(void *impl) noexcept
+      : _impl{static_cast<Impl *>(impl)} {}
+
+  constexpr operator bool() const noexcept { return _impl != nullptr; }
+
+  constexpr explicit operator void *() const noexcept { return _impl; }
+
+  std::uint32_t get_network_id() const noexcept;
+
+  const Eigen::Vector3f &get_position() const noexcept;
+
+  void set_position(const Eigen::Vector3f &position) const noexcept;
+
+  const Eigen::Vector3f &get_velocity() const noexcept;
+
+  void set_velocity(const Eigen::Vector3f &velocity) const noexcept;
+
+private:
+  friend class Game;
+
+  friend constexpr bool operator==(Projectile lhs,
+                                   Projectile rhs) noexcept = default;
+
+  friend struct std::hash<Projectile>;
+
+  struct Impl;
+
+  static Impl *new_impl(std::uint32_t network_id);
+
+  static void delete_impl(Impl *impl);
 
   Impl *_impl{};
 };
@@ -76,6 +131,8 @@ public:
 
   constexpr explicit operator void *() const noexcept { return _impl; }
 
+  void clear() const noexcept;
+
   void simulate(const Simulate_info &info) const;
 
   void snapshot(serial::Writer &writer) const;
@@ -84,13 +141,19 @@ public:
 
   void destroy_player(Player player) const noexcept;
 
-  Unique_player create_player_unique(const Player::Create_info &info) const;
-
   std::size_t get_player_count() const noexcept;
 
   std::pmr::vector<Player>
   get_players(std::pmr::memory_resource *memory_resource =
                   std::pmr::get_default_resource()) const;
+
+  Projectile create_projectile(const Projectile::Create_info &info) const;
+
+  void destroy_projectile(Projectile projectile) const noexcept;
+
+  std::pmr::vector<Projectile>
+  get_projectiles(std::pmr::memory_resource *memory_resource =
+                      std::pmr::get_default_resource()) const;
 
 private:
   friend constexpr bool operator==(Game lhs, Game rhs) noexcept = default;
@@ -115,8 +178,14 @@ struct Player::Input_state {
   bool move_right{};
   bool move_forward{};
   bool move_backward{};
+  bool use_primary{};
   float yaw{};
   float pitch{};
+};
+
+struct Projectile::Create_info {
+  Eigen::Vector3f position{Eigen::Vector3f::Zero()};
+  Eigen::Vector3f velocity{Eigen::Vector3f::Zero()};
 };
 
 struct Game::Create_info {};
@@ -217,6 +286,9 @@ template <> struct Serializer<game::Player::Input_state> {
     if (value.move_backward) {
       flags |= 1 << 3;
     }
+    if (value.use_primary) {
+      flags |= 1 << 4;
+    }
     serialize<std::uint8_t>(writer, flags);
     serialize<float>(writer, value.yaw);
     serialize<float>(writer, value.pitch);
@@ -240,6 +312,7 @@ template <> struct Serializer<game::Player::Input_state> {
         .move_right = (*flags & (1 << 1)) != 0,
         .move_forward = (*flags & (1 << 2)) != 0,
         .move_backward = (*flags & (1 << 3)) != 0,
+        .use_primary = (*flags & (1 << 4)) != 0,
         .yaw = *yaw,
         .pitch = *pitch,
     };
@@ -251,6 +324,13 @@ namespace std {
 template <> struct hash<fpsparty::game::Player> {
   constexpr std::size_t
   operator()(fpsparty::game::Player value) const noexcept {
+    return static_cast<std::size_t>(std::bit_cast<std::uintptr_t>(value._impl));
+  }
+};
+
+template <> struct hash<fpsparty::game::Projectile> {
+  constexpr std::size_t
+  operator()(fpsparty::game::Projectile value) const noexcept {
     return static_cast<std::size_t>(std::bit_cast<std::uintptr_t>(value._impl));
   }
 };

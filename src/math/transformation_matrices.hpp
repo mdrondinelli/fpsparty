@@ -46,6 +46,14 @@ constexpr Eigen::Matrix4f z_rotation_matrix(float a) {
   return retval;
 }
 
+constexpr Eigen::Matrix4f uniform_scale_matrix(float s) {
+  auto retval = Eigen::Matrix4f{Eigen::Matrix4f::Identity()};
+  retval(0, 0) = s;
+  retval(1, 1) = s;
+  retval(2, 2) = s;
+  return retval;
+}
+
 constexpr Eigen::Matrix4f axis_aligned_scale_matrix(const Eigen::Vector3f &s) {
   auto retval = Eigen::Matrix4f{Eigen::Matrix4f::Identity()};
   retval(0, 0) = s[0];

@@ -13,9 +13,14 @@ class Replicated_player {
 public:
   constexpr Replicated_player() noexcept = default;
 
+  constexpr explicit Replicated_player(void *impl) noexcept
+      : _impl{static_cast<Impl *>(impl)} {}
+
   constexpr operator bool() const noexcept { return _impl != nullptr; }
 
   constexpr explicit operator void *() const noexcept { return _impl; }
+
+  std::uint32_t get_network_id() const noexcept;
 
   const Player::Input_state &get_input_state() const noexcept;
 
@@ -36,9 +41,36 @@ private:
 
   struct Impl;
 
-  constexpr explicit Replicated_player(Impl *impl) : _impl{impl} {}
-
   Impl *_impl{};
+};
+
+class Replicated_projectile {
+public:
+  constexpr Replicated_projectile() noexcept = default;
+
+  constexpr Replicated_projectile(void *impl)
+      : _impl{static_cast<Impl *>(impl)} {}
+
+  constexpr operator bool() const noexcept { return _impl != nullptr; }
+
+  constexpr explicit operator void *() const noexcept { return _impl; }
+
+  std::uint32_t get_network_id() const noexcept;
+
+  const Eigen::Vector3f &get_position() const noexcept;
+
+  const Eigen::Vector3f &get_velocity() const noexcept;
+
+  friend constexpr bool
+  operator==(Replicated_projectile lhs,
+             Replicated_projectile rhs) noexcept = default;
+
+private:
+  friend class Replicated_game;
+
+  struct Impl;
+
+  Impl *_impl;
 };
 
 class Replicated_game {
@@ -61,15 +93,19 @@ public:
 
   void apply_snapshot(serial::Reader &reader) const;
 
-  Replicated_player get_player(std::uint32_t id) const noexcept;
-
   std::pmr::vector<Replicated_player>
   get_players(std::pmr::memory_resource *memory_resource =
                   std::pmr::get_default_resource()) const;
 
-  bool is_player_locally_controlled(std::uint32_t id) const noexcept;
+  Replicated_player
+  get_player_by_network_id(std::uint32_t network_id) const noexcept;
 
-  void set_player_locally_controlled(std::uint32_t id, bool b) const noexcept;
+  std::pmr::vector<Replicated_projectile>
+  get_projectiles(std::pmr::memory_resource *memory_resource =
+                      std::pmr::get_default_resource()) const;
+
+  Replicated_projectile
+  get_projectile_by_network_id(std::uint32_t network_id) const noexcept;
 
 private:
   struct Impl;
