@@ -40,6 +40,11 @@ void Player::set_input_state(const Input_state &input_state,
   _impl->input_fresh = input_fresh;
 }
 
+std::optional<std::uint16_t>
+Player::get_input_sequence_number() const noexcept {
+  return _impl->input_sequence_number;
+}
+
 void Player::increment_input_sequence_number() const noexcept {
   if (_impl->input_sequence_number) {
     ++*_impl->input_sequence_number;
@@ -54,6 +59,10 @@ const Eigen::Vector3f &Player::get_position() const noexcept {
   return _impl->position;
 }
 
+void Player::set_position(const Eigen::Vector3f &position) const noexcept {
+  _impl->position = position;
+}
+
 Game create_game(const Game::Create_info &) { return Game{new Game::Impl}; }
 
 void destroy_game(Game game) noexcept { delete game._impl; }
@@ -61,11 +70,11 @@ void destroy_game(Game game) noexcept { delete game._impl; }
 void Game::simulate(const Simulate_info &info) const {
   for (const auto &player : _impl->players) {
     const auto movement_result = simulate_humanoid_movement({
-        .initial_position = player._impl->position,
+        .initial_position = player.get_position(),
         .input_state = player.get_input_state(),
         .duration = info.duration,
     });
-    player._impl->position = movement_result.final_position;
+    player.set_position(movement_result.final_position);
   }
 }
 
@@ -73,13 +82,13 @@ void Game::snapshot(serial::Writer &writer) const {
   using serial::serialize;
   serialize<std::uint8_t>(writer, _impl->players.size());
   for (const auto &player : _impl->players) {
-    serialize<std::uint32_t>(writer, player._impl->id);
-    serialize<float>(writer, player._impl->position.x());
-    serialize<float>(writer, player._impl->position.y());
-    serialize<float>(writer, player._impl->position.z());
-    serialize<Player::Input_state>(writer, player._impl->input_state);
-    serialize<std::optional<std::uint16_t>>(
-        writer, player._impl->input_sequence_number);
+    serialize<std::uint32_t>(writer, player.get_id());
+    serialize<float>(writer, player.get_position().x());
+    serialize<float>(writer, player.get_position().y());
+    serialize<float>(writer, player.get_position().z());
+    serialize<Player::Input_state>(writer, player.get_input_state());
+    serialize<std::optional<std::uint16_t>>(writer,
+                                            player.get_input_sequence_number());
   }
 }
 

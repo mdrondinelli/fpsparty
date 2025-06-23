@@ -39,6 +39,8 @@ public:
                        std::uint16_t input_sequence_number,
                        bool input_fresh) const noexcept;
 
+  std::optional<std::uint16_t> get_input_sequence_number() const noexcept;
+
   void increment_input_sequence_number() const noexcept;
 
   bool is_input_stale() const noexcept;
@@ -46,6 +48,8 @@ public:
   void mark_input_stale() const noexcept;
 
   const Eigen::Vector3f &get_position() const noexcept;
+
+  void set_position(const Eigen::Vector3f &position) const noexcept;
 
 private:
   friend class Game;
