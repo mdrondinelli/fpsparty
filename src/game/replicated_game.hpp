@@ -17,6 +17,8 @@ public:
 
   constexpr explicit operator void *() const noexcept { return _impl; }
 
+  std::uint32_t get_network_id() const noexcept;
+
   const Player::Input_state &get_input_state() const noexcept;
 
   std::optional<std::uint16_t> get_input_sequence_number() const noexcept;
