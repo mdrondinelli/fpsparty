@@ -287,6 +287,9 @@ public:
             _glfw_window.get_key(glfw::Key::k_w) == glfw::Press_state::press;
         input_state.move_backward =
             _glfw_window.get_key(glfw::Key::k_s) == glfw::Press_state::press;
+        input_state.use_primary =
+            _glfw_window.get_mouse_button(glfw::Mouse_button::mb_left) ==
+            glfw::Press_state::press;
         net::Client::send_player_input_state(input_state,
                                              _input_sequence_number);
         _in_flight_input_states.emplace_back(input_state,

@@ -115,6 +115,7 @@ struct Player::Input_state {
   bool move_right{};
   bool move_forward{};
   bool move_backward{};
+  bool use_primary{};
   float yaw{};
   float pitch{};
 };
@@ -217,6 +218,9 @@ template <> struct Serializer<game::Player::Input_state> {
     if (value.move_backward) {
       flags |= 1 << 3;
     }
+    if (value.use_primary) {
+      flags |= 1 << 4;
+    }
     serialize<std::uint8_t>(writer, flags);
     serialize<float>(writer, value.yaw);
     serialize<float>(writer, value.pitch);
@@ -240,6 +244,7 @@ template <> struct Serializer<game::Player::Input_state> {
         .move_right = (*flags & (1 << 1)) != 0,
         .move_forward = (*flags & (1 << 2)) != 0,
         .move_backward = (*flags & (1 << 3)) != 0,
+        .use_primary = (*flags & (1 << 4)) != 0,
         .yaw = *yaw,
         .pitch = *pitch,
     };

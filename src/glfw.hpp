@@ -6,6 +6,7 @@
 #endif
 
 #include <GLFW/glfw3.h>
+#include <array>
 #include <cstring>
 #include <exception>
 #include <memory>
