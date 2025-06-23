@@ -63,8 +63,6 @@ class Game {
 public:
   struct Create_info;
 
-  struct Simulate_player_input_info;
-
   struct Simulate_info;
 
   class Snapshotting_error;
