@@ -11,7 +11,7 @@ struct Replicated_game::Impl {
 };
 
 struct Replicated_player::Impl {
-  std::uint32_t network_id;
+  std::uint32_t network_id{};
   Player::Input_state input_state{};
   std::optional<std::uint16_t> input_sequence_number{};
   Eigen::Vector3f position{0.0f, 0.0f, 0.0f};
