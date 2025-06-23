@@ -13,6 +13,9 @@ class Replicated_player {
 public:
   constexpr Replicated_player() noexcept = default;
 
+  constexpr explicit Replicated_player(void *impl) noexcept
+      : _impl{static_cast<Impl *>(impl)} {}
+
   constexpr operator bool() const noexcept { return _impl != nullptr; }
 
   constexpr explicit operator void *() const noexcept { return _impl; }
@@ -37,8 +40,6 @@ private:
   friend class Replicated_game;
 
   struct Impl;
-
-  constexpr explicit Replicated_player(Impl *impl) : _impl{impl} {}
 
   Impl *_impl{};
 };
