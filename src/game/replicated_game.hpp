@@ -44,6 +44,24 @@ private:
   Impl *_impl{};
 };
 
+class Replicated_projectile {
+public:
+  constexpr operator bool() const noexcept { return _impl != nullptr; }
+
+  constexpr explicit operator void *() const noexcept { return _impl; }
+
+  std::uint32_t get_network_id() const noexcept;
+
+  const Eigen::Vector3f &get_position() const noexcept;
+
+  const Eigen::Vector3f &get_velocity() const noexcept;
+
+private:
+  struct Impl;
+
+  Impl *_impl;
+};
+
 class Replicated_game {
 public:
   struct Create_info;
@@ -70,6 +88,10 @@ public:
 
   Replicated_player
   get_player_by_network_id(std::uint32_t network_id) const noexcept;
+
+  std::pmr::vector<Replicated_projectile>
+  get_projectiles(std::pmr::memory_resource *memory_resource =
+                      std::pmr::get_default_resource()) const;
 
 private:
   struct Impl;
