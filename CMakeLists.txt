@@ -11,9 +11,12 @@ add_subdirectory(extern/magic_enum-0.9.7)
 # game
 add_library(
   game
+  src/game/humanoid_movement.cpp
+  src/game/projectile_movement.cpp
+  src/game/player.cpp
+  src/game/projectile.cpp
   src/game/game.cpp
   src/game/replicated_game.cpp
-  src/game/humanoid_movement.cpp
 )
 target_include_directories(
   game

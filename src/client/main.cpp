@@ -34,7 +34,7 @@ DispatchLoaderDynamic defaultDispatchLoaderDynamic;
 }
 
 namespace {
-constexpr auto server_ip = "192.168.1.64";
+constexpr auto server_ip = "192.168.1.65";
 
 volatile std::sig_atomic_t signal_status{};
 void handle_signal(int signal) { signal_status = signal; }
@@ -66,7 +66,7 @@ const auto floor_mesh_vertices = std::vector<Vertex>{
 
 const auto floor_mesh_indices = std::vector<std::uint16_t>{0, 1, 2, 3, 2, 1};
 
-const auto player_mesh_vertices = std::vector<Vertex>{
+const auto cube_mesh_vertices = std::vector<Vertex>{
     // +x face
     {.x = 0.5f, .y = 0.5f, .z = 0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},   // 1
     {.x = 0.5f, .y = -0.5f, .z = 0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f},  // 2
@@ -99,7 +99,7 @@ const auto player_mesh_vertices = std::vector<Vertex>{
     {.x = -0.5f, .y = -0.5f, .z = -0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f}, // 4
 };
 
-const auto player_mesh_indices = std::vector<std::uint16_t>{
+const auto cube_mesh_indices = std::vector<std::uint16_t>{
     // +x face
     0,
     1,
@@ -174,12 +174,12 @@ public:
     _floor_index_buffer =
         upload_indices(std::as_bytes(std::span{floor_mesh_indices}));
     std::cout << "Uploaded floor index buffer.\n";
-    _player_vertex_buffer =
-        upload_vertices(std::as_bytes(std::span{player_mesh_vertices}));
-    std::cout << "Uploaded player vertex buffer.\n";
-    _player_index_buffer =
-        upload_indices(std::as_bytes(std::span{player_mesh_indices}));
-    std::cout << "Uploaded player index buffer.\n";
+    _cube_vertex_buffer =
+        upload_vertices(std::as_bytes(std::span{cube_mesh_vertices}));
+    std::cout << "Uploaded cube vertex buffer.\n";
+    _cube_index_buffer =
+        upload_indices(std::as_bytes(std::span{cube_mesh_indices}));
+    std::cout << "Uploaded cube index buffer.\n";
     _vk_image_acquire_semaphore = make_vk_semaphore("image_acquire_semaphore");
     _vk_image_release_semaphore = make_vk_semaphore("image_release_semaphore");
     _vk_work_done_fence =
@@ -721,11 +721,12 @@ private:
                                         vk::ShaderStageFlagBits::eVertex, 0, 64,
                                         view_projection_matrix.data());
       _vk_command_buffer->drawIndexed(floor_mesh_indices.size(), 1, 0, 0, 0);
-      // draw other players
+      // draw cubes
       _vk_command_buffer->bindVertexBuffers(
-          0, {_player_vertex_buffer.get_buffer()}, {0});
-      _vk_command_buffer->bindIndexBuffer(_player_index_buffer.get_buffer(), 0,
+          0, {_cube_vertex_buffer.get_buffer()}, {0});
+      _vk_command_buffer->bindIndexBuffer(_cube_index_buffer.get_buffer(), 0,
                                           vk::IndexType::eUint16);
+      // draw other players (cubes)
       for (const auto &other_player : _game->get_players()) {
         if (other_player != player) {
           const auto model_matrix =
@@ -738,9 +739,21 @@ private:
           _vk_command_buffer->pushConstants(
               *_vk_pipeline_layout, vk::ShaderStageFlagBits::eVertex, 0, 64,
               model_view_projection_matrix.data());
-          _vk_command_buffer->drawIndexed(player_mesh_indices.size(), 1, 0, 0,
-                                          0);
+          _vk_command_buffer->drawIndexed(cube_mesh_indices.size(), 1, 0, 0, 0);
         }
+      }
+      // draw projectiles (cubes)
+      for (const auto &projectile : _game->get_projectiles()) {
+        const auto model_matrix =
+            (math::translation_matrix(projectile.get_position()) *
+             math::uniform_scale_matrix(0.25f))
+                .eval();
+        const auto model_view_projection_matrix =
+            (view_projection_matrix * model_matrix).eval();
+        _vk_command_buffer->pushConstants(
+            *_vk_pipeline_layout, vk::ShaderStageFlagBits::eVertex, 0, 64,
+            model_view_projection_matrix.data());
+        _vk_command_buffer->drawIndexed(cube_mesh_indices.size(), 1, 0, 0, 0);
       }
     }
     _vk_command_buffer->endRendering();
@@ -776,8 +789,8 @@ private:
   vk::UniqueCommandPool _vk_command_pool{};
   Vertex_buffer _floor_vertex_buffer{};
   Index_buffer _floor_index_buffer{};
-  Vertex_buffer _player_vertex_buffer{};
-  Index_buffer _player_index_buffer{};
+  Vertex_buffer _cube_vertex_buffer{};
+  Index_buffer _cube_index_buffer{};
   vk::UniqueSemaphore _vk_image_acquire_semaphore{};
   vk::UniqueSemaphore _vk_image_release_semaphore{};
   vk::UniqueFence _vk_work_done_fence{};

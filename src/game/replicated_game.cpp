@@ -1,6 +1,7 @@
 #include "replicated_game.hpp"
 #include "game/game.hpp"
 #include "game/humanoid_movement.hpp"
+#include "game/projectile_movement.hpp"
 #include "serial/serialize.hpp"
 #include <algorithm>
 #include <vector>
@@ -8,13 +9,21 @@
 namespace fpsparty::game {
 struct Replicated_game::Impl {
   std::vector<std::unique_ptr<Replicated_player::Impl>> player_impls{};
+  std::vector<std::unique_ptr<Replicated_projectile::Impl>> projectile_impls{};
 };
 
 struct Replicated_player::Impl {
   std::uint32_t network_id{};
   Player::Input_state input_state{};
   std::optional<std::uint16_t> input_sequence_number{};
-  Eigen::Vector3f position{0.0f, 0.0f, 0.0f};
+  Eigen::Vector3f position{Eigen::Vector3f::Zero()};
+  bool marked{};
+};
+
+struct Replicated_projectile::Impl {
+  std::uint32_t network_id{};
+  Eigen::Vector3f position{Eigen::Vector3f::Zero()};
+  Eigen::Vector3f velocity{Eigen::Vector3f::Zero()};
   bool marked{};
 };
 
@@ -47,6 +56,18 @@ const Eigen::Vector3f &Replicated_player::get_position() const noexcept {
   return _impl->position;
 }
 
+std::uint32_t Replicated_projectile::get_network_id() const noexcept {
+  return _impl->network_id;
+}
+
+const Eigen::Vector3f &Replicated_projectile::get_position() const noexcept {
+  return _impl->position;
+}
+
+const Eigen::Vector3f &Replicated_projectile::get_velocity() const noexcept {
+  return _impl->velocity;
+}
+
 void Replicated_game::clear() const { _impl->player_impls.clear(); }
 
 void Replicated_game::simulate(const Simulate_info &info) const {
@@ -57,6 +78,15 @@ void Replicated_game::simulate(const Simulate_info &info) const {
         .duration = info.duration,
     });
     player_impl->position = movement_result.final_position;
+  }
+  for (const auto &projectile_impl : _impl->projectile_impls) {
+    const auto movement_result = simulate_projectile_movement({
+        .initial_position = projectile_impl->position,
+        .initial_velocity = projectile_impl->velocity,
+        .duration = info.duration,
+    });
+    projectile_impl->position = movement_result.final_position;
+    projectile_impl->velocity = movement_result.final_velocity;
   }
 }
 
@@ -120,6 +150,69 @@ void Replicated_game::apply_snapshot(serial::Reader &reader) const {
       ++it;
     }
   }
+  const auto projectile_count = deserialize<std::uint16_t>(reader);
+  if (!projectile_count) {
+    throw Snapshot_application_error{};
+  }
+  for (const auto &projectile_impl : _impl->projectile_impls) {
+    projectile_impl->marked = false;
+  }
+  for (auto i = 0u; i != *projectile_count; ++i) {
+    const auto projectile_network_id = deserialize<std::uint32_t>(reader);
+    if (!projectile_network_id) {
+      throw Snapshot_application_error{};
+    }
+    const auto projectile_impl = [&]() {
+      auto retval = get_projectile_by_network_id(*projectile_network_id)._impl;
+      if (!retval) {
+        retval =
+            _impl->projectile_impls
+                .emplace_back(std::make_unique<Replicated_projectile::Impl>())
+                .get();
+        retval->network_id = *projectile_network_id;
+      }
+      return retval;
+    }();
+    projectile_impl->marked = true;
+    const auto projectile_position_x = deserialize<float>(reader);
+    if (!projectile_position_x) {
+      throw Snapshot_application_error{};
+    }
+    const auto projectile_position_y = deserialize<float>(reader);
+    if (!projectile_position_y) {
+      throw Snapshot_application_error{};
+    }
+    const auto projectile_position_z = deserialize<float>(reader);
+    if (!projectile_position_z) {
+      throw Snapshot_application_error{};
+    }
+    projectile_impl->position.x() = *projectile_position_x;
+    projectile_impl->position.y() = *projectile_position_y;
+    projectile_impl->position.z() = *projectile_position_z;
+    const auto projectile_velocity_x = deserialize<float>(reader);
+    if (!projectile_velocity_x) {
+      throw Snapshot_application_error{};
+    }
+    const auto projectile_velocity_y = deserialize<float>(reader);
+    if (!projectile_velocity_y) {
+      throw Snapshot_application_error{};
+    }
+    const auto projectile_velocity_z = deserialize<float>(reader);
+    if (!projectile_velocity_z) {
+      throw Snapshot_application_error{};
+    }
+    projectile_impl->velocity.x() = *projectile_velocity_x;
+    projectile_impl->velocity.y() = *projectile_velocity_y;
+    projectile_impl->velocity.z() = *projectile_velocity_z;
+  }
+  for (auto it = _impl->projectile_impls.begin();
+       it != _impl->projectile_impls.end();) {
+    if (!(*it)->marked) {
+      it = _impl->projectile_impls.erase(it);
+    } else {
+      ++it;
+    }
+  }
 }
 
 std::pmr::vector<Replicated_player>
@@ -140,6 +233,26 @@ Replicated_player Replicated_game::get_player_by_network_id(
       });
   return Replicated_player{it != _impl->player_impls.end() ? it->get()
                                                            : nullptr};
+}
+
+std::pmr::vector<Replicated_projectile> Replicated_game::get_projectiles(
+    std::pmr::memory_resource *memory_resource) const {
+  auto retval = std::pmr::vector<Replicated_projectile>(memory_resource);
+  retval.reserve(_impl->projectile_impls.size());
+  for (const auto &projectile_impl : _impl->projectile_impls) {
+    retval.emplace_back(Replicated_projectile{projectile_impl.get()});
+  }
+  return retval;
+}
+
+Replicated_projectile Replicated_game::get_projectile_by_network_id(
+    std::uint32_t network_id) const noexcept {
+  const auto it = std::ranges::find_if(
+      _impl->projectile_impls, [&](const auto &projectile_impl) {
+        return projectile_impl->network_id == network_id;
+      });
+  return Replicated_projectile{it != _impl->projectile_impls.end() ? it->get()
+                                                                   : nullptr};
 }
 
 Replicated_game create_replicated_game(const Replicated_game::Create_info &) {

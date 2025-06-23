@@ -46,6 +46,11 @@ private:
 
 class Replicated_projectile {
 public:
+  constexpr Replicated_projectile() noexcept = default;
+
+  constexpr Replicated_projectile(void *impl)
+      : _impl{static_cast<Impl *>(impl)} {}
+
   constexpr operator bool() const noexcept { return _impl != nullptr; }
 
   constexpr explicit operator void *() const noexcept { return _impl; }
@@ -56,7 +61,13 @@ public:
 
   const Eigen::Vector3f &get_velocity() const noexcept;
 
+  friend constexpr bool
+  operator==(Replicated_projectile lhs,
+             Replicated_projectile rhs) noexcept = default;
+
 private:
+  friend class Replicated_game;
+
   struct Impl;
 
   Impl *_impl;
@@ -92,6 +103,9 @@ public:
   std::pmr::vector<Replicated_projectile>
   get_projectiles(std::pmr::memory_resource *memory_resource =
                       std::pmr::get_default_resource()) const;
+
+  Replicated_projectile
+  get_projectile_by_network_id(std::uint32_t network_id) const noexcept;
 
 private:
   struct Impl;
