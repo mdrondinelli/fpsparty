@@ -59,7 +59,7 @@ protected:
     std::cout << "Peer connected.\n";
     const auto player = _game->create_player({});
     peer.set_data(static_cast<void *>(player));
-    send_player_id(peer, player.get_id());
+    send_player_id(peer, player.get_network_id());
   }
 
   void on_peer_disconnect(enet::Peer peer) override {

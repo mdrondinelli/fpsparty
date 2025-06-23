@@ -31,7 +31,7 @@ public:
 
   constexpr explicit operator void *() const noexcept { return _impl; }
 
-  std::uint32_t get_id() const noexcept;
+  std::uint32_t get_network_id() const noexcept;
 
   Input_state get_input_state() const noexcept;
 
