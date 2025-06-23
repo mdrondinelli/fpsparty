@@ -67,10 +67,6 @@ public:
   get_players(std::pmr::memory_resource *memory_resource =
                   std::pmr::get_default_resource()) const;
 
-  bool is_player_locally_controlled(std::uint32_t id) const noexcept;
-
-  void set_player_locally_controlled(std::uint32_t id, bool b) const noexcept;
-
 private:
   struct Impl;
 

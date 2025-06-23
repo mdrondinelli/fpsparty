@@ -336,7 +336,6 @@ protected:
 
   void on_player_id(std::uint32_t player_id) override {
     _player_id = player_id;
-    _game->set_player_locally_controlled(player_id, true);
     std::cout << "Got player id: " << player_id << ".\n";
   }
 

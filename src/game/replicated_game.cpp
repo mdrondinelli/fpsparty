@@ -42,13 +42,9 @@ struct Replicated_game::Impl {
   std::vector<
       std::pair<std::uint32_t, std::unique_ptr<Replicated_player::Impl>>>
       players{};
-  std::vector<std::uint32_t> local_player_ids{};
 };
 
-void Replicated_game::clear() const {
-  _impl->players.clear();
-  _impl->local_player_ids.clear();
-}
+void Replicated_game::clear() const { _impl->players.clear(); }
 
 void Replicated_game::simulate(const Simulate_info &info) const {
   for (const auto &player_node : _impl->players) {
@@ -137,26 +133,6 @@ Replicated_game::get_players(std::pmr::memory_resource *memory_resource) const {
     retval.emplace_back(Replicated_player{node.second.get()});
   }
   return retval;
-}
-
-bool Replicated_game::is_player_locally_controlled(
-    std::uint32_t id) const noexcept {
-  return std::ranges::find(_impl->local_player_ids, id) !=
-         _impl->local_player_ids.end();
-}
-
-void Replicated_game::set_player_locally_controlled(std::uint32_t id,
-                                                    bool b) const noexcept {
-  if (b) {
-    if (!is_player_locally_controlled(id)) {
-      _impl->local_player_ids.emplace_back(id);
-    }
-  } else {
-    const auto it = std::ranges::find(_impl->local_player_ids, id);
-    if (it != _impl->local_player_ids.end()) {
-      _impl->local_player_ids.erase(it);
-    }
-  }
 }
 
 Replicated_game create_replicated_game(const Replicated_game::Create_info &) {
