@@ -61,11 +61,12 @@ public:
 
   void apply_snapshot(serial::Reader &reader) const;
 
-  Replicated_player get_player(std::uint32_t id) const noexcept;
-
   std::pmr::vector<Replicated_player>
   get_players(std::pmr::memory_resource *memory_resource =
                   std::pmr::get_default_resource()) const;
+
+  Replicated_player
+  get_player_by_network_id(std::uint32_t network_id) const noexcept;
 
 private:
   struct Impl;

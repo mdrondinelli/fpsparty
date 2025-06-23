@@ -316,7 +316,7 @@ public:
   bool has_game_state() const noexcept { return _has_game_state; }
 
   game::Replicated_player get_player() const noexcept {
-    return _player_id ? _game->get_player(*_player_id)
+    return _player_id ? _game->get_player_by_network_id(*_player_id)
                       : game::Replicated_player{};
   }
 
@@ -679,8 +679,9 @@ private:
         .colorAttachmentCount = 1,
         .pColorAttachments = &color_attachment,
     });
-    const auto player =
-        _player_id ? _game->get_player(*_player_id) : game::Replicated_player{};
+    const auto player = _player_id
+                            ? _game->get_player_by_network_id(*_player_id)
+                            : game::Replicated_player{};
     if (player) {
       const auto view_matrix =
           (math::x_rotation_matrix(-player.get_input_state().pitch) *

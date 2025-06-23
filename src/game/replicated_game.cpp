@@ -67,15 +67,15 @@ void Replicated_game::apply_snapshot(serial::Reader &reader) const {
     it->second->marked = false;
   }
   for (auto i = 0u; i != *player_count; ++i) {
-    const auto player_id = deserialize<std::uint32_t>(reader);
-    if (!player_id) {
+    const auto player_network_id = deserialize<std::uint32_t>(reader);
+    if (!player_network_id) {
       throw Snapshot_application_error{};
     }
     const auto player_impl = [&]() {
-      auto retval = get_player(*player_id)._impl;
+      auto retval = get_player_by_network_id(*player_network_id)._impl;
       if (!retval) {
         retval = _impl->players
-                     .emplace_back(*player_id,
+                     .emplace_back(*player_network_id,
                                    std::make_unique<Replicated_player::Impl>())
                      .second.get();
       }
@@ -118,13 +118,6 @@ void Replicated_game::apply_snapshot(serial::Reader &reader) const {
   }
 }
 
-Replicated_player Replicated_game::get_player(std::uint32_t id) const noexcept {
-  const auto it = std::ranges::find_if(
-      _impl->players, [&](const auto &node) { return node.first == id; });
-  return Replicated_player{it != _impl->players.end() ? it->second.get()
-                                                      : nullptr};
-}
-
 std::pmr::vector<Replicated_player>
 Replicated_game::get_players(std::pmr::memory_resource *memory_resource) const {
   auto retval = std::pmr::vector<Replicated_player>(memory_resource);
@@ -133,6 +126,15 @@ Replicated_game::get_players(std::pmr::memory_resource *memory_resource) const {
     retval.emplace_back(Replicated_player{node.second.get()});
   }
   return retval;
+}
+
+Replicated_player Replicated_game::get_player_by_network_id(
+    std::uint32_t network_id) const noexcept {
+  const auto it = std::ranges::find_if(_impl->players, [&](const auto &node) {
+    return node.first == network_id;
+  });
+  return Replicated_player{it != _impl->players.end() ? it->second.get()
+                                                      : nullptr};
 }
 
 Replicated_game create_replicated_game(const Replicated_game::Create_info &) {
