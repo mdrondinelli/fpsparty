@@ -56,6 +56,10 @@ public:
 
   void set_position(const Eigen::Vector3f &position) const noexcept;
 
+  const Eigen::Vector3f &get_velocity() const noexcept;
+
+  void set_velocity(const Eigen::Vector3f &velocity) const noexcept;
+
 private:
   friend class Game;
 
@@ -204,8 +208,8 @@ public:
       : _value{value}, _owner{owner} {}
 
   constexpr Unique_player(Unique_player &&other) noexcept
-      : _value{std::exchange(other._value, {})}, _owner{std::exchange(
-                                                     other._owner, {})} {}
+      : _value{std::exchange(other._value, {})},
+        _owner{std::exchange(other._owner, {})} {}
 
   Unique_player &operator=(Unique_player &&other) noexcept {
     auto temp{std::move(other)};

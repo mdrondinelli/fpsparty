@@ -8,6 +8,7 @@ struct Player::Impl {
   bool input_fresh{};
   float attack_cooldown{};
   Eigen::Vector3f position{Eigen::Vector3f::Zero()};
+  Eigen::Vector3f velocity{Eigen::Vector3f::Zero()};
 };
 
 std::uint32_t Player::get_network_id() const noexcept {
@@ -66,6 +67,14 @@ const Eigen::Vector3f &Player::get_position() const noexcept {
 
 void Player::set_position(const Eigen::Vector3f &position) const noexcept {
   _impl->position = position;
+}
+
+const Eigen::Vector3f &Player::get_velocity() const noexcept {
+  return _impl->velocity;
+}
+
+void Player::set_velocity(const Eigen::Vector3f &velocity) const noexcept {
+  _impl->velocity = velocity;
 }
 
 Player::Impl *Player::new_impl(std::uint32_t network_id) {

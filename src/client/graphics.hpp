@@ -2,6 +2,7 @@
 #define FPSPARTY_CLIENT_GRAPHICS_HPP
 
 #include "glfw.hpp"
+#include "vma.hpp"
 #include <Eigen/Dense>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_handles.hpp>
@@ -38,6 +39,7 @@ private:
     vk::UniqueCommandPool command_pool{};
     vk::UniqueCommandBuffer command_buffer{};
     vk::UniqueImage depth_image{};
+    vma::Unique_allocation depth_allocation{};
     vk::UniqueImageView depth_image_view{};
     std::uint32_t swapchain_image_index{};
   };

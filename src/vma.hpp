@@ -99,6 +99,16 @@ public:
                        const Allocation_create_info &allocation_create_info,
                        Allocation_info *allocation_info = nullptr) const;
 
+  std::tuple<vk::Image, vma::Allocation>
+  create_image(const vk::ImageCreateInfo &image_create_info,
+               const Allocation_create_info &allocation_create_info,
+               Allocation_info *allocation_info = nullptr) const;
+
+  std::tuple<vk::UniqueImage, vma::Unique_allocation>
+  create_image_unique(const vk::ImageCreateInfo &image_create_info,
+                      const Allocation_create_info &allocation_create_info,
+                      Allocation_info *allocation_info = nullptr) const;
+
   void *map_memory(Allocation allocation) const;
 
   void unmap_memory(Allocation allocation) const;
@@ -178,9 +188,8 @@ public:
       : _value{value}, _owner{owner} {}
 
   constexpr Unique_allocation(Unique_allocation &&other) noexcept
-      : _value{std::exchange(other._value, nullptr)}, _owner{std::exchange(
-                                                          other._owner,
-                                                          nullptr)} {}
+      : _value{std::exchange(other._value, nullptr)},
+        _owner{std::exchange(other._owner, nullptr)} {}
 
   Unique_allocation &operator=(Unique_allocation &&other) noexcept {
     auto temp{std::move(other)};
@@ -238,6 +247,37 @@ Allocator::create_buffer_unique(
   const auto [buffer, allocation] = create_buffer(
       buffer_create_info, allocation_create_info, allocation_info);
   return std::tuple{vk::UniqueBuffer{buffer, vk::Device{allocator_info.device}},
+                    Unique_allocation{allocation, *this}};
+}
+
+inline std::tuple<vk::Image, vma::Allocation>
+Allocator::create_image(const vk::ImageCreateInfo &image_create_info,
+                        const Allocation_create_info &allocation_create_info,
+                        Allocation_info *allocation_info) const {
+  auto c_image_create_info = VkImageCreateInfo{};
+  std::memcpy(&c_image_create_info, &image_create_info,
+              sizeof(VkImageCreateInfo));
+  auto c_image = VkImage{};
+  auto c_allocation = VmaAllocation{};
+  const auto result =
+      vmaCreateImage(_value, &c_image_create_info, &allocation_create_info,
+                     &c_image, &c_allocation, allocation_info);
+  if (vk::Result{result} != vk::Result::eSuccess) {
+    throw Buffer_creation_error{};
+  }
+  return std::tuple{vk::Image{c_image}, vma::Allocation{c_allocation}};
+}
+
+inline std::tuple<vk::UniqueImage, vma::Unique_allocation>
+Allocator::create_image_unique(
+    const vk::ImageCreateInfo &image_create_info,
+    const Allocation_create_info &allocation_create_info,
+    Allocation_info *allocation_info) const {
+  auto allocator_info = VmaAllocatorInfo{};
+  vmaGetAllocatorInfo(_value, &allocator_info);
+  const auto [image, allocation] =
+      create_image(image_create_info, allocation_create_info, allocation_info);
+  return std::tuple{vk::UniqueImage{image, vk::Device{allocator_info.device}},
                     Unique_allocation{allocation, *this}};
 }
 

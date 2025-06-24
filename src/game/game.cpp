@@ -37,24 +37,29 @@ void Game::simulate(const Simulate_info &info) const {
     player.decrease_attack_cooldown(info.duration);
     if (player.get_input_state().use_primary &&
         player.get_attack_cooldown() == 0.0f) {
-      const auto player_look_direction =
+      const auto player_basis =
           (math::y_rotation_matrix(player.get_input_state().yaw) *
            math::x_rotation_matrix(player.get_input_state().pitch))
-              .col(2)
-              .head<3>()
               .eval();
+      const auto player_up_direction = player_basis.col(1).head<3>().eval();
+      const auto player_look_direction = player_basis.col(2).head<3>().eval();
       create_projectile({
-          .position = player.get_position(),
-          .velocity = 10.0f * player_look_direction,
+          .position = player.get_position() + Eigen::Vector3f::UnitY() * 1.5f,
+          .velocity = player.get_velocity() + 15.0f * player_look_direction +
+                      2.0f * player_up_direction,
       });
       player.set_attack_cooldown(constants::attack_cooldown);
     }
-    const auto movement_result = simulate_humanoid_movement({
+    const auto movement_info = Humanoid_movement_simulation_info{
         .initial_position = player.get_position(),
         .input_state = player.get_input_state(),
         .duration = info.duration,
-    });
+    };
+    const auto movement_result = simulate_humanoid_movement(movement_info);
     player.set_position(movement_result.final_position);
+    player.set_velocity(
+        (movement_result.final_position - movement_info.initial_position) /
+        info.duration);
   }
   for (const auto &projectile : _impl->projectiles) {
     const auto movement_result = simulate_projectile_movement({
@@ -66,7 +71,7 @@ void Game::simulate(const Simulate_info &info) const {
     projectile.set_velocity(movement_result.final_velocity);
   }
   for (const auto &projectile : get_projectiles()) {
-    if (projectile.get_position().y() < -0.5f) {
+    if (projectile.get_position().y() < 0.0f) {
       destroy_projectile(projectile);
     }
   }

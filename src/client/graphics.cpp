@@ -4,6 +4,8 @@
 #include <fstream>
 #include <iostream>
 #include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_enums.hpp>
+#include <vulkan/vulkan_structs.hpp>
 
 namespace fpsparty::client {
 namespace {
@@ -132,63 +134,90 @@ vk::UniquePipeline make_pipeline(vk::PipelineLayout pipeline_layout,
   const auto frag_shader_module =
       load_vk_shader_module("./assets/shaders/shader.frag.spv");
   const auto shader_stages = std::vector<vk::PipelineShaderStageCreateInfo>{
-      {.stage = vk::ShaderStageFlagBits::eVertex,
-       .module = *vert_shader_module,
-       .pName = "main"},
-      {.stage = vk::ShaderStageFlagBits::eFragment,
-       .module = *frag_shader_module,
-       .pName = "main"}};
+      {
+          .stage = vk::ShaderStageFlagBits::eVertex,
+          .module = *vert_shader_module,
+          .pName = "main",
+      },
+      {
+          .stage = vk::ShaderStageFlagBits::eFragment,
+          .module = *frag_shader_module,
+          .pName = "main",
+      },
+  };
   const auto vertex_binding = vk::VertexInputBindingDescription{
       .binding = 0,
       .stride = 6 * sizeof(float),
-      .inputRate = vk::VertexInputRate::eVertex};
+      .inputRate = vk::VertexInputRate::eVertex,
+  };
   const auto vertex_attributes =
       std::vector<vk::VertexInputAttributeDescription>{
-          {.location = 0,
-           .binding = 0,
-           .format = vk::Format::eR32G32B32Sfloat,
-           .offset = 0},
-          {.location = 1,
-           .binding = 0,
-           .format = vk::Format::eR32G32B32Sfloat,
-           .offset = 3 * sizeof(float)}};
+          {
+              .location = 0,
+              .binding = 0,
+              .format = vk::Format::eR32G32B32Sfloat,
+              .offset = 0,
+          },
+          {
+              .location = 1,
+              .binding = 0,
+              .format = vk::Format::eR32G32B32Sfloat,
+              .offset = 3 * sizeof(float),
+          },
+      };
   const auto vertex_input_state = vk::PipelineVertexInputStateCreateInfo{
       .vertexBindingDescriptionCount = 1,
       .pVertexBindingDescriptions = &vertex_binding,
       .vertexAttributeDescriptionCount =
           static_cast<std::uint32_t>(vertex_attributes.size()),
-      .pVertexAttributeDescriptions = vertex_attributes.data()};
+      .pVertexAttributeDescriptions = vertex_attributes.data(),
+  };
   const auto input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo{
       .topology = vk::PrimitiveTopology::eTriangleList,
-      .primitiveRestartEnable = vk::False};
+      .primitiveRestartEnable = vk::False,
+  };
   const auto rasterization_state = vk::PipelineRasterizationStateCreateInfo{
       .depthClampEnable = vk::False,
       .rasterizerDiscardEnable = vk::False,
       .polygonMode = vk::PolygonMode::eFill,
       .depthBiasEnable = vk::False,
-      .lineWidth = 1.0f};
+      .lineWidth = 1.0f,
+  };
   const auto blend_attachment = vk::PipelineColorBlendAttachmentState{
       .colorWriteMask =
           vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-          vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
+          vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+  };
   const auto color_blend_state = vk::PipelineColorBlendStateCreateInfo{
-      .attachmentCount = 1, .pAttachments = &blend_attachment};
+      .attachmentCount = 1,
+      .pAttachments = &blend_attachment,
+  };
   const auto viewport_state = vk::PipelineViewportStateCreateInfo{
-      .viewportCount = 1, .scissorCount = 1};
+      .viewportCount = 1,
+      .scissorCount = 1,
+  };
   const auto depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo{
-      .depthCompareOp = vk::CompareOp::eAlways};
+      .depthTestEnable = vk::True,
+      .depthWriteEnable = vk::True,
+      .depthCompareOp = vk::CompareOp::eLess,
+  };
   const auto multisample_state = vk::PipelineMultisampleStateCreateInfo{
-      .rasterizationSamples = vk::SampleCountFlagBits::e1};
+      .rasterizationSamples = vk::SampleCountFlagBits::e1,
+  };
   const auto dynamic_states = std::vector<vk::DynamicState>{
-      vk::DynamicState::eViewport, vk::DynamicState::eScissor,
-      vk::DynamicState::eCullMode, vk::DynamicState::eFrontFace,
-      vk::DynamicState::ePrimitiveTopology};
+      vk::DynamicState::eViewport,          vk::DynamicState::eScissor,
+      vk::DynamicState::eCullMode,          vk::DynamicState::eFrontFace,
+      vk::DynamicState::ePrimitiveTopology,
+  };
   const auto dynamic_state = vk::PipelineDynamicStateCreateInfo{
       .dynamicStateCount = static_cast<std::uint32_t>(dynamic_states.size()),
-      .pDynamicStates = dynamic_states.data()};
+      .pDynamicStates = dynamic_states.data(),
+  };
   const auto rendering_info = vk::PipelineRenderingCreateInfo{
       .colorAttachmentCount = 1,
-      .pColorAttachmentFormats = &swapchain_image_format};
+      .pColorAttachmentFormats = &swapchain_image_format,
+      .depthAttachmentFormat = vk::Format::eD32Sfloat,
+  };
   return std::move(Global_vulkan_state::get()
                        .device()
                        .createGraphicsPipelinesUnique(
@@ -264,6 +293,50 @@ Graphics::Graphics(const Create_info &info)
             .level = vk::CommandBufferLevel::ePrimary,
             .commandBufferCount = 1,
         })[0]);
+    std::tie(_frame_resources.back().depth_image,
+             _frame_resources.back().depth_allocation) =
+        Global_vulkan_state::get().allocator().create_image_unique(
+            {
+                .imageType = vk::ImageType::e2D,
+                .format = vk::Format::eD32Sfloat,
+                .extent =
+                    vk::Extent3D{
+                        _swapchain_image_extent.width,
+                        _swapchain_image_extent.height,
+                        1,
+                    },
+                .mipLevels = 1,
+                .arrayLayers = 1,
+                .samples = vk::SampleCountFlagBits::e1,
+                .tiling = vk::ImageTiling::eOptimal,
+                .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
+                .sharingMode = vk::SharingMode::eExclusive,
+                .initialLayout = vk::ImageLayout::eUndefined,
+            },
+            {
+                .flags = {},
+                .usage = c_repr(vma::Memory_usage::e_auto),
+                .requiredFlags = {},
+                .preferredFlags = {},
+                .memoryTypeBits = {},
+                .pool = {},
+                .pUserData = {},
+                .priority = {},
+            });
+    _frame_resources.back().depth_image_view =
+        Global_vulkan_state::get().device().createImageViewUnique({
+            .image = *_frame_resources.back().depth_image,
+            .viewType = vk::ImageViewType::e2D,
+            .format = vk::Format::eD32Sfloat,
+            .subresourceRange =
+                {
+                    .aspectMask = vk::ImageAspectFlagBits::eDepth,
+                    .baseMipLevel = 0,
+                    .levelCount = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                },
+        });
   }
 }
 
@@ -323,11 +396,19 @@ bool Graphics::begin() {
       .storeOp = vk::AttachmentStoreOp::eStore,
       .clearValue = {{0.4196f, 0.6196f, 0.7451f, 1.0f}},
   };
+  const auto depth_attachment = vk::RenderingAttachmentInfo{
+      .imageView = *frame_resource.depth_image_view,
+      .imageLayout = vk::ImageLayout::eDepthAttachmentOptimal,
+      .loadOp = vk::AttachmentLoadOp::eClear,
+      .storeOp = vk::AttachmentStoreOp::eStore,
+      .clearValue = {vk::ClearDepthStencilValue{.depth = 1.0f}},
+  };
   frame_resource.command_buffer->beginRendering({
       .renderArea = {.offset = {0, 0}, .extent = _swapchain_image_extent},
       .layerCount = 1,
       .colorAttachmentCount = 1,
       .pColorAttachments = &color_attachment,
+      .pDepthAttachment = &depth_attachment,
   });
   frame_resource.command_buffer->bindPipeline(vk::PipelineBindPoint::eGraphics,
                                               *_pipeline);

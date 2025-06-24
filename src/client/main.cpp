@@ -52,10 +52,10 @@ struct Vertex {
 };
 
 const auto floor_mesh_vertices = std::vector<Vertex>{
-    {.x = 10.0f, .y = -0.5f, .z = 10.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},
-    {.x = 10.0f, .y = -0.5f, .z = -10.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},
-    {.x = -10.0f, .y = -0.5f, .z = 10.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},
-    {.x = -10.0f, .y = -0.5f, .z = -10.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f},
+    {.x = 10.0f, .y = 0.0f, .z = 10.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},
+    {.x = 10.0f, .y = 0.0f, .z = -10.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},
+    {.x = -10.0f, .y = 0.0f, .z = 10.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},
+    {.x = -10.0f, .y = 0.0f, .z = -10.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f},
 };
 
 const auto floor_mesh_indices = std::vector<std::uint16_t>{0, 1, 2, 3, 2, 1};
@@ -189,7 +189,8 @@ public:
         const auto view_matrix =
             (math::x_rotation_matrix(-player.get_input_state().pitch) *
              math::y_rotation_matrix(-player.get_input_state().yaw) *
-             math::translation_matrix(-player.get_position()))
+             math::translation_matrix(
+                 -(player.get_position() + Eigen::Vector3f::UnitY() * 1.7f)))
                 .eval();
         const auto framebuffer_size = _glfw_window.get_framebuffer_size();
         const auto framebuffer_aspect =
@@ -215,9 +216,10 @@ public:
         for (const auto &other_player : _game->get_players()) {
           if (other_player != player) {
             const auto model_matrix =
-                (math::translation_matrix(other_player.get_position()) *
+                (math::translation_matrix(other_player.get_position() +
+                                          Eigen::Vector3f::UnitY() * 0.9f) *
                  math::y_rotation_matrix(other_player.get_input_state().yaw) *
-                 math::axis_aligned_scale_matrix({0.5f, 1.0f, 0.5f}))
+                 math::axis_aligned_scale_matrix({0.7f, 1.8f, 0.7f}))
                     .eval();
             const auto model_view_projection_matrix =
                 (view_projection_matrix * model_matrix).eval();
