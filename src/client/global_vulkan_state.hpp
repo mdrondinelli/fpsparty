@@ -1,6 +1,7 @@
 #ifndef FPSPARTY_CLIENT_GLOBAL_VULKAN_STATE_HPP
 #define FPSPARTY_CLIENT_GLOBAL_VULKAN_STATE_HPP
 
+#include "vma.hpp"
 #include <memory>
 #include <mutex>
 #include <vulkan/vulkan.hpp>
@@ -24,6 +25,8 @@ public:
 
   vk::Queue queue() const noexcept { return _queue; }
 
+  vma::Allocator allocator() const noexcept { return *_allocator; }
+
 private:
   friend class Global_vulkan_state_guard;
 
@@ -42,6 +45,7 @@ private:
   std::uint32_t _queue_family_index{};
   vk::UniqueDevice _device{};
   vk::Queue _queue{};
+  vma::Unique_allocator _allocator{};
 };
 
 class Global_vulkan_state_guard {

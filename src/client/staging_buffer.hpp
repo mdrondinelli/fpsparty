@@ -10,8 +10,7 @@ class Staging_buffer {
 public:
   constexpr Staging_buffer() noexcept = default;
 
-  explicit Staging_buffer(vma::Allocator allocator,
-                          std::span<const std::byte> data);
+  explicit Staging_buffer(std::span<const std::byte> data);
 
   vk::Buffer get_buffer() const { return *_buffer; }
 

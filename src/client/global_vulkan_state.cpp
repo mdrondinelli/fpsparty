@@ -144,6 +144,30 @@ make_vk_device(vk::PhysicalDevice physical_device,
   std::cout << "Created VkDevice.\n";
   return std::tuple{std::move(device), queue};
 }
+
+vma::Unique_allocator make_vma_allocator(vk::Instance instance,
+                                         vk::PhysicalDevice physical_device,
+                                         vk::Device device) {
+  auto create_info = vma::Allocator::Create_info{
+      .flags = {},
+      .physicalDevice = physical_device,
+      .device = device,
+      .preferredLargeHeapBlockSize = 0,
+      .pAllocationCallbacks = nullptr,
+      .pDeviceMemoryCallbacks = nullptr,
+      .pHeapSizeLimit = nullptr,
+      .pVulkanFunctions = nullptr,
+      .instance = instance,
+      .vulkanApiVersion = vk::ApiVersion13,
+      .pTypeExternalMemoryHandleTypes = nullptr,
+  };
+  const auto vulkan_functions = vma::import_functions_from_volk(create_info);
+  create_info.pVulkanFunctions = &vulkan_functions;
+  auto retval = vma::create_allocator_unique(create_info);
+  std::cout << "Created VmaAllocator.\n";
+  return retval;
+}
+
 } // namespace
 
 std::unique_ptr<Global_vulkan_state> Global_vulkan_state::_global_instance{};
@@ -177,6 +201,7 @@ Global_vulkan_state::Global_vulkan_state() {
       find_vk_physical_device(*_instance);
   std::tie(_device, _queue) =
       make_vk_device(_physical_device, _queue_family_index);
+  _allocator = make_vma_allocator(*_instance, _physical_device, *_device);
 }
 
 Global_vulkan_state_guard::Global_vulkan_state_guard(const Create_info &)

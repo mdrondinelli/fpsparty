@@ -10,7 +10,7 @@ class Index_buffer {
 public:
   constexpr Index_buffer() noexcept = default;
 
-  explicit Index_buffer(vma::Allocator allocator, vk::CommandPool command_pool,
+  explicit Index_buffer(vk::CommandPool command_pool,
                         std::span<const std::byte> data);
 
   constexpr vk::Buffer get_buffer() const noexcept { return *_buffer; }
