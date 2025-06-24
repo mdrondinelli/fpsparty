@@ -8,7 +8,6 @@
 #include "glfw.hpp"
 #include "math/transformation_matrices.hpp"
 #include "net/client.hpp"
-#include "vma.hpp"
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
@@ -161,7 +160,6 @@ public:
     _glfw_window.set_key_callback(this);
     _glfw_window.set_mouse_button_callback(this);
     _glfw_window.set_cursor_pos_callback(this);
-    _vma_allocator = make_vma_allocator();
     _vk_command_pool =
         Global_vulkan_state::get().device().createCommandPoolUnique({
             .flags = vk::CommandPoolCreateFlagBits::eTransient,
@@ -366,39 +364,17 @@ protected:
   }
 
 private:
-  vma::Unique_allocator make_vma_allocator() {
-    auto create_info = vma::Allocator::Create_info{
-        .flags = {},
-        .physicalDevice = Global_vulkan_state::get().physical_device(),
-        .device = Global_vulkan_state::get().device(),
-        .preferredLargeHeapBlockSize = 0,
-        .pAllocationCallbacks = nullptr,
-        .pDeviceMemoryCallbacks = nullptr,
-        .pHeapSizeLimit = nullptr,
-        .pVulkanFunctions = nullptr,
-        .instance = Global_vulkan_state::get().instance(),
-        .vulkanApiVersion = vk::ApiVersion13,
-        .pTypeExternalMemoryHandleTypes = nullptr,
-    };
-    const auto vulkan_functions = vma::import_functions_from_volk(create_info);
-    create_info.pVulkanFunctions = &vulkan_functions;
-    auto retval = vma::create_allocator_unique(create_info);
-    std::cout << "Created VmaAllocator.\n";
-    return retval;
-  }
-
   Vertex_buffer upload_vertices(std::span<const std::byte> data) {
-    return Vertex_buffer{*_vma_allocator, *_vk_command_pool, data};
+    return Vertex_buffer{*_vk_command_pool, data};
   }
 
   Index_buffer upload_indices(std::span<const std::byte> data) {
-    return Index_buffer{*_vma_allocator, *_vk_command_pool, data};
+    return Index_buffer{*_vk_command_pool, data};
   }
 
   glfw::Window _glfw_window{};
   vk::SurfaceKHR _vk_surface{};
   Graphics _graphics{};
-  vma::Unique_allocator _vma_allocator{};
   vk::UniqueCommandPool _vk_command_pool{};
   Vertex_buffer _floor_vertex_buffer{};
   Index_buffer _floor_index_buffer{};

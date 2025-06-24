@@ -10,7 +10,7 @@ class Vertex_buffer {
 public:
   constexpr Vertex_buffer() noexcept = default;
 
-  explicit Vertex_buffer(vma::Allocator allocator, vk::CommandPool command_pool,
+  explicit Vertex_buffer(vk::CommandPool command_pool,
                          std::span<const std::byte> data);
 
   constexpr vk::Buffer get_buffer() const noexcept { return *_buffer; }

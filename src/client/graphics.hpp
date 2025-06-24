@@ -37,6 +37,8 @@ private:
     vk::UniqueFence work_done_fence{};
     vk::UniqueCommandPool command_pool{};
     vk::UniqueCommandBuffer command_buffer{};
+    vk::UniqueImage depth_image{};
+    vk::UniqueImageView depth_image_view{};
     std::uint32_t swapchain_image_index{};
   };
 
