@@ -1,6 +1,7 @@
 #include "constants.hpp"
 #include "enet.hpp"
 #include "game/game.hpp"
+#include "net/constants.hpp"
 #include "net/server.hpp"
 #include <cassert>
 #include <chrono>
@@ -86,10 +87,10 @@ int main() {
   std::signal(SIGTERM, handle_signal);
   const auto enet_guard = enet::Initialization_guard{{}};
   auto server = Server{{
-      .port = constants::port,
-      .max_clients = constants::max_clients,
+      .port = net::constants::port,
+      .max_clients = net::constants::max_clients,
   }};
-  std::cout << "Server running on port " << constants::port << ".\n";
+  std::cout << "Server running on port " << net::constants::port << ".\n";
   using Clock = std::chrono::high_resolution_clock;
   using Duration = Clock::duration;
   auto loop_duration = Duration{};

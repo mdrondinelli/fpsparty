@@ -1,5 +1,5 @@
 #include "game.hpp"
-#include "constants.hpp"
+#include "game/constants.hpp"
 #include "game/humanoid_movement.hpp"
 #include "game/projectile_movement.hpp"
 #include "math/transformation_matrices.hpp"
@@ -45,8 +45,10 @@ void Game::simulate(const Simulate_info &info) const {
       const auto player_look_direction = player_basis.col(2).head<3>().eval();
       create_projectile({
           .position = player.get_position() + Eigen::Vector3f::UnitY() * 1.5f,
-          .velocity = player.get_velocity() + 15.0f * player_look_direction +
-                      2.0f * player_up_direction,
+          .velocity =
+              player.get_velocity() +
+              constants::projectile_forward_speed * player_look_direction +
+              constants::projectile_up_speed * player_up_direction,
       });
       player.set_attack_cooldown(constants::attack_cooldown);
     }

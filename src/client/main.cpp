@@ -8,6 +8,7 @@
 #include "glfw.hpp"
 #include "math/transformation_matrices.hpp"
 #include "net/client.hpp"
+#include "net/constants.hpp"
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
@@ -415,10 +416,10 @@ int main() {
   }};
   client.connect({
       .host = *enet::parse_ip(server_ip),
-      .port = constants::port,
+      .port = net::constants::port,
   });
-  std::cout << "Connecting to " << server_ip << " on port " << constants::port
-            << ".\n";
+  std::cout << "Connecting to " << server_ip << " on port "
+            << net::constants::port << ".\n";
   using Clock = std::chrono::high_resolution_clock;
   using Duration = Clock::duration;
   auto loop_duration = Duration{};
