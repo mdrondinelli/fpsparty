@@ -1,3 +1,6 @@
+#ifndef FPSPARTY_CONSTANTS_HPP
+#define FPSPARTY_CONSTANTS_HPP
+
 #include <cstddef>
 #include <cstdint>
 
@@ -17,3 +20,5 @@ constexpr auto mouselook_sensititvity = 1.0f / 512.0f;
 constexpr auto gravitational_acceleration = 9.81f;
 constexpr auto attack_cooldown = 0.8f;
 } // namespace fpsparty::constants
+
+#endif
