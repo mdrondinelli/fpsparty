@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-namespace fpsparty::game {
+namespace fpsparty::game_replica {
 class Replicated_humanoid {
 public:
   constexpr Replicated_humanoid() noexcept = default;
@@ -171,6 +171,6 @@ inline Unique_replicated_game
 create_replicated_game_unique(const Replicated_game::Create_info &info) {
   return Unique_replicated_game{create_replicated_game(info)};
 }
-} // namespace fpsparty::game
+} // namespace fpsparty::game_replica
 
 #endif

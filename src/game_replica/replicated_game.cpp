@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <vector>
 
-namespace fpsparty::game {
+namespace fpsparty::game_replica {
 struct Replicated_game::Impl {
   std::vector<std::unique_ptr<Replicated_humanoid::Impl>> humanoid_impls{};
   std::vector<std::unique_ptr<Replicated_projectile::Impl>> projectile_impls{};
@@ -265,4 +265,4 @@ Replicated_game create_replicated_game(const Replicated_game::Create_info &) {
 void destroy_replicated_game(Replicated_game replicated_game) noexcept {
   delete replicated_game._impl;
 }
-}; // namespace fpsparty::game
+}; // namespace fpsparty::game_replica

@@ -178,14 +178,14 @@ public:
     _cube_index_buffer =
         upload_indices(std::as_bytes(std::span{cube_mesh_indices}));
     std::cout << "Uploaded cube index buffer.\n";
-    _game = game::create_replicated_game_unique({});
+    _game = game_replica::create_replicated_game_unique({});
   }
 
   void render() {
     if (_graphics.begin()) {
       const auto player = _player_id
                               ? _game->get_humanoid_by_network_id(*_player_id)
-                              : game::Replicated_humanoid{};
+                              : game_replica::Replicated_humanoid{};
       if (player) {
         const auto view_matrix =
             (math::x_rotation_matrix(-player.get_input_state().pitch) *
@@ -288,9 +288,9 @@ public:
 
   bool has_game_state() const noexcept { return _has_game_state; }
 
-  game::Replicated_humanoid get_player() const noexcept {
+  game_replica::Replicated_humanoid get_player() const noexcept {
     return _player_id ? _game->get_humanoid_by_network_id(*_player_id)
-                      : game::Replicated_humanoid{};
+                      : game_replica::Replicated_humanoid{};
   }
 
   constexpr glfw::Window get_window() const noexcept { return _glfw_window; }
@@ -384,7 +384,7 @@ private:
   Vertex_buffer _cube_vertex_buffer{};
   Index_buffer _cube_index_buffer{};
   bool _has_game_state{};
-  game::Unique_replicated_game _game{};
+  game_replica::Unique_replicated_game _game{};
   std::optional<std::uint32_t> _player_id{};
   float _tick_timer{};
   std::uint16_t _input_sequence_number{};
