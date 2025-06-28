@@ -30,7 +30,7 @@ target_include_directories(
 # game_authority
 add_library(
   game_authority
-  src/game_authority/player.cpp
+  src/game_authority/humanoid.cpp
   src/game_authority/projectile.cpp
   src/game_authority/game.cpp
 )
