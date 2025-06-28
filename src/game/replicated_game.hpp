@@ -1,7 +1,7 @@
 #ifndef FPSPARTY_GAME_REPLICATED_GAME_HPP
 #define FPSPARTY_GAME_REPLICATED_GAME_HPP
 
-#include "game/game.hpp"
+#include "game_core/humanoid_input_state.hpp"
 #include "serial/reader.hpp"
 #include <Eigen/Dense>
 #include <memory_resource>
@@ -9,11 +9,11 @@
 #include <vector>
 
 namespace fpsparty::game {
-class Replicated_player {
+class Replicated_humanoid {
 public:
-  constexpr Replicated_player() noexcept = default;
+  constexpr Replicated_humanoid() noexcept = default;
 
-  constexpr explicit Replicated_player(void *impl) noexcept
+  constexpr explicit Replicated_humanoid(void *impl) noexcept
       : _impl{static_cast<Impl *>(impl)} {}
 
   constexpr operator bool() const noexcept { return _impl != nullptr; }
@@ -22,19 +22,20 @@ public:
 
   std::uint32_t get_network_id() const noexcept;
 
-  const Player::Input_state &get_input_state() const noexcept;
+  const game_core::Humanoid_input_state &get_input_state() const noexcept;
 
   std::optional<std::uint16_t> get_input_sequence_number() const noexcept;
 
-  void set_input_state(const Player::Input_state &input_state) const noexcept;
+  void set_input_state(
+      const game_core::Humanoid_input_state &input_state) const noexcept;
 
-  void set_input_state(const Player::Input_state &input_state,
+  void set_input_state(const game_core::Humanoid_input_state &input_state,
                        std::uint16_t input_sequence_number) const noexcept;
 
   const Eigen::Vector3f &get_position() const noexcept;
 
-  friend constexpr bool operator==(Replicated_player lhs,
-                                   Replicated_player rhs) noexcept = default;
+  friend constexpr bool operator==(Replicated_humanoid lhs,
+                                   Replicated_humanoid rhs) noexcept = default;
 
 private:
   friend class Replicated_game;
@@ -93,12 +94,12 @@ public:
 
   void apply_snapshot(serial::Reader &reader) const;
 
-  std::pmr::vector<Replicated_player>
-  get_players(std::pmr::memory_resource *memory_resource =
-                  std::pmr::get_default_resource()) const;
+  std::pmr::vector<Replicated_humanoid>
+  get_humanoids(std::pmr::memory_resource *memory_resource =
+                    std::pmr::get_default_resource()) const;
 
-  Replicated_player
-  get_player_by_network_id(std::uint32_t network_id) const noexcept;
+  Replicated_humanoid
+  get_humanoid_by_network_id(std::uint32_t network_id) const noexcept;
 
   std::pmr::vector<Replicated_projectile>
   get_projectiles(std::pmr::memory_resource *memory_resource =

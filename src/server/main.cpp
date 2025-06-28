@@ -35,7 +35,7 @@ public:
     _tick_timer -= duration;
     if (_tick_timer <= 0.0f) {
       _tick_timer += constants::tick_duration;
-      const auto players = _game->get_players();
+      const auto players = _game->get_humanoids();
       for (const auto &player : players) {
         if (player.is_input_stale()) {
           player.increment_input_sequence_number();
@@ -58,21 +58,21 @@ public:
 protected:
   void on_peer_connect(enet::Peer peer) override {
     std::cout << "Peer connected.\n";
-    const auto player = _game->create_player({});
+    const auto player = _game->create_humanoid({});
     peer.set_data(static_cast<void *>(player));
     send_player_id(peer, player.get_network_id());
   }
 
   void on_peer_disconnect(enet::Peer peer) override {
     std::cout << "Peer disconnected.\n";
-    const auto player = static_cast<game::Player>(peer.get_data());
-    _game->destroy_player(player);
+    const auto player = static_cast<game::Humanoid>(peer.get_data());
+    _game->destroy_humanoid(player);
   }
 
   void on_player_input_state(enet::Peer peer,
-                             const game::Player::Input_state &input_state,
+                             const game_core::Humanoid_input_state &input_state,
                              std::uint16_t input_sequence_number) override {
-    const auto player = static_cast<game::Player>(peer.get_data());
+    const auto player = static_cast<game::Humanoid>(peer.get_data());
     player.set_input_state(input_state, input_sequence_number, true);
   }
 
@@ -111,7 +111,7 @@ int main() {
     server.disconnect();
     do {
       server.wait_events(100);
-    } while (server.get_game().get_player_count() > 0);
+    } while (server.get_game().get_humanoid_count() > 0);
   }
   std::cout << "Exiting.\n";
   return 0;

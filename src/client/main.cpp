@@ -184,8 +184,8 @@ public:
   void render() {
     if (_graphics.begin()) {
       const auto player = _player_id
-                              ? _game->get_player_by_network_id(*_player_id)
-                              : game::Replicated_player{};
+                              ? _game->get_humanoid_by_network_id(*_player_id)
+                              : game::Replicated_humanoid{};
       if (player) {
         const auto view_matrix =
             (math::x_rotation_matrix(-player.get_input_state().pitch) *
@@ -214,7 +214,7 @@ public:
         _graphics.bind_index_buffer(_cube_index_buffer.get_buffer(),
                                     vk::IndexType::eUint16);
         // draw other players (cubes)
-        for (const auto &other_player : _game->get_players()) {
+        for (const auto &other_player : _game->get_humanoids()) {
           if (other_player != player) {
             const auto model_matrix =
                 (math::translation_matrix(other_player.get_position() +
@@ -288,9 +288,9 @@ public:
 
   bool has_game_state() const noexcept { return _has_game_state; }
 
-  game::Replicated_player get_player() const noexcept {
-    return _player_id ? _game->get_player_by_network_id(*_player_id)
-                      : game::Replicated_player{};
+  game::Replicated_humanoid get_player() const noexcept {
+    return _player_id ? _game->get_humanoid_by_network_id(*_player_id)
+                      : game::Replicated_humanoid{};
   }
 
   constexpr glfw::Window get_window() const noexcept { return _glfw_window; }
@@ -388,7 +388,7 @@ private:
   std::optional<std::uint32_t> _player_id{};
   float _tick_timer{};
   std::uint16_t _input_sequence_number{};
-  std::vector<std::pair<game::Player::Input_state, std::uint16_t>>
+  std::vector<std::pair<game_core::Humanoid_input_state, std::uint16_t>>
       _in_flight_input_states{};
 };
 

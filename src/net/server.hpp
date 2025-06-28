@@ -35,7 +35,7 @@ protected:
   virtual void on_peer_disconnect(enet::Peer) {}
 
   virtual void on_player_input_state(enet::Peer,
-                                     const game::Player::Input_state &,
+                                     const game_core::Humanoid_input_state &,
                                      std::uint16_t) {}
 
 private:

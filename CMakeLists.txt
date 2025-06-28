@@ -8,11 +8,28 @@ add_subdirectory(extern/volk-1.4.304)
 add_subdirectory(extern/VulkanMemoryAllocator-3.3.0)
 add_subdirectory(extern/magic_enum-0.9.7)
 
+# game_core
+add_library(
+  game_core
+  src/game_core/humanoid_movement.cpp
+  src/game_core/projectile_movement.cpp
+)
+target_include_directories(
+  game_core
+  SYSTEM
+  PUBLIC
+  ${CMAKE_SOURCE_DIR}/extern/eigen-3.4.0
+  ${CMAKE_SOURCE_DIR}/extern/magic_enum-0.9.7/include
+)
+target_include_directories(
+  game_core
+  PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+)
+
 # game
 add_library(
   game
-  src/game/humanoid_movement.cpp
-  src/game/projectile_movement.cpp
   src/game/player.cpp
   src/game/projectile.cpp
   src/game/game.cpp
@@ -26,15 +43,10 @@ target_include_directories(
 )
 target_include_directories(
   game
-  SYSTEM
-  PRIVATE
-  ${CMAKE_SOURCE_DIR}/extern/magic_enum-0.9.7/include
-)
-target_include_directories(
-  game
   PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
+target_link_libraries(game game_core)
 
 # net
 add_library(
@@ -111,19 +123,22 @@ target_link_directories(client PRIVATE ${CMAKE_SOURCE_DIR}/extern/enet/.libs)
 target_link_libraries(client enet glfw volk GPUOpen::VulkanMemoryAllocator game net)
 
 # compiler options
-set_property(TARGET game net server client PROPERTY CXX_STANDARD 23)
-set_property(TARGET game net server client PROPERTY CXX_STANDARD_REQUIRED ON)
-set_property(TARGET game net server client PROPERTY CXX_EXTENSIONS OFF)
+set_property(TARGET game_core game net server client PROPERTY CXX_STANDARD 23)
+set_property(TARGET game_core game net server client PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET game_core game net server client PROPERTY CXX_EXTENSIONS OFF)
 if (MSVC)
+  target_compile_options(game_core PRIVATE /W4 /WX)
   target_compile_options(game PRIVATE /W4 /WX)
   target_compile_options(net PRIVATE /W4 /WX)
   target_compile_options(server PRIVATE /W4 /WX)
   target_compile_options(client PRIVATE /W4 /WX)
 else()
+  target_compile_options(game_core PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
   target_compile_options(game PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
   target_compile_options(net PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
   target_compile_options(client PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
   target_compile_options(server PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
+  target_link_options(game_core PRIVATE -stdlib=libc++ -lc++abi)
   target_link_options(game PRIVATE -stdlib=libc++ -lc++abi)
   target_link_options(net PRIVATE -stdlib=libc++ -lc++abi)
   target_link_options(client PRIVATE -stdlib=libc++ -lc++abi)

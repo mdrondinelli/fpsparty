@@ -1,15 +1,16 @@
 #include "game.hpp"
-#include "game/constants.hpp"
-#include "game/humanoid_movement.hpp"
-#include "game/projectile_movement.hpp"
+#include "game_core/constants.hpp"
+#include "game_core/humanoid_movement.hpp"
+#include "game_core/projectile_movement.hpp"
 #include "math/transformation_matrices.hpp"
 #include "serial/serialize.hpp"
 #include <Eigen/Dense>
+#include <Eigen/Geometry>
 #include <algorithm>
 
 namespace fpsparty::game {
 struct Game::Impl {
-  std::vector<Player> players{};
+  std::vector<Humanoid> humanoids{};
   std::vector<Projectile> projectiles{};
   std::uint32_t next_network_id{};
 };
@@ -22,49 +23,50 @@ void destroy_game(Game game) noexcept {
 }
 
 void Game::clear() const noexcept {
-  for (const auto &player : _impl->players) {
-    Player::delete_impl(player._impl);
+  for (const auto &humanoid : _impl->humanoids) {
+    Humanoid::delete_impl(humanoid._impl);
   }
   for (const auto &projectile : _impl->projectiles) {
     Projectile::delete_impl(projectile._impl);
   }
-  _impl->players.clear();
+  _impl->humanoids.clear();
   _impl->projectiles.clear();
 }
 
 void Game::simulate(const Simulate_info &info) const {
-  for (const auto &player : _impl->players) {
-    player.decrease_attack_cooldown(info.duration);
-    if (player.get_input_state().use_primary &&
-        player.get_attack_cooldown() == 0.0f) {
-      const auto player_basis =
-          (math::y_rotation_matrix(player.get_input_state().yaw) *
-           math::x_rotation_matrix(player.get_input_state().pitch))
+  for (const auto &humanoid : _impl->humanoids) {
+    humanoid.decrease_attack_cooldown(info.duration);
+    if (humanoid.get_input_state().use_primary &&
+        humanoid.get_attack_cooldown() == 0.0f) {
+      const auto basis =
+          (math::y_rotation_matrix(humanoid.get_input_state().yaw) *
+           math::x_rotation_matrix(humanoid.get_input_state().pitch))
               .eval();
-      const auto player_up_direction = player_basis.col(1).head<3>().eval();
-      const auto player_look_direction = player_basis.col(2).head<3>().eval();
+      const auto up = basis.col(1).head<3>().eval();
+      const auto forward = basis.col(2).head<3>().eval();
       create_projectile({
-          .position = player.get_position() + Eigen::Vector3f::UnitY() * 1.5f,
-          .velocity =
-              player.get_velocity() +
-              constants::projectile_forward_speed * player_look_direction +
-              constants::projectile_up_speed * player_up_direction,
+          .creator = humanoid,
+          .position = humanoid.get_position() + Eigen::Vector3f::UnitY() * 1.5f,
+          .velocity = humanoid.get_velocity() +
+                      game_core::constants::projectile_forward_speed * forward +
+                      game_core::constants::projectile_up_speed * up,
       });
-      player.set_attack_cooldown(constants::attack_cooldown);
+      humanoid.set_attack_cooldown(game_core::constants::attack_cooldown);
     }
-    const auto movement_info = Humanoid_movement_simulation_info{
-        .initial_position = player.get_position(),
-        .input_state = player.get_input_state(),
+    const auto movement_info = game_core::Humanoid_movement_simulation_info{
+        .initial_position = humanoid.get_position(),
+        .input_state = humanoid.get_input_state(),
         .duration = info.duration,
     };
-    const auto movement_result = simulate_humanoid_movement(movement_info);
-    player.set_position(movement_result.final_position);
-    player.set_velocity(
+    const auto movement_result =
+        game_core::simulate_humanoid_movement(movement_info);
+    humanoid.set_position(movement_result.final_position);
+    humanoid.set_velocity(
         (movement_result.final_position - movement_info.initial_position) /
         info.duration);
   }
   for (const auto &projectile : _impl->projectiles) {
-    const auto movement_result = simulate_projectile_movement({
+    const auto movement_result = game_core::simulate_projectile_movement({
         .initial_position = projectile.get_position(),
         .initial_velocity = projectile.get_velocity(),
         .duration = info.duration,
@@ -77,19 +79,53 @@ void Game::simulate(const Simulate_info &info) const {
       destroy_projectile(projectile);
     }
   }
+  for (const auto &humanoid : get_humanoids()) {
+    const auto humanoid_bounds = Eigen::AlignedBox3f{
+        humanoid.get_position() -
+            Eigen::Vector3f{
+                game_core::constants::humanoid_half_width,
+                0.0f,
+                game_core::constants::humanoid_half_width,
+            },
+        humanoid.get_position() +
+            Eigen::Vector3f{
+                game_core::constants::humanoid_half_width,
+                game_core::constants::humanoid_height,
+                game_core::constants::humanoid_half_width,
+            },
+    };
+    for (const auto &projectile : _impl->projectiles) {
+      if (projectile.get_creator() == humanoid) {
+        continue;
+      }
+      const auto projectile_half_extents = Eigen::Vector3f{
+          game_core::constants::projectile_half_extent,
+          game_core::constants::projectile_half_extent,
+          game_core::constants::projectile_half_extent,
+      };
+      const auto projectile_bounds = Eigen::AlignedBox3f{
+          projectile.get_position() - projectile_half_extents,
+          projectile.get_position() + projectile_half_extents,
+      };
+      if (projectile_bounds.intersects(humanoid_bounds)) {
+        destroy_humanoid(humanoid);
+      }
+    }
+  }
 }
 
 void Game::snapshot(serial::Writer &writer) const {
   using serial::serialize;
-  serialize<std::uint8_t>(writer, _impl->players.size());
-  for (const auto &player : _impl->players) {
-    serialize<std::uint32_t>(writer, player.get_network_id());
-    serialize<float>(writer, player.get_position().x());
-    serialize<float>(writer, player.get_position().y());
-    serialize<float>(writer, player.get_position().z());
-    serialize<Player::Input_state>(writer, player.get_input_state());
-    serialize<std::optional<std::uint16_t>>(writer,
-                                            player.get_input_sequence_number());
+  serialize<std::uint8_t>(writer, _impl->humanoids.size());
+  for (const auto &humanoid : _impl->humanoids) {
+    serialize<std::uint32_t>(writer, humanoid.get_network_id());
+    serialize<float>(writer, humanoid.get_position().x());
+    serialize<float>(writer, humanoid.get_position().y());
+    serialize<float>(writer, humanoid.get_position().z());
+    serialize<game_core::Humanoid_input_state>(writer,
+                                               humanoid.get_input_state());
+    serialize<std::optional<std::uint16_t>>(
+        writer, humanoid.get_input_sequence_number());
   }
   serialize<std::uint16_t>(writer, _impl->projectiles.size());
   for (const auto &projectile : _impl->projectiles) {
@@ -103,37 +139,35 @@ void Game::snapshot(serial::Writer &writer) const {
   }
 }
 
-Player Game::create_player(const Player::Create_info &) const {
-  const auto retval = Player{Player::new_impl(_impl->next_network_id++)};
-  _impl->players.emplace_back(retval);
+Humanoid Game::create_humanoid(const Humanoid::Create_info &) const {
+  const auto retval = Humanoid{Humanoid::new_impl(_impl->next_network_id++)};
+  _impl->humanoids.emplace_back(retval);
   return retval;
 }
 
-void Game::destroy_player(Player player) const noexcept {
-  const auto it = std::ranges::find(_impl->players, player);
-  if (it != _impl->players.end()) {
-    _impl->players.erase(it);
-    Player::delete_impl(player._impl);
+void Game::destroy_humanoid(Humanoid humanoid) const noexcept {
+  const auto it = std::ranges::find(_impl->humanoids, humanoid);
+  if (it != _impl->humanoids.end()) {
+    _impl->humanoids.erase(it);
+    Humanoid::delete_impl(humanoid._impl);
   }
 }
 
-std::size_t Game::get_player_count() const noexcept {
-  return _impl->players.size();
+std::size_t Game::get_humanoid_count() const noexcept {
+  return _impl->humanoids.size();
 }
 
-std::pmr::vector<Player>
-Game::get_players(std::pmr::memory_resource *memory_resource) const {
-  auto retval = std::pmr::vector<Player>{memory_resource};
-  retval.reserve(_impl->players.size());
-  retval.insert_range(retval.begin(), _impl->players);
+std::pmr::vector<Humanoid>
+Game::get_humanoids(std::pmr::memory_resource *memory_resource) const {
+  auto retval = std::pmr::vector<Humanoid>{memory_resource};
+  retval.reserve(_impl->humanoids.size());
+  retval.insert_range(retval.begin(), _impl->humanoids);
   return retval;
 }
 
 Projectile Game::create_projectile(const Projectile::Create_info &info) const {
   const auto retval =
-      Projectile{Projectile::new_impl(_impl->next_network_id++)};
-  retval.set_position(info.position);
-  retval.set_velocity(info.velocity);
+      Projectile{Projectile::new_impl(_impl->next_network_id++, info)};
   _impl->projectiles.emplace_back(retval);
   return retval;
 }

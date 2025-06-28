@@ -53,7 +53,8 @@ void Server::handle_event(const enet::Event &e) {
     }
     switch (*message_type) {
     case Message_type::player_input_state: {
-      const auto input_state = deserialize<game::Player::Input_state>(reader);
+      const auto input_state =
+          deserialize<game_core::Humanoid_input_state>(reader);
       if (!input_state) {
         std::cerr << "Malformed player input state packet.\n";
         return;

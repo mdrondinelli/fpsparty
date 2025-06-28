@@ -1,8 +1,8 @@
 #include "humanoid_movement.hpp"
-#include "constants.hpp"
+#include "game_core/constants.hpp"
 #include "math/transformation_matrices.hpp"
 
-namespace fpsparty::game {
+namespace fpsparty::game_core {
 Humanoid_movement_simulation_result
 simulate_humanoid_movement(const Humanoid_movement_simulation_info &info) {
   const auto basis_matrix = math::y_rotation_matrix(info.input_state.yaw);
@@ -21,9 +21,9 @@ simulate_humanoid_movement(const Humanoid_movement_simulation_info &info) {
   }
   movement_vector.normalize();
   return {
-      .final_position =
-          info.initial_position +
-          movement_vector * constants::player_movement_speed * info.duration,
+      .final_position = info.initial_position + movement_vector *
+                                                    constants::humanoid_speed *
+                                                    info.duration,
   };
 }
-} // namespace fpsparty::game
+} // namespace fpsparty::game_core

@@ -38,13 +38,13 @@ bool Client::is_connected() const noexcept {
 }
 
 void Client::send_player_input_state(
-    const game::Player::Input_state &input_state,
+    const game_core::Humanoid_input_state &input_state,
     std::uint16_t sequence_number) {
   auto packet_writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<net::Message_type>(packet_writer,
                                net::Message_type::player_input_state);
-  serialize<game::Player::Input_state>(packet_writer, input_state);
+  serialize<game_core::Humanoid_input_state>(packet_writer, input_state);
   serialize<std::uint16_t>(packet_writer, sequence_number);
   _server.send(constants::player_input_state_channel_id,
                enet::create_packet_unique(
