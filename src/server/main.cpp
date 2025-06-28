@@ -1,6 +1,6 @@
 #include "constants.hpp"
 #include "enet.hpp"
-#include "game/game.hpp"
+#include "game_authority/game.hpp"
 #include "net/constants.hpp"
 #include "net/server.hpp"
 #include <cassert>

@@ -2,7 +2,7 @@
 #define FPSPARTY_NET_SERVER_HPP
 
 #include "enet.hpp"
-#include "game/game.hpp"
+#include "game_authority/game.hpp"
 #include <cstdint>
 
 namespace fpsparty::net {

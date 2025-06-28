@@ -4,7 +4,7 @@
 #include "client/vertex_buffer.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
-#include "game/replicated_game.hpp"
+#include "game_replica/replicated_game.hpp"
 #include "glfw.hpp"
 #include "math/transformation_matrices.hpp"
 #include "net/client.hpp"
