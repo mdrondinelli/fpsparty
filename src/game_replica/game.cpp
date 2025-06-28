@@ -254,11 +254,7 @@ Game::get_projectile_by_network_id(std::uint32_t network_id) const noexcept {
   return Projectile{it != _impl->projectile_impls.end() ? it->get() : nullptr};
 }
 
-Game create_replicated_game(const Game_create_info &) {
-  return Game{new Game::Impl};
-}
+Game create_game(const Game_create_info &) { return Game{new Game::Impl}; }
 
-void destroy_replicated_game(Game replicated_game) noexcept {
-  delete replicated_game._impl;
-}
+void destroy_game(Game game) noexcept { delete game._impl; }
 }; // namespace fpsparty::game_replica

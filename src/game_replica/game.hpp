@@ -112,36 +112,35 @@ private:
 
   constexpr explicit Game(Impl *impl) noexcept : _impl{impl} {}
 
-  friend Game create_replicated_game(const Game_create_info &info);
+  friend Game create_game(const Game_create_info &info);
 
-  friend void destroy_replicated_game(Game replicated_game) noexcept;
+  friend void destroy_game(Game replicated_game) noexcept;
 
   Impl *_impl{};
 };
 
-Game create_replicated_game(const Game_create_info &info);
+Game create_game(const Game_create_info &info);
 
-void destroy_replicated_game(Game replicated_game) noexcept;
+void destroy_game(Game replicated_game) noexcept;
 
-class Unique_replicated_game {
+class Unique_game {
 public:
-  constexpr Unique_replicated_game() noexcept = default;
+  constexpr Unique_game() noexcept = default;
 
-  constexpr explicit Unique_replicated_game(Game value) noexcept
-      : _value{value} {}
+  constexpr explicit Unique_game(Game value) noexcept : _value{value} {}
 
-  constexpr Unique_replicated_game(Unique_replicated_game &&other) noexcept
+  constexpr Unique_game(Unique_game &&other) noexcept
       : _value{std::exchange(other._value, Game{})} {}
 
-  Unique_replicated_game &operator=(Unique_replicated_game &&other) noexcept {
+  Unique_game &operator=(Unique_game &&other) noexcept {
     auto temp{std::move(other)};
     swap(temp);
     return *this;
   }
 
-  ~Unique_replicated_game() {
+  ~Unique_game() {
     if (_value) {
-      destroy_replicated_game(_value);
+      destroy_game(_value);
     }
   }
 
@@ -150,16 +149,15 @@ public:
   const Game *operator->() const noexcept { return &_value; }
 
 private:
-  constexpr void swap(Unique_replicated_game &other) noexcept {
+  constexpr void swap(Unique_game &other) noexcept {
     std::swap(_value, other._value);
   }
 
   Game _value{};
 };
 
-inline Unique_replicated_game
-create_replicated_game_unique(const Game_create_info &info) {
-  return Unique_replicated_game{create_replicated_game(info)};
+inline Unique_game create_game_unique(const Game_create_info &info) {
+  return Unique_game{create_game(info)};
 }
 } // namespace fpsparty::game_replica
 
