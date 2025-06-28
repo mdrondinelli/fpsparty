@@ -1,6 +1,6 @@
 #include "game.hpp"
 
-namespace fpsparty::game {
+namespace fpsparty::game_authority {
 struct Projectile::Impl {
   std::uint32_t network_id;
   Humanoid creator;
@@ -41,4 +41,4 @@ Projectile::Impl *Projectile::new_impl(std::uint32_t network_id,
 }
 
 void Projectile::delete_impl(Impl *impl) { delete impl; }
-} // namespace fpsparty::game
+} // namespace fpsparty::game_authority

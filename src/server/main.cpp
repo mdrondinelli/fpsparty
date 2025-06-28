@@ -29,7 +29,7 @@ public:
                      .max_clients = create_info.max_clients,
                      .incoming_bandwidth = create_info.incoming_bandwidth,
                      .outgoing_bandwidth = create_info.outgoing_bandwidth}},
-        _game{game::create_game_unique({})} {}
+        _game{game_authority::create_game_unique({})} {}
 
   bool service_game_state(float duration) {
     _tick_timer -= duration;
@@ -53,7 +53,7 @@ public:
 
   void broadcast_game_state() { net::Server::broadcast_game_state(*_game); }
 
-  constexpr game::Game get_game() const noexcept { return *_game; }
+  constexpr game_authority::Game get_game() const noexcept { return *_game; }
 
 protected:
   void on_peer_connect(enet::Peer peer) override {
@@ -65,19 +65,19 @@ protected:
 
   void on_peer_disconnect(enet::Peer peer) override {
     std::cout << "Peer disconnected.\n";
-    const auto player = static_cast<game::Humanoid>(peer.get_data());
+    const auto player = static_cast<game_authority::Humanoid>(peer.get_data());
     _game->destroy_humanoid(player);
   }
 
   void on_player_input_state(enet::Peer peer,
                              const game_core::Humanoid_input_state &input_state,
                              std::uint16_t input_sequence_number) override {
-    const auto player = static_cast<game::Humanoid>(peer.get_data());
+    const auto player = static_cast<game_authority::Humanoid>(peer.get_data());
     player.set_input_state(input_state, input_sequence_number, true);
   }
 
 private:
-  game::Unique_game _game{};
+  game_authority::Unique_game _game{};
   float _tick_timer{};
 };
 } // namespace

@@ -27,7 +27,7 @@ public:
 
   void send_player_id(enet::Peer peer, std::uint32_t player_id);
 
-  void broadcast_game_state(game::Game game);
+  void broadcast_game_state(game_authority::Game game);
 
 protected:
   virtual void on_peer_connect(enet::Peer) {}

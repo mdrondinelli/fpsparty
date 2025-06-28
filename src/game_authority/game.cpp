@@ -8,7 +8,7 @@
 #include <Eigen/Geometry>
 #include <algorithm>
 
-namespace fpsparty::game {
+namespace fpsparty::game_authority {
 struct Game::Impl {
   std::vector<Humanoid> humanoids{};
   std::vector<Projectile> projectiles{};
@@ -187,4 +187,4 @@ Game::get_projectiles(std::pmr::memory_resource *memory_resource) const {
   retval.insert_range(retval.begin(), _impl->projectiles);
   return retval;
 }
-} // namespace fpsparty::game
+} // namespace fpsparty::game_authority

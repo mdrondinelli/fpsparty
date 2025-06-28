@@ -8,7 +8,7 @@
 #include <exception>
 #include <memory_resource>
 
-namespace fpsparty::game {
+namespace fpsparty::game_authority {
 class Game;
 class Humanoid;
 class Projectile;
@@ -265,25 +265,26 @@ inline Unique_game create_game_unique(const Game::Create_info &info) {
   return Unique_game{create_game(info)};
 }
 
-} // namespace fpsparty::game
+} // namespace fpsparty::game_authority
 
 namespace std {
-template <> struct hash<fpsparty::game::Humanoid> {
+template <> struct hash<fpsparty::game_authority::Humanoid> {
   constexpr std::size_t
-  operator()(fpsparty::game::Humanoid value) const noexcept {
+  operator()(fpsparty::game_authority::Humanoid value) const noexcept {
     return static_cast<std::size_t>(std::bit_cast<std::uintptr_t>(value._impl));
   }
 };
 
-template <> struct hash<fpsparty::game::Projectile> {
+template <> struct hash<fpsparty::game_authority::Projectile> {
   constexpr std::size_t
-  operator()(fpsparty::game::Projectile value) const noexcept {
+  operator()(fpsparty::game_authority::Projectile value) const noexcept {
     return static_cast<std::size_t>(std::bit_cast<std::uintptr_t>(value._impl));
   }
 };
 
-template <> struct hash<fpsparty::game::Game> {
-  constexpr std::size_t operator()(fpsparty::game::Game value) const noexcept {
+template <> struct hash<fpsparty::game_authority::Game> {
+  constexpr std::size_t
+  operator()(fpsparty::game_authority::Game value) const noexcept {
     return static_cast<std::size_t>(std::bit_cast<std::uintptr_t>(value._impl));
   }
 };

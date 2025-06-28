@@ -1,6 +1,6 @@
 #include "game.hpp"
 
-namespace fpsparty::game {
+namespace fpsparty::game_authority {
 struct Humanoid::Impl {
   std::uint32_t network_id;
   game_core::Humanoid_input_state input_state{};
@@ -82,4 +82,4 @@ Humanoid::Impl *Humanoid::new_impl(std::uint32_t network_id) {
 }
 
 void Humanoid::delete_impl(Impl *impl) { delete impl; }
-} // namespace fpsparty::game
+} // namespace fpsparty::game_authority
