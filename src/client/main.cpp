@@ -4,7 +4,7 @@
 #include "client/vertex_buffer.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
-#include "game_replica/replicated_game.hpp"
+#include "game_replica/game.hpp"
 #include "glfw.hpp"
 #include "math/transformation_matrices.hpp"
 #include "net/client.hpp"
@@ -185,7 +185,7 @@ public:
     if (_graphics.begin()) {
       const auto player = _player_id
                               ? _game->get_humanoid_by_network_id(*_player_id)
-                              : game_replica::Replicated_humanoid{};
+                              : game_replica::Humanoid{};
       if (player) {
         const auto view_matrix =
             (math::x_rotation_matrix(-player.get_input_state().pitch) *
@@ -288,9 +288,9 @@ public:
 
   bool has_game_state() const noexcept { return _has_game_state; }
 
-  game_replica::Replicated_humanoid get_player() const noexcept {
+  game_replica::Humanoid get_player() const noexcept {
     return _player_id ? _game->get_humanoid_by_network_id(*_player_id)
-                      : game_replica::Replicated_humanoid{};
+                      : game_replica::Humanoid{};
   }
 
   constexpr glfw::Window get_window() const noexcept { return _glfw_window; }

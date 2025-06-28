@@ -9,11 +9,11 @@
 #include <vector>
 
 namespace fpsparty::game_replica {
-class Replicated_humanoid {
+class Humanoid {
 public:
-  constexpr Replicated_humanoid() noexcept = default;
+  constexpr Humanoid() noexcept = default;
 
-  constexpr explicit Replicated_humanoid(void *impl) noexcept
+  constexpr explicit Humanoid(void *impl) noexcept
       : _impl{static_cast<Impl *>(impl)} {}
 
   constexpr operator bool() const noexcept { return _impl != nullptr; }
@@ -34,23 +34,22 @@ public:
 
   const Eigen::Vector3f &get_position() const noexcept;
 
-  friend constexpr bool operator==(Replicated_humanoid lhs,
-                                   Replicated_humanoid rhs) noexcept = default;
+  friend constexpr bool operator==(Humanoid lhs,
+                                   Humanoid rhs) noexcept = default;
 
 private:
-  friend class Replicated_game;
+  friend class Game;
 
   struct Impl;
 
   Impl *_impl{};
 };
 
-class Replicated_projectile {
+class Projectile {
 public:
-  constexpr Replicated_projectile() noexcept = default;
+  constexpr Projectile() noexcept = default;
 
-  constexpr Replicated_projectile(void *impl)
-      : _impl{static_cast<Impl *>(impl)} {}
+  constexpr Projectile(void *impl) : _impl{static_cast<Impl *>(impl)} {}
 
   constexpr operator bool() const noexcept { return _impl != nullptr; }
 
@@ -62,19 +61,18 @@ public:
 
   const Eigen::Vector3f &get_velocity() const noexcept;
 
-  friend constexpr bool
-  operator==(Replicated_projectile lhs,
-             Replicated_projectile rhs) noexcept = default;
+  friend constexpr bool operator==(Projectile lhs,
+                                   Projectile rhs) noexcept = default;
 
 private:
-  friend class Replicated_game;
+  friend class Game;
 
   struct Impl;
 
   Impl *_impl;
 };
 
-class Replicated_game {
+class Game {
 public:
   struct Create_info;
 
@@ -82,7 +80,7 @@ public:
 
   class Snapshot_application_error;
 
-  constexpr Replicated_game() noexcept = default;
+  constexpr Game() noexcept = default;
 
   constexpr operator bool() const noexcept { return _impl != nullptr; }
 
@@ -94,54 +92,52 @@ public:
 
   void apply_snapshot(serial::Reader &reader) const;
 
-  std::pmr::vector<Replicated_humanoid>
+  std::pmr::vector<Humanoid>
   get_humanoids(std::pmr::memory_resource *memory_resource =
                     std::pmr::get_default_resource()) const;
 
-  Replicated_humanoid
-  get_humanoid_by_network_id(std::uint32_t network_id) const noexcept;
+  Humanoid get_humanoid_by_network_id(std::uint32_t network_id) const noexcept;
 
-  std::pmr::vector<Replicated_projectile>
+  std::pmr::vector<Projectile>
   get_projectiles(std::pmr::memory_resource *memory_resource =
                       std::pmr::get_default_resource()) const;
 
-  Replicated_projectile
+  Projectile
   get_projectile_by_network_id(std::uint32_t network_id) const noexcept;
 
 private:
   struct Impl;
 
-  constexpr explicit Replicated_game(Impl *impl) noexcept : _impl{impl} {}
+  constexpr explicit Game(Impl *impl) noexcept : _impl{impl} {}
 
-  friend Replicated_game create_replicated_game(const Create_info &info);
+  friend Game create_replicated_game(const Create_info &info);
 
-  friend void destroy_replicated_game(Replicated_game replicated_game) noexcept;
+  friend void destroy_replicated_game(Game replicated_game) noexcept;
 
   Impl *_impl{};
 };
 
-struct Replicated_game::Create_info {};
+struct Game::Create_info {};
 
-struct Replicated_game::Simulate_info {
+struct Game::Simulate_info {
   float duration;
 };
 
-class Replicated_game::Snapshot_application_error : std::exception {};
+class Game::Snapshot_application_error : std::exception {};
 
-Replicated_game
-create_replicated_game(const Replicated_game::Create_info &info);
+Game create_replicated_game(const Game::Create_info &info);
 
-void destroy_replicated_game(Replicated_game replicated_game) noexcept;
+void destroy_replicated_game(Game replicated_game) noexcept;
 
 class Unique_replicated_game {
 public:
   constexpr Unique_replicated_game() noexcept = default;
 
-  constexpr explicit Unique_replicated_game(Replicated_game value) noexcept
+  constexpr explicit Unique_replicated_game(Game value) noexcept
       : _value{value} {}
 
   constexpr Unique_replicated_game(Unique_replicated_game &&other) noexcept
-      : _value{std::exchange(other._value, Replicated_game{})} {}
+      : _value{std::exchange(other._value, Game{})} {}
 
   Unique_replicated_game &operator=(Unique_replicated_game &&other) noexcept {
     auto temp{std::move(other)};
@@ -155,20 +151,20 @@ public:
     }
   }
 
-  const Replicated_game &operator*() const noexcept { return _value; }
+  const Game &operator*() const noexcept { return _value; }
 
-  const Replicated_game *operator->() const noexcept { return &_value; }
+  const Game *operator->() const noexcept { return &_value; }
 
 private:
   constexpr void swap(Unique_replicated_game &other) noexcept {
     std::swap(_value, other._value);
   }
 
-  Replicated_game _value{};
+  Game _value{};
 };
 
 inline Unique_replicated_game
-create_replicated_game_unique(const Replicated_game::Create_info &info) {
+create_replicated_game_unique(const Game::Create_info &info) {
   return Unique_replicated_game{create_replicated_game(info)};
 }
 } // namespace fpsparty::game_replica

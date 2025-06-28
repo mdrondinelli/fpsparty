@@ -44,7 +44,7 @@ target_link_libraries(game_authority game_core)
 # game_replica
 add_library(
   game_replica
-  src/game_replica/replicated_game.cpp
+  src/game_replica/game.cpp
 )
 target_include_directories(
   game_replica
