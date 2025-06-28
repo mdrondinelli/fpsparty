@@ -72,14 +72,16 @@ private:
   Impl *_impl;
 };
 
+struct Game_create_info {};
+
+struct Game_simulate_info {
+  float duration;
+};
+
+class Game_snapshot_application_error : std::exception {};
+
 class Game {
 public:
-  struct Create_info;
-
-  struct Simulate_info;
-
-  class Snapshot_application_error;
-
   constexpr Game() noexcept = default;
 
   constexpr operator bool() const noexcept { return _impl != nullptr; }
@@ -88,7 +90,7 @@ public:
 
   void clear() const;
 
-  void simulate(const Simulate_info &info) const;
+  void simulate(const Game_simulate_info &info) const;
 
   void apply_snapshot(serial::Reader &reader) const;
 
@@ -110,22 +112,14 @@ private:
 
   constexpr explicit Game(Impl *impl) noexcept : _impl{impl} {}
 
-  friend Game create_replicated_game(const Create_info &info);
+  friend Game create_replicated_game(const Game_create_info &info);
 
   friend void destroy_replicated_game(Game replicated_game) noexcept;
 
   Impl *_impl{};
 };
 
-struct Game::Create_info {};
-
-struct Game::Simulate_info {
-  float duration;
-};
-
-class Game::Snapshot_application_error : std::exception {};
-
-Game create_replicated_game(const Game::Create_info &info);
+Game create_replicated_game(const Game_create_info &info);
 
 void destroy_replicated_game(Game replicated_game) noexcept;
 
@@ -164,7 +158,7 @@ private:
 };
 
 inline Unique_replicated_game
-create_replicated_game_unique(const Game::Create_info &info) {
+create_replicated_game_unique(const Game_create_info &info) {
   return Unique_replicated_game{create_replicated_game(info)};
 }
 } // namespace fpsparty::game_replica

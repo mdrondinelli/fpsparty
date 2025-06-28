@@ -15,7 +15,7 @@ struct Game::Impl {
   std::uint32_t next_network_id{};
 };
 
-Game create_game(const Game::Create_info &) { return Game{new Game::Impl}; }
+Game create_game(const Game_create_info &) { return Game{new Game::Impl}; }
 
 void destroy_game(Game game) noexcept {
   game.clear();
@@ -33,7 +33,7 @@ void Game::clear() const noexcept {
   _impl->projectiles.clear();
 }
 
-void Game::simulate(const Simulate_info &info) const {
+void Game::simulate(const Game_simulate_info &info) const {
   for (const auto &humanoid : _impl->humanoids) {
     humanoid.decrease_attack_cooldown(info.duration);
     if (humanoid.get_input_state().use_primary &&
@@ -139,7 +139,7 @@ void Game::snapshot(serial::Writer &writer) const {
   }
 }
 
-Humanoid Game::create_humanoid(const Humanoid::Create_info &) const {
+Humanoid Game::create_humanoid(const Humanoid_create_info &) const {
   const auto retval = Humanoid{Humanoid::new_impl(_impl->next_network_id++)};
   _impl->humanoids.emplace_back(retval);
   return retval;
@@ -165,7 +165,7 @@ Game::get_humanoids(std::pmr::memory_resource *memory_resource) const {
   return retval;
 }
 
-Projectile Game::create_projectile(const Projectile::Create_info &info) const {
+Projectile Game::create_projectile(const Projectile_create_info &info) const {
   const auto retval =
       Projectile{Projectile::new_impl(_impl->next_network_id++, info)};
   _impl->projectiles.emplace_back(retval);

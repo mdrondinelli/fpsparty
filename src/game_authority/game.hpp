@@ -15,10 +15,10 @@ class Projectile;
 class Unique_game;
 class Unique_humanoid;
 
+struct Humanoid_create_info {};
+
 class Humanoid {
 public:
-  struct Create_info;
-
   constexpr Humanoid() noexcept = default;
 
   constexpr explicit Humanoid(void *impl) noexcept
@@ -75,10 +75,14 @@ private:
   Impl *_impl{};
 };
 
+struct Projectile_create_info {
+  Humanoid creator;
+  Eigen::Vector3f position{Eigen::Vector3f::Zero()};
+  Eigen::Vector3f velocity{Eigen::Vector3f::Zero()};
+};
+
 class Projectile {
 public:
-  struct Create_info;
-
   constexpr Projectile() noexcept = default;
 
   constexpr explicit Projectile(void *impl) noexcept
@@ -110,23 +114,26 @@ private:
 
   struct Impl;
 
-  static Impl *new_impl(std::uint32_t network_id, const Create_info &info);
+  static Impl *new_impl(std::uint32_t network_id,
+                        const Projectile_create_info &info);
 
   static void delete_impl(Impl *impl);
 
   Impl *_impl{};
 };
 
+struct Game_create_info {};
+
+struct Game_simulate_info {
+  float duration;
+};
+
+class Game_snapshotting_error : public std::exception {};
+
 class Game {
   struct Impl;
 
 public:
-  struct Create_info;
-
-  struct Simulate_info;
-
-  class Snapshotting_error;
-
   constexpr Game() noexcept = default;
 
   constexpr explicit Game(void *impl) noexcept
@@ -138,11 +145,11 @@ public:
 
   void clear() const noexcept;
 
-  void simulate(const Simulate_info &info) const;
+  void simulate(const Game_simulate_info &info) const;
 
   void snapshot(serial::Writer &writer) const;
 
-  Humanoid create_humanoid(const Humanoid::Create_info &info) const;
+  Humanoid create_humanoid(const Humanoid_create_info &info) const;
 
   void destroy_humanoid(Humanoid humanoid) const noexcept;
 
@@ -152,7 +159,7 @@ public:
   get_humanoids(std::pmr::memory_resource *memory_resource =
                     std::pmr::get_default_resource()) const;
 
-  Projectile create_projectile(const Projectile::Create_info &info) const;
+  Projectile create_projectile(const Projectile_create_info &info) const;
 
   void destroy_projectile(Projectile projectile) const noexcept;
 
@@ -163,7 +170,7 @@ public:
 private:
   friend constexpr bool operator==(Game lhs, Game rhs) noexcept = default;
 
-  friend Game create_game(const Create_info &info);
+  friend Game create_game(const Game_create_info &info);
 
   friend void destroy_game(Game game) noexcept;
 
@@ -172,25 +179,9 @@ private:
   Impl *_impl{};
 };
 
-Game create_game(const Game::Create_info &info);
+Game create_game(const Game_create_info &info);
 
 void destroy_game(Game game) noexcept;
-
-struct Humanoid::Create_info {};
-
-struct Projectile::Create_info {
-  Humanoid creator;
-  Eigen::Vector3f position{Eigen::Vector3f::Zero()};
-  Eigen::Vector3f velocity{Eigen::Vector3f::Zero()};
-};
-
-struct Game::Create_info {};
-
-struct Game::Simulate_info {
-  float duration;
-};
-
-class Game::Snapshotting_error : public std::exception {};
 
 class Unique_humanoid {
 public:
@@ -261,7 +252,7 @@ private:
   Game _value{};
 };
 
-inline Unique_game create_game_unique(const Game::Create_info &info) {
+inline Unique_game create_game_unique(const Game_create_info &info) {
   return Unique_game{create_game(info)};
 }
 

@@ -71,7 +71,7 @@ const Eigen::Vector3f &Projectile::get_velocity() const noexcept {
 
 void Game::clear() const { _impl->humanoid_impls.clear(); }
 
-void Game::simulate(const Simulate_info &info) const {
+void Game::simulate(const Game_simulate_info &info) const {
   for (const auto &humanoid_impl : _impl->humanoid_impls) {
     const auto movement_result = game_core::simulate_humanoid_movement({
         .initial_position = humanoid_impl->position,
@@ -95,7 +95,7 @@ void Game::apply_snapshot(serial::Reader &reader) const {
   using serial::deserialize;
   const auto humanoid_count = deserialize<std::uint8_t>(reader);
   if (!humanoid_count) {
-    throw Snapshot_application_error{};
+    throw Game_snapshot_application_error{};
   }
   for (const auto &humanoid_impl : _impl->humanoid_impls) {
     humanoid_impl->marked = false;
@@ -103,7 +103,7 @@ void Game::apply_snapshot(serial::Reader &reader) const {
   for (auto i = 0u; i != *humanoid_count; ++i) {
     const auto humanoid_network_id = deserialize<std::uint32_t>(reader);
     if (!humanoid_network_id) {
-      throw Snapshot_application_error{};
+      throw Game_snapshot_application_error{};
     }
     const auto humanoid_impl = [&]() {
       auto retval = get_humanoid_by_network_id(*humanoid_network_id)._impl;
@@ -118,25 +118,25 @@ void Game::apply_snapshot(serial::Reader &reader) const {
     humanoid_impl->marked = true;
     const auto humanoid_position_x = deserialize<float>(reader);
     if (!humanoid_position_x) {
-      throw Snapshot_application_error{};
+      throw Game_snapshot_application_error{};
     }
     const auto humanoid_position_y = deserialize<float>(reader);
     if (!humanoid_position_y) {
-      throw Snapshot_application_error{};
+      throw Game_snapshot_application_error{};
     }
     const auto humanoid_position_z = deserialize<float>(reader);
     if (!humanoid_position_z) {
-      throw Snapshot_application_error{};
+      throw Game_snapshot_application_error{};
     }
     const auto input_state =
         deserialize<game_core::Humanoid_input_state>(reader);
     if (!input_state) {
-      throw Snapshot_application_error{};
+      throw Game_snapshot_application_error{};
     }
     const auto input_sequence_number =
         deserialize<std::optional<std::uint16_t>>(reader);
     if (!input_sequence_number) {
-      throw Snapshot_application_error{};
+      throw Game_snapshot_application_error{};
     }
     humanoid_impl->position.x() = *humanoid_position_x;
     humanoid_impl->position.y() = *humanoid_position_y;
@@ -154,7 +154,7 @@ void Game::apply_snapshot(serial::Reader &reader) const {
   }
   const auto projectile_count = deserialize<std::uint16_t>(reader);
   if (!projectile_count) {
-    throw Snapshot_application_error{};
+    throw Game_snapshot_application_error{};
   }
   for (const auto &projectile_impl : _impl->projectile_impls) {
     projectile_impl->marked = false;
@@ -162,7 +162,7 @@ void Game::apply_snapshot(serial::Reader &reader) const {
   for (auto i = 0u; i != *projectile_count; ++i) {
     const auto projectile_network_id = deserialize<std::uint32_t>(reader);
     if (!projectile_network_id) {
-      throw Snapshot_application_error{};
+      throw Game_snapshot_application_error{};
     }
     const auto projectile_impl = [&]() {
       auto retval = get_projectile_by_network_id(*projectile_network_id)._impl;
@@ -177,30 +177,30 @@ void Game::apply_snapshot(serial::Reader &reader) const {
     projectile_impl->marked = true;
     const auto projectile_position_x = deserialize<float>(reader);
     if (!projectile_position_x) {
-      throw Snapshot_application_error{};
+      throw Game_snapshot_application_error{};
     }
     const auto projectile_position_y = deserialize<float>(reader);
     if (!projectile_position_y) {
-      throw Snapshot_application_error{};
+      throw Game_snapshot_application_error{};
     }
     const auto projectile_position_z = deserialize<float>(reader);
     if (!projectile_position_z) {
-      throw Snapshot_application_error{};
+      throw Game_snapshot_application_error{};
     }
     projectile_impl->position.x() = *projectile_position_x;
     projectile_impl->position.y() = *projectile_position_y;
     projectile_impl->position.z() = *projectile_position_z;
     const auto projectile_velocity_x = deserialize<float>(reader);
     if (!projectile_velocity_x) {
-      throw Snapshot_application_error{};
+      throw Game_snapshot_application_error{};
     }
     const auto projectile_velocity_y = deserialize<float>(reader);
     if (!projectile_velocity_y) {
-      throw Snapshot_application_error{};
+      throw Game_snapshot_application_error{};
     }
     const auto projectile_velocity_z = deserialize<float>(reader);
     if (!projectile_velocity_z) {
-      throw Snapshot_application_error{};
+      throw Game_snapshot_application_error{};
     }
     projectile_impl->velocity.x() = *projectile_velocity_x;
     projectile_impl->velocity.y() = *projectile_velocity_y;
@@ -254,7 +254,7 @@ Game::get_projectile_by_network_id(std::uint32_t network_id) const noexcept {
   return Projectile{it != _impl->projectile_impls.end() ? it->get() : nullptr};
 }
 
-Game create_replicated_game(const Game::Create_info &) {
+Game create_replicated_game(const Game_create_info &) {
   return Game{new Game::Impl};
 }
 

@@ -31,7 +31,7 @@ void Projectile::set_velocity(const Eigen::Vector3f &velocity) const noexcept {
 }
 
 Projectile::Impl *Projectile::new_impl(std::uint32_t network_id,
-                                       const Create_info &info) {
+                                       const Projectile_create_info &info) {
   return new Impl{
       .network_id = network_id,
       .creator = info.creator,
