@@ -9,7 +9,7 @@
 namespace fpsparty::serial {
 class Span_reader : public Reader {
 public:
-  constexpr explicit Span_reader() noexcept = default;
+  constexpr Span_reader() noexcept = default;
 
   constexpr explicit Span_reader(std::span<const std::byte> data) noexcept
       : _data{data}, _offset{} {}
@@ -23,6 +23,10 @@ public:
       return false;
     }
   }
+
+  std::span<const std::byte> data() const noexcept { return _data; }
+
+  std::size_t offset() const noexcept { return _offset; }
 
 private:
   std::span<const std::byte> _data{};

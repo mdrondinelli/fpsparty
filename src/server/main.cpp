@@ -1,8 +1,9 @@
 #include "constants.hpp"
 #include "enet.hpp"
-#include "game_authority/game.hpp"
+#include "game/server/game.hpp"
 #include "net/constants.hpp"
 #include "net/server.hpp"
+#include "serial/ostream_writer.hpp"
 #include <cassert>
 #include <chrono>
 #include <csignal>
@@ -29,21 +30,27 @@ public:
                      .max_clients = create_info.max_clients,
                      .incoming_bandwidth = create_info.incoming_bandwidth,
                      .outgoing_bandwidth = create_info.outgoing_bandwidth}},
-        _game{game_authority::create_game_unique({})} {}
+        _game{{}} {}
 
   bool service_game_state(float duration) {
     _tick_timer -= duration;
     if (_tick_timer <= 0.0f) {
       _tick_timer += constants::tick_duration;
-      const auto players = _game->get_humanoids();
-      for (const auto &player : players) {
-        if (player.is_input_stale()) {
-          player.increment_input_sequence_number();
+      const auto peers = get_peers();
+      for (const auto &peer : peers) {
+        const auto peer_node = static_cast<Peer_node *>(peer.get_data());
+        for (const auto &player : peer_node->players) {
+          if (player->is_input_stale()) {
+            player->increment_input_sequence_number();
+          }
         }
       }
-      _game->simulate({.duration = constants::tick_duration});
-      for (const auto &player : players) {
-        player.mark_input_stale();
+      _game.simulate({.duration = constants::tick_duration});
+      for (const auto &peer : peers) {
+        const auto peer_node = static_cast<Peer_node *>(peer.get_data());
+        for (const auto &player : peer_node->players) {
+          player->mark_input_stale();
+        }
       }
       return true;
     } else {
@@ -51,33 +58,99 @@ public:
     }
   }
 
-  void broadcast_game_state() { net::Server::broadcast_game_state(*_game); }
+  void broadcast_game_state() {
+    auto world_state_writer = serial::Ostringstream_writer{};
+    _game.get_world().dump(world_state_writer);
+    for (const auto &peer : get_peers()) {
+      auto player_state_writer = serial::Ostringstream_writer{};
+      const auto peer_node = static_cast<Peer_node *>(peer.get_data());
+      const auto peer_player_count = peer_node->players.size();
+      for (const auto &player : peer_node->players) {
+        player->dump(player_state_writer);
+      }
+      net::Server::send_game_state(
+          peer,
+          std::as_bytes(std::span{
+              world_state_writer.stream().view().data(),
+              world_state_writer.stream().view().size(),
+          }),
+          std::as_bytes(std::span{
+              player_state_writer.stream().view().data(),
+              player_state_writer.stream().view().size(),
+          }),
+          peer_player_count);
+    }
+  }
 
-  constexpr game_authority::Game get_game() const noexcept { return *_game; }
+  std::size_t get_peer_count() const noexcept {
+    return net::Server::get_peer_count();
+  }
 
 protected:
   void on_peer_connect(enet::Peer peer) override {
     std::cout << "Peer connected.\n";
-    const auto player = _game->create_humanoid({});
-    peer.set_data(static_cast<void *>(player));
-    send_player_id(peer, player.get_network_id());
+    peer.set_data(new Peer_node);
+    // const auto player = _game->create_humanoid({});
+    // peer.set_data(static_cast<void *>(player));
+    // send_player_id(peer, player.get_network_id());
   }
 
   void on_peer_disconnect(enet::Peer peer) override {
     std::cout << "Peer disconnected.\n";
-    const auto player = static_cast<game_authority::Humanoid>(peer.get_data());
-    _game->destroy_humanoid(player);
+    const auto peer_node =
+        std::unique_ptr<Peer_node>{static_cast<Peer_node *>(peer.get_data())};
+    for (const auto &player : peer_node->players) {
+      const auto humanoid = player->get_humanoid().lock();
+      if (humanoid) {
+        _game.get_world().remove(humanoid);
+      }
+      _game.get_world().remove(player);
+    }
   }
 
-  void on_player_input_state(enet::Peer peer,
-                             const game_core::Humanoid_input_state &input_state,
-                             std::uint16_t input_sequence_number) override {
-    const auto player = static_cast<game_authority::Humanoid>(peer.get_data());
-    player.set_input_state(input_state, input_sequence_number, true);
+  void on_player_join_request(enet::Peer peer) override {
+    const auto peer_node = static_cast<Peer_node *>(peer.get_data());
+    const auto player = _game.create_player({});
+    peer_node->players.emplace_back(player);
+    _game.get_world().add(player);
+  }
+
+  void on_player_leave_request(enet::Peer peer,
+                               std::uint32_t player_network_id) override {
+    const auto peer_node = static_cast<Peer_node *>(peer.get_data());
+    for (auto it = peer_node->players.begin();
+         it != peer_node->players.end();) {
+      if ((*it)->get_network_id() == player_network_id) {
+        const auto humanoid = (*it)->get_humanoid().lock();
+        if (humanoid) {
+          _game.get_world().remove(humanoid);
+        }
+        _game.get_world().remove(*it);
+        it = peer_node->players.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
+
+  void on_player_input_state(
+      enet::Peer peer, std::uint32_t player_network_id,
+      std::uint16_t input_sequence_number,
+      const game::Humanoid_input_state &input_state) override {
+    const auto peer_node = static_cast<Peer_node *>(peer.get_data());
+    for (const auto &player : peer_node->players) {
+      if (player->get_network_id() == player_network_id) {
+        player->set_input_state(input_state, input_sequence_number);
+      }
+    }
   }
 
 private:
-  game_authority::Unique_game _game{};
+  struct Peer_node {
+    std::vector<rc::Strong<game::Player>> players;
+  };
+
+  game::Game _game{{}};
   float _tick_timer{};
 };
 } // namespace
@@ -111,7 +184,7 @@ int main() {
     server.disconnect();
     do {
       server.wait_events(100);
-    } while (server.get_game().get_humanoid_count() > 0);
+    } while (server.get_peer_count() > 0);
   }
   std::cout << "Exiting.\n";
   return 0;

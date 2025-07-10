@@ -2,7 +2,7 @@
 #define FPSPARTY_NET_CLIENT_H
 
 #include "enet.hpp"
-#include "game_core/humanoid_input_state.hpp"
+#include "game/core/humanoid_input_state.hpp"
 #include "serial/reader.hpp"
 
 namespace fpsparty::net {
@@ -27,18 +27,24 @@ public:
 
   bool is_connected() const noexcept;
 
-  void
-  send_player_input_state(const game_core::Humanoid_input_state &input_state,
-                          std::uint16_t sequence_number);
+  void send_player_join_request();
+
+  void send_player_leave_request(std::uint32_t player_network_id);
+
+  void send_player_input_state(std::uint32_t player_network_id,
+                               std::uint16_t input_sequence_number,
+                               const game::Humanoid_input_state &input_state);
 
 protected:
   virtual void on_connect() {}
 
   virtual void on_disconnect() {}
 
-  virtual void on_player_id(std::uint32_t) {}
+  virtual void on_player_join_response(std::uint32_t /*player_network_id*/) {}
 
-  virtual void on_game_state(serial::Reader &) {}
+  virtual void on_game_state(serial::Reader & /*world_state_reader*/,
+                             serial::Reader & /*player_states_reader*/,
+                             std::uint8_t /*player_state_count*/) {}
 
 private:
   void handle_event(const enet::Event &e);

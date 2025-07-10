@@ -2,8 +2,9 @@
 #define FPSPARTY_NET_SERVER_HPP
 
 #include "enet.hpp"
-#include "game_authority/game.hpp"
+#include "game/core/humanoid_input_state.hpp"
 #include <cstdint>
+#include <memory_resource>
 
 namespace fpsparty::net {
 class Server {
@@ -25,18 +26,35 @@ public:
 
   void disconnect();
 
-  void send_player_id(enet::Peer peer, std::uint32_t player_id);
+  void send_player_join_response(enet::Peer peer,
+                                 std::uint32_t player_network_id);
 
-  void broadcast_game_state(game_authority::Game game);
+  void send_game_state(enet::Peer peer, std::span<const std::byte> world_state,
+                       std::span<const std::byte> player_states,
+                       std::size_t player_state_count);
+
+  std::size_t get_peer_count() const noexcept;
+
+  std::pmr::vector<enet::Peer>
+  get_peers(std::pmr::memory_resource *memory_resource =
+                std::pmr::get_default_resource()) const;
 
 protected:
   virtual void on_peer_connect(enet::Peer) {}
 
   virtual void on_peer_disconnect(enet::Peer) {}
 
-  virtual void on_player_input_state(enet::Peer,
-                                     const game_core::Humanoid_input_state &,
-                                     std::uint16_t) {}
+  virtual void on_player_join_request(enet::Peer) {}
+
+  virtual void on_player_leave_request(enet::Peer /*peer*/,
+                                       std::uint32_t /*player_network_id*/) {}
+
+  virtual void
+  on_player_input_state(enet::Peer /*peer*/,
+                        std::uint32_t /*player_network_id*/,
+                        std::uint16_t /*input_sequence_number*/,
+                        const game::Humanoid_input_state & /*input_state*/
+  ) {}
 
 private:
   void handle_event(const enet::Event &e);

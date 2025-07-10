@@ -1,8 +1,8 @@
 #include "humanoid_movement.hpp"
-#include "game_core/constants.hpp"
+#include "game/core/constants.hpp"
 #include "math/transformation_matrices.hpp"
 
-namespace fpsparty::game_core {
+namespace fpsparty::game {
 Humanoid_movement_simulation_result
 simulate_humanoid_movement(const Humanoid_movement_simulation_info &info) {
   const auto basis_matrix = math::y_rotation_matrix(info.input_state.yaw);
@@ -26,4 +26,4 @@ simulate_humanoid_movement(const Humanoid_movement_simulation_info &info) {
                                                     info.duration,
   };
 }
-} // namespace fpsparty::game_core
+} // namespace fpsparty::game

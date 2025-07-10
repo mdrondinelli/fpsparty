@@ -5,8 +5,11 @@
 #include "serial/ostream_writer.hpp"
 #include "serial/serialize.hpp"
 #include "serial/span_reader.hpp"
+#include "serial/span_writer.hpp"
 #include <iostream>
+#include <limits>
 #include <span>
+#include <stdexcept>
 
 namespace fpsparty::net {
 Server::Server(const Create_info &create_info)
@@ -28,6 +31,56 @@ void Server::wait_events(std::uint32_t timeout) {
     handle_event(e);
     e = _host->service(0);
   }
+}
+
+void Server::disconnect() {
+  for (const auto &peer : _peers) {
+    peer.disconnect(0);
+  }
+}
+
+void Server::send_player_join_response(enet::Peer peer,
+                                       std::uint32_t player_network_id) {
+  auto writer = serial::Ostringstream_writer{};
+  using serial::serialize;
+  serialize<Message_type>(writer, Message_type::player_join_response);
+  serialize<std::uint32_t>(writer, player_network_id);
+  peer.send(constants::player_initialization_channel_id,
+            enet::create_packet_unique({
+                .data = writer.stream().view().data(),
+                .data_length = writer.stream().view().size(),
+                .flags = enet::Packet_flag_bits::reliable,
+            }));
+}
+
+void Server::send_game_state(enet::Peer peer,
+                             std::span<const std::byte> world_state,
+                             std::span<const std::byte> player_states,
+                             std::size_t player_state_count) {
+  auto packet = enet::create_packet_unique({
+      .data = nullptr,
+      .data_length = sizeof(Message_type) + sizeof(std::uint16_t) +
+                     sizeof(std::uint8_t) + world_state.size() +
+                     player_states.size(),
+  });
+  auto writer = serial::Span_writer{std::as_writable_bytes(packet->get_data())};
+  using serial::serialize;
+  serialize<std::uint16_t>(writer, Message_type::game_state);
+  serialize<std::uint16_t>(writer, world_state.size());
+  serialize<std::uint8_t>(writer, player_state_count);
+  writer.write(world_state);
+  writer.write(player_states);
+  peer.send(constants::game_state_channel_id, std::move(packet));
+}
+
+std::size_t Server::get_peer_count() const noexcept { return _peers.size(); }
+
+std::pmr::vector<enet::Peer>
+Server::get_peers(std::pmr::memory_resource *memory_resource) const {
+  auto retval = std::pmr::vector<enet::Peer>(memory_resource);
+  retval.reserve(_peers.size());
+  retval.insert_range(retval.begin(), _peers);
+  return retval;
 }
 
 void Server::handle_event(const enet::Event &e) {
@@ -52,10 +105,22 @@ void Server::handle_event(const enet::Event &e) {
       return;
     }
     switch (*message_type) {
+    case Message_type::player_join_request: {
+      on_player_join_request(e.peer);
+      return;
+    }
+    case Message_type::player_leave_request: {
+      const auto player_network_id = deserialize<std::uint32_t>(reader);
+      if (!player_network_id) {
+        std::cerr << "Malformed player leave request packet.\n";
+        return;
+      }
+      on_player_leave_request(e.peer, *player_network_id);
+      return;
+    }
     case Message_type::player_input_state: {
-      const auto input_state =
-          deserialize<game_core::Humanoid_input_state>(reader);
-      if (!input_state) {
+      const auto player_network_id = deserialize<std::uint32_t>(reader);
+      if (!player_network_id) {
         std::cerr << "Malformed player input state packet.\n";
         return;
       }
@@ -64,7 +129,14 @@ void Server::handle_event(const enet::Event &e) {
         std::cerr << "Malformed player input state packet.\n";
         return;
       }
-      on_player_input_state(e.peer, *input_state, *input_sequence_number);
+      const auto input_state =
+          deserialize<game_core::Humanoid_input_state>(reader);
+      if (!input_state) {
+        std::cerr << "Malformed player input state packet.\n";
+        return;
+      }
+      on_player_input_state(e.peer, *player_network_id, *input_sequence_number,
+                            *input_state);
       return;
     }
     default:
@@ -75,35 +147,5 @@ void Server::handle_event(const enet::Event &e) {
   default:
     return;
   }
-}
-
-void Server::disconnect() {
-  for (const auto &peer : _peers) {
-    peer.disconnect(0);
-  }
-}
-
-void Server::send_player_id(enet::Peer peer, std::uint32_t player_id) {
-  auto writer = serial::Ostringstream_writer{};
-  using serial::serialize;
-  serialize<Message_type>(writer, Message_type::player_id);
-  serialize<std::uint32_t>(writer, player_id);
-  peer.send(constants::player_id_channel_id,
-            enet::create_packet_unique({
-                .data = writer.stream().view().data(),
-                .data_length = writer.stream().view().size(),
-                .flags = enet::Packet_flag_bits::reliable,
-            }));
-}
-
-void Server::broadcast_game_state(game_authority::Game game) {
-  auto packet_writer = serial::Ostringstream_writer{};
-  serial::serialize<Message_type>(packet_writer, Message_type::game_state);
-  game.snapshot(packet_writer);
-  _host->broadcast(constants::game_state_channel_id,
-                   enet::create_packet_unique({
-                       .data = packet_writer.stream().view().data(),
-                       .data_length = packet_writer.stream().view().length(),
-                   }));
 }
 } // namespace fpsparty::net

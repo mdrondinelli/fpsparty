@@ -157,7 +157,8 @@ public:
         _graphics{{
             .window = _glfw_window,
             .surface = _vk_surface,
-        }} {
+        }},
+        _game{{}} {
     _glfw_window.set_key_callback(this);
     _glfw_window.set_mouse_button_callback(this);
     _glfw_window.set_cursor_pos_callback(this);
@@ -178,7 +179,6 @@ public:
     _cube_index_buffer =
         upload_indices(std::as_bytes(std::span{cube_mesh_indices}));
     std::cout << "Uploaded cube index buffer.\n";
-    _game = game_replica::create_game_unique({});
   }
 
   void render() {
@@ -384,7 +384,7 @@ private:
   Vertex_buffer _cube_vertex_buffer{};
   Index_buffer _cube_index_buffer{};
   bool _has_game_state{};
-  game_replica::Unique_game _game{};
+  game_replica::Game _game;
   std::optional<std::uint32_t> _player_id{};
   float _tick_timer{};
   std::uint16_t _input_sequence_number{};
