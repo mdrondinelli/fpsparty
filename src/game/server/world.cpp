@@ -90,21 +90,21 @@ bool World::remove(const rc::Strong<Projectile> &projectile) noexcept {
 std::pmr::vector<rc::Strong<Player>>
 World::get_players(std::pmr::memory_resource *memory_resource) const {
   auto retval = std::pmr::vector<rc::Strong<Player>>{memory_resource};
-  retval.append_range(_players);
+  retval.assign_range(_players);
   return retval;
 }
 
 std::pmr::vector<rc::Strong<Humanoid>>
 World::get_humanoids(std::pmr::memory_resource *memory_resource) const {
   auto retval = std::pmr::vector<rc::Strong<Humanoid>>{memory_resource};
-  retval.append_range(_humanoids);
+  retval.assign_range(_humanoids);
   return retval;
 }
 
 std::pmr::vector<rc::Strong<Projectile>>
 World::get_projectiles(std::pmr::memory_resource *memory_resource) const {
   auto retval = std::pmr::vector<rc::Strong<Projectile>>{memory_resource};
-  retval.append_range(_projectiles);
+  retval.assign_range(_projectiles);
   return retval;
 }
 

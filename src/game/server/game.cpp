@@ -6,11 +6,12 @@
 #include "rc.hpp"
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
+#include <cstdint>
 
 namespace fpsparty::game {
 Game::Game(const Game_create_info &) {}
 
-void Game::simulate(const Game_simulate_info &info) {
+void Game::tick(float duration) {
   const auto players = _world.get_players();
   if (_world.get_humanoid_count() < 2 && _world.get_player_count() > 1) {
     for (const auto &player : players) {
@@ -29,7 +30,7 @@ void Game::simulate(const Game_simulate_info &info) {
   }
   const auto humanoids = _world.get_humanoids();
   for (const auto &humanoid : humanoids) {
-    humanoid->decrease_attack_cooldown(info.duration);
+    humanoid->decrease_attack_cooldown(duration);
     if (humanoid->get_input_state().use_primary &&
         humanoid->get_attack_cooldown() == 0.0f) {
       const auto basis =
@@ -51,20 +52,20 @@ void Game::simulate(const Game_simulate_info &info) {
     const auto movement_info = Humanoid_movement_simulation_info{
         .initial_position = humanoid->get_position(),
         .input_state = humanoid->get_input_state(),
-        .duration = info.duration,
+        .duration = duration,
     };
     const auto movement_result = simulate_humanoid_movement(movement_info);
     humanoid->set_position(movement_result.final_position);
     humanoid->set_velocity(
         (movement_result.final_position - movement_info.initial_position) /
-        info.duration);
+        duration);
   }
   const auto projectiles = _world.get_projectiles();
   for (const auto &projectile : projectiles) {
     const auto movement_result = simulate_projectile_movement({
         .initial_position = projectile->get_position(),
         .initial_velocity = projectile->get_velocity(),
-        .duration = info.duration,
+        .duration = duration,
     });
     projectile->set_position(movement_result.final_position);
     projectile->set_velocity(movement_result.final_velocity);
@@ -108,6 +109,7 @@ void Game::simulate(const Game_simulate_info &info) {
       _world.remove(projectile);
     }
   }
+  ++_tick_number;
 }
 
 rc::Strong<Player> Game::create_player(const Player_create_info &info) {
@@ -122,6 +124,8 @@ rc::Strong<Projectile>
 Game::create_projectile(const Projectile_create_info &info) {
   return _projectile_factory.create(_next_network_id++, info);
 }
+
+std::uint64_t Game::get_tick_number() const noexcept { return _tick_number; }
 
 const World &Game::get_world() const noexcept { return _world; }
 

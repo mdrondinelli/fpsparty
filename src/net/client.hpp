@@ -3,6 +3,7 @@
 
 #include "enet.hpp"
 #include "game/core/humanoid_input_state.hpp"
+#include "net/message_type.hpp"
 #include "serial/reader.hpp"
 
 namespace fpsparty::net {
@@ -36,15 +37,16 @@ public:
                                const game::Humanoid_input_state &input_state);
 
 protected:
-  virtual void on_connect() {}
+  virtual void on_connect();
 
-  virtual void on_disconnect() {}
+  virtual void on_disconnect();
 
-  virtual void on_player_join_response(std::uint32_t /*player_network_id*/) {}
+  virtual void on_player_join_response(std::uint32_t player_network_id);
 
-  virtual void on_game_state(serial::Reader & /*world_state_reader*/,
-                             serial::Reader & /*player_states_reader*/,
-                             std::uint8_t /*player_state_count*/) {}
+  virtual void on_game_state(std::uint64_t tick_number,
+                             serial::Reader &world_state_reader,
+                             serial::Reader &player_states_reader,
+                             std::uint8_t player_state_count);
 
 private:
   void handle_event(const enet::Event &e);

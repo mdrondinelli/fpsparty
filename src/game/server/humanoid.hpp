@@ -20,7 +20,7 @@ public:
 
   const Humanoid_input_state &get_input_state() const noexcept;
 
-  void set_input_state(const Humanoid_input_state &input_state) noexcept;
+  void set_input_state(const Humanoid_input_state &value) noexcept;
 
   float get_attack_cooldown() const noexcept;
 
@@ -30,11 +30,11 @@ public:
 
   const Eigen::Vector3f &get_position() const noexcept;
 
-  void set_position(const Eigen::Vector3f &position) noexcept;
+  void set_position(const Eigen::Vector3f &value) noexcept;
 
   const Eigen::Vector3f &get_velocity() const noexcept;
 
-  void set_velocity(const Eigen::Vector3f &velocity) noexcept;
+  void set_velocity(const Eigen::Vector3f &value) noexcept;
 
 private:
   std::uint32_t _network_id{};

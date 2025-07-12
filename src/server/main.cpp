@@ -36,22 +36,7 @@ public:
     _tick_timer -= duration;
     if (_tick_timer <= 0.0f) {
       _tick_timer += constants::tick_duration;
-      const auto peers = get_peers();
-      for (const auto &peer : peers) {
-        const auto peer_node = static_cast<Peer_node *>(peer.get_data());
-        for (const auto &player : peer_node->players) {
-          if (player->is_input_stale()) {
-            player->increment_input_sequence_number();
-          }
-        }
-      }
-      _game.simulate({.duration = constants::tick_duration});
-      for (const auto &peer : peers) {
-        const auto peer_node = static_cast<Peer_node *>(peer.get_data());
-        for (const auto &player : peer_node->players) {
-          player->mark_input_stale();
-        }
-      }
+      _game.tick({.duration = constants::tick_duration});
       return true;
     } else {
       return false;

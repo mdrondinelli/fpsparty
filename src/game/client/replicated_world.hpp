@@ -1,20 +1,16 @@
 #ifndef FPSPARTY_GAME_REPLICATED_WORLD_HPP
 #define FPSPARTY_GAME_REPLICATED_WORLD_HPP
 
+#include "game/client/replicated_humanoid.hpp"
+#include "game/client/replicated_player.hpp"
+#include "game/client/replicated_projectile.hpp"
 #include "rc.hpp"
-#include "serial/reader.hpp"
 #include <vector>
 
 namespace fpsparty::game {
-struct Replicated_world_load_info {
-  serial::Reader *world_state_reader{};
-  serial::Reader *player_states_reader{};
-  std::uint8_t player_state_count{};
-};
-
 class Replicated_world {
 public:
-  void load(const Replicated_world_load_info &info);
+  void load(serial::Reader &reader);
 
   std::pmr::vector<rc::Strong<Replicated_player>>
   get_players(std::pmr::memory_resource *memory_resource =

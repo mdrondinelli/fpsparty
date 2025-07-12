@@ -13,9 +13,8 @@ const Humanoid_input_state &Humanoid::get_input_state() const noexcept {
   return _input_state;
 }
 
-void Humanoid::set_input_state(
-    const Humanoid_input_state &input_state) noexcept {
-  _input_state = input_state;
+void Humanoid::set_input_state(const Humanoid_input_state &value) noexcept {
+  _input_state = value;
 }
 
 float Humanoid::get_attack_cooldown() const noexcept {
@@ -34,15 +33,15 @@ const Eigen::Vector3f &Humanoid::get_position() const noexcept {
   return _position;
 }
 
-void Humanoid::set_position(const Eigen::Vector3f &position) noexcept {
-  _position = position;
+void Humanoid::set_position(const Eigen::Vector3f &value) noexcept {
+  _position = value;
 }
 
 const Eigen::Vector3f &Humanoid::get_velocity() const noexcept {
   return _velocity;
 }
 
-void Humanoid::set_velocity(const Eigen::Vector3f &velocity) noexcept {
-  _velocity = velocity;
+void Humanoid::set_velocity(const Eigen::Vector3f &value) noexcept {
+  _velocity = value;
 }
 } // namespace fpsparty::game

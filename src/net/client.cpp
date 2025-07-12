@@ -107,28 +107,35 @@ void Client::handle_event(const enet::Event &e) {
     case Message_type::player_join_response: {
       const auto player_network_id = deserialize<std::uint32_t>(reader);
       if (!player_network_id) {
-        std::cerr << "Received malformed player_join_response message.\n";
-        return;
+        goto malformed_message;
       }
       on_player_join_response(*player_network_id);
       return;
     }
     case Message_type::game_state: {
+      const auto tick_number = deserialize<std::uint64_t>(reader);
+      if (!tick_number) {
+        goto malformed_message;
+      }
       const auto world_state_size = deserialize<std::uint16_t>(reader);
       if (!world_state_size) {
-        std::cerr << "Received malformed game_state message.\n";
-        return;
+        goto malformed_message;
       }
       const auto player_state_count = deserialize<std::uint8_t>(reader);
       if (!player_state_count) {
-        std::cerr << "Received malformed game_state message.\n";
-        return;
+        goto malformed_message;
       }
-      auto world_state_reader = serial::Span_reader{
-          reader.data().subspan(reader.offset(), *world_state_size)};
-      auto player_states_reader = serial::Span_reader{
-          reader.data().subspan(reader.offset() + *world_state_size)};
-      on_game_state(world_state_reader, player_states_reader,
+      auto world_state_reader =
+          reader.subspan_reader(reader.offset(), *world_state_size);
+      if (!world_state_reader) {
+        goto malformed_message;
+      }
+      auto player_states_reader =
+          reader.subspan_reader(reader.offset() + *world_state_size);
+      if (!player_states_reader) {
+        goto malformed_message;
+      }
+      on_game_state(*tick_number, *world_state_reader, *player_states_reader,
                     *player_state_count);
       return;
     }
@@ -136,9 +143,23 @@ void Client::handle_event(const enet::Event &e) {
       std::cerr << "Received packet with unexpected message type.\n";
       return;
     }
+    return;
+  malformed_message:
+    std::cerr << "Received malformed " << magic_enum::enum_name(*message_type)
+              << "message.\n";
+    return;
   }
   default:
     return;
   }
 }
+
+void Client::on_connect() {}
+
+void Client::on_disconnect() {}
+
+void Client::on_player_join_response(std::uint32_t) {}
+
+void Client::on_game_state(std::uint64_t, serial::Reader &, serial::Reader &,
+                           std::uint8_t) {}
 } // namespace fpsparty::net

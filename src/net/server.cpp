@@ -53,7 +53,7 @@ void Server::send_player_join_response(enet::Peer peer,
             }));
 }
 
-void Server::send_game_state(enet::Peer peer,
+void Server::send_game_state(enet::Peer peer, std::uint64_t tick_number,
                              std::span<const std::byte> world_state,
                              std::span<const std::byte> player_states,
                              std::size_t player_state_count) {
@@ -65,7 +65,8 @@ void Server::send_game_state(enet::Peer peer,
   });
   auto writer = serial::Span_writer{std::as_writable_bytes(packet->get_data())};
   using serial::serialize;
-  serialize<std::uint16_t>(writer, Message_type::game_state);
+  serialize<Message_type>(writer, Message_type::game_state);
+  serialize<std::uint64_t>(writer, tick_number);
   serialize<std::uint16_t>(writer, world_state.size());
   serialize<std::uint8_t>(writer, player_state_count);
   writer.write(world_state);

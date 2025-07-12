@@ -4,6 +4,7 @@
 #include "serial/reader.hpp"
 #include <cstddef>
 #include <cstring>
+#include <optional>
 #include <span>
 
 namespace fpsparty::serial {
@@ -22,6 +23,23 @@ public:
     } else {
       return false;
     }
+  }
+
+  std::optional<Span_reader>
+  subspan_reader(std::size_t offset,
+                 std::size_t count = std::dynamic_extent) const noexcept {
+    if (offset < _data.size() &&
+        (count == std::dynamic_extent || count <= _data.size() - offset)) {
+      return subspan_reader_unchecked(offset, count);
+    } else {
+      return std::nullopt;
+    }
+  }
+
+  Span_reader subspan_reader_unchecked(
+      std::size_t offset,
+      std::size_t count = std::dynamic_extent) const noexcept {
+    return Span_reader{_data.subspan(offset, count)};
   }
 
   std::span<const std::byte> data() const noexcept { return _data; }

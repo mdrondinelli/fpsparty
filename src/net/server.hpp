@@ -29,7 +29,8 @@ public:
   void send_player_join_response(enet::Peer peer,
                                  std::uint32_t player_network_id);
 
-  void send_game_state(enet::Peer peer, std::span<const std::byte> world_state,
+  void send_game_state(enet::Peer peer, std::uint64_t tick_number,
+                       std::span<const std::byte> world_state,
                        std::span<const std::byte> player_states,
                        std::size_t player_state_count);
 
