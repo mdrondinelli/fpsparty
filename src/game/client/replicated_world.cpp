@@ -1,6 +1,17 @@
 #include "replicated_world.hpp"
 
 namespace fpsparty::game {
+void Replicated_world::load(serial::Reader &reader) {
+  using serial::deserialize;
+  const auto humanoid_count = deserialize<std::uint8_t>(reader);
+  if (!humanoid_count) {
+    throw Replicated_world_load_error{};
+  }
+  for (auto i = std::uint8_t{}; i != humanoid_count; ++i) {
+    const auto network_id = deserialize<std::uint32_t>();
+  }
+}
+
 std::pmr::vector<rc::Strong<Replicated_player>> Replicated_world::get_players(
     std::pmr::memory_resource *memory_resource) const {
   auto retval =

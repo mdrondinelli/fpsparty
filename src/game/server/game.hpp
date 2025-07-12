@@ -5,6 +5,7 @@
 #include "game/server/player.hpp"
 #include "game/server/projectile.hpp"
 #include "game/server/world.hpp"
+#include "net/object_id.hpp"
 #include <Eigen/Dense>
 #include <exception>
 
@@ -38,7 +39,7 @@ private:
   rc::Factory<Humanoid> _humanoid_factory{};
   rc::Factory<Projectile> _projectile_factory{};
   std::uint64_t _tick_number{};
-  std::uint32_t _next_network_id{1};
+  net::Object_id _next_network_id{1};
   World _world{};
 };
 } // namespace fpsparty::game

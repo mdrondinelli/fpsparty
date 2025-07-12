@@ -8,6 +8,8 @@
 #include <vector>
 
 namespace fpsparty::game {
+class Replicated_world_load_error {};
+
 class Replicated_world {
 public:
   void load(serial::Reader &reader);

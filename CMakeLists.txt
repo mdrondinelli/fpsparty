@@ -47,8 +47,8 @@ target_link_libraries(game-server game-core)
 # libgame-client
 add_library(
   game-client
-  src/game/client/game.cpp
-  src/game/client/humanoid.cpp
+  src/game/client/replicated_game.cpp
+  src/game/client/replicated_world.cpp
 )
 target_include_directories(
   game-client

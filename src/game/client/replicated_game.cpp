@@ -1,7 +1,6 @@
 #include "replicated_game.hpp"
 #include "game/core/humanoid_movement.hpp"
 #include "game/core/projectile_movement.hpp"
-#include "serial/serialize.hpp"
 
 namespace fpsparty::game {
 void Replicated_game::tick(float duration) {

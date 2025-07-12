@@ -3,7 +3,8 @@
 
 #include "enet.hpp"
 #include "game/core/humanoid_input_state.hpp"
-#include "net/message_type.hpp"
+#include "net/object_id.hpp"
+#include "net/sequence_number.hpp"
 #include "serial/reader.hpp"
 
 namespace fpsparty::net {
@@ -30,10 +31,10 @@ public:
 
   void send_player_join_request();
 
-  void send_player_leave_request(std::uint32_t player_network_id);
+  void send_player_leave_request(Object_id player_network_id);
 
-  void send_player_input_state(std::uint32_t player_network_id,
-                               std::uint16_t input_sequence_number,
+  void send_player_input_state(Object_id player_network_id,
+                               Sequence_number input_sequence_number,
                                const game::Humanoid_input_state &input_state);
 
 protected:
@@ -41,9 +42,9 @@ protected:
 
   virtual void on_disconnect();
 
-  virtual void on_player_join_response(std::uint32_t player_network_id);
+  virtual void on_player_join_response(Object_id player_network_id);
 
-  virtual void on_game_state(std::uint64_t tick_number,
+  virtual void on_game_state(Sequence_number tick_number,
                              serial::Reader &world_state_reader,
                              serial::Reader &player_states_reader,
                              std::uint8_t player_state_count);
