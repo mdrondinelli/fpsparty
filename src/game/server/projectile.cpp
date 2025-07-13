@@ -1,4 +1,5 @@
 #include "projectile.hpp"
+#include "game/core/game_object_id.hpp"
 
 namespace fpsparty::game {
 Projectile::Creator_remove_listener::Creator_remove_listener(
@@ -9,9 +10,9 @@ void Projectile::Creator_remove_listener::on_remove_game_object() {
   projectile->_creator = nullptr;
 }
 
-Projectile::Projectile(std::uint32_t network_id,
+Projectile::Projectile(Game_object_id game_object_id,
                        const Projectile_create_info &info) noexcept
-    : _network_id{network_id},
+    : Game_object{game_object_id},
       _creator{info.creator},
       _creator_remove_listener{this},
       _position{info.position},
@@ -28,10 +29,6 @@ void Projectile::on_remove() {
   if (creator) {
     creator->remove_remove_listener(&_creator_remove_listener);
   }
-}
-
-std::uint32_t Projectile::get_network_id() const noexcept {
-  return _network_id;
 }
 
 const rc::Weak<Humanoid> &Projectile::get_creator() const noexcept {

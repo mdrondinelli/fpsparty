@@ -32,12 +32,13 @@ void Replicated_game::tick(float duration) {
 }
 
 void Replicated_game::load(const Replicated_game_load_info &info) {
+  using serial::deserialize;
   _tick_number = info.tick_number;
-  _world.load(*info.world_state_reader);
-}
-
-std::uint64_t Replicated_game::get_tick_number() const noexcept {
-  return _tick_number;
+  _world.load({
+      .public_state_reader = info.public_state_reader,
+      .player_state_reader = info.player_state_reader,
+      .player_state_count = info.player_state_count,
+  });
 }
 
 const Replicated_world &Replicated_game::get_world() const noexcept {
@@ -45,4 +46,8 @@ const Replicated_world &Replicated_game::get_world() const noexcept {
 }
 
 Replicated_world &Replicated_game::get_world() noexcept { return _world; }
+
+std::uint64_t Replicated_game::get_tick_number() const noexcept {
+  return _tick_number;
+}
 } // namespace fpsparty::game

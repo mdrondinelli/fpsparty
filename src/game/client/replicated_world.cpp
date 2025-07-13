@@ -1,15 +1,170 @@
 #include "replicated_world.hpp"
+#include "game/client/replicated_player.hpp"
+#include "game/client/replicated_projectile.hpp"
+#include "game/core/game_object.hpp"
+#include "game/core/game_object_id.hpp"
+#include "game/core/humanoid_input_state.hpp"
+#include "game/core/sequence_number.hpp"
+#include <algorithm>
 
 namespace fpsparty::game {
-void Replicated_world::load(serial::Reader &reader) {
+void Replicated_world::load(const Replicated_world_load_info &info) {
   using serial::deserialize;
-  const auto humanoid_count = deserialize<std::uint8_t>(reader);
+  const auto humanoid_count =
+      deserialize<std::uint8_t>(*info.public_state_reader);
   if (!humanoid_count) {
     throw Replicated_world_load_error{};
   }
+  auto temp_humanoids = std::vector<rc::Strong<Replicated_humanoid>>{};
+  temp_humanoids.reserve(*humanoid_count);
   for (auto i = std::uint8_t{}; i != humanoid_count; ++i) {
-    const auto network_id = deserialize<std::uint32_t>();
+    const auto game_object_id =
+        deserialize<Game_object_id>(*info.public_state_reader);
+    if (!game_object_id) {
+      throw Replicated_world_load_error{};
+    }
+    const auto position_x = deserialize<float>(*info.public_state_reader);
+    if (!position_x) {
+      throw Replicated_world_load_error{};
+    }
+    const auto position_y = deserialize<float>(*info.public_state_reader);
+    if (!position_y) {
+      throw Replicated_world_load_error{};
+    }
+    const auto position_z = deserialize<float>(*info.public_state_reader);
+    if (!position_z) {
+      throw Replicated_world_load_error{};
+    }
+    const auto input_state =
+        deserialize<Humanoid_input_state>(*info.public_state_reader);
+    if (!input_state) {
+      throw Replicated_world_load_error{};
+    }
+    auto humanoid = [&]() {
+      const auto existing_humanoid =
+          get_humanoid_by_game_object_id(*game_object_id);
+      return existing_humanoid ? existing_humanoid
+                               : _humanoid_factory.create(*game_object_id);
+    }();
+    humanoid->set_position({*position_x, *position_y, *position_z});
+    humanoid->set_input_state(*input_state);
+    temp_humanoids.emplace_back(std::move(humanoid));
   }
+  std::swap(_humanoids, temp_humanoids);
+  for (const auto &humanoid : temp_humanoids) {
+    if (!get_humanoid_by_game_object_id(humanoid->get_game_object_id())) {
+      detail::on_remove_game_object(*humanoid);
+    }
+  }
+  const auto projectile_count =
+      deserialize<std::uint16_t>(*info.public_state_reader);
+  if (!projectile_count) {
+    throw Replicated_world_load_error{};
+  }
+  auto temp_projectiles = std::vector<rc::Strong<Replicated_projectile>>{};
+  temp_projectiles.reserve(*projectile_count);
+  for (auto i = std::uint16_t{}; i != projectile_count; ++i) {
+    const auto game_object_id =
+        deserialize<Game_object_id>(*info.public_state_reader);
+    const auto position_x = deserialize<float>(*info.public_state_reader);
+    const auto position_y = deserialize<float>(*info.public_state_reader);
+    const auto position_z = deserialize<float>(*info.public_state_reader);
+    const auto velocity_x = deserialize<float>(*info.public_state_reader);
+    const auto velocity_y = deserialize<float>(*info.public_state_reader);
+    const auto velocity_z = deserialize<float>(*info.public_state_reader);
+    auto projectile = [&]() {
+      const auto existing_projectile =
+          get_projectile_by_game_object_id(*game_object_id);
+      return existing_projectile ? existing_projectile
+                                 : _projectile_factory.create(*game_object_id);
+    }();
+    projectile->set_position({*position_x, *position_y, *position_z});
+    projectile->set_velocity({*velocity_x, *velocity_y, *velocity_z});
+    temp_projectiles.emplace_back(std::move(projectile));
+  }
+  std::swap(_projectiles, temp_projectiles);
+  for (const auto &projectile : temp_projectiles) {
+    if (!get_projectile_by_game_object_id(projectile->get_game_object_id())) {
+      detail::on_remove_game_object(*projectile);
+    }
+  }
+  auto temp_players = std::vector<rc::Strong<Replicated_player>>{};
+  temp_players.reserve(info.player_state_count);
+  for (auto i = std::uint8_t{}; i != info.player_state_count; ++i) {
+    const auto game_object_id =
+        deserialize<Game_object_id>(*info.player_state_reader);
+    if (!game_object_id) {
+      throw Replicated_world_load_error{};
+    }
+    auto player = [&]() {
+      const auto existing_player =
+          get_player_by_game_object_id(*game_object_id);
+      return existing_player ? existing_player
+                             : _player_factory.create(*game_object_id);
+    }();
+    const auto humanoid_game_object_id =
+        deserialize<Game_object_id>(*info.player_state_reader);
+    if (!humanoid_game_object_id) {
+      throw Replicated_world_load_error{};
+    }
+    if (*humanoid_game_object_id) {
+      const auto humanoid =
+          get_humanoid_by_game_object_id(*humanoid_game_object_id);
+      if (!humanoid) {
+        throw Replicated_world_load_error{};
+      }
+      const auto input_state =
+          deserialize<Humanoid_input_state>(*info.player_state_reader);
+      if (!input_state) {
+        throw Replicated_world_load_error{};
+      }
+      const auto input_sequence_number =
+          deserialize<std::optional<Sequence_number>>(
+              *info.player_state_reader);
+      if (!input_sequence_number) {
+        throw Replicated_world_load_error{};
+      }
+      player->set_humanoid(humanoid);
+      player->set_input_state(*input_state);
+      player->set_input_sequence_number(*input_sequence_number);
+    }
+    temp_players.emplace_back(std::move(player));
+  }
+  std::swap(_players, temp_players);
+  for (const auto &player : temp_players) {
+    if (!get_player_by_game_object_id(player->get_game_object_id())) {
+      detail::on_remove_game_object(*player);
+    }
+  }
+}
+
+rc::Strong<Replicated_player> Replicated_world::get_player_by_game_object_id(
+    Game_object_id id) const noexcept {
+  const auto it = std::ranges::find_if(
+      _players, [id](const rc::Strong<Replicated_player> &x) {
+        return x->get_game_object_id() == id;
+      });
+  return it != _players.end() ? *it : nullptr;
+}
+
+rc::Strong<Replicated_humanoid>
+Replicated_world::get_humanoid_by_game_object_id(
+    Game_object_id id) const noexcept {
+  const auto it = std::ranges::find_if(
+      _humanoids, [id](const rc::Strong<Replicated_humanoid> &x) {
+        return x->get_game_object_id() == id;
+      });
+  return it != _humanoids.end() ? *it : nullptr;
+}
+
+rc::Strong<Replicated_projectile>
+Replicated_world::get_projectile_by_game_object_id(
+    Game_object_id id) const noexcept {
+  const auto it = std::ranges::find_if(
+      _projectiles, [id](const rc::Strong<Replicated_projectile> &x) {
+        return x->get_game_object_id() == id;
+      });
+  return it != _projectiles.end() ? *it : nullptr;
 }
 
 std::pmr::vector<rc::Strong<Replicated_player>> Replicated_world::get_players(

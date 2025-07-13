@@ -2,6 +2,7 @@
 #define FPSPARTY_GAME_PROJECTILE_HPP
 
 #include "game/core/game_object.hpp"
+#include "game/core/game_object_id.hpp"
 #include "game/server/humanoid.hpp"
 #include "rc.hpp"
 #include <Eigen/Dense>
@@ -15,12 +16,10 @@ struct Projectile_create_info {
 
 class Projectile : public Game_object, public rc::Object<Projectile> {
 public:
-  explicit Projectile(std::uint32_t network_id,
+  explicit Projectile(Game_object_id game_object_id,
                       const Projectile_create_info &info) noexcept;
 
   void on_remove() override;
-
-  std::uint32_t get_network_id() const noexcept;
 
   const rc::Weak<Humanoid> &get_creator() const noexcept;
 
@@ -41,7 +40,6 @@ private:
     void on_remove_game_object() override;
   };
 
-  std::uint32_t _network_id{};
   rc::Weak<Humanoid> _creator{};
   Creator_remove_listener _creator_remove_listener;
   Eigen::Vector3f _position{Eigen::Vector3f::Zero()};

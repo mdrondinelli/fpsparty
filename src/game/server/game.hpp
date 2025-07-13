@@ -1,11 +1,12 @@
 #ifndef FPSPARTY_GAME_GAME_HPP
 #define FPSPARTY_GAME_GAME_HPP
 
+#include "game/core/game_object_id.hpp"
+#include "game/core/sequence_number.hpp"
 #include "game/server/humanoid.hpp"
 #include "game/server/player.hpp"
 #include "game/server/projectile.hpp"
 #include "game/server/world.hpp"
-#include "net/object_id.hpp"
 #include <Eigen/Dense>
 #include <exception>
 
@@ -28,7 +29,7 @@ public:
 
   rc::Strong<Projectile> create_projectile(const Projectile_create_info &info);
 
-  std::uint64_t get_tick_number() const noexcept;
+  Sequence_number get_tick_number() const noexcept;
 
   const World &get_world() const noexcept;
 
@@ -38,8 +39,8 @@ private:
   rc::Factory<Player> _player_factory{};
   rc::Factory<Humanoid> _humanoid_factory{};
   rc::Factory<Projectile> _projectile_factory{};
-  std::uint64_t _tick_number{};
-  net::Object_id _next_network_id{1};
+  Sequence_number _tick_number{};
+  Game_object_id _next_network_id{1};
   World _world{};
 };
 } // namespace fpsparty::game

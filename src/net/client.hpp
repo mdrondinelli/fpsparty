@@ -2,9 +2,9 @@
 #define FPSPARTY_NET_CLIENT_H
 
 #include "enet.hpp"
+#include "game/core/game_object_id.hpp"
 #include "game/core/humanoid_input_state.hpp"
-#include "net/object_id.hpp"
-#include "net/sequence_number.hpp"
+#include "game/core/sequence_number.hpp"
 #include "serial/reader.hpp"
 
 namespace fpsparty::net {
@@ -31,10 +31,10 @@ public:
 
   void send_player_join_request();
 
-  void send_player_leave_request(Object_id player_network_id);
+  void send_player_leave_request(game::Game_object_id player_network_id);
 
-  void send_player_input_state(Object_id player_network_id,
-                               Sequence_number input_sequence_number,
+  void send_player_input_state(game::Game_object_id player_network_id,
+                               game::Sequence_number input_sequence_number,
                                const game::Humanoid_input_state &input_state);
 
 protected:
@@ -42,9 +42,9 @@ protected:
 
   virtual void on_disconnect();
 
-  virtual void on_player_join_response(Object_id player_network_id);
+  virtual void on_player_join_response(game::Game_object_id player_network_id);
 
-  virtual void on_game_state(Sequence_number tick_number,
+  virtual void on_game_state(game::Sequence_number tick_number,
                              serial::Reader &world_state_reader,
                              serial::Reader &player_states_reader,
                              std::uint8_t player_state_count);

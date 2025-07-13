@@ -2,11 +2,11 @@
 #include "game/core/constants.hpp"
 #include "game/core/humanoid_movement.hpp"
 #include "game/core/projectile_movement.hpp"
+#include "game/core/sequence_number.hpp"
 #include "math/transformation_matrices.hpp"
 #include "rc.hpp"
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
-#include <cstdint>
 
 namespace fpsparty::game {
 Game::Game(const Game_create_info &) {}
@@ -125,7 +125,7 @@ Game::create_projectile(const Projectile_create_info &info) {
   return _projectile_factory.create(_next_network_id++, info);
 }
 
-std::uint64_t Game::get_tick_number() const noexcept { return _tick_number; }
+Sequence_number Game::get_tick_number() const noexcept { return _tick_number; }
 
 const World &Game::get_world() const noexcept { return _world; }
 

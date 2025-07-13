@@ -1,13 +1,12 @@
 #include "humanoid.hpp"
+#include "game/core/game_object_id.hpp"
 
 namespace fpsparty::game {
-Humanoid::Humanoid(std::uint32_t network_id,
+Humanoid::Humanoid(Game_object_id game_object_id,
                    const Humanoid_create_info &) noexcept
-    : _network_id{network_id} {}
+    : Game_object{game_object_id} {}
 
 void Humanoid::on_remove() {}
-
-std::uint32_t Humanoid::get_network_id() const noexcept { return _network_id; }
 
 const Humanoid_input_state &Humanoid::get_input_state() const noexcept {
   return _input_state;

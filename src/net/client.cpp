@@ -1,6 +1,7 @@
 #include "client.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
+#include "game/core/game_object_id.hpp"
 #include "net/message_type.hpp"
 #include "serial/ostream_writer.hpp"
 #include "serial/serialize.hpp"
@@ -51,12 +52,12 @@ void Client::send_player_join_request() {
                }));
 }
 
-void Client::send_player_leave_request(Object_id player_network_id) {
+void Client::send_player_leave_request(game::Game_object_id player_network_id) {
   auto packet_writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<net::Message_type>(packet_writer,
                                net::Message_type::player_leave_request);
-  serialize<Object_id>(packet_writer, player_network_id);
+  serialize<game::Game_object_id>(packet_writer, player_network_id);
   _server.send(constants::player_initialization_channel_id,
                enet::create_packet_unique({
                    .data = packet_writer.stream().view().data(),
@@ -66,15 +67,16 @@ void Client::send_player_leave_request(Object_id player_network_id) {
 }
 
 void Client::send_player_input_state(
-    Object_id player_network_id, Sequence_number input_sequence_number,
+    game::Game_object_id player_network_id,
+    game::Sequence_number input_sequence_number,
     const game::Humanoid_input_state &input_state) {
   auto packet_writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<net::Message_type>(packet_writer,
                                net::Message_type::player_input_state);
   serialize<game::Humanoid_input_state>(packet_writer, input_state);
-  serialize<Object_id>(packet_writer, player_network_id);
-  serialize<Sequence_number>(packet_writer, input_sequence_number);
+  serialize<game::Game_object_id>(packet_writer, player_network_id);
+  serialize<game::Sequence_number>(packet_writer, input_sequence_number);
   _server.send(constants::player_input_state_channel_id,
                enet::create_packet_unique({
                    .data = packet_writer.stream().view().data(),
@@ -105,7 +107,7 @@ void Client::handle_event(const enet::Event &e) {
     }
     switch (*message_type) {
     case Message_type::player_join_response: {
-      const auto player_network_id = deserialize<Object_id>(reader);
+      const auto player_network_id = deserialize<game::Game_object_id>(reader);
       if (!player_network_id) {
         goto malformed_message;
       }
@@ -113,7 +115,7 @@ void Client::handle_event(const enet::Event &e) {
       return;
     }
     case Message_type::game_state: {
-      const auto tick_number = deserialize<Sequence_number>(reader);
+      const auto tick_number = deserialize<game::Sequence_number>(reader);
       if (!tick_number) {
         goto malformed_message;
       }
@@ -158,8 +160,8 @@ void Client::on_connect() {}
 
 void Client::on_disconnect() {}
 
-void Client::on_player_join_response(Object_id) {}
+void Client::on_player_join_response(game::Game_object_id) {}
 
-void Client::on_game_state(Sequence_number, serial::Reader &, serial::Reader &,
-                           std::uint8_t) {}
+void Client::on_game_state(game::Sequence_number, serial::Reader &,
+                           serial::Reader &, std::uint8_t) {}
 } // namespace fpsparty::net

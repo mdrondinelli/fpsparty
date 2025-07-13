@@ -1,24 +1,26 @@
 #include "player.hpp"
+#include "game/core/game_object_id.hpp"
+#include "game/core/sequence_number.hpp"
 
 namespace fpsparty::game {
-Player::Player(std::uint32_t network_id, const Player_create_info &) noexcept
-    : _network_id{network_id}, _humanoid_remove_listener{this} {}
+Player::Player(Game_object_id game_object_id,
+               const Player_create_info &) noexcept
+    : Game_object{game_object_id}, _humanoid_remove_listener{this} {}
 
 void Player::on_remove() { set_humanoid(nullptr); }
 
 void Player::dump(serial::Writer &writer) const {
   using serial::serialize;
-  serialize<std::uint32_t>(writer, _network_id);
+  serialize<Game_object_id>(writer, get_game_object_id());
   const auto humanoid = _humanoid.lock();
-  const auto humanoid_network_id = humanoid ? humanoid->get_network_id() : 0;
-  serialize<std::uint32_t>(writer, humanoid_network_id);
-  if (humanoid_network_id) {
+  const auto humanoid_game_object_id =
+      humanoid ? humanoid->get_game_object_id() : 0;
+  serialize<Game_object_id>(writer, humanoid_game_object_id);
+  if (humanoid_game_object_id) {
     serialize<Humanoid_input_state>(writer, _input_state);
-    serialize<std::optional<std::uint16_t>>(writer, _input_sequence_number);
+    serialize<std::optional<Sequence_number>>(writer, _input_sequence_number);
   }
 }
-
-std::uint32_t Player::get_network_id() const noexcept { return _network_id; }
 
 const rc::Weak<Humanoid> &Player::get_humanoid() const noexcept {
   return _humanoid;
@@ -40,13 +42,13 @@ const Humanoid_input_state &Player::get_input_state() const noexcept {
   return _input_state;
 }
 
-std::optional<std::uint16_t>
+std::optional<Sequence_number>
 Player::get_input_sequence_number() const noexcept {
   return _input_sequence_number;
 }
 
 void Player::set_input_state(const Humanoid_input_state &input_state,
-                             std::uint16_t input_sequence_number) noexcept {
+                             Sequence_number input_sequence_number) noexcept {
   if (_input_sequence_number) {
     const auto difference = static_cast<std::int16_t>(input_sequence_number -
                                                       *_input_sequence_number);

@@ -1,8 +1,9 @@
 #include "server.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
+#include "game/core/game_object_id.hpp"
+#include "game/core/sequence_number.hpp"
 #include "net/message_type.hpp"
-#include "net/sequence_number.hpp"
 #include "serial/ostream_writer.hpp"
 #include "serial/serialize.hpp"
 #include "serial/span_reader.hpp"
@@ -39,11 +40,11 @@ void Server::disconnect() {
 }
 
 void Server::send_player_join_response(enet::Peer peer,
-                                       Object_id player_network_id) {
+                                       game::Game_object_id player_network_id) {
   auto writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<Message_type>(writer, Message_type::player_join_response);
-  serialize<Object_id>(writer, player_network_id);
+  serialize<game::Game_object_id>(writer, player_network_id);
   peer.send(constants::player_initialization_channel_id,
             enet::create_packet_unique({
                 .data = writer.stream().view().data(),
@@ -52,20 +53,20 @@ void Server::send_player_join_response(enet::Peer peer,
             }));
 }
 
-void Server::send_game_state(enet::Peer peer, Sequence_number tick_number,
+void Server::send_game_state(enet::Peer peer, game::Sequence_number tick_number,
                              std::span<const std::byte> world_state,
                              std::span<const std::byte> player_states,
                              std::size_t player_state_count) {
   auto packet = enet::create_packet_unique({
       .data = nullptr,
-      .data_length = sizeof(Message_type) + sizeof(Sequence_number) +
+      .data_length = sizeof(Message_type) + sizeof(game::Sequence_number) +
                      sizeof(std::uint16_t) + sizeof(std::uint8_t) +
                      world_state.size() + player_states.size(),
   });
   auto writer = serial::Span_writer{std::as_writable_bytes(packet->get_data())};
   using serial::serialize;
   serialize<Message_type>(writer, Message_type::game_state);
-  serialize<Sequence_number>(writer, tick_number);
+  serialize<game::Sequence_number>(writer, tick_number);
   serialize<std::uint16_t>(writer, world_state.size());
   serialize<std::uint8_t>(writer, player_state_count);
   writer.write(world_state);
@@ -89,9 +90,10 @@ void Server::on_peer_disconnect(enet::Peer) {}
 
 void Server::on_player_join_request(enet::Peer) {}
 
-void Server::on_player_leave_request(enet::Peer, Object_id) {}
+void Server::on_player_leave_request(enet::Peer, game::Game_object_id) {}
 
-void Server::on_player_input_state(enet::Peer, Object_id, Sequence_number,
+void Server::on_player_input_state(enet::Peer, game::Game_object_id,
+                                   game::Sequence_number,
                                    const game::Humanoid_input_state &) {}
 
 void Server::handle_event(const enet::Event &e) {
@@ -121,7 +123,7 @@ void Server::handle_event(const enet::Event &e) {
       return;
     }
     case Message_type::player_leave_request: {
-      const auto player_network_id = deserialize<Object_id>(reader);
+      const auto player_network_id = deserialize<game::Game_object_id>(reader);
       if (!player_network_id) {
         std::cerr << "Malformed player leave request packet.\n";
         return;
@@ -130,12 +132,13 @@ void Server::handle_event(const enet::Event &e) {
       return;
     }
     case Message_type::player_input_state: {
-      const auto player_network_id = deserialize<Object_id>(reader);
+      const auto player_network_id = deserialize<game::Game_object_id>(reader);
       if (!player_network_id) {
         std::cerr << "Malformed player input state packet.\n";
         return;
       }
-      const auto input_sequence_number = deserialize<Sequence_number>(reader);
+      const auto input_sequence_number =
+          deserialize<game::Sequence_number>(reader);
       if (!input_sequence_number) {
         std::cerr << "Malformed player input state packet.\n";
         return;

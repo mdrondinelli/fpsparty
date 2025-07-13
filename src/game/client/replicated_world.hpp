@@ -5,14 +5,31 @@
 #include "game/client/replicated_player.hpp"
 #include "game/client/replicated_projectile.hpp"
 #include "rc.hpp"
+#include "serial/reader.hpp"
+#include <exception>
 #include <vector>
 
 namespace fpsparty::game {
-class Replicated_world_load_error {};
+struct Replicated_world_load_info {
+  serial::Reader *public_state_reader{};
+  serial::Reader *player_state_reader{};
+  std::uint8_t player_state_count{};
+};
+
+class Replicated_world_load_error : public std::exception {};
 
 class Replicated_world {
 public:
-  void load(serial::Reader &reader);
+  void load(const Replicated_world_load_info &info);
+
+  rc::Strong<Replicated_player>
+  get_player_by_game_object_id(Game_object_id id) const noexcept;
+
+  rc::Strong<Replicated_humanoid>
+  get_humanoid_by_game_object_id(Game_object_id id) const noexcept;
+
+  rc::Strong<Replicated_projectile>
+  get_projectile_by_game_object_id(Game_object_id id) const noexcept;
 
   std::pmr::vector<rc::Strong<Replicated_player>>
   get_players(std::pmr::memory_resource *memory_resource =
@@ -33,6 +50,9 @@ public:
   std::size_t get_projectile_count() const noexcept;
 
 private:
+  rc::Factory<Replicated_player> _player_factory{};
+  rc::Factory<Replicated_humanoid> _humanoid_factory{};
+  rc::Factory<Replicated_projectile> _projectile_factory{};
   std::vector<rc::Strong<Replicated_player>> _players{};
   std::vector<rc::Strong<Replicated_humanoid>> _humanoids{};
   std::vector<rc::Strong<Replicated_projectile>> _projectiles{};

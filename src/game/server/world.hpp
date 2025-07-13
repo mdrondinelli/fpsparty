@@ -44,8 +44,6 @@ public:
   std::size_t get_projectile_count() const noexcept;
 
 private:
-  void on_remove(Game_object &game_object);
-
   std::vector<rc::Strong<Player>> _players{};
   std::vector<rc::Strong<Humanoid>> _humanoids{};
   std::vector<rc::Strong<Projectile>> _projectiles{};

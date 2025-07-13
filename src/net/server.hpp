@@ -2,9 +2,9 @@
 #define FPSPARTY_NET_SERVER_HPP
 
 #include "enet.hpp"
+#include "game/core/game_object_id.hpp"
 #include "game/core/humanoid_input_state.hpp"
-#include "net/object_id.hpp"
-#include "net/sequence_number.hpp"
+#include "game/core/sequence_number.hpp"
 #include <cstdint>
 #include <memory_resource>
 
@@ -28,9 +28,10 @@ public:
 
   void disconnect();
 
-  void send_player_join_response(enet::Peer peer, Object_id player_network_id);
+  void send_player_join_response(enet::Peer peer,
+                                 game::Game_object_id player_network_id);
 
-  void send_game_state(enet::Peer peer, Sequence_number tick_number,
+  void send_game_state(enet::Peer peer, game::Sequence_number tick_number,
                        std::span<const std::byte> world_state,
                        std::span<const std::byte> player_states,
                        std::size_t player_state_count);
@@ -49,11 +50,11 @@ protected:
   virtual void on_player_join_request(enet::Peer);
 
   virtual void on_player_leave_request(enet::Peer peer,
-                                       Object_id player_network_id);
+                                       game::Game_object_id player_network_id);
 
   virtual void
-  on_player_input_state(enet::Peer peer, Object_id player_network_id,
-                        Sequence_number input_sequence_number,
+  on_player_input_state(enet::Peer peer, game::Game_object_id player_network_id,
+                        game::Sequence_number input_sequence_number,
                         const game::Humanoid_input_state &input_state);
 
 private:
