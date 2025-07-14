@@ -29,7 +29,7 @@ public:
   void disconnect();
 
   void send_player_join_response(enet::Peer peer,
-                                 game::Game_object_id player_network_id);
+                                 game::Game_object_id player_game_object_id);
 
   void send_game_state(enet::Peer peer, game::Sequence_number tick_number,
                        std::span<const std::byte> world_state,
@@ -49,11 +49,13 @@ protected:
 
   virtual void on_player_join_request(enet::Peer);
 
-  virtual void on_player_leave_request(enet::Peer peer,
-                                       game::Game_object_id player_network_id);
+  virtual void
+  on_player_leave_request(enet::Peer peer,
+                          game::Game_object_id player_game_object_id);
 
   virtual void
-  on_player_input_state(enet::Peer peer, game::Game_object_id player_network_id,
+  on_player_input_state(enet::Peer peer,
+                        game::Game_object_id player_game_object_id,
                         game::Sequence_number input_sequence_number,
                         const game::Humanoid_input_state &input_state);
 

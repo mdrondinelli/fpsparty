@@ -102,11 +102,11 @@ protected:
 
   void
   on_player_leave_request(enet::Peer peer,
-                          game::Game_object_id player_network_id) override {
+                          game::Game_object_id player_game_object_id) override {
     const auto peer_node = static_cast<Peer_node *>(peer.get_data());
     for (auto it = peer_node->players.begin();
          it != peer_node->players.end();) {
-      if ((*it)->get_game_object_id() == player_network_id) {
+      if ((*it)->get_game_object_id() == player_game_object_id) {
         const auto humanoid = (*it)->get_humanoid().lock();
         if (humanoid) {
           _game.get_world().remove(humanoid);
@@ -120,12 +120,12 @@ protected:
   }
 
   void on_player_input_state(
-      enet::Peer peer, game::Game_object_id player_network_id,
+      enet::Peer peer, game::Game_object_id player_game_object_id,
       game::Sequence_number input_sequence_number,
       const game::Humanoid_input_state &input_state) override {
     const auto peer_node = static_cast<Peer_node *>(peer.get_data());
     for (const auto &player : peer_node->players) {
-      if (player->get_game_object_id() == player_network_id) {
+      if (player->get_game_object_id() == player_game_object_id) {
         player->set_input_state(input_state, input_sequence_number);
       }
     }

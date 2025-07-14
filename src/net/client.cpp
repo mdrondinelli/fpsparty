@@ -52,12 +52,13 @@ void Client::send_player_join_request() {
                }));
 }
 
-void Client::send_player_leave_request(game::Game_object_id player_network_id) {
+void Client::send_player_leave_request(
+    game::Game_object_id player_game_object_id) {
   auto packet_writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<net::Message_type>(packet_writer,
                                net::Message_type::player_leave_request);
-  serialize<game::Game_object_id>(packet_writer, player_network_id);
+  serialize<game::Game_object_id>(packet_writer, player_game_object_id);
   _server.send(constants::player_initialization_channel_id,
                enet::create_packet_unique({
                    .data = packet_writer.stream().view().data(),
@@ -67,14 +68,14 @@ void Client::send_player_leave_request(game::Game_object_id player_network_id) {
 }
 
 void Client::send_player_input_state(
-    game::Game_object_id player_network_id,
+    game::Game_object_id player_game_object_id,
     game::Sequence_number input_sequence_number,
     const game::Humanoid_input_state &input_state) {
   auto packet_writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<net::Message_type>(packet_writer,
                                net::Message_type::player_input_state);
-  serialize<game::Game_object_id>(packet_writer, player_network_id);
+  serialize<game::Game_object_id>(packet_writer, player_game_object_id);
   serialize<game::Sequence_number>(packet_writer, input_sequence_number);
   serialize<game::Humanoid_input_state>(packet_writer, input_state);
   _server.send(constants::player_input_state_channel_id,
@@ -107,11 +108,12 @@ void Client::handle_event(const enet::Event &e) {
     }
     switch (*message_type) {
     case Message_type::player_join_response: {
-      const auto player_network_id = deserialize<game::Game_object_id>(reader);
-      if (!player_network_id) {
+      const auto player_game_object_id =
+          deserialize<game::Game_object_id>(reader);
+      if (!player_game_object_id) {
         goto malformed_message;
       }
-      on_player_join_response(*player_network_id);
+      on_player_join_response(*player_game_object_id);
       return;
     }
     case Message_type::game_state: {

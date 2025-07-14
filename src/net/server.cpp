@@ -39,12 +39,12 @@ void Server::disconnect() {
   }
 }
 
-void Server::send_player_join_response(enet::Peer peer,
-                                       game::Game_object_id player_network_id) {
+void Server::send_player_join_response(
+    enet::Peer peer, game::Game_object_id player_game_object_id) {
   auto writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<Message_type>(writer, Message_type::player_join_response);
-  serialize<game::Game_object_id>(writer, player_network_id);
+  serialize<game::Game_object_id>(writer, player_game_object_id);
   peer.send(constants::player_initialization_channel_id,
             enet::create_packet_unique({
                 .data = writer.stream().view().data(),
@@ -123,12 +123,13 @@ void Server::handle_event(const enet::Event &e) {
       return;
     }
     case Message_type::player_leave_request: {
-      const auto player_network_id = deserialize<game::Game_object_id>(reader);
-      if (!player_network_id) {
+      const auto player_game_object_id =
+          deserialize<game::Game_object_id>(reader);
+      if (!player_game_object_id) {
         std::cerr << "Malformed player leave request packet.\n";
         return;
       }
-      on_player_leave_request(e.peer, *player_network_id);
+      on_player_leave_request(e.peer, *player_game_object_id);
       return;
     }
     case Message_type::player_input_state: {

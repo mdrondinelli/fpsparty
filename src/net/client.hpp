@@ -31,9 +31,9 @@ public:
 
   void send_player_join_request();
 
-  void send_player_leave_request(game::Game_object_id player_network_id);
+  void send_player_leave_request(game::Game_object_id player_game_object_id);
 
-  void send_player_input_state(game::Game_object_id player_network_id,
+  void send_player_input_state(game::Game_object_id player_game_object_id,
                                game::Sequence_number input_sequence_number,
                                const game::Humanoid_input_state &input_state);
 
@@ -42,7 +42,8 @@ protected:
 
   virtual void on_disconnect();
 
-  virtual void on_player_join_response(game::Game_object_id player_network_id);
+  virtual void
+  on_player_join_response(game::Game_object_id player_game_object_id);
 
   virtual void on_game_state(game::Sequence_number tick_number,
                              serial::Reader &public_state_reader,

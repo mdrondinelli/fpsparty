@@ -40,7 +40,7 @@ private:
   rc::Factory<Humanoid> _humanoid_factory{};
   rc::Factory<Projectile> _projectile_factory{};
   Sequence_number _tick_number{};
-  Game_object_id _next_network_id{1};
+  Game_object_id _next_game_object_id{1};
   World _world{};
 };
 } // namespace fpsparty::game

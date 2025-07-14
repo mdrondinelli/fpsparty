@@ -113,16 +113,16 @@ void Game::tick(float duration) {
 }
 
 rc::Strong<Player> Game::create_player(const Player_create_info &info) {
-  return _player_factory.create(_next_network_id++, info);
+  return _player_factory.create(_next_game_object_id++, info);
 }
 
 rc::Strong<Humanoid> Game::create_humanoid(const Humanoid_create_info &info) {
-  return _humanoid_factory.create(_next_network_id++, info);
+  return _humanoid_factory.create(_next_game_object_id++, info);
 }
 
 rc::Strong<Projectile>
 Game::create_projectile(const Projectile_create_info &info) {
-  return _projectile_factory.create(_next_network_id++, info);
+  return _projectile_factory.create(_next_game_object_id++, info);
 }
 
 Sequence_number Game::get_tick_number() const noexcept { return _tick_number; }
