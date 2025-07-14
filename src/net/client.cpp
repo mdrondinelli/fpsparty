@@ -117,27 +117,32 @@ void Client::handle_event(const enet::Event &e) {
     case Message_type::game_state: {
       const auto tick_number = deserialize<game::Sequence_number>(reader);
       if (!tick_number) {
+        std::cerr << "Failed to deserialize tick_number.\n";
         goto malformed_message;
       }
-      const auto world_state_size = deserialize<std::uint16_t>(reader);
-      if (!world_state_size) {
+      const auto public_state_size = deserialize<std::uint16_t>(reader);
+      if (!public_state_size) {
+        std::cerr << "Failed to deserialize public_state_size.\n";
         goto malformed_message;
       }
       const auto player_state_count = deserialize<std::uint8_t>(reader);
       if (!player_state_count) {
+        std::cerr << "Failed to deserialize player_state_count.\n";
         goto malformed_message;
       }
-      auto world_state_reader =
-          reader.subspan_reader(reader.offset(), *world_state_size);
-      if (!world_state_reader) {
+      auto public_state_reader =
+          reader.subspan_reader(reader.offset(), *public_state_size);
+      if (!public_state_reader) {
+        std::cerr << "Failed to obtain public_state_reader.\n";
         goto malformed_message;
       }
-      auto player_states_reader =
-          reader.subspan_reader(reader.offset() + *world_state_size);
-      if (!player_states_reader) {
+      auto player_state_reader =
+          reader.subspan_reader(reader.offset() + *public_state_size);
+      if (!player_state_reader) {
+        std::cerr << "Failed to obtain player_state_reader.\n";
         goto malformed_message;
       }
-      on_game_state(*tick_number, *world_state_reader, *player_states_reader,
+      on_game_state(*tick_number, *public_state_reader, *player_state_reader,
                     *player_state_count);
       return;
     }
@@ -148,7 +153,7 @@ void Client::handle_event(const enet::Event &e) {
     return;
   malformed_message:
     std::cerr << "Received malformed " << magic_enum::enum_name(*message_type)
-              << "message.\n";
+              << " message.\n";
     return;
   }
   default:

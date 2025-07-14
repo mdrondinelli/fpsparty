@@ -3,6 +3,8 @@
 #include "game/core/projectile_movement.hpp"
 
 namespace fpsparty::game {
+Replicated_game::Replicated_game(const Replicated_game_create_info &) {}
+
 void Replicated_game::tick(float duration) {
   const auto players = _world.get_players();
   for (const auto &player : players) {
@@ -39,6 +41,11 @@ void Replicated_game::load(const Replicated_game_load_info &info) {
       .player_state_reader = info.player_state_reader,
       .player_state_count = info.player_state_count,
   });
+}
+
+void Replicated_game::reset() {
+  _world.reset();
+  _tick_number = 0;
 }
 
 const Replicated_world &Replicated_game::get_world() const noexcept {

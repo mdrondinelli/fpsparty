@@ -18,7 +18,7 @@ public:
       : _data{data}, _offset{} {}
 
   void write(std::span<std::byte const> data) override {
-    if (_offset + data.size() <= data.size()) {
+    if (_offset + data.size() <= _data.size()) {
       std::memcpy(_data.data() + _offset, data.data(), data.size());
       _offset += data.size();
     } else {

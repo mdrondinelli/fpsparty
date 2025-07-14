@@ -1,5 +1,7 @@
 #include "constants.hpp"
 #include "enet.hpp"
+#include "game/core/game_object_id.hpp"
+#include "game/core/sequence_number.hpp"
 #include "game/server/game.hpp"
 #include "net/constants.hpp"
 #include "net/server.hpp"
@@ -36,7 +38,7 @@ public:
     _tick_timer -= duration;
     if (_tick_timer <= 0.0f) {
       _tick_timer += constants::tick_duration;
-      _game.tick({.duration = constants::tick_duration});
+      _game.tick(constants::tick_duration);
       return true;
     } else {
       return false;
@@ -44,8 +46,8 @@ public:
   }
 
   void broadcast_game_state() {
-    auto world_state_writer = serial::Ostringstream_writer{};
-    _game.get_world().dump(world_state_writer);
+    auto public_state_writer = serial::Ostringstream_writer{};
+    _game.get_world().dump(public_state_writer);
     for (const auto &peer : get_peers()) {
       auto player_state_writer = serial::Ostringstream_writer{};
       const auto peer_node = static_cast<Peer_node *>(peer.get_data());
@@ -54,10 +56,10 @@ public:
         player->dump(player_state_writer);
       }
       net::Server::send_game_state(
-          peer,
+          peer, _game.get_tick_number(),
           std::as_bytes(std::span{
-              world_state_writer.stream().view().data(),
-              world_state_writer.stream().view().size(),
+              public_state_writer.stream().view().data(),
+              public_state_writer.stream().view().size(),
           }),
           std::as_bytes(std::span{
               player_state_writer.stream().view().data(),
@@ -98,14 +100,16 @@ protected:
     const auto player = _game.create_player({});
     peer_node->players.emplace_back(player);
     _game.get_world().add(player);
+    send_player_join_response(peer, player->get_game_object_id());
   }
 
-  void on_player_leave_request(enet::Peer peer,
-                               std::uint32_t player_network_id) override {
+  void
+  on_player_leave_request(enet::Peer peer,
+                          game::Game_object_id player_network_id) override {
     const auto peer_node = static_cast<Peer_node *>(peer.get_data());
     for (auto it = peer_node->players.begin();
          it != peer_node->players.end();) {
-      if ((*it)->get_network_id() == player_network_id) {
+      if ((*it)->get_game_object_id() == player_network_id) {
         const auto humanoid = (*it)->get_humanoid().lock();
         if (humanoid) {
           _game.get_world().remove(humanoid);
@@ -119,12 +123,12 @@ protected:
   }
 
   void on_player_input_state(
-      enet::Peer peer, std::uint32_t player_network_id,
-      std::uint16_t input_sequence_number,
+      enet::Peer peer, game::Game_object_id player_network_id,
+      game::Sequence_number input_sequence_number,
       const game::Humanoid_input_state &input_state) override {
     const auto peer_node = static_cast<Peer_node *>(peer.get_data());
     for (const auto &player : peer_node->players) {
-      if (player->get_network_id() == player_network_id) {
+      if (player->get_game_object_id() == player_network_id) {
         player->set_input_state(input_state, input_sequence_number);
       }
     }

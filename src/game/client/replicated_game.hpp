@@ -7,6 +7,8 @@
 #include <exception>
 
 namespace fpsparty::game {
+struct Replicated_game_create_info {};
+
 struct Replicated_game_load_info {
   Sequence_number tick_number{};
   serial::Reader *public_state_reader{};
@@ -18,9 +20,13 @@ class Replicated_game_load_error : public std::exception {};
 
 class Replicated_game {
 public:
+  explicit Replicated_game(const Replicated_game_create_info &info);
+
   void tick(float duration);
 
   void load(const Replicated_game_load_info &info);
+
+  void reset();
 
   const Replicated_world &get_world() const noexcept;
 

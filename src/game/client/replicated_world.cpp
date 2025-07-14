@@ -138,6 +138,24 @@ void Replicated_world::load(const Replicated_world_load_info &info) {
   }
 }
 
+void Replicated_world::reset() {
+  while (!_players.empty()) {
+    const auto player = std::move(_players.back());
+    detail::on_remove_game_object(*player);
+    _players.pop_back();
+  }
+  while (!_humanoids.empty()) {
+    const auto humanoid = std::move(_humanoids.back());
+    detail::on_remove_game_object(*humanoid);
+    _humanoids.pop_back();
+  }
+  while (!_projectiles.empty()) {
+    const auto projectile = std::move(_humanoids.back());
+    detail::on_remove_game_object(*projectile);
+    _projectiles.pop_back();
+  }
+}
+
 rc::Strong<Replicated_player> Replicated_world::get_player_by_game_object_id(
     Game_object_id id) const noexcept {
   const auto it = std::ranges::find_if(

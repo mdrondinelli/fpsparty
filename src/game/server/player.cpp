@@ -3,6 +3,14 @@
 #include "game/core/sequence_number.hpp"
 
 namespace fpsparty::game {
+Player::Humanoid_remove_listener::Humanoid_remove_listener(
+    Player *player) noexcept
+    : _player{player} {}
+
+void Player::Humanoid_remove_listener::on_remove_game_object() {
+  _player->set_humanoid(nullptr);
+}
+
 Player::Player(Game_object_id game_object_id,
                const Player_create_info &) noexcept
     : Game_object{game_object_id}, _humanoid_remove_listener{this} {}

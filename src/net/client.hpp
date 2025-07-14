@@ -45,8 +45,8 @@ protected:
   virtual void on_player_join_response(game::Game_object_id player_network_id);
 
   virtual void on_game_state(game::Sequence_number tick_number,
-                             serial::Reader &world_state_reader,
-                             serial::Reader &player_states_reader,
+                             serial::Reader &public_state_reader,
+                             serial::Reader &player_state_reader,
                              std::uint8_t player_state_count);
 
 private:

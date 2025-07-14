@@ -35,7 +35,7 @@ public:
 private:
   class Humanoid_remove_listener : public Game_object_remove_listener {
   public:
-    explicit Humanoid_remove_listener(Replicated_player *player);
+    explicit Humanoid_remove_listener(Replicated_player *player) noexcept;
 
     void on_remove_game_object() override;
 

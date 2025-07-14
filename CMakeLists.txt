@@ -49,6 +49,9 @@ add_library(
   game-client
   src/game/client/replicated_game.cpp
   src/game/client/replicated_world.cpp
+  src/game/client/replicated_player.cpp
+  src/game/client/replicated_humanoid.cpp
+  src/game/client/replicated_projectile.cpp
 )
 target_include_directories(
   game-client

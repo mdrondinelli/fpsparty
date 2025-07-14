@@ -54,23 +54,23 @@ void Server::send_player_join_response(enet::Peer peer,
 }
 
 void Server::send_game_state(enet::Peer peer, game::Sequence_number tick_number,
-                             std::span<const std::byte> world_state,
-                             std::span<const std::byte> player_states,
+                             std::span<const std::byte> public_state,
+                             std::span<const std::byte> player_state,
                              std::size_t player_state_count) {
   auto packet = enet::create_packet_unique({
       .data = nullptr,
       .data_length = sizeof(Message_type) + sizeof(game::Sequence_number) +
                      sizeof(std::uint16_t) + sizeof(std::uint8_t) +
-                     world_state.size() + player_states.size(),
+                     public_state.size() + player_state.size(),
   });
   auto writer = serial::Span_writer{std::as_writable_bytes(packet->get_data())};
   using serial::serialize;
   serialize<Message_type>(writer, Message_type::game_state);
   serialize<game::Sequence_number>(writer, tick_number);
-  serialize<std::uint16_t>(writer, world_state.size());
+  serialize<std::uint16_t>(writer, public_state.size());
   serialize<std::uint8_t>(writer, player_state_count);
-  writer.write(world_state);
-  writer.write(player_states);
+  writer.write(public_state);
+  writer.write(player_state);
   peer.send(constants::game_state_channel_id, std::move(packet));
 }
 

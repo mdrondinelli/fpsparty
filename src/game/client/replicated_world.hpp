@@ -20,7 +20,15 @@ class Replicated_world_load_error : public std::exception {};
 
 class Replicated_world {
 public:
+  Replicated_world() = default;
+
+  Replicated_world(const Replicated_world &other) = delete;
+
+  Replicated_world &operator=(const Replicated_world &other) = delete;
+
   void load(const Replicated_world_load_info &info);
+
+  void reset();
 
   rc::Strong<Replicated_player>
   get_player_by_game_object_id(Game_object_id id) const noexcept;

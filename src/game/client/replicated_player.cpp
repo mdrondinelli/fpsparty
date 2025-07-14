@@ -1,6 +1,14 @@
 #include "replicated_player.hpp"
 
 namespace fpsparty::game {
+Replicated_player::Humanoid_remove_listener::Humanoid_remove_listener(
+    Replicated_player *player) noexcept
+    : _player{player} {}
+
+void Replicated_player::Humanoid_remove_listener::on_remove_game_object() {
+  _player->set_humanoid(nullptr);
+}
+
 Replicated_player::Replicated_player(Game_object_id game_object_id)
     : Game_object{game_object_id}, _humanoid_remove_listener{this} {}
 

@@ -4,7 +4,8 @@
 #include "client/vertex_buffer.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
-#include "game_replica/game.hpp"
+#include "game/client/replicated_game.hpp"
+#include "game/core/game_object_id.hpp"
 #include "glfw.hpp"
 #include "math/transformation_matrices.hpp"
 #include "net/client.hpp"
@@ -31,7 +32,7 @@ DispatchLoaderDynamic defaultDispatchLoaderDynamic;
 }
 
 namespace {
-constexpr auto server_ip = "192.168.1.65";
+constexpr auto server_ip = "127.0.0.1";
 
 volatile std::sig_atomic_t signal_status{};
 void handle_signal(int signal) { signal_status = signal; }
@@ -183,15 +184,16 @@ public:
 
   void render() {
     if (_graphics.begin()) {
-      const auto player = _player_id
-                              ? _game->get_humanoid_by_network_id(*_player_id)
-                              : game_replica::Humanoid{};
-      if (player) {
+      const auto player = get_player();
+      const auto player_humanoid =
+          player ? player->get_humanoid().lock() : nullptr;
+      if (player_humanoid) {
         const auto view_matrix =
-            (math::x_rotation_matrix(-player.get_input_state().pitch) *
-             math::y_rotation_matrix(-player.get_input_state().yaw) *
-             math::translation_matrix(
-                 -(player.get_position() + Eigen::Vector3f::UnitY() * 1.7f)))
+            (math::x_rotation_matrix(
+                 -player_humanoid->get_input_state().pitch) *
+             math::y_rotation_matrix(-player_humanoid->get_input_state().yaw) *
+             math::translation_matrix(-(player_humanoid->get_position() +
+                                        Eigen::Vector3f::UnitY() * 1.7f)))
                 .eval();
         const auto framebuffer_size = _glfw_window.get_framebuffer_size();
         const auto framebuffer_aspect =
@@ -214,12 +216,13 @@ public:
         _graphics.bind_index_buffer(_cube_index_buffer.get_buffer(),
                                     vk::IndexType::eUint16);
         // draw other players (cubes)
-        for (const auto &other_player : _game->get_humanoids()) {
-          if (other_player != player) {
+        for (const auto &other_humanoid : _game.get_world().get_humanoids()) {
+          if (other_humanoid != player_humanoid) {
             const auto model_matrix =
-                (math::translation_matrix(other_player.get_position() +
+                (math::translation_matrix(other_humanoid->get_position() +
                                           Eigen::Vector3f::UnitY() * 0.9f) *
-                 math::y_rotation_matrix(other_player.get_input_state().yaw) *
+                 math::y_rotation_matrix(
+                     other_humanoid->get_input_state().yaw) *
                  math::axis_aligned_scale_matrix({0.7f, 1.8f, 0.7f}))
                     .eval();
             const auto model_view_projection_matrix =
@@ -229,9 +232,9 @@ public:
           }
         }
         // draw projectiles (cubes)
-        for (const auto &projectile : _game->get_projectiles()) {
+        for (const auto &projectile : _game.get_world().get_projectiles()) {
           const auto model_matrix =
-              (math::translation_matrix(projectile.get_position()) *
+              (math::translation_matrix(projectile->get_position()) *
                math::uniform_scale_matrix(0.25f))
                   .eval();
           const auto model_view_projection_matrix =
@@ -251,7 +254,7 @@ public:
       _tick_timer += constants::tick_duration;
       const auto player = get_player();
       if (player) {
-        auto input_state = player.get_input_state();
+        auto input_state = player->get_input_state();
         input_state.move_left =
             _glfw_window.get_key(glfw::Key::k_a) == glfw::Press_state::press;
         input_state.move_right =
@@ -263,14 +266,15 @@ public:
         input_state.use_primary =
             _glfw_window.get_mouse_button(glfw::Mouse_button::mb_left) ==
             glfw::Press_state::press;
-        net::Client::send_player_input_state(input_state,
-                                             _input_sequence_number);
+        net::Client::send_player_input_state(
+            *_player_id, _input_sequence_number, input_state);
         _in_flight_input_states.emplace_back(input_state,
                                              _input_sequence_number);
-        player.set_input_state(input_state, _input_sequence_number);
+        player->set_input_state(input_state);
+        player->set_input_sequence_number(_input_sequence_number);
         ++_input_sequence_number;
       }
-      _game->simulate({.duration = constants::tick_duration});
+      _game.tick(constants::tick_duration);
     }
   }
 
@@ -288,9 +292,10 @@ public:
 
   bool has_game_state() const noexcept { return _has_game_state; }
 
-  game_replica::Humanoid get_player() const noexcept {
-    return _player_id ? _game->get_humanoid_by_network_id(*_player_id)
-                      : game_replica::Humanoid{};
+  rc::Strong<game::Replicated_player> get_player() const noexcept {
+    return _player_id
+               ? _game.get_world().get_player_by_game_object_id(*_player_id)
+               : nullptr;
   }
 
   constexpr glfw::Window get_window() const noexcept { return _glfw_window; }
@@ -300,24 +305,32 @@ protected:
 
   void on_disconnect() override {
     _player_id = std::nullopt;
-    _game->clear();
+    _game.reset();
     _has_game_state = false;
     _tick_timer = 0.0f;
     _input_sequence_number = 0;
     _in_flight_input_states.clear();
   }
 
-  void on_player_id(std::uint32_t player_id) override {
+  void on_player_join_response(game::Game_object_id player_id) override {
     _player_id = player_id;
-    std::cout << "Got player id: " << player_id << ".\n";
+    std::cout << "Got player join response. id = " << player_id << ".\n";
   }
 
-  void on_game_state(serial::Reader &reader) override {
+  void on_game_state(game::Sequence_number tick_number,
+                     serial::Reader &public_state_reader,
+                     serial::Reader &player_state_reader,
+                     std::uint8_t player_state_count) override {
     _has_game_state = true;
-    _game->apply_snapshot(reader);
+    _game.load({
+        .tick_number = tick_number,
+        .public_state_reader = &public_state_reader,
+        .player_state_reader = &player_state_reader,
+        .player_state_count = player_state_count,
+    });
     if (const auto player = get_player()) {
       const auto acknowledged_input_sequence_number =
-          player.get_input_sequence_number();
+          player->get_input_sequence_number();
       if (acknowledged_input_sequence_number) {
         while (_in_flight_input_states.size() > 0 &&
                _in_flight_input_states[0].second <=
@@ -327,8 +340,9 @@ protected:
       }
       for (const auto &[input_state, input_sequence_number] :
            _in_flight_input_states) {
-        player.set_input_state(input_state, input_sequence_number);
-        _game->simulate({.duration = constants::tick_duration});
+        player->set_input_state(input_state);
+        player->set_input_sequence_number(input_sequence_number);
+        _game.tick(constants::tick_duration);
       }
     }
   }
@@ -353,7 +367,7 @@ protected:
     if (const auto player = get_player()) {
       if (_glfw_window.get_cursor_input_mode() ==
           glfw::Cursor_input_mode::disabled) {
-        auto input_state = player.get_input_state();
+        auto input_state = player->get_input_state();
         input_state.yaw -=
             static_cast<float>(dxpos * constants::mouselook_sensititvity);
         input_state.pitch +=
@@ -361,7 +375,7 @@ protected:
         input_state.pitch =
             std::clamp(input_state.pitch, -0.5f * std::numbers::pi_v<float>,
                        0.5f * std::numbers::pi_v<float>);
-        player.set_input_state(input_state);
+        player->set_input_state(input_state);
       }
     }
   }
@@ -384,11 +398,11 @@ private:
   Vertex_buffer _cube_vertex_buffer{};
   Index_buffer _cube_index_buffer{};
   bool _has_game_state{};
-  game_replica::Game _game;
+  game::Replicated_game _game;
   std::optional<std::uint32_t> _player_id{};
   float _tick_timer{};
   std::uint16_t _input_sequence_number{};
-  std::vector<std::pair<game_core::Humanoid_input_state, std::uint16_t>>
+  std::vector<std::pair<game::Humanoid_input_state, game::Sequence_number>>
       _in_flight_input_states{};
 };
 
