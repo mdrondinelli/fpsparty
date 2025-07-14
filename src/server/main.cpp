@@ -126,12 +126,9 @@ protected:
       enet::Peer peer, game::Game_object_id player_network_id,
       game::Sequence_number input_sequence_number,
       const game::Humanoid_input_state &input_state) override {
-    std::cout << "Got player input state.\n";
     const auto peer_node = static_cast<Peer_node *>(peer.get_data());
-    std::cout << "Player has " << peer_node->players.size() << " players.\n";
     for (const auto &player : peer_node->players) {
       if (player->get_game_object_id() == player_network_id) {
-        std::cout << "Applyting player input state.\n";
         player->set_input_state(input_state, input_sequence_number);
       }
     }
