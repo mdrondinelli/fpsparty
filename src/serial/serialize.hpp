@@ -1,9 +1,9 @@
 #ifndef FPSPARTY_SERIAL_SERIALIZE_HPP
 #define FPSPARTY_SERIAL_SERIALIZE_HPP
 
-#include "byteswap.hpp"
-#include "reader.hpp"
-#include "writer.hpp"
+#include "serial/byteswap.hpp"
+#include "serial/reader.hpp"
+#include "serial/writer.hpp"
 #include <algorithm>
 #include <bit>
 #include <exception>
