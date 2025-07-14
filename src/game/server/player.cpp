@@ -57,14 +57,9 @@ Player::get_input_sequence_number() const noexcept {
 
 void Player::set_input_state(const Humanoid_input_state &input_state,
                              Sequence_number input_sequence_number) noexcept {
-  if (_input_sequence_number) {
-    const auto difference = static_cast<std::int16_t>(input_sequence_number -
-                                                      *_input_sequence_number);
-    if (difference < 0) {
-      return;
-    }
+  if (input_sequence_number > *_input_sequence_number) {
+    _input_state = input_state;
+    _input_sequence_number = input_sequence_number;
   }
-  _input_state = input_state;
-  _input_sequence_number = input_sequence_number;
 }
 } // namespace fpsparty::game

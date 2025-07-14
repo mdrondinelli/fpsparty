@@ -13,7 +13,7 @@ Game::Game(const Game_create_info &) {}
 
 void Game::tick(float duration) {
   const auto players = _world.get_players();
-  if (_world.get_humanoid_count() < 2 && _world.get_player_count() > 1) {
+  if (_world.get_humanoid_count() < 2) {
     for (const auto &player : players) {
       auto humanoid = player->get_humanoid().lock();
       if (!humanoid) {

@@ -74,9 +74,9 @@ void Client::send_player_input_state(
   using serial::serialize;
   serialize<net::Message_type>(packet_writer,
                                net::Message_type::player_input_state);
-  serialize<game::Humanoid_input_state>(packet_writer, input_state);
   serialize<game::Game_object_id>(packet_writer, player_network_id);
   serialize<game::Sequence_number>(packet_writer, input_sequence_number);
+  serialize<game::Humanoid_input_state>(packet_writer, input_state);
   _server.send(constants::player_input_state_channel_id,
                enet::create_packet_unique({
                    .data = packet_writer.stream().view().data(),

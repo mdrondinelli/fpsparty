@@ -132,8 +132,9 @@ void Server::handle_event(const enet::Event &e) {
       return;
     }
     case Message_type::player_input_state: {
-      const auto player_network_id = deserialize<game::Game_object_id>(reader);
-      if (!player_network_id) {
+      const auto player_game_object_id =
+          deserialize<game::Game_object_id>(reader);
+      if (!player_game_object_id) {
         std::cerr << "Malformed player input state packet.\n";
         return;
       }
@@ -148,8 +149,8 @@ void Server::handle_event(const enet::Event &e) {
         std::cerr << "Malformed player input state packet.\n";
         return;
       }
-      on_player_input_state(e.peer, *player_network_id, *input_sequence_number,
-                            *input_state);
+      on_player_input_state(e.peer, *player_game_object_id,
+                            *input_sequence_number, *input_state);
       return;
     }
     default:

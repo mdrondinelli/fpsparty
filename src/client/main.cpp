@@ -321,7 +321,11 @@ protected:
                      serial::Reader &public_state_reader,
                      serial::Reader &player_state_reader,
                      std::uint8_t player_state_count) override {
+    if (!_has_game_state) {
+      send_player_join_request();
+    }
     _has_game_state = true;
+    std::cout << "Got tick " << tick_number << ".\n";
     _game.load({
         .tick_number = tick_number,
         .public_state_reader = &public_state_reader,
@@ -344,6 +348,8 @@ protected:
         player->set_input_sequence_number(input_sequence_number);
         _game.tick(constants::tick_duration);
       }
+      std::cout << "Predicting " << _in_flight_input_states.size()
+                << " ticks ahead.\n";
     }
   }
 
