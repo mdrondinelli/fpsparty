@@ -77,9 +77,6 @@ protected:
   void on_peer_connect(enet::Peer peer) override {
     std::cout << "Peer connected.\n";
     peer.set_data(new Peer_node);
-    // const auto player = _game->create_humanoid({});
-    // peer.set_data(static_cast<void *>(player));
-    // send_player_id(peer, player.get_network_id());
   }
 
   void on_peer_disconnect(enet::Peer peer) override {
