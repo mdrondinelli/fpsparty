@@ -6,7 +6,8 @@
 #include <Eigen/Dense>
 
 namespace fpsparty::game {
-class Replicated_humanoid : public Entity {
+class Replicated_humanoid : public Entity,
+                            public rc::Object<Replicated_humanoid> {
 public:
   explicit Replicated_humanoid(Entity_id entity_id) noexcept;
 
