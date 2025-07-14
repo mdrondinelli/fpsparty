@@ -325,7 +325,6 @@ protected:
       send_player_join_request();
     }
     _has_game_state = true;
-    std::cout << "Got tick " << tick_number << ".\n";
     _game.load({
         .tick_number = tick_number,
         .public_state_reader = &public_state_reader,
