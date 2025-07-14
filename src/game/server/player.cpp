@@ -1,5 +1,5 @@
 #include "player.hpp"
-#include "game/core/game_object_id.hpp"
+#include "game/core/entity_id.hpp"
 #include "game/core/sequence_number.hpp"
 
 namespace fpsparty::game {
@@ -7,24 +7,24 @@ Player::Humanoid_remove_listener::Humanoid_remove_listener(
     Player *player) noexcept
     : _player{player} {}
 
-void Player::Humanoid_remove_listener::on_remove_game_object() {
+void Player::Humanoid_remove_listener::on_remove_entity() {
   _player->set_humanoid(nullptr);
 }
 
-Player::Player(Game_object_id game_object_id,
+Player::Player(Entity_id entity_id,
                const Player_create_info &) noexcept
-    : Game_object{game_object_id}, _humanoid_remove_listener{this} {}
+    : Entity{entity_id}, _humanoid_remove_listener{this} {}
 
 void Player::on_remove() { set_humanoid(nullptr); }
 
 void Player::dump(serial::Writer &writer) const {
   using serial::serialize;
-  serialize<Game_object_id>(writer, get_game_object_id());
+  serialize<Entity_id>(writer, get_entity_id());
   const auto humanoid = _humanoid.lock();
-  const auto humanoid_game_object_id =
-      humanoid ? humanoid->get_game_object_id() : 0;
-  serialize<Game_object_id>(writer, humanoid_game_object_id);
-  if (humanoid_game_object_id) {
+  const auto humanoid_entity_id =
+      humanoid ? humanoid->get_entity_id() : 0;
+  serialize<Entity_id>(writer, humanoid_entity_id);
+  if (humanoid_entity_id) {
     serialize<Humanoid_input_state>(writer, _input_state);
     serialize<std::optional<Sequence_number>>(writer, _input_sequence_number);
   }

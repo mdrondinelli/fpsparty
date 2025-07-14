@@ -2,17 +2,17 @@
 #define FPSPARTY_GAME_REPLICATED_PLAYER_HPP
 
 #include "game/client/replicated_humanoid.hpp"
-#include "game/core/game_object.hpp"
-#include "game/core/game_object_id.hpp"
+#include "game/core/entity.hpp"
+#include "game/core/entity_id.hpp"
 #include "game/core/humanoid_input_state.hpp"
 #include "game/core/sequence_number.hpp"
 #include "rc.hpp"
 
 namespace fpsparty::game {
-class Replicated_player : public Game_object,
+class Replicated_player : public Entity,
                           public rc::Object<Replicated_player> {
 public:
-  explicit Replicated_player(Game_object_id game_object_id);
+  explicit Replicated_player(Entity_id entity_id);
 
 protected:
   void on_remove() override;
@@ -33,11 +33,11 @@ public:
       const std::optional<Sequence_number> &value) noexcept;
 
 private:
-  class Humanoid_remove_listener : public Game_object_remove_listener {
+  class Humanoid_remove_listener : public Entity_remove_listener {
   public:
     explicit Humanoid_remove_listener(Replicated_player *player) noexcept;
 
-    void on_remove_game_object() override;
+    void on_remove_entity() override;
 
   private:
     Replicated_player *_player{};

@@ -5,12 +5,12 @@ Replicated_player::Humanoid_remove_listener::Humanoid_remove_listener(
     Replicated_player *player) noexcept
     : _player{player} {}
 
-void Replicated_player::Humanoid_remove_listener::on_remove_game_object() {
+void Replicated_player::Humanoid_remove_listener::on_remove_entity() {
   _player->set_humanoid(nullptr);
 }
 
-Replicated_player::Replicated_player(Game_object_id game_object_id)
-    : Game_object{game_object_id}, _humanoid_remove_listener{this} {}
+Replicated_player::Replicated_player(Entity_id entity_id)
+    : Entity{entity_id}, _humanoid_remove_listener{this} {}
 
 void Replicated_player::on_remove() {
   const auto humanoid = _humanoid.lock();

@@ -1,9 +1,9 @@
 #include "replicated_humanoid.hpp"
-#include "game/core/game_object_id.hpp"
+#include "game/core/entity_id.hpp"
 
 namespace fpsparty::game {
-Replicated_humanoid::Replicated_humanoid(Game_object_id game_object_id) noexcept
-    : Game_object{game_object_id} {}
+Replicated_humanoid::Replicated_humanoid(Entity_id entity_id) noexcept
+    : Entity{entity_id} {}
 
 void Replicated_humanoid::on_remove() {}
 

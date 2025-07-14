@@ -11,7 +11,7 @@ add_subdirectory(extern/magic_enum-0.9.7)
 # libgame-core
 add_library(
   game-core
-  src/game/core/game_object.cpp
+  src/game/core/entity.cpp
   src/game/core/humanoid_movement.cpp
   src/game/core/projectile_movement.cpp
 )

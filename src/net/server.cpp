@@ -1,7 +1,7 @@
 #include "server.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
-#include "game/core/game_object_id.hpp"
+#include "game/core/entity_id.hpp"
 #include "game/core/sequence_number.hpp"
 #include "net/message_type.hpp"
 #include "serial/ostream_writer.hpp"
@@ -40,11 +40,11 @@ void Server::disconnect() {
 }
 
 void Server::send_player_join_response(
-    enet::Peer peer, game::Game_object_id player_game_object_id) {
+    enet::Peer peer, game::Entity_id player_entity_id) {
   auto writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<Message_type>(writer, Message_type::player_join_response);
-  serialize<game::Game_object_id>(writer, player_game_object_id);
+  serialize<game::Entity_id>(writer, player_entity_id);
   peer.send(constants::player_initialization_channel_id,
             enet::create_packet_unique({
                 .data = writer.stream().view().data(),
@@ -90,9 +90,9 @@ void Server::on_peer_disconnect(enet::Peer) {}
 
 void Server::on_player_join_request(enet::Peer) {}
 
-void Server::on_player_leave_request(enet::Peer, game::Game_object_id) {}
+void Server::on_player_leave_request(enet::Peer, game::Entity_id) {}
 
-void Server::on_player_input_state(enet::Peer, game::Game_object_id,
+void Server::on_player_input_state(enet::Peer, game::Entity_id,
                                    game::Sequence_number,
                                    const game::Humanoid_input_state &) {}
 
@@ -123,19 +123,19 @@ void Server::handle_event(const enet::Event &e) {
       return;
     }
     case Message_type::player_leave_request: {
-      const auto player_game_object_id =
-          deserialize<game::Game_object_id>(reader);
-      if (!player_game_object_id) {
+      const auto player_entity_id =
+          deserialize<game::Entity_id>(reader);
+      if (!player_entity_id) {
         std::cerr << "Malformed player leave request packet.\n";
         return;
       }
-      on_player_leave_request(e.peer, *player_game_object_id);
+      on_player_leave_request(e.peer, *player_entity_id);
       return;
     }
     case Message_type::player_input_state: {
-      const auto player_game_object_id =
-          deserialize<game::Game_object_id>(reader);
-      if (!player_game_object_id) {
+      const auto player_entity_id =
+          deserialize<game::Entity_id>(reader);
+      if (!player_entity_id) {
         std::cerr << "Malformed player input state packet.\n";
         return;
       }
@@ -150,7 +150,7 @@ void Server::handle_event(const enet::Event &e) {
         std::cerr << "Malformed player input state packet.\n";
         return;
       }
-      on_player_input_state(e.peer, *player_game_object_id,
+      on_player_input_state(e.peer, *player_entity_id,
                             *input_sequence_number, *input_state);
       return;
     }

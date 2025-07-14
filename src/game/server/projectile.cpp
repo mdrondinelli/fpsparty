@@ -1,18 +1,18 @@
 #include "projectile.hpp"
-#include "game/core/game_object_id.hpp"
+#include "game/core/entity_id.hpp"
 
 namespace fpsparty::game {
 Projectile::Creator_remove_listener::Creator_remove_listener(
     Projectile *projectile) noexcept
     : projectile{projectile} {}
 
-void Projectile::Creator_remove_listener::on_remove_game_object() {
+void Projectile::Creator_remove_listener::on_remove_entity() {
   projectile->_creator = nullptr;
 }
 
-Projectile::Projectile(Game_object_id game_object_id,
+Projectile::Projectile(Entity_id entity_id,
                        const Projectile_create_info &info) noexcept
-    : Game_object{game_object_id},
+    : Entity{entity_id},
       _creator{info.creator},
       _creator_remove_listener{this},
       _position{info.position},

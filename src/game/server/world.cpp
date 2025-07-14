@@ -1,14 +1,14 @@
 #include "world.hpp"
 #include "algorithms/unordered_erase.hpp"
-#include "game/core/game_object.hpp"
-#include "game/core/game_object_id.hpp"
+#include "game/core/entity.hpp"
+#include "game/core/entity_id.hpp"
 
 namespace fpsparty::game {
 void World::dump(serial::Writer &writer) const {
   using serial::serialize;
   serialize<std::uint8_t>(writer, _humanoids.size());
   for (const auto &humanoid : _humanoids) {
-    serialize<Game_object_id>(writer, humanoid->get_game_object_id());
+    serialize<Entity_id>(writer, humanoid->get_entity_id());
     serialize<float>(writer, humanoid->get_position().x());
     serialize<float>(writer, humanoid->get_position().y());
     serialize<float>(writer, humanoid->get_position().z());
@@ -16,7 +16,7 @@ void World::dump(serial::Writer &writer) const {
   }
   serialize<std::uint16_t>(writer, _projectiles.size());
   for (const auto &projectile : _projectiles) {
-    serialize<Game_object_id>(writer, projectile->get_game_object_id());
+    serialize<Entity_id>(writer, projectile->get_entity_id());
     serialize<float>(writer, projectile->get_position().x());
     serialize<float>(writer, projectile->get_position().y());
     serialize<float>(writer, projectile->get_position().z());
@@ -39,7 +39,7 @@ bool World::add(const rc::Strong<Player> &player) {
 bool World::remove(const rc::Strong<Player> &player) noexcept {
   const auto it = std::ranges::find(_players, player);
   if (it != _players.end()) {
-    detail::on_remove_game_object(**it);
+    detail::on_remove_entity(**it);
     algorithms::unordered_erase_at(_players, it);
     return true;
   } else {
@@ -60,7 +60,7 @@ bool World::add(const rc::Strong<Humanoid> &humanoid) {
 bool World::remove(const rc::Strong<Humanoid> &humanoid) noexcept {
   const auto it = std::ranges::find(_humanoids, humanoid);
   if (it != _humanoids.end()) {
-    detail::on_remove_game_object(**it);
+    detail::on_remove_entity(**it);
     algorithms::unordered_erase_at(_humanoids, it);
     return true;
   } else {
@@ -81,7 +81,7 @@ bool World::add(const rc::Strong<Projectile> &projectile) {
 bool World::remove(const rc::Strong<Projectile> &projectile) noexcept {
   const auto it = std::ranges::find(_projectiles, projectile);
   if (it != _projectiles.end()) {
-    detail::on_remove_game_object(**it);
+    detail::on_remove_entity(**it);
     algorithms::unordered_erase_at(_projectiles, it);
     return true;
   } else {

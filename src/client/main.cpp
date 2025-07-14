@@ -5,7 +5,7 @@
 #include "constants.hpp"
 #include "enet.hpp"
 #include "game/client/replicated_game.hpp"
-#include "game/core/game_object_id.hpp"
+#include "game/core/entity_id.hpp"
 #include "glfw.hpp"
 #include "math/transformation_matrices.hpp"
 #include "net/client.hpp"
@@ -294,7 +294,7 @@ public:
 
   rc::Strong<game::Replicated_player> get_player() const noexcept {
     return _player_id
-               ? _game.get_world().get_player_by_game_object_id(*_player_id)
+               ? _game.get_world().get_player_by_entity_id(*_player_id)
                : nullptr;
   }
 
@@ -312,7 +312,7 @@ protected:
     _in_flight_input_states.clear();
   }
 
-  void on_player_join_response(game::Game_object_id player_id) override {
+  void on_player_join_response(game::Entity_id player_id) override {
     _player_id = player_id;
     std::cout << "Got player join response. id = " << player_id << ".\n";
   }

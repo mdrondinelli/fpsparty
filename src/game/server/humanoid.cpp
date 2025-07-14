@@ -1,10 +1,10 @@
 #include "humanoid.hpp"
-#include "game/core/game_object_id.hpp"
+#include "game/core/entity_id.hpp"
 
 namespace fpsparty::game {
-Humanoid::Humanoid(Game_object_id game_object_id,
+Humanoid::Humanoid(Entity_id entity_id,
                    const Humanoid_create_info &) noexcept
-    : Game_object{game_object_id} {}
+    : Entity{entity_id} {}
 
 void Humanoid::on_remove() {}
 

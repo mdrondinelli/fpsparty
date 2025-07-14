@@ -1,10 +1,10 @@
 #include "replicated_projectile.hpp"
-#include "game/core/game_object_id.hpp"
+#include "game/core/entity_id.hpp"
 
 namespace fpsparty::game {
 Replicated_projectile::Replicated_projectile(
-    Game_object_id game_object_id) noexcept
-    : Game_object{game_object_id} {}
+    Entity_id entity_id) noexcept
+    : Entity{entity_id} {}
 
 void Replicated_projectile::on_remove() {}
 

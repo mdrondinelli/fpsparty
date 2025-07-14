@@ -1,14 +1,14 @@
 #ifndef FPSPARTY_GAME_REPLICATED_PROJECTILE_HPP
 #define FPSPARTY_GAME_REPLICATED_PROJECTILE_HPP
 
-#include "game/core/game_object.hpp"
-#include "game/core/game_object_id.hpp"
+#include "game/core/entity.hpp"
+#include "game/core/entity_id.hpp"
 #include <Eigen/Dense>
 
 namespace fpsparty::game {
-class Replicated_projectile : public Game_object {
+class Replicated_projectile : public Entity {
 public:
-  explicit Replicated_projectile(Game_object_id game_object_id) noexcept;
+  explicit Replicated_projectile(Entity_id entity_id) noexcept;
 
 protected:
   void on_remove() override;

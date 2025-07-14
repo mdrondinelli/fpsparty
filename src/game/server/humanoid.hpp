@@ -1,17 +1,17 @@
 #ifndef FPSPARTY_GAME_HUMANOID_HPP
 #define FPSPARTY_GAME_HUMANOID_HPP
 
-#include "game/core/game_object.hpp"
-#include "game/core/game_object_id.hpp"
+#include "game/core/entity.hpp"
+#include "game/core/entity_id.hpp"
 #include "game/core/humanoid_input_state.hpp"
 #include <Eigen/Dense>
 
 namespace fpsparty::game {
 struct Humanoid_create_info {};
 
-class Humanoid : public Game_object, public rc::Object<Humanoid> {
+class Humanoid : public Entity, public rc::Object<Humanoid> {
 public:
-  explicit Humanoid(Game_object_id game_object_id,
+  explicit Humanoid(Entity_id entity_id,
                     const Humanoid_create_info &info) noexcept;
 
   void on_remove() override;

@@ -31,13 +31,13 @@ public:
   void reset();
 
   rc::Strong<Replicated_player>
-  get_player_by_game_object_id(Game_object_id id) const noexcept;
+  get_player_by_entity_id(Entity_id id) const noexcept;
 
   rc::Strong<Replicated_humanoid>
-  get_humanoid_by_game_object_id(Game_object_id id) const noexcept;
+  get_humanoid_by_entity_id(Entity_id id) const noexcept;
 
   rc::Strong<Replicated_projectile>
-  get_projectile_by_game_object_id(Game_object_id id) const noexcept;
+  get_projectile_by_entity_id(Entity_id id) const noexcept;
 
   std::pmr::vector<rc::Strong<Replicated_player>>
   get_players(std::pmr::memory_resource *memory_resource =

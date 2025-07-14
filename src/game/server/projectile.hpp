@@ -1,8 +1,8 @@
 #ifndef FPSPARTY_GAME_PROJECTILE_HPP
 #define FPSPARTY_GAME_PROJECTILE_HPP
 
-#include "game/core/game_object.hpp"
-#include "game/core/game_object_id.hpp"
+#include "game/core/entity.hpp"
+#include "game/core/entity_id.hpp"
 #include "game/server/humanoid.hpp"
 #include "rc.hpp"
 #include <Eigen/Dense>
@@ -14,9 +14,9 @@ struct Projectile_create_info {
   Eigen::Vector3f velocity{Eigen::Vector3f::Zero()};
 };
 
-class Projectile : public Game_object, public rc::Object<Projectile> {
+class Projectile : public Entity, public rc::Object<Projectile> {
 public:
-  explicit Projectile(Game_object_id game_object_id,
+  explicit Projectile(Entity_id entity_id,
                       const Projectile_create_info &info) noexcept;
 
   void on_remove() override;
@@ -32,12 +32,12 @@ public:
   void set_velocity(const Eigen::Vector3f &velocity) noexcept;
 
 private:
-  struct Creator_remove_listener : Game_object_remove_listener {
+  struct Creator_remove_listener : Entity_remove_listener {
     Projectile *projectile;
 
     explicit Creator_remove_listener(Projectile *projectile) noexcept;
 
-    void on_remove_game_object() override;
+    void on_remove_entity() override;
   };
 
   rc::Weak<Humanoid> _creator{};

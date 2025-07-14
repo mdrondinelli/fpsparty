@@ -1,7 +1,7 @@
 #ifndef FPSPARTY_GAME_GAME_HPP
 #define FPSPARTY_GAME_GAME_HPP
 
-#include "game/core/game_object_id.hpp"
+#include "game/core/entity_id.hpp"
 #include "game/core/sequence_number.hpp"
 #include "game/server/humanoid.hpp"
 #include "game/server/player.hpp"
@@ -40,7 +40,7 @@ private:
   rc::Factory<Humanoid> _humanoid_factory{};
   rc::Factory<Projectile> _projectile_factory{};
   Sequence_number _tick_number{};
-  Game_object_id _next_game_object_id{1};
+  Entity_id _next_entity_id{1};
   World _world{};
 };
 } // namespace fpsparty::game

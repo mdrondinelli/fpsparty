@@ -1,8 +1,8 @@
 #ifndef FPSPARTY_GAME_PLAYER_HPP
 #define FPSPARTY_GAME_PLAYER_HPP
 
-#include "game/core/game_object.hpp"
-#include "game/core/game_object_id.hpp"
+#include "game/core/entity.hpp"
+#include "game/core/entity_id.hpp"
 #include "game/core/humanoid_input_state.hpp"
 #include "game/core/sequence_number.hpp"
 #include "game/server/humanoid.hpp"
@@ -12,9 +12,9 @@
 namespace fpsparty::game {
 struct Player_create_info {};
 
-class Player : public Game_object, rc::Object<Player> {
+class Player : public Entity, rc::Object<Player> {
 public:
-  explicit Player(Game_object_id game_object_id,
+  explicit Player(Entity_id entity_id,
                   const Player_create_info &info) noexcept;
 
   void on_remove() override;
@@ -33,11 +33,11 @@ public:
                        Sequence_number input_sequence_number) noexcept;
 
 private:
-  class Humanoid_remove_listener : public Game_object_remove_listener {
+  class Humanoid_remove_listener : public Entity_remove_listener {
   public:
     explicit Humanoid_remove_listener(Player *player) noexcept;
 
-    void on_remove_game_object() override;
+    void on_remove_entity() override;
 
   private:
     Player *_player{};
