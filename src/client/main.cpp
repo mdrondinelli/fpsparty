@@ -6,6 +6,7 @@
 #include "enet.hpp"
 #include "game/client/replicated_game.hpp"
 #include "game/core/entity_id.hpp"
+#include "game/core/sequence_number.hpp"
 #include "glfw.hpp"
 #include "math/transformation_matrices.hpp"
 #include "net/client.hpp"
@@ -403,7 +404,7 @@ private:
   game::Replicated_game _game;
   std::optional<std::uint32_t> _player_id{};
   float _tick_timer{};
-  std::uint16_t _input_sequence_number{};
+  game::Sequence_number _input_sequence_number{};
   std::vector<std::pair<game::Humanoid_input_state, game::Sequence_number>>
       _in_flight_input_states{};
 };
