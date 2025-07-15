@@ -1,8 +1,10 @@
 #include "client.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
+#include "game/core/entity_id.hpp"
 #include "net/message_type.hpp"
 #include "serial/ostream_writer.hpp"
+#include "serial/serialize.hpp"
 #include "serial/span_reader.hpp"
 #include <iostream>
 
@@ -37,19 +39,50 @@ bool Client::is_connected() const noexcept {
   return _server != nullptr && !_connecting;
 }
 
+void Client::send_player_join_request() {
+  auto packet_writer = serial::Ostringstream_writer{};
+  using serial::serialize;
+  serialize<net::Message_type>(packet_writer,
+                               net::Message_type::player_join_request);
+  _server.send(constants::player_initialization_channel_id,
+               enet::create_packet_unique({
+                   .data = packet_writer.stream().view().data(),
+                   .data_length = packet_writer.stream().view().length(),
+                   .flags = enet::Packet_flag_bits::reliable,
+               }));
+}
+
+void Client::send_player_leave_request(
+    game::Entity_id player_entity_id) {
+  auto packet_writer = serial::Ostringstream_writer{};
+  using serial::serialize;
+  serialize<net::Message_type>(packet_writer,
+                               net::Message_type::player_leave_request);
+  serialize<game::Entity_id>(packet_writer, player_entity_id);
+  _server.send(constants::player_initialization_channel_id,
+               enet::create_packet_unique({
+                   .data = packet_writer.stream().view().data(),
+                   .data_length = packet_writer.stream().view().length(),
+                   .flags = enet::Packet_flag_bits::reliable,
+               }));
+}
+
 void Client::send_player_input_state(
-    const game_core::Humanoid_input_state &input_state,
-    std::uint16_t sequence_number) {
+    game::Entity_id player_entity_id,
+    game::Sequence_number input_sequence_number,
+    const game::Humanoid_input_state &input_state) {
   auto packet_writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<net::Message_type>(packet_writer,
                                net::Message_type::player_input_state);
-  serialize<game_core::Humanoid_input_state>(packet_writer, input_state);
-  serialize<std::uint16_t>(packet_writer, sequence_number);
+  serialize<game::Entity_id>(packet_writer, player_entity_id);
+  serialize<game::Sequence_number>(packet_writer, input_sequence_number);
+  serialize<game::Humanoid_input_state>(packet_writer, input_state);
   _server.send(constants::player_input_state_channel_id,
-               enet::create_packet_unique(
-                   {.data = packet_writer.stream().view().data(),
-                    .data_length = packet_writer.stream().view().length()}));
+               enet::create_packet_unique({
+                   .data = packet_writer.stream().view().data(),
+                   .data_length = packet_writer.stream().view().length(),
+               }));
 }
 
 void Client::handle_event(const enet::Event &e) {
@@ -74,25 +107,68 @@ void Client::handle_event(const enet::Event &e) {
       return;
     }
     switch (*message_type) {
-    case Message_type::player_id: {
-      const auto player_id = deserialize<std::uint32_t>(reader);
-      if (!player_id) {
-        std::cerr << "Received malformed player_id message.\n";
-        return;
+    case Message_type::player_join_response: {
+      const auto player_entity_id =
+          deserialize<game::Entity_id>(reader);
+      if (!player_entity_id) {
+        goto malformed_message;
       }
-      on_player_id(*player_id);
+      on_player_join_response(*player_entity_id);
       return;
     }
-    case Message_type::game_state:
-      on_game_state(reader);
+    case Message_type::game_state: {
+      const auto tick_number = deserialize<game::Sequence_number>(reader);
+      if (!tick_number) {
+        std::cerr << "Failed to deserialize tick_number.\n";
+        goto malformed_message;
+      }
+      const auto public_state_size = deserialize<std::uint16_t>(reader);
+      if (!public_state_size) {
+        std::cerr << "Failed to deserialize public_state_size.\n";
+        goto malformed_message;
+      }
+      const auto player_state_count = deserialize<std::uint8_t>(reader);
+      if (!player_state_count) {
+        std::cerr << "Failed to deserialize player_state_count.\n";
+        goto malformed_message;
+      }
+      auto public_state_reader =
+          reader.subspan_reader(reader.offset(), *public_state_size);
+      if (!public_state_reader) {
+        std::cerr << "Failed to obtain public_state_reader.\n";
+        goto malformed_message;
+      }
+      auto player_state_reader =
+          reader.subspan_reader(reader.offset() + *public_state_size);
+      if (!player_state_reader) {
+        std::cerr << "Failed to obtain player_state_reader.\n";
+        goto malformed_message;
+      }
+      on_game_state(*tick_number, *public_state_reader, *player_state_reader,
+                    *player_state_count);
       return;
+    }
     default:
       std::cerr << "Received packet with unexpected message type.\n";
       return;
     }
+    return;
+  malformed_message:
+    std::cerr << "Received malformed " << magic_enum::enum_name(*message_type)
+              << " message.\n";
+    return;
   }
   default:
     return;
   }
 }
+
+void Client::on_connect() {}
+
+void Client::on_disconnect() {}
+
+void Client::on_player_join_response(game::Entity_id) {}
+
+void Client::on_game_state(game::Sequence_number, serial::Reader &,
+                           serial::Reader &, std::uint8_t) {}
 } // namespace fpsparty::net

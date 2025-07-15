@@ -5,7 +5,9 @@
 
 namespace fpsparty::net {
 enum class Message_type : std::uint8_t {
-  player_id,
+  player_join_request,
+  player_join_response,
+  player_leave_request,
   player_input_state,
   game_state
 };

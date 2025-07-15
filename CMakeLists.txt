@@ -8,52 +8,60 @@ add_subdirectory(extern/volk-1.4.304)
 add_subdirectory(extern/VulkanMemoryAllocator-3.3.0)
 add_subdirectory(extern/magic_enum-0.9.7)
 
-# game_core
+# libgame-core
 add_library(
-  game_core
-  src/game_core/humanoid_movement.cpp
-  src/game_core/projectile_movement.cpp
+  game-core
+  src/game/core/entity.cpp
+  src/game/core/humanoid_movement.cpp
+  src/game/core/projectile_movement.cpp
 )
 target_include_directories(
-  game_core
+  game-core
   SYSTEM
   PUBLIC
   ${CMAKE_SOURCE_DIR}/extern/eigen-3.4.0
   ${CMAKE_SOURCE_DIR}/extern/magic_enum-0.9.7/include
 )
 target_include_directories(
-  game_core
+  game-core
   PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
+target_compile_definitions(game-core PUBLIC FPSPARTY_SERIAL_EIGEN)
 
-# game_authority
+# libgame-server
 add_library(
-  game_authority
-  src/game_authority/humanoid.cpp
-  src/game_authority/projectile.cpp
-  src/game_authority/game.cpp
+  game-server
+  src/game/server/game.cpp
+  src/game/server/humanoid.cpp
+  src/game/server/player.cpp
+  src/game/server/projectile.cpp
+  src/game/server/world.cpp
 )
 target_include_directories(
-  game_authority
+  game-server
   PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
-target_link_libraries(game_authority game_core)
+target_link_libraries(game-server game-core)
 
-# game_replica
+# libgame-client
 add_library(
-  game_replica
-  src/game_replica/game.cpp
+  game-client
+  src/game/client/replicated_game.cpp
+  src/game/client/replicated_world.cpp
+  src/game/client/replicated_player.cpp
+  src/game/client/replicated_humanoid.cpp
+  src/game/client/replicated_projectile.cpp
 )
 target_include_directories(
-  game_replica
+  game-client
   PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
-target_link_libraries(game_replica game_core)
+target_link_libraries(game-client game-core)
 
-# net
+# libnet
 add_library(
   net
   src/net/client.cpp
@@ -90,7 +98,7 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/src
 )
 target_link_directories(server PRIVATE ${CMAKE_SOURCE_DIR}/extern/enet/.libs)
-target_link_libraries(server enet game_authority net)
+target_link_libraries(server enet game-server net)
 
 # client
 add_executable(
@@ -125,29 +133,29 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/src
 )
 target_link_directories(client PRIVATE ${CMAKE_SOURCE_DIR}/extern/enet/.libs)
-target_link_libraries(client enet glfw volk GPUOpen::VulkanMemoryAllocator game_replica net)
+target_link_libraries(client enet glfw volk GPUOpen::VulkanMemoryAllocator game-client net)
 
 # compiler options
-set_property(TARGET game_core game_authority game_replica net server client PROPERTY CXX_STANDARD 23)
-set_property(TARGET game_core game_authority game_replica net server client PROPERTY CXX_STANDARD_REQUIRED ON)
-set_property(TARGET game_core game_authority game_replica net server client PROPERTY CXX_EXTENSIONS OFF)
+set_property(TARGET game-core game-server game-client net server client PROPERTY CXX_STANDARD 23)
+set_property(TARGET game-core game-server game-client net server client PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET game-core game-server game-client net server client PROPERTY CXX_EXTENSIONS OFF)
 if (MSVC)
-  target_compile_options(game_core PRIVATE /W4 /WX)
-  target_compile_options(game_authority PRIVATE /W4 /WX)
-  target_compile_options(game_replica PRIVATE /W4 /WX)
+  target_compile_options(game-core PRIVATE /W4 /WX)
+  target_compile_options(game-server PRIVATE /W4 /WX)
+  target_compile_options(game-client PRIVATE /W4 /WX)
   target_compile_options(net PRIVATE /W4 /WX)
   target_compile_options(server PRIVATE /W4 /WX)
   target_compile_options(client PRIVATE /W4 /WX)
 else()
-  target_compile_options(game_core PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
-  target_compile_options(game_authority PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
-  target_compile_options(game_replica PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
+  target_compile_options(game-core PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
+  target_compile_options(game-server PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
+  target_compile_options(game-client PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
   target_compile_options(net PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
   target_compile_options(client PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
   target_compile_options(server PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
-  target_link_options(game_core PRIVATE -stdlib=libc++ -lc++abi)
-  target_link_options(game_authority PRIVATE -stdlib=libc++ -lc++abi)
-  target_link_options(game_replica PRIVATE -stdlib=libc++ -lc++abi)
+  target_link_options(game-core PRIVATE -stdlib=libc++ -lc++abi)
+  target_link_options(game-server PRIVATE -stdlib=libc++ -lc++abi)
+  target_link_options(game-client PRIVATE -stdlib=libc++ -lc++abi)
   target_link_options(net PRIVATE -stdlib=libc++ -lc++abi)
   target_link_options(client PRIVATE -stdlib=libc++ -lc++abi)
   target_link_options(server PRIVATE -stdlib=libc++ -lc++abi)

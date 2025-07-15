@@ -1,7 +1,7 @@
 #include "projectile_movement.hpp"
-#include "game_core/constants.hpp"
+#include "game/core/constants.hpp"
 
-namespace fpsparty::game_core {
+namespace fpsparty::game {
 Projectile_movement_simulation_result simulate_projectile_movement(
     const Projectile_movement_simulation_info &info) noexcept {
   const auto velocity =
@@ -16,4 +16,4 @@ Projectile_movement_simulation_result simulate_projectile_movement(
       .final_velocity = velocity,
   };
 }
-} // namespace fpsparty::game_core
+} // namespace fpsparty::game
