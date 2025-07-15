@@ -293,9 +293,8 @@ public:
   bool has_game_state() const noexcept { return _has_game_state; }
 
   rc::Strong<game::Replicated_player> get_player() const noexcept {
-    return _player_id
-               ? _game.get_world().get_player_by_entity_id(*_player_id)
-               : nullptr;
+    return _player_id ? _game.get_world().get_player_by_entity_id(*_player_id)
+                      : nullptr;
   }
 
   constexpr glfw::Window get_window() const noexcept { return _glfw_window; }
@@ -347,8 +346,6 @@ protected:
         player->set_input_sequence_number(input_sequence_number);
         _game.tick(constants::tick_duration);
       }
-      std::cout << "Predicting " << _in_flight_input_states.size()
-                << " ticks ahead.\n";
     }
   }
 
