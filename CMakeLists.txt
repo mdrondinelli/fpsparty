@@ -36,6 +36,7 @@ add_library(
   src/game/server/humanoid.cpp
   src/game/server/player.cpp
   src/game/server/projectile.cpp
+  src/game/server/wall.cpp
   src/game/server/world.cpp
 )
 target_include_directories(
