@@ -5,6 +5,8 @@
 #include "game/core/entity_id.hpp"
 #include "game/core/humanoid_input_state.hpp"
 #include "game/core/sequence_number.hpp"
+#include "serial/serialize.hpp"
+#include <Eigen/Dense>
 #include <algorithm>
 
 namespace fpsparty::game {
@@ -18,21 +20,13 @@ void Replicated_world::load(const Replicated_world_load_info &info) {
   auto temp_humanoids = std::vector<rc::Strong<Replicated_humanoid>>{};
   temp_humanoids.reserve(*humanoid_count);
   for (auto i = std::uint8_t{}; i != humanoid_count; ++i) {
-    const auto entity_id =
-        deserialize<Entity_id>(*info.public_state_reader);
+    const auto entity_id = deserialize<Entity_id>(*info.public_state_reader);
     if (!entity_id) {
       throw Replicated_world_load_error{};
     }
-    const auto position_x = deserialize<float>(*info.public_state_reader);
-    if (!position_x) {
-      throw Replicated_world_load_error{};
-    }
-    const auto position_y = deserialize<float>(*info.public_state_reader);
-    if (!position_y) {
-      throw Replicated_world_load_error{};
-    }
-    const auto position_z = deserialize<float>(*info.public_state_reader);
-    if (!position_z) {
+    const auto position =
+        deserialize<Eigen::Vector3f>(*info.public_state_reader);
+    if (!position) {
       throw Replicated_world_load_error{};
     }
     const auto input_state =
@@ -41,12 +35,11 @@ void Replicated_world::load(const Replicated_world_load_info &info) {
       throw Replicated_world_load_error{};
     }
     auto humanoid = [&]() {
-      const auto existing_humanoid =
-          get_humanoid_by_entity_id(*entity_id);
+      const auto existing_humanoid = get_humanoid_by_entity_id(*entity_id);
       return existing_humanoid ? existing_humanoid
                                : _humanoid_factory.create(*entity_id);
     }();
-    humanoid->set_position({*position_x, *position_y, *position_z});
+    humanoid->set_position(*position);
     humanoid->set_input_state(*input_state);
     temp_humanoids.emplace_back(std::move(humanoid));
   }
@@ -64,22 +57,27 @@ void Replicated_world::load(const Replicated_world_load_info &info) {
   auto temp_projectiles = std::vector<rc::Strong<Replicated_projectile>>{};
   temp_projectiles.reserve(*projectile_count);
   for (auto i = std::uint16_t{}; i != projectile_count; ++i) {
-    const auto entity_id =
-        deserialize<Entity_id>(*info.public_state_reader);
-    const auto position_x = deserialize<float>(*info.public_state_reader);
-    const auto position_y = deserialize<float>(*info.public_state_reader);
-    const auto position_z = deserialize<float>(*info.public_state_reader);
-    const auto velocity_x = deserialize<float>(*info.public_state_reader);
-    const auto velocity_y = deserialize<float>(*info.public_state_reader);
-    const auto velocity_z = deserialize<float>(*info.public_state_reader);
+    const auto entity_id = deserialize<Entity_id>(*info.public_state_reader);
+    if (!entity_id) {
+      throw Replicated_world_load_error{};
+    }
+    const auto position =
+        deserialize<Eigen::Vector3f>(*info.public_state_reader);
+    if (!position) {
+      throw Replicated_world_load_error{};
+    }
+    const auto velocity =
+        deserialize<Eigen::Vector3f>(*info.public_state_reader);
+    if (!velocity) {
+      throw Replicated_world_load_error{};
+    }
     auto projectile = [&]() {
-      const auto existing_projectile =
-          get_projectile_by_entity_id(*entity_id);
+      const auto existing_projectile = get_projectile_by_entity_id(*entity_id);
       return existing_projectile ? existing_projectile
                                  : _projectile_factory.create(*entity_id);
     }();
-    projectile->set_position({*position_x, *position_y, *position_z});
-    projectile->set_velocity({*velocity_x, *velocity_y, *velocity_z});
+    projectile->set_position(*position);
+    projectile->set_velocity(*velocity);
     temp_projectiles.emplace_back(std::move(projectile));
   }
   std::swap(_projectiles, temp_projectiles);
@@ -91,14 +89,12 @@ void Replicated_world::load(const Replicated_world_load_info &info) {
   auto temp_players = std::vector<rc::Strong<Replicated_player>>{};
   temp_players.reserve(info.player_state_count);
   for (auto i = std::uint8_t{}; i != info.player_state_count; ++i) {
-    const auto entity_id =
-        deserialize<Entity_id>(*info.player_state_reader);
+    const auto entity_id = deserialize<Entity_id>(*info.player_state_reader);
     if (!entity_id) {
       throw Replicated_world_load_error{};
     }
     auto player = [&]() {
-      const auto existing_player =
-          get_player_by_entity_id(*entity_id);
+      const auto existing_player = get_player_by_entity_id(*entity_id);
       return existing_player ? existing_player
                              : _player_factory.create(*entity_id);
     }();
@@ -108,8 +104,7 @@ void Replicated_world::load(const Replicated_world_load_info &info) {
       throw Replicated_world_load_error{};
     }
     if (*humanoid_entity_id) {
-      const auto humanoid =
-          get_humanoid_by_entity_id(*humanoid_entity_id);
+      const auto humanoid = get_humanoid_by_entity_id(*humanoid_entity_id);
       if (!humanoid) {
         throw Replicated_world_load_error{};
       }
@@ -156,8 +151,8 @@ void Replicated_world::reset() {
   }
 }
 
-rc::Strong<Replicated_player> Replicated_world::get_player_by_entity_id(
-    Entity_id id) const noexcept {
+rc::Strong<Replicated_player>
+Replicated_world::get_player_by_entity_id(Entity_id id) const noexcept {
   const auto it = std::ranges::find_if(
       _players, [id](const rc::Strong<Replicated_player> &x) {
         return x->get_entity_id() == id;
@@ -166,8 +161,7 @@ rc::Strong<Replicated_player> Replicated_world::get_player_by_entity_id(
 }
 
 rc::Strong<Replicated_humanoid>
-Replicated_world::get_humanoid_by_entity_id(
-    Entity_id id) const noexcept {
+Replicated_world::get_humanoid_by_entity_id(Entity_id id) const noexcept {
   const auto it = std::ranges::find_if(
       _humanoids, [id](const rc::Strong<Replicated_humanoid> &x) {
         return x->get_entity_id() == id;
@@ -176,8 +170,7 @@ Replicated_world::get_humanoid_by_entity_id(
 }
 
 rc::Strong<Replicated_projectile>
-Replicated_world::get_projectile_by_entity_id(
-    Entity_id id) const noexcept {
+Replicated_world::get_projectile_by_entity_id(Entity_id id) const noexcept {
   const auto it = std::ranges::find_if(
       _projectiles, [id](const rc::Strong<Replicated_projectile> &x) {
         return x->get_entity_id() == id;

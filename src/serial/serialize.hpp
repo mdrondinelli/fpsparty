@@ -128,4 +128,8 @@ template <typename T> std::optional<T> deserialize(Reader &reader) {
 }
 } // namespace fpsparty::serial
 
+#ifdef FPSPARTY_SERIAL_EIGEN
+#include "serial/eigen.hpp"
+#endif
+
 #endif

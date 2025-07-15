@@ -2,6 +2,7 @@
 #include "algorithms/unordered_erase.hpp"
 #include "game/core/entity.hpp"
 #include "game/core/entity_id.hpp"
+#include <Eigen/Dense>
 
 namespace fpsparty::game {
 void World::dump(serial::Writer &writer) const {
@@ -9,20 +10,14 @@ void World::dump(serial::Writer &writer) const {
   serialize<std::uint8_t>(writer, _humanoids.size());
   for (const auto &humanoid : _humanoids) {
     serialize<Entity_id>(writer, humanoid->get_entity_id());
-    serialize<float>(writer, humanoid->get_position().x());
-    serialize<float>(writer, humanoid->get_position().y());
-    serialize<float>(writer, humanoid->get_position().z());
+    serialize<Eigen::Vector3f>(writer, humanoid->get_position());
     serialize<Humanoid_input_state>(writer, humanoid->get_input_state());
   }
   serialize<std::uint16_t>(writer, _projectiles.size());
   for (const auto &projectile : _projectiles) {
     serialize<Entity_id>(writer, projectile->get_entity_id());
-    serialize<float>(writer, projectile->get_position().x());
-    serialize<float>(writer, projectile->get_position().y());
-    serialize<float>(writer, projectile->get_position().z());
-    serialize<float>(writer, projectile->get_velocity().x());
-    serialize<float>(writer, projectile->get_velocity().y());
-    serialize<float>(writer, projectile->get_velocity().z());
+    serialize<Eigen::Vector3f>(writer, projectile->get_position());
+    serialize<Eigen::Vector3f>(writer, projectile->get_velocity());
   }
 }
 
