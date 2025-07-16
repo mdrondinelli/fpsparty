@@ -1,4 +1,6 @@
 #include "grid.hpp"
+#include "serial/serialize.hpp"
+#include <cstdint>
 
 namespace fpsparty::game {
 Grid::Grid(const Grid_create_info &create_info)
@@ -9,6 +11,16 @@ Grid::Grid(const Grid_create_info &create_info)
       _depth_chunks{(create_info.depth + (_chunk_side_length - 1)) /
                     _chunk_side_length} {
   _chunks.reserve(_width_chunks * _height_chunks * _depth_chunks);
+}
+
+void Grid::dump(serial::Writer &writer) const {
+  using serial::serialize;
+  serialize<std::uint32_t>(writer, _width_chunks);
+  serialize<std::uint32_t>(writer, _height_chunks);
+  serialize<std::uint32_t>(writer, _depth_chunks);
+  for (const auto &chunk : _chunks) {
+    serialize<std::uint64_t>(writer, chunk);
+  }
 }
 
 bool Grid::is_solid(const Eigen::Vector3i &location) const noexcept {
