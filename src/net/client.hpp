@@ -42,13 +42,12 @@ protected:
 
   virtual void on_disconnect();
 
-  virtual void
-  on_player_join_response(game::Entity_id player_entity_id);
+  virtual void on_player_join_response(game::Entity_id player_entity_id);
 
-  virtual void on_game_state(game::Sequence_number tick_number,
-                             serial::Reader &public_state_reader,
-                             serial::Reader &player_state_reader,
-                             std::uint8_t player_state_count);
+  virtual void on_snapshot(game::Sequence_number tick_number,
+                           serial::Reader &public_state_reader,
+                           serial::Reader &player_state_reader,
+                           std::uint8_t player_state_count);
 
 private:
   void handle_event(const enet::Event &e);

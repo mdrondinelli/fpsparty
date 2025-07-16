@@ -55,17 +55,16 @@ public:
       for (const auto &player : peer_node->players) {
         player->dump(player_state_writer);
       }
-      net::Server::send_game_state(
-          peer, _game.get_tick_number(),
-          std::as_bytes(std::span{
-              public_state_writer.stream().view().data(),
-              public_state_writer.stream().view().size(),
-          }),
-          std::as_bytes(std::span{
-              player_state_writer.stream().view().data(),
-              player_state_writer.stream().view().size(),
-          }),
-          peer_player_count);
+      net::Server::send_snapshot(peer, _game.get_tick_number(),
+                                 std::as_bytes(std::span{
+                                     public_state_writer.stream().view().data(),
+                                     public_state_writer.stream().view().size(),
+                                 }),
+                                 std::as_bytes(std::span{
+                                     player_state_writer.stream().view().data(),
+                                     player_state_writer.stream().view().size(),
+                                 }),
+                                 peer_player_count);
     }
   }
 
@@ -100,9 +99,8 @@ protected:
     send_player_join_response(peer, player->get_entity_id());
   }
 
-  void
-  on_player_leave_request(enet::Peer peer,
-                          game::Entity_id player_entity_id) override {
+  void on_player_leave_request(enet::Peer peer,
+                               game::Entity_id player_entity_id) override {
     const auto peer_node = static_cast<Peer_node *>(peer.get_data());
     for (auto it = peer_node->players.begin();
          it != peer_node->players.end();) {

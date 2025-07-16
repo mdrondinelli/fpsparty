@@ -39,8 +39,8 @@ void Server::disconnect() {
   }
 }
 
-void Server::send_player_join_response(
-    enet::Peer peer, game::Entity_id player_entity_id) {
+void Server::send_player_join_response(enet::Peer peer,
+                                       game::Entity_id player_entity_id) {
   auto writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<Message_type>(writer, Message_type::player_join_response);
@@ -53,10 +53,10 @@ void Server::send_player_join_response(
             }));
 }
 
-void Server::send_game_state(enet::Peer peer, game::Sequence_number tick_number,
-                             std::span<const std::byte> public_state,
-                             std::span<const std::byte> player_state,
-                             std::size_t player_state_count) {
+void Server::send_snapshot(enet::Peer peer, game::Sequence_number tick_number,
+                           std::span<const std::byte> public_state,
+                           std::span<const std::byte> player_state,
+                           std::size_t player_state_count) {
   auto packet = enet::create_packet_unique({
       .data = nullptr,
       .data_length = sizeof(Message_type) + sizeof(game::Sequence_number) +
@@ -123,8 +123,7 @@ void Server::handle_event(const enet::Event &e) {
       return;
     }
     case Message_type::player_leave_request: {
-      const auto player_entity_id =
-          deserialize<game::Entity_id>(reader);
+      const auto player_entity_id = deserialize<game::Entity_id>(reader);
       if (!player_entity_id) {
         std::cerr << "Malformed player leave request packet.\n";
         return;
@@ -133,8 +132,7 @@ void Server::handle_event(const enet::Event &e) {
       return;
     }
     case Message_type::player_input_state: {
-      const auto player_entity_id =
-          deserialize<game::Entity_id>(reader);
+      const auto player_entity_id = deserialize<game::Entity_id>(reader);
       if (!player_entity_id) {
         std::cerr << "Malformed player input state packet.\n";
         return;
@@ -150,8 +148,8 @@ void Server::handle_event(const enet::Event &e) {
         std::cerr << "Malformed player input state packet.\n";
         return;
       }
-      on_player_input_state(e.peer, *player_entity_id,
-                            *input_sequence_number, *input_state);
+      on_player_input_state(e.peer, *player_entity_id, *input_sequence_number,
+                            *input_state);
       return;
     }
     default:

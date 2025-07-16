@@ -317,10 +317,10 @@ protected:
     std::cout << "Got player join response. id = " << player_id << ".\n";
   }
 
-  void on_game_state(game::Sequence_number tick_number,
-                     serial::Reader &public_state_reader,
-                     serial::Reader &player_state_reader,
-                     std::uint8_t player_state_count) override {
+  void on_snapshot(game::Sequence_number tick_number,
+                   serial::Reader &public_state_reader,
+                   serial::Reader &player_state_reader,
+                   std::uint8_t player_state_count) override {
     if (!_has_game_state) {
       send_player_join_request();
     }

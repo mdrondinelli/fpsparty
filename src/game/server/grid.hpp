@@ -1,6 +1,7 @@
 #ifndef FPSPARTY_GAME_GRID_HPP
 #define FPSPARTY_GAME_GRID_HPP
 
+#include "serial/writer.hpp"
 #include <Eigen/Dense>
 #include <cstddef>
 
@@ -14,6 +15,8 @@ struct Grid_create_info {
 class Grid {
 public:
   explicit Grid(const Grid_create_info &create_info);
+
+  void dump(serial::Writer &writer) const;
 
   bool is_solid(const Eigen::Vector3i &location) const noexcept;
 

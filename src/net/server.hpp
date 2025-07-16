@@ -31,10 +31,12 @@ public:
   void send_player_join_response(enet::Peer peer,
                                  game::Entity_id player_entity_id);
 
-  void send_game_state(enet::Peer peer, game::Sequence_number tick_number,
-                       std::span<const std::byte> world_state,
-                       std::span<const std::byte> player_states,
-                       std::size_t player_state_count);
+  void send_grid(enet::Peer peer, std::span<const std::byte> state);
+
+  void send_snapshot(enet::Peer peer, game::Sequence_number tick_number,
+                     std::span<const std::byte> public_state,
+                     std::span<const std::byte> player_state,
+                     std::size_t player_state_count);
 
   std::size_t get_peer_count() const noexcept;
 
@@ -49,13 +51,11 @@ protected:
 
   virtual void on_player_join_request(enet::Peer);
 
-  virtual void
-  on_player_leave_request(enet::Peer peer,
-                          game::Entity_id player_entity_id);
+  virtual void on_player_leave_request(enet::Peer peer,
+                                       game::Entity_id player_entity_id);
 
   virtual void
-  on_player_input_state(enet::Peer peer,
-                        game::Entity_id player_entity_id,
+  on_player_input_state(enet::Peer peer, game::Entity_id player_entity_id,
                         game::Sequence_number input_sequence_number,
                         const game::Humanoid_input_state &input_state);
 
