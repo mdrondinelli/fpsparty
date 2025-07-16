@@ -53,10 +53,11 @@ void Server::send_player_join_response(enet::Peer peer,
             }));
 }
 
-void Server::send_snapshot(enet::Peer peer, game::Sequence_number tick_number,
-                           std::span<const std::byte> public_state,
-                           std::span<const std::byte> player_state,
-                           std::size_t player_state_count) {
+void Server::send_entity_snapshot(enet::Peer peer,
+                                  game::Sequence_number tick_number,
+                                  std::span<const std::byte> public_state,
+                                  std::span<const std::byte> player_state,
+                                  std::size_t player_state_count) {
   auto packet = enet::create_packet_unique({
       .data = nullptr,
       .data_length = sizeof(Message_type) + sizeof(game::Sequence_number) +

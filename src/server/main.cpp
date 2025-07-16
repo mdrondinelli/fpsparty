@@ -55,16 +55,17 @@ public:
       for (const auto &player : peer_node->players) {
         player->dump(player_state_writer);
       }
-      net::Server::send_snapshot(peer, _game.get_tick_number(),
-                                 std::as_bytes(std::span{
-                                     public_state_writer.stream().view().data(),
-                                     public_state_writer.stream().view().size(),
-                                 }),
-                                 std::as_bytes(std::span{
-                                     player_state_writer.stream().view().data(),
-                                     player_state_writer.stream().view().size(),
-                                 }),
-                                 peer_player_count);
+      net::Server::send_entity_snapshot(
+          peer, _game.get_tick_number(),
+          std::as_bytes(std::span{
+              public_state_writer.stream().view().data(),
+              public_state_writer.stream().view().size(),
+          }),
+          std::as_bytes(std::span{
+              player_state_writer.stream().view().data(),
+              player_state_writer.stream().view().size(),
+          }),
+          peer_player_count);
     }
   }
 

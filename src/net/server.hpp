@@ -31,12 +31,12 @@ public:
   void send_player_join_response(enet::Peer peer,
                                  game::Entity_id player_entity_id);
 
-  void send_grid(enet::Peer peer, std::span<const std::byte> state);
+  void send_grid_snapshot(enet::Peer peer, std::span<const std::byte> state);
 
-  void send_snapshot(enet::Peer peer, game::Sequence_number tick_number,
-                     std::span<const std::byte> public_state,
-                     std::span<const std::byte> player_state,
-                     std::size_t player_state_count);
+  void send_entity_snapshot(enet::Peer peer, game::Sequence_number tick_number,
+                            std::span<const std::byte> public_state,
+                            std::span<const std::byte> player_state,
+                            std::size_t player_state_count);
 
   std::size_t get_peer_count() const noexcept;
 
