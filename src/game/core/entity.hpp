@@ -23,6 +23,10 @@ class Entity : public rc::Object<Entity> {
 public:
   explicit Entity(Entity_id id) noexcept;
 
+  Entity(const Entity &other) = delete;
+
+  Entity &operator=(const Entity &other) = delete;
+
   Entity_id get_entity_id() const noexcept;
 
   bool add_remove_listener(Entity_remove_listener *listener);

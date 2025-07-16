@@ -20,6 +20,14 @@ public:
 
   void on_remove() override;
 
+  float get_min_y() const noexcept;
+
+  float get_max_y() const noexcept;
+
+  std::span<const Eigen::Vector2f> get_corners() const noexcept;
+
+  bool is_loop() const noexcept;
+
 private:
   float _min_y{};
   float _max_y{};

@@ -3,6 +3,7 @@
 #include "game/core/humanoid_movement.hpp"
 #include "game/core/projectile_movement.hpp"
 #include "game/core/sequence_number.hpp"
+#include "game/server/player.hpp"
 #include "math/transformation_matrices.hpp"
 #include "rc.hpp"
 #include <Eigen/Dense>
@@ -12,8 +13,8 @@ namespace fpsparty::game {
 Game::Game(const Game_create_info &) {}
 
 void Game::tick(float duration) {
-  const auto players = _world.get_players();
-  if (_world.get_humanoid_count() < 2) {
+  const auto players = _world.get_entities_of_type<Player>();
+  if (_world.count_entities_of_type<Humanoid>() < 2) {
     for (const auto &player : players) {
       auto humanoid = player->get_humanoid().lock();
       if (!humanoid) {
@@ -28,7 +29,7 @@ void Game::tick(float duration) {
       player_humanoid->set_input_state(player->get_input_state());
     }
   }
-  const auto humanoids = _world.get_humanoids();
+  const auto humanoids = _world.get_entities_of_type<Humanoid>();
   for (const auto &humanoid : humanoids) {
     humanoid->decrease_attack_cooldown(duration);
     if (humanoid->get_input_state().use_primary &&
@@ -60,7 +61,7 @@ void Game::tick(float duration) {
         (movement_result.final_position - movement_info.initial_position) /
         duration);
   }
-  const auto projectiles = _world.get_projectiles();
+  const auto projectiles = _world.get_entities_of_type<Projectile>();
   for (const auto &projectile : projectiles) {
     const auto movement_result = simulate_projectile_movement({
         .initial_position = projectile->get_position(),
