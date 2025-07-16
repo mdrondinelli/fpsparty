@@ -2,6 +2,7 @@
 #define FPSPARTY_RC_HPP
 
 #include <atomic>
+#include <concepts>
 #include <cstddef>
 #include <memory>
 #include <memory_resource>
@@ -36,6 +37,12 @@ private:
   std::atomic<std::size_t> _strong_reference_count{};
   std::atomic<std::size_t> _weak_reference_count{};
 };
+
+namespace detail {
+template <typename T> Strong<T> construct_strong(T *object) noexcept {
+  return Strong<T>{object};
+}
+} // namespace detail
 
 template <typename T> class Strong {
 public:
@@ -85,7 +92,30 @@ public:
       ++_object->_strong_reference_count;
       ++_object->_weak_reference_count;
     }
-    return Strong<const T>{_object};
+    return detail::construct_strong<const T>(_object);
+  }
+
+  template <typename U>
+  requires std::derived_from<T, U>
+  operator Strong<U>() const noexcept {
+    if (_object) {
+      ++_object->_strong_reference_count;
+      ++_object->_weak_reference_count;
+    }
+    return detail::construct_strong<U>(_object);
+  }
+
+  template <std::derived_from<T> U> Strong<U> downcast() const noexcept {
+    const auto u = dynamic_cast<U *>(_object);
+    if (u != nullptr) {
+      if (_object) {
+        ++_object->_strong_reference_count;
+        ++_object->_weak_reference_count;
+      }
+      return detail::construct_strong(u);
+    } else {
+      return nullptr;
+    }
   }
 
   constexpr T &operator*() const noexcept { return *_object; }
@@ -99,6 +129,8 @@ private:
   friend class Factory<T>;
   friend class Object<T>;
   friend class Weak<T>;
+
+  friend Strong<T> detail::construct_strong(T *object) noexcept;
 
   constexpr explicit Strong(T *object) noexcept : _object{object} {}
 
