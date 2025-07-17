@@ -1,4 +1,4 @@
-#include "world.hpp"
+#include "entity_world.hpp"
 #include "algorithms/unordered_erase.hpp"
 #include "game/core/entity.hpp"
 #include "game/server/humanoid.hpp"
@@ -6,7 +6,7 @@
 #include <Eigen/Dense>
 
 namespace fpsparty::game {
-void World::dump(serial::Writer &writer) const {
+void Entity_world::dump(serial::Writer &writer) const {
   using serial::serialize;
   const auto humanoids = get_entities_of_type<Humanoid>();
   serialize<std::uint8_t>(writer, humanoids.size());
@@ -24,7 +24,7 @@ void World::dump(serial::Writer &writer) const {
   }
 }
 
-bool World::add(const rc::Strong<Entity> &entity) {
+bool Entity_world::add(const rc::Strong<Entity> &entity) {
   const auto it = std::ranges::find(_entities, entity);
   if (it == _entities.end()) {
     _entities.emplace_back(entity);
@@ -34,7 +34,7 @@ bool World::add(const rc::Strong<Entity> &entity) {
   }
 }
 
-bool World::remove(const rc::Strong<Entity> &entity) noexcept {
+bool Entity_world::remove(const rc::Strong<Entity> &entity) noexcept {
   const auto it = std::ranges::find(_entities, entity);
   if (it != _entities.end()) {
     detail::on_remove_entity(**it);

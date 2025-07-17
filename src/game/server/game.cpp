@@ -128,7 +128,7 @@ Game::create_projectile(const Projectile_create_info &info) {
 
 Sequence_number Game::get_tick_number() const noexcept { return _tick_number; }
 
-const World &Game::get_world() const noexcept { return _world; }
+const Entity_world &Game::get_world() const noexcept { return _world; }
 
-World &Game::get_world() noexcept { return _world; }
+Entity_world &Game::get_world() noexcept { return _world; }
 } // namespace fpsparty::game

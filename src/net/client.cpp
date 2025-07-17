@@ -142,8 +142,8 @@ void Client::handle_event(const enet::Event &e) {
         std::cerr << "Failed to obtain player_state_reader.\n";
         goto malformed_message;
       }
-      on_snapshot(*tick_number, *public_state_reader, *player_state_reader,
-                  *player_state_count);
+      on_entity_snapshot(*tick_number, *public_state_reader,
+                         *player_state_reader, *player_state_count);
       return;
     }
     default:
@@ -167,6 +167,6 @@ void Client::on_disconnect() {}
 
 void Client::on_player_join_response(game::Entity_id) {}
 
-void Client::on_snapshot(game::Sequence_number, serial::Reader &,
-                         serial::Reader &, std::uint8_t) {}
+void Client::on_entity_snapshot(game::Sequence_number, serial::Reader &,
+                                serial::Reader &, std::uint8_t) {}
 } // namespace fpsparty::net

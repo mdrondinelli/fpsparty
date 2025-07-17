@@ -9,7 +9,7 @@
 #include <vector>
 
 namespace fpsparty::game {
-class World {
+class Entity_world {
 public:
   void dump(serial::Writer &writer) const;
 

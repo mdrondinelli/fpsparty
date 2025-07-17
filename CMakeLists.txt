@@ -32,12 +32,12 @@ target_compile_definitions(game-core PUBLIC FPSPARTY_SERIAL_EIGEN)
 # libgame-server
 add_library(
   game-server
+  src/game/server/entity_world.cpp
   src/game/server/game.cpp
   src/game/server/grid.cpp
   src/game/server/humanoid.cpp
   src/game/server/player.cpp
   src/game/server/projectile.cpp
-  src/game/server/world.cpp
 )
 target_include_directories(
   game-server
