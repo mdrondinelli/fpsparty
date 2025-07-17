@@ -77,7 +77,12 @@ protected:
   void on_peer_connect(enet::Peer peer) override {
     std::cout << "Peer connected.\n";
     peer.set_data(new Peer_node);
-    send_grid_snapshot(peer, /* TODO: send grid snapshot */);
+    const auto &grid = _game.get_grid();
+    auto writer = serial::Ostringstream_writer{};
+    grid.dump(writer);
+    send_grid_snapshot(peer,
+                       std::as_bytes(std::span{writer.stream().view().data(),
+                                               writer.stream().view().size()}));
   }
 
   void on_peer_disconnect(enet::Peer peer) override {

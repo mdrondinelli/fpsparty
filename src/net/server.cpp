@@ -53,6 +53,20 @@ void Server::send_player_join_response(enet::Peer peer,
             }));
 }
 
+void Server::send_grid_snapshot(enet::Peer peer,
+                                std::span<const std::byte> state) {
+  auto packet = enet::create_packet_unique({
+      .data = nullptr,
+      .data_length = sizeof(Message_type) + state.size(),
+      .flags = enet::Packet_flag_bits::reliable,
+  });
+  auto writer = serial::Span_writer{std::as_writable_bytes(packet->get_data())};
+  using serial::serialize;
+  serialize<Message_type>(writer, Message_type::grid_snapshot);
+  writer.write(state);
+  peer.send(constants::grid_snapshot_channel_id, std::move(packet));
+}
+
 void Server::send_entity_snapshot(enet::Peer peer,
                                   game::Sequence_number tick_number,
                                   std::span<const std::byte> public_state,

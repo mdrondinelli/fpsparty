@@ -10,7 +10,7 @@
 #include <Eigen/Geometry>
 
 namespace fpsparty::game {
-Game::Game(const Game_create_info &) {}
+Game::Game(const Game_create_info &info) : _grid{info.grid_info} {}
 
 void Game::tick(float duration) {
   const auto players = _entities.get_entities_of_type<Player>();
@@ -127,6 +127,10 @@ Game::create_projectile(const Projectile_create_info &info) {
 }
 
 Sequence_number Game::get_tick_number() const noexcept { return _tick_number; }
+
+const Grid &Game::get_grid() const noexcept { return _grid; }
+
+Grid &Game::get_grid() noexcept { return _grid; }
 
 const Entity_world &Game::get_entities() const noexcept { return _entities; }
 

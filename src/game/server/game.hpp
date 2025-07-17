@@ -4,6 +4,7 @@
 #include "game/core/entity_id.hpp"
 #include "game/core/sequence_number.hpp"
 #include "game/server/entity_world.hpp"
+#include "game/server/grid.hpp"
 #include "game/server/humanoid.hpp"
 #include "game/server/player.hpp"
 #include "game/server/projectile.hpp"
@@ -11,7 +12,9 @@
 #include <exception>
 
 namespace fpsparty::game {
-struct Game_create_info {};
+struct Game_create_info {
+  Grid_create_info grid_info{};
+};
 
 class Game_snapshotting_error : public std::exception {};
 
@@ -31,6 +34,10 @@ public:
 
   Sequence_number get_tick_number() const noexcept;
 
+  const Grid &get_grid() const noexcept;
+
+  Grid &get_grid() noexcept;
+
   const Entity_world &get_entities() const noexcept;
 
   Entity_world &get_entities() noexcept;
@@ -40,8 +47,9 @@ private:
   rc::Factory<Humanoid> _humanoid_factory{};
   rc::Factory<Projectile> _projectile_factory{};
   Sequence_number _tick_number{};
-  Entity_id _next_entity_id{1};
+  Grid _grid;
   Entity_world _entities{};
+  Entity_id _next_entity_id{1};
 };
 } // namespace fpsparty::game
 
