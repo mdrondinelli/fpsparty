@@ -114,6 +114,10 @@ void Client::handle_event(const enet::Event &e) {
       on_player_join_response(*player_entity_id);
       return;
     }
+    case Message_type::grid_snapshot: {
+      on_grid_snapshot(reader);
+      return;
+    }
     case Message_type::entity_snapshot: {
       const auto tick_number = deserialize<game::Sequence_number>(reader);
       if (!tick_number) {
