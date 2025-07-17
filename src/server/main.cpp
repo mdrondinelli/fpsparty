@@ -47,7 +47,7 @@ public:
 
   void broadcast_game_state() {
     auto public_state_writer = serial::Ostringstream_writer{};
-    _game.get_world().dump(public_state_writer);
+    _game.get_entities().dump(public_state_writer);
     for (const auto &peer : get_peers()) {
       auto player_state_writer = serial::Ostringstream_writer{};
       const auto peer_node = static_cast<Peer_node *>(peer.get_data());
@@ -87,9 +87,9 @@ protected:
     for (const auto &player : peer_node->players) {
       const auto humanoid = player->get_humanoid().lock();
       if (humanoid) {
-        _game.get_world().remove(humanoid);
+        _game.get_entities().remove(humanoid);
       }
-      _game.get_world().remove(player);
+      _game.get_entities().remove(player);
     }
   }
 
@@ -97,7 +97,7 @@ protected:
     const auto peer_node = static_cast<Peer_node *>(peer.get_data());
     const auto player = _game.create_player({});
     peer_node->players.emplace_back(player);
-    _game.get_world().add(player);
+    _game.get_entities().add(player);
     send_player_join_response(peer, player->get_entity_id());
   }
 
@@ -109,9 +109,9 @@ protected:
       if ((*it)->get_entity_id() == player_entity_id) {
         const auto humanoid = (*it)->get_humanoid().lock();
         if (humanoid) {
-          _game.get_world().remove(humanoid);
+          _game.get_entities().remove(humanoid);
         }
-        _game.get_world().remove(*it);
+        _game.get_entities().remove(*it);
         it = peer_node->players.erase(it);
       } else {
         ++it;

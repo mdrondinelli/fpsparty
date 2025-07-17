@@ -31,9 +31,9 @@ public:
 
   Sequence_number get_tick_number() const noexcept;
 
-  const Entity_world &get_world() const noexcept;
+  const Entity_world &get_entities() const noexcept;
 
-  Entity_world &get_world() noexcept;
+  Entity_world &get_entities() noexcept;
 
 private:
   rc::Factory<Player> _player_factory{};
@@ -41,7 +41,7 @@ private:
   rc::Factory<Projectile> _projectile_factory{};
   Sequence_number _tick_number{};
   Entity_id _next_entity_id{1};
-  Entity_world _world{};
+  Entity_world _entities{};
 };
 } // namespace fpsparty::game
 

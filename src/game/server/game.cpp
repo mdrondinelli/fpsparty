@@ -13,13 +13,13 @@ namespace fpsparty::game {
 Game::Game(const Game_create_info &) {}
 
 void Game::tick(float duration) {
-  const auto players = _world.get_entities_of_type<Player>();
-  if (_world.count_entities_of_type<Humanoid>() < 2) {
+  const auto players = _entities.get_entities_of_type<Player>();
+  if (_entities.count_entities_of_type<Humanoid>() < 2) {
     for (const auto &player : players) {
       auto humanoid = player->get_humanoid().lock();
       if (!humanoid) {
         humanoid = create_humanoid({});
-        _world.add(humanoid);
+        _entities.add(humanoid);
         player->set_humanoid(humanoid);
       }
     }
@@ -29,7 +29,7 @@ void Game::tick(float duration) {
       player_humanoid->set_input_state(player->get_input_state());
     }
   }
-  const auto humanoids = _world.get_entities_of_type<Humanoid>();
+  const auto humanoids = _entities.get_entities_of_type<Humanoid>();
   for (const auto &humanoid : humanoids) {
     humanoid->decrease_attack_cooldown(duration);
     if (humanoid->get_input_state().use_primary &&
@@ -40,7 +40,7 @@ void Game::tick(float duration) {
               .eval();
       const auto up = basis.col(1).head<3>().eval();
       const auto forward = basis.col(2).head<3>().eval();
-      _world.add(create_projectile({
+      _entities.add(create_projectile({
           .creator = humanoid,
           .position =
               humanoid->get_position() + Eigen::Vector3f::UnitY() * 1.5f,
@@ -61,7 +61,7 @@ void Game::tick(float duration) {
         (movement_result.final_position - movement_info.initial_position) /
         duration);
   }
-  const auto projectiles = _world.get_entities_of_type<Projectile>();
+  const auto projectiles = _entities.get_entities_of_type<Projectile>();
   for (const auto &projectile : projectiles) {
     const auto movement_result = simulate_projectile_movement({
         .initial_position = projectile->get_position(),
@@ -100,14 +100,14 @@ void Game::tick(float duration) {
           projectile->get_position() + projectile_half_extents,
       };
       if (projectile_bounds.intersects(humanoid_bounds)) {
-        _world.remove(humanoid);
+        _entities.remove(humanoid);
         break;
       }
     }
   }
   for (const auto &projectile : projectiles) {
     if (projectile->get_position().y() < 0.0f) {
-      _world.remove(projectile);
+      _entities.remove(projectile);
     }
   }
   ++_tick_number;
@@ -128,7 +128,7 @@ Game::create_projectile(const Projectile_create_info &info) {
 
 Sequence_number Game::get_tick_number() const noexcept { return _tick_number; }
 
-const Entity_world &Game::get_world() const noexcept { return _world; }
+const Entity_world &Game::get_entities() const noexcept { return _entities; }
 
-Entity_world &Game::get_world() noexcept { return _world; }
+Entity_world &Game::get_entities() noexcept { return _entities; }
 } // namespace fpsparty::game
