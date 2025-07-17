@@ -80,7 +80,7 @@ void Server::send_entity_snapshot(enet::Peer peer,
   });
   auto writer = serial::Span_writer{std::as_writable_bytes(packet->get_data())};
   using serial::serialize;
-  serialize<Message_type>(writer, Message_type::game_state);
+  serialize<Message_type>(writer, Message_type::entity_snapshot);
   serialize<game::Sequence_number>(writer, tick_number);
   serialize<std::uint16_t>(writer, public_state.size());
   serialize<std::uint8_t>(writer, player_state_count);
