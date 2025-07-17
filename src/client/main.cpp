@@ -312,6 +312,8 @@ protected:
     _in_flight_input_states.clear();
   }
 
+  // void on_grid_snapshot(serial::Reader &reader) override {}
+
   void on_player_join_response(game::Entity_id player_id) override {
     _player_id = player_id;
     std::cout << "Got player join response. id = " << player_id << ".\n";

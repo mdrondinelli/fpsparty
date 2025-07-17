@@ -13,6 +13,7 @@ add_library(
   game-core
   src/game/core/grid.cpp
   src/game/core/entity.cpp
+  src/game/core/entity_world.cpp
   src/game/core/humanoid_movement.cpp
   src/game/core/projectile_movement.cpp
 )
@@ -33,7 +34,6 @@ target_compile_definitions(game-core PUBLIC FPSPARTY_SERIAL_EIGEN)
 # libgame-server
 add_library(
   game-server
-  src/game/server/entity_world.cpp
   src/game/server/game.cpp
   src/game/server/humanoid.cpp
   src/game/server/player.cpp
