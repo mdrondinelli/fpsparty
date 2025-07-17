@@ -2,9 +2,9 @@
 #define FPSPARTY_GAME_GAME_HPP
 
 #include "game/core/entity_id.hpp"
+#include "game/core/grid.hpp"
 #include "game/core/sequence_number.hpp"
 #include "game/server/entity_world.hpp"
-#include "game/server/grid.hpp"
 #include "game/server/humanoid.hpp"
 #include "game/server/player.hpp"
 #include "game/server/projectile.hpp"
