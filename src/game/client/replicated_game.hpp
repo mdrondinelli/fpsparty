@@ -1,7 +1,10 @@
 #ifndef FPSPARTY_GAME_REPLICATED_GAME_HPP
 #define FPSPARTY_GAME_REPLICATED_GAME_HPP
 
-#include "game/client/replicated_world.hpp"
+#include "game/client/replicated_humanoid.hpp"
+#include "game/client/replicated_player.hpp"
+#include "game/client/replicated_projectile.hpp"
+#include "game/core/entity_world.hpp"
 #include "game/core/sequence_number.hpp"
 #include "serial/reader.hpp"
 #include <exception>
@@ -13,7 +16,6 @@ struct Replicated_game_load_info {
   Sequence_number tick_number{};
   serial::Reader *public_state_reader{};
   serial::Reader *player_state_reader{};
-  std::uint8_t player_state_count{};
 };
 
 class Replicated_game_load_error : public std::exception {};
@@ -28,14 +30,17 @@ public:
 
   void reset();
 
-  const Replicated_world &get_world() const noexcept;
+  const Entity_world &get_world() const noexcept;
 
-  Replicated_world &get_world() noexcept;
+  Entity_world &get_world() noexcept;
 
   Sequence_number get_tick_number() const noexcept;
 
 private:
-  Replicated_world _world{};
+  Entity_world _world{};
+  Replicated_humanoid_loader _humanoid_loader{};
+  Replicated_projectile_loader _projectile_loader{};
+  Replicated_player_loader _player_loader{};
   Sequence_number _tick_number{};
 };
 } // namespace fpsparty::game

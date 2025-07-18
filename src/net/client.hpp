@@ -48,8 +48,7 @@ protected:
 
   virtual void on_entity_snapshot(game::Sequence_number tick_number,
                                   serial::Reader &public_state_reader,
-                                  serial::Reader &player_state_reader,
-                                  std::uint8_t player_state_count);
+                                  serial::Reader &player_state_reader);
 
 private:
   void handle_event(const enet::Event &e);

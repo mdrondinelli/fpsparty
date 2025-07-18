@@ -3,6 +3,7 @@
 
 #include "game/core/entity.hpp"
 #include "game/core/entity_id.hpp"
+#include "game/core/entity_world.hpp"
 #include "game/core/humanoid_input_state.hpp"
 #include "game/core/sequence_number.hpp"
 #include "game/server/humanoid.hpp"
@@ -14,12 +15,9 @@ struct Player_create_info {};
 
 class Player : public Entity, rc::Object<Player> {
 public:
-  explicit Player(Entity_id entity_id,
-                  const Player_create_info &info) noexcept;
+  explicit Player(Entity_id entity_id, const Player_create_info &info) noexcept;
 
   void on_remove() override;
-
-  void dump(serial::Writer &writer) const;
 
   const rc::Weak<Humanoid> &get_humanoid() const noexcept;
 
@@ -47,6 +45,13 @@ private:
   Humanoid_remove_listener _humanoid_remove_listener;
   Humanoid_input_state _input_state{};
   std::optional<Sequence_number> _input_sequence_number{};
+};
+
+class Player_dumper : public Entity_dumper {
+public:
+  Entity_type get_entity_type() const noexcept override;
+
+  void dump_entity(serial::Writer &writer, const Entity &entity) const override;
 };
 } // namespace fpsparty::game
 

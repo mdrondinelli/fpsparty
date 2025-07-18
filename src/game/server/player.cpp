@@ -11,24 +11,10 @@ void Player::Humanoid_remove_listener::on_remove_entity() {
   _player->set_humanoid(nullptr);
 }
 
-Player::Player(Entity_id entity_id,
-               const Player_create_info &) noexcept
-    : Entity{entity_id}, _humanoid_remove_listener{this} {}
+Player::Player(Entity_id entity_id, const Player_create_info &) noexcept
+    : Entity{Entity_type::player, entity_id}, _humanoid_remove_listener{this} {}
 
 void Player::on_remove() { set_humanoid(nullptr); }
-
-void Player::dump(serial::Writer &writer) const {
-  using serial::serialize;
-  serialize<Entity_id>(writer, get_entity_id());
-  const auto humanoid = _humanoid.lock();
-  const auto humanoid_entity_id =
-      humanoid ? humanoid->get_entity_id() : 0;
-  serialize<Entity_id>(writer, humanoid_entity_id);
-  if (humanoid_entity_id) {
-    serialize<Humanoid_input_state>(writer, _input_state);
-    serialize<std::optional<Sequence_number>>(writer, _input_sequence_number);
-  }
-}
 
 const rc::Weak<Humanoid> &Player::get_humanoid() const noexcept {
   return _humanoid;
@@ -60,6 +46,25 @@ void Player::set_input_state(const Humanoid_input_state &input_state,
   if (input_sequence_number > *_input_sequence_number) {
     _input_state = input_state;
     _input_sequence_number = input_sequence_number;
+  }
+}
+
+Entity_type Player_dumper::get_entity_type() const noexcept {
+  return Entity_type::player;
+}
+
+void Player_dumper::dump_entity(serial::Writer &writer,
+                                const Entity &entity) const {
+  using serial::serialize;
+  if (const auto player = dynamic_cast<const Player *>(&entity)) {
+    const auto humanoid = player->get_humanoid().lock();
+    const auto humanoid_entity_id = humanoid ? humanoid->get_entity_id() : 0;
+    serialize<Entity_id>(writer, humanoid_entity_id);
+    if (humanoid_entity_id) {
+      serialize<Humanoid_input_state>(writer, player->get_input_state());
+      serialize<std::optional<Sequence_number>>(
+          writer, player->get_input_sequence_number());
+    }
   }
 }
 } // namespace fpsparty::game

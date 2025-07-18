@@ -12,7 +12,7 @@ void Projectile::Creator_remove_listener::on_remove_entity() {
 
 Projectile::Projectile(Entity_id entity_id,
                        const Projectile_create_info &info) noexcept
-    : Entity{entity_id},
+    : Entity{Entity_type::projectile, entity_id},
       _creator{info.creator},
       _creator_remove_listener{this},
       _position{info.position},
@@ -50,4 +50,18 @@ const Eigen::Vector3f &Projectile::get_velocity() const noexcept {
 void Projectile::set_velocity(const Eigen::Vector3f &velocity) noexcept {
   _velocity = velocity;
 }
+
+Entity_type Projectile_dumper::get_entity_type() const noexcept {
+  return Entity_type::projectile;
+}
+
+void Projectile_dumper::dump_entity(serial::Writer &writer,
+                                    const Entity &entity) const {
+  using serial::serialize;
+  if (const auto projectile = dynamic_cast<const Projectile *>(&entity)) {
+    serialize<Eigen::Vector3f>(writer, projectile->get_position());
+    serialize<Eigen::Vector3f>(writer, projectile->get_velocity());
+  }
+}
+
 } // namespace fpsparty::game

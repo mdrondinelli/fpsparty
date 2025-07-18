@@ -2,9 +2,8 @@
 #include "game/core/entity_id.hpp"
 
 namespace fpsparty::game {
-Humanoid::Humanoid(Entity_id entity_id,
-                   const Humanoid_create_info &) noexcept
-    : Entity{entity_id} {}
+Humanoid::Humanoid(Entity_id entity_id, const Humanoid_create_info &) noexcept
+    : Entity{Entity_type::humanoid, entity_id} {}
 
 void Humanoid::on_remove() {}
 
@@ -42,5 +41,18 @@ const Eigen::Vector3f &Humanoid::get_velocity() const noexcept {
 
 void Humanoid::set_velocity(const Eigen::Vector3f &value) noexcept {
   _velocity = value;
+}
+
+Entity_type Humanoid_dumper::get_entity_type() const noexcept {
+  return Entity_type::humanoid;
+}
+
+void Humanoid_dumper::dump_entity(serial::Writer &writer,
+                                  const Entity &entity) const {
+  using serial::serialize;
+  if (const auto humanoid = dynamic_cast<const Humanoid *>(&entity)) {
+    serialize<Eigen::Vector3f>(writer, humanoid->get_position());
+    serialize<Humanoid_input_state>(writer, humanoid->get_input_state());
+  }
 }
 } // namespace fpsparty::game

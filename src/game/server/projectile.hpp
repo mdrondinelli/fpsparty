@@ -45,6 +45,13 @@ private:
   Eigen::Vector3f _position{Eigen::Vector3f::Zero()};
   Eigen::Vector3f _velocity{Eigen::Vector3f::Zero()};
 };
+
+class Projectile_dumper : public Entity_dumper {
+public:
+  Entity_type get_entity_type() const noexcept override;
+
+  void dump_entity(serial::Writer &writer, const Entity &entity) const override;
+};
 } // namespace fpsparty::game
 
 #endif

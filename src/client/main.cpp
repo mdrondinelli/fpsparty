@@ -5,6 +5,9 @@
 #include "constants.hpp"
 #include "enet.hpp"
 #include "game/client/replicated_game.hpp"
+#include "game/client/replicated_humanoid.hpp"
+#include "game/client/replicated_player.hpp"
+#include "game/client/replicated_projectile.hpp"
 #include "game/core/entity_id.hpp"
 #include "game/core/sequence_number.hpp"
 #include "glfw.hpp"
@@ -217,7 +220,9 @@ public:
         _graphics.bind_index_buffer(_cube_index_buffer.get_buffer(),
                                     vk::IndexType::eUint16);
         // draw other players (cubes)
-        for (const auto &other_humanoid : _game.get_world().get_humanoids()) {
+        for (const auto &other_humanoid :
+             _game.get_world()
+                 .get_entities_of_type<game::Replicated_humanoid>()) {
           if (other_humanoid != player_humanoid) {
             const auto model_matrix =
                 (math::translation_matrix(other_humanoid->get_position() +
@@ -233,7 +238,9 @@ public:
           }
         }
         // draw projectiles (cubes)
-        for (const auto &projectile : _game.get_world().get_projectiles()) {
+        for (const auto &projectile :
+             _game.get_world()
+                 .get_entities_of_type<game::Replicated_projectile>()) {
           const auto model_matrix =
               (math::translation_matrix(projectile->get_position()) *
                math::uniform_scale_matrix(0.25f))
@@ -294,8 +301,9 @@ public:
   bool has_game_state() const noexcept { return _has_game_state; }
 
   rc::Strong<game::Replicated_player> get_player() const noexcept {
-    return _player_id ? _game.get_world().get_player_by_entity_id(*_player_id)
-                      : nullptr;
+    return (_player_id ? _game.get_world().get_entity_by_id(*_player_id)
+                       : nullptr)
+        .downcast<game::Replicated_player>();
   }
 
   constexpr glfw::Window get_window() const noexcept { return _glfw_window; }
@@ -321,8 +329,7 @@ protected:
 
   void on_entity_snapshot(game::Sequence_number tick_number,
                           serial::Reader &public_state_reader,
-                          serial::Reader &player_state_reader,
-                          std::uint8_t player_state_count) override {
+                          serial::Reader &player_state_reader) override {
     if (!_has_game_state) {
       send_player_join_request();
     }
@@ -331,7 +338,6 @@ protected:
         .tick_number = tick_number,
         .public_state_reader = &public_state_reader,
         .player_state_reader = &player_state_reader,
-        .player_state_count = player_state_count,
     });
     if (const auto player = get_player()) {
       const auto acknowledged_input_sequence_number =

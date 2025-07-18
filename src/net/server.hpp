@@ -35,8 +35,7 @@ public:
 
   void send_entity_snapshot(enet::Peer peer, game::Sequence_number tick_number,
                             std::span<const std::byte> public_state,
-                            std::span<const std::byte> player_state,
-                            std::size_t player_state_count);
+                            std::span<const std::byte> player_state);
 
   std::size_t get_peer_count() const noexcept;
 

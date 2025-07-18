@@ -106,16 +106,15 @@ public:
   }
 
   template <std::derived_from<T> U> Strong<U> downcast() const noexcept {
-    const auto u = dynamic_cast<U *>(_object);
-    if (u != nullptr) {
-      if (_object) {
+    if (_object != nullptr) {
+      const auto u = dynamic_cast<U *>(_object);
+      if (u != nullptr) {
         ++_object->_strong_reference_count;
         ++_object->_weak_reference_count;
+        return detail::construct_strong(u);
       }
-      return detail::construct_strong(u);
-    } else {
-      return nullptr;
     }
+    return nullptr;
   }
 
   constexpr T &operator*() const noexcept { return *_object; }

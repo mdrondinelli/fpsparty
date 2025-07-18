@@ -3,6 +3,7 @@
 
 #include "game/core/entity.hpp"
 #include "game/core/entity_id.hpp"
+#include "game/core/entity_world.hpp"
 #include "game/core/humanoid_input_state.hpp"
 #include <Eigen/Dense>
 
@@ -39,6 +40,13 @@ private:
   float _attack_cooldown{};
   Eigen::Vector3f _position{Eigen::Vector3f::Zero()};
   Eigen::Vector3f _velocity{Eigen::Vector3f::Zero()};
+};
+
+class Humanoid_dumper : public Entity_dumper {
+public:
+  Entity_type get_entity_type() const noexcept override;
+
+  void dump_entity(serial::Writer &writer, const Entity &entity) const override;
 };
 } // namespace fpsparty::game
 

@@ -129,11 +129,6 @@ void Client::handle_event(const enet::Event &e) {
         std::cerr << "Failed to deserialize public_state_size.\n";
         goto malformed_message;
       }
-      const auto player_state_count = deserialize<std::uint8_t>(reader);
-      if (!player_state_count) {
-        std::cerr << "Failed to deserialize player_state_count.\n";
-        goto malformed_message;
-      }
       auto public_state_reader =
           reader.subspan_reader(reader.offset(), *public_state_size);
       if (!public_state_reader) {
@@ -147,7 +142,7 @@ void Client::handle_event(const enet::Event &e) {
         goto malformed_message;
       }
       on_entity_snapshot(*tick_number, *public_state_reader,
-                         *player_state_reader, *player_state_count);
+                         *player_state_reader);
       return;
     }
     default:
@@ -171,6 +166,8 @@ void Client::on_disconnect() {}
 
 void Client::on_player_join_response(game::Entity_id) {}
 
+void Client::on_grid_snapshot(serial::Reader &) {}
+
 void Client::on_entity_snapshot(game::Sequence_number, serial::Reader &,
-                                serial::Reader &, std::uint8_t) {}
+                                serial::Reader &) {}
 } // namespace fpsparty::net

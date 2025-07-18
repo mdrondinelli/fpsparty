@@ -2,6 +2,7 @@
 #define FPSPARTY_GAME_ENTITY_HPP
 
 #include "game/core/entity_id.hpp"
+#include "game/core/entity_type.hpp"
 #include "rc.hpp"
 #include <vector>
 
@@ -21,11 +22,13 @@ public:
 
 class Entity : public rc::Object<Entity> {
 public:
-  explicit Entity(Entity_id id) noexcept;
+  explicit Entity(Entity_type type, Entity_id id) noexcept;
 
   Entity(const Entity &other) = delete;
 
   Entity &operator=(const Entity &other) = delete;
+
+  Entity_type get_entity_type() const noexcept;
 
   Entity_id get_entity_id() const noexcept;
 
@@ -39,6 +42,7 @@ protected:
 private:
   friend void detail::on_remove_entity(Entity &entity) noexcept;
 
+  Entity_type _entity_type{};
   Entity_id _entity_id{};
   std::vector<Entity_remove_listener *> _removal_listeners{};
 };

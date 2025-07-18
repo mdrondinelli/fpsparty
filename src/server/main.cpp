@@ -1,8 +1,10 @@
 #include "constants.hpp"
 #include "enet.hpp"
 #include "game/core/entity_id.hpp"
+#include "game/core/entity_type.hpp"
 #include "game/core/sequence_number.hpp"
 #include "game/server/game.hpp"
+#include "game/server/player.hpp"
 #include "net/constants.hpp"
 #include "net/server.hpp"
 #include "serial/ostream_writer.hpp"
@@ -46,14 +48,30 @@ public:
   }
 
   void broadcast_game_state() {
+    using serial::serialize;
     auto public_state_writer = serial::Ostringstream_writer{};
-    _game.get_entities().dump(public_state_writer);
+    const auto humanoid_dumper = game::Humanoid_dumper{};
+    const auto projectile_dumper = game::Projectile_dumper{};
+    const auto public_state_dumpers =
+        std::array<const game::Entity_dumper *, 2>{
+            &humanoid_dumper,
+            &projectile_dumper,
+        };
+    _game.get_entities().dump({
+        .writer = &public_state_writer,
+        .dumpers = public_state_dumpers,
+    });
     for (const auto &peer : get_peers()) {
       auto player_state_writer = serial::Ostringstream_writer{};
       const auto peer_node = static_cast<Peer_node *>(peer.get_data());
       const auto peer_player_count = peer_node->players.size();
+      serialize<std::uint32_t>(player_state_writer, peer_player_count);
       for (const auto &player : peer_node->players) {
-        player->dump(player_state_writer);
+        serialize<game::Entity_type>(player_state_writer,
+                                     game::Entity_type::player);
+        serialize<game::Entity_id>(player_state_writer,
+                                   player->get_entity_id());
+        game::Player_dumper{}.dump_entity(player_state_writer, *player);
       }
       net::Server::send_entity_snapshot(
           peer, _game.get_tick_number(),
@@ -64,8 +82,7 @@ public:
           std::as_bytes(std::span{
               player_state_writer.stream().view().data(),
               player_state_writer.stream().view().size(),
-          }),
-          peer_player_count);
+          }));
     }
   }
 
@@ -77,6 +94,7 @@ protected:
   void on_peer_connect(enet::Peer peer) override {
     std::cout << "Peer connected.\n";
     peer.set_data(new Peer_node);
+    return;
     const auto &grid = _game.get_grid();
     auto writer = serial::Ostringstream_writer{};
     grid.dump(writer);
