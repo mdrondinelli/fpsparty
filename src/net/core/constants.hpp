@@ -1,5 +1,5 @@
-#ifndef FPSPARTY_NET_CONSTANTS_HPP
-#define FPSPARTY_NET_CONSTANTS_HPP
+#ifndef FPSPARTY_NET_CORE_CONSTANTS_HPP
+#define FPSPARTY_NET_CORE_CONSTANTS_HPP
 
 #include <cstddef>
 #include <cstdint>

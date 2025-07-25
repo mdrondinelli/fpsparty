@@ -2,9 +2,9 @@
 #define FPSPARTY_NET_CLIENT_H
 
 #include "enet.hpp"
-#include "game/core/entity_id.hpp"
-#include "game/core/humanoid_input_state.hpp"
-#include "game/core/sequence_number.hpp"
+#include "net/core/entity_id.hpp"
+#include "net/core/input_state.hpp"
+#include "net/core/sequence_number.hpp"
 #include "serial/reader.hpp"
 
 namespace fpsparty::net {
@@ -31,22 +31,22 @@ public:
 
   void send_player_join_request();
 
-  void send_player_leave_request(game::Entity_id player_entity_id);
+  void send_player_leave_request(net::Entity_id player_entity_id);
 
-  void send_player_input_state(game::Entity_id player_entity_id,
-                               game::Sequence_number input_sequence_number,
-                               const game::Humanoid_input_state &input_state);
+  void send_player_input_state(net::Entity_id player_entity_id,
+                               net::Sequence_number input_sequence_number,
+                               const net::Input_state &input_state);
 
 protected:
   virtual void on_connect();
 
   virtual void on_disconnect();
 
-  virtual void on_player_join_response(game::Entity_id player_entity_id);
+  virtual void on_player_join_response(net::Entity_id player_entity_id);
 
   virtual void on_grid_snapshot(serial::Reader &state_reader);
 
-  virtual void on_entity_snapshot(game::Sequence_number tick_number,
+  virtual void on_entity_snapshot(net::Sequence_number tick_number,
                                   serial::Reader &public_state_reader,
                                   serial::Reader &player_state_reader);
 

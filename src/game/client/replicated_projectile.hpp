@@ -2,14 +2,14 @@
 #define FPSPARTY_GAME_REPLICATED_PROJECTILE_HPP
 
 #include "game/core/entity.hpp"
-#include "game/core/entity_id.hpp"
 #include "game/core/entity_world.hpp"
+#include "net/core/entity_id.hpp"
 #include <Eigen/Dense>
 
 namespace fpsparty::game {
 class Replicated_projectile : public Entity, rc::Object<Replicated_projectile> {
 public:
-  explicit Replicated_projectile(Entity_id entity_id) noexcept;
+  explicit Replicated_projectile(net::Entity_id entity_id) noexcept;
 
 protected:
   void on_remove() override;
@@ -36,7 +36,7 @@ public:
       std::pmr::memory_resource *memory_resource =
           std::pmr::get_default_resource()) noexcept;
 
-  rc::Strong<Entity> create_entity(Entity_id entity_id) override;
+  rc::Strong<Entity> create_entity(net::Entity_id entity_id) override;
 
   void load_entity(serial::Reader &reader, Entity &entity,
                    const Entity_world &world) const override;

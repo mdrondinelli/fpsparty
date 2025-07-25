@@ -1,19 +1,18 @@
 #include "replicated_humanoid.hpp"
-#include "game/core/entity_id.hpp"
+#include "net/core/entity_id.hpp"
 
 namespace fpsparty::game {
-Replicated_humanoid::Replicated_humanoid(Entity_id entity_id) noexcept
+Replicated_humanoid::Replicated_humanoid(net::Entity_id entity_id) noexcept
     : Entity{Entity_type::humanoid, entity_id} {}
 
 void Replicated_humanoid::on_remove() {}
 
-const Humanoid_input_state &
-Replicated_humanoid::get_input_state() const noexcept {
+const net::Input_state &Replicated_humanoid::get_input_state() const noexcept {
   return _input_state;
 }
 
 void Replicated_humanoid::set_input_state(
-    const Humanoid_input_state &value) noexcept {
+    const net::Input_state &value) noexcept {
   _input_state = value;
 }
 
@@ -30,7 +29,7 @@ Replicated_humanoid_loader::Replicated_humanoid_loader(
     : _factory{memory_resource} {}
 
 rc::Strong<Entity>
-Replicated_humanoid_loader::create_entity(Entity_id entity_id) {
+Replicated_humanoid_loader::create_entity(net::Entity_id entity_id) {
   return _factory.create(entity_id);
 }
 
@@ -45,7 +44,7 @@ void Replicated_humanoid_loader::load_entity(serial::Reader &reader,
   if (!position) {
     throw Replicated_humanoid_load_error{};
   }
-  const auto input_state = deserialize<Humanoid_input_state>(reader);
+  const auto input_state = deserialize<net::Input_state>(reader);
   if (!input_state) {
     throw Replicated_humanoid_load_error{};
   }

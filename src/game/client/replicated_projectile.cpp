@@ -1,9 +1,9 @@
 #include "replicated_projectile.hpp"
-#include "game/core/entity_id.hpp"
+#include "net/core/entity_id.hpp"
 #include "serial/serialize.hpp"
 
 namespace fpsparty::game {
-Replicated_projectile::Replicated_projectile(Entity_id entity_id) noexcept
+Replicated_projectile::Replicated_projectile(net::Entity_id entity_id) noexcept
     : Entity{Entity_type::projectile, entity_id} {}
 
 void Replicated_projectile::on_remove() {}
@@ -31,7 +31,7 @@ Replicated_projectile_loader::Replicated_projectile_loader(
     : _factory{memory_resource} {}
 
 rc::Strong<Entity>
-Replicated_projectile_loader::create_entity(Entity_id entity_id) {
+Replicated_projectile_loader::create_entity(net::Entity_id entity_id) {
   return _factory.create(entity_id);
 }
 

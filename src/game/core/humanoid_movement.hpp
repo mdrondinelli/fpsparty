@@ -1,13 +1,13 @@
 #ifndef FPSPARTY_GAME_HUMANOID_MOVEMENT_HPP
 #define FPSPARTY_GAME_HUMANOID_MOVEMENT_HPP
 
-#include "game/core/humanoid_input_state.hpp"
+#include "net/core/input_state.hpp"
 #include <Eigen/Dense>
 
 namespace fpsparty::game {
 struct Humanoid_movement_simulation_info {
   Eigen::Vector3f initial_position;
-  Humanoid_input_state input_state;
+  net::Input_state input_state;
   float duration;
 };
 

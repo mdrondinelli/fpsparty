@@ -12,7 +12,7 @@ void Replicated_player::Humanoid_remove_listener::on_remove_entity() {
   _player->set_humanoid(nullptr);
 }
 
-Replicated_player::Replicated_player(Entity_id entity_id)
+Replicated_player::Replicated_player(net::Entity_id entity_id)
     : Entity{Entity_type::player, entity_id}, _humanoid_remove_listener{this} {}
 
 void Replicated_player::on_remove() {
@@ -40,23 +40,22 @@ void Replicated_player::set_humanoid(
   }
 }
 
-const Humanoid_input_state &
-Replicated_player::get_input_state() const noexcept {
+const net::Input_state &Replicated_player::get_input_state() const noexcept {
   return _input_state;
 }
 
 void Replicated_player::set_input_state(
-    const Humanoid_input_state &value) noexcept {
+    const net::Input_state &value) noexcept {
   _input_state = value;
 }
 
-const std::optional<Sequence_number> &
+const std::optional<net::Sequence_number> &
 Replicated_player::get_input_sequence_number() const noexcept {
   return _input_sequence_number;
 }
 
 void Replicated_player::set_input_sequence_number(
-    const std::optional<Sequence_number> &value) noexcept {
+    const std::optional<net::Sequence_number> &value) noexcept {
   _input_sequence_number = value;
 }
 
@@ -65,7 +64,7 @@ Replicated_player_loader::Replicated_player_loader(
     : _factory{memory_resource} {}
 
 rc::Strong<Entity>
-Replicated_player_loader::create_entity(Entity_id entity_id) {
+Replicated_player_loader::create_entity(net::Entity_id entity_id) {
   return _factory.create(entity_id);
 }
 
@@ -77,7 +76,7 @@ void Replicated_player_loader::load_entity(serial::Reader &reader,
     std::cerr << "Failed to downcast player.\n";
     throw Replicated_player_load_error{};
   }
-  const auto humanoid_entity_id = deserialize<Entity_id>(reader);
+  const auto humanoid_entity_id = deserialize<net::Entity_id>(reader);
   if (!humanoid_entity_id) {
     std::cerr << "Failed to deserialize humanoid entity id.\n";
     throw Replicated_player_load_error{};
@@ -89,13 +88,13 @@ void Replicated_player_loader::load_entity(serial::Reader &reader,
       std::cerr << "Failed to get humanoid by entity id.\n";
       throw Replicated_player_load_error{};
     }
-    const auto input_state = deserialize<Humanoid_input_state>(reader);
+    const auto input_state = deserialize<net::Input_state>(reader);
     if (!input_state) {
       std::cerr << "Failed to get deserialize input state.\n";
       throw Replicated_player_load_error{};
     }
     const auto input_sequence_number =
-        deserialize<std::optional<Sequence_number>>(reader);
+        deserialize<std::optional<net::Sequence_number>>(reader);
     if (!input_sequence_number) {
       std::cerr << "Failed to get deserialize input sequence number.\n";
       throw Replicated_player_load_error{};

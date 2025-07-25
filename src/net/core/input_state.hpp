@@ -1,10 +1,10 @@
-#ifndef FPSPARTY_GAME_HUMANOID_INPUT_STATE_HPP
-#define FPSPARTY_GAME_HUMANOID_INPUT_STATE_HPP
+#ifndef FPSPARTY_NET_INPUT_STATE_HPP
+#define FPSPARTY_NET_INPUT_STATE_HPP
 
 #include "serial/serialize.hpp"
 
-namespace fpsparty::game {
-struct Humanoid_input_state {
+namespace fpsparty::net {
+struct Input_state {
   bool move_left{};
   bool move_right{};
   bool move_forward{};
@@ -13,11 +13,11 @@ struct Humanoid_input_state {
   float yaw{};
   float pitch{};
 };
-} // namespace fpsparty::game
+} // namespace fpsparty::net
 
 namespace fpsparty::serial {
-template <> struct Serializer<game::Humanoid_input_state> {
-  void write(Writer &writer, const game::Humanoid_input_state &value) const {
+template <> struct Serializer<net::Input_state> {
+  void write(Writer &writer, const net::Input_state &value) const {
     auto flags = std::uint8_t{};
     if (value.move_left) {
       flags |= 1 << 0;
@@ -39,7 +39,7 @@ template <> struct Serializer<game::Humanoid_input_state> {
     serialize<float>(writer, value.pitch);
   }
 
-  std::optional<game::Humanoid_input_state> read(Reader &reader) const {
+  std::optional<net::Input_state> read(Reader &reader) const {
     const auto flags = deserialize<std::uint8_t>(reader);
     if (!flags) {
       return std::nullopt;
@@ -52,7 +52,7 @@ template <> struct Serializer<game::Humanoid_input_state> {
     if (!pitch) {
       return std::nullopt;
     }
-    return game::Humanoid_input_state{
+    return net::Input_state{
         .move_left = (*flags & (1 << 0)) != 0,
         .move_right = (*flags & (1 << 1)) != 0,
         .move_forward = (*flags & (1 << 2)) != 0,
@@ -64,5 +64,4 @@ template <> struct Serializer<game::Humanoid_input_state> {
   }
 };
 } // namespace fpsparty::serial
-
 #endif

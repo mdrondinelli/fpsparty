@@ -28,7 +28,7 @@ public:
 
   virtual Entity_type get_entity_type() const noexcept = 0;
 
-  virtual rc::Strong<Entity> create_entity(Entity_id entity_id) = 0;
+  virtual rc::Strong<Entity> create_entity(net::Entity_id entity_id) = 0;
 
   virtual void load_entity(serial::Reader &reader, Entity &entity,
                            const Entity_world &world) const = 0;
@@ -83,7 +83,7 @@ public:
     return retval;
   }
 
-  rc::Strong<Entity> get_entity_by_id(Entity_id id) const noexcept;
+  rc::Strong<Entity> get_entity_by_id(net::Entity_id id) const noexcept;
 
 private:
   std::vector<rc::Strong<Entity>> _entities{};

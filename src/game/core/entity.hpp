@@ -1,8 +1,8 @@
 #ifndef FPSPARTY_GAME_ENTITY_HPP
 #define FPSPARTY_GAME_ENTITY_HPP
 
-#include "game/core/entity_id.hpp"
 #include "game/core/entity_type.hpp"
+#include "net/core/entity_id.hpp"
 #include "rc.hpp"
 #include <vector>
 
@@ -22,7 +22,7 @@ public:
 
 class Entity : public rc::Object<Entity> {
 public:
-  explicit Entity(Entity_type type, Entity_id id) noexcept;
+  explicit Entity(Entity_type type, net::Entity_id id) noexcept;
 
   Entity(const Entity &other) = delete;
 
@@ -30,7 +30,7 @@ public:
 
   Entity_type get_entity_type() const noexcept;
 
-  Entity_id get_entity_id() const noexcept;
+  net::Entity_id get_entity_id() const noexcept;
 
   bool add_remove_listener(Entity_remove_listener *listener);
 
@@ -43,7 +43,7 @@ private:
   friend void detail::on_remove_entity(Entity &entity) noexcept;
 
   Entity_type _entity_type{};
-  Entity_id _entity_id{};
+  net::Entity_id _entity_id{};
   std::vector<Entity_remove_listener *> _removal_listeners{};
 };
 } // namespace fpsparty::game

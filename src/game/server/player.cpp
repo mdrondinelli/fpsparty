@@ -1,6 +1,6 @@
 #include "player.hpp"
-#include "game/core/entity_id.hpp"
-#include "game/core/sequence_number.hpp"
+#include "net/core/entity_id.hpp"
+#include "net/core/sequence_number.hpp"
 
 namespace fpsparty::game {
 Player::Humanoid_remove_listener::Humanoid_remove_listener(
@@ -11,7 +11,7 @@ void Player::Humanoid_remove_listener::on_remove_entity() {
   _player->set_humanoid(nullptr);
 }
 
-Player::Player(Entity_id entity_id, const Player_create_info &) noexcept
+Player::Player(net::Entity_id entity_id, const Player_create_info &) noexcept
     : Entity{Entity_type::player, entity_id}, _humanoid_remove_listener{this} {}
 
 void Player::on_remove() { set_humanoid(nullptr); }
@@ -32,17 +32,18 @@ void Player::set_humanoid(const rc::Weak<Humanoid> &value) noexcept {
   }
 }
 
-const Humanoid_input_state &Player::get_input_state() const noexcept {
+const net::Input_state &Player::get_input_state() const noexcept {
   return _input_state;
 }
 
-std::optional<Sequence_number>
+std::optional<net::Sequence_number>
 Player::get_input_sequence_number() const noexcept {
   return _input_sequence_number;
 }
 
-void Player::set_input_state(const Humanoid_input_state &input_state,
-                             Sequence_number input_sequence_number) noexcept {
+void Player::set_input_state(
+    const net::Input_state &input_state,
+    net::Sequence_number input_sequence_number) noexcept {
   if (input_sequence_number > *_input_sequence_number) {
     _input_state = input_state;
     _input_sequence_number = input_sequence_number;
@@ -59,10 +60,10 @@ void Player_dumper::dump_entity(serial::Writer &writer,
   if (const auto player = dynamic_cast<const Player *>(&entity)) {
     const auto humanoid = player->get_humanoid().lock();
     const auto humanoid_entity_id = humanoid ? humanoid->get_entity_id() : 0;
-    serialize<Entity_id>(writer, humanoid_entity_id);
+    serialize<net::Entity_id>(writer, humanoid_entity_id);
     if (humanoid_entity_id) {
-      serialize<Humanoid_input_state>(writer, player->get_input_state());
-      serialize<std::optional<Sequence_number>>(
+      serialize<net::Input_state>(writer, player->get_input_state());
+      serialize<std::optional<net::Sequence_number>>(
           writer, player->get_input_sequence_number());
     }
   }

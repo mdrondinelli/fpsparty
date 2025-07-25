@@ -29,7 +29,7 @@ void Entity_world::dump(const Entity_world_dump_info &info) const {
         });
     if (dumper_it != info.dumpers.end()) {
       serialize<Entity_type>(*info.writer, entity_type);
-      serialize<Entity_id>(*info.writer, entity->get_entity_id());
+      serialize<net::Entity_id>(*info.writer, entity->get_entity_id());
       (*dumper_it)->dump_entity(*info.writer, *entity);
     }
   }
@@ -58,7 +58,7 @@ void Entity_world::load(const Entity_world_load_info &info) {
       if (loader_it == info.loaders.end()) {
         throw Entity_world_load_error{};
       }
-      const auto entity_id = deserialize<Entity_id>(*reader);
+      const auto entity_id = deserialize<net::Entity_id>(*reader);
       if (!entity_id) {
         std::cerr << "Failed to deserialize entity id.\n";
         throw Entity_world_load_error{};
@@ -114,7 +114,8 @@ bool Entity_world::remove(const rc::Strong<Entity> &entity) noexcept {
   }
 }
 
-rc::Strong<Entity> Entity_world::get_entity_by_id(Entity_id id) const noexcept {
+rc::Strong<Entity>
+Entity_world::get_entity_by_id(net::Entity_id id) const noexcept {
   const auto it =
       std::ranges::find_if(_entities, [&](const rc::Strong<Entity> &entity) {
         return entity->get_entity_id() == id;

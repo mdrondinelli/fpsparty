@@ -1,13 +1,13 @@
 #ifndef FPSPARTY_GAME_GAME_HPP
 #define FPSPARTY_GAME_GAME_HPP
 
-#include "game/core/entity_id.hpp"
 #include "game/core/entity_world.hpp"
 #include "game/core/grid.hpp"
-#include "game/core/sequence_number.hpp"
 #include "game/server/humanoid.hpp"
 #include "game/server/player.hpp"
 #include "game/server/projectile.hpp"
+#include "net/core/entity_id.hpp"
+#include "net/core/sequence_number.hpp"
 #include <Eigen/Dense>
 #include <exception>
 
@@ -32,7 +32,7 @@ public:
 
   rc::Strong<Projectile> create_projectile(const Projectile_create_info &info);
 
-  Sequence_number get_tick_number() const noexcept;
+  net::Sequence_number get_tick_number() const noexcept;
 
   const Grid &get_grid() const noexcept;
 
@@ -46,10 +46,10 @@ private:
   rc::Factory<Player> _player_factory{};
   rc::Factory<Humanoid> _humanoid_factory{};
   rc::Factory<Projectile> _projectile_factory{};
-  Sequence_number _tick_number{};
   Grid _grid;
   Entity_world _entities{};
-  Entity_id _next_entity_id{1};
+  net::Entity_id _next_entity_id{1};
+  net::Sequence_number _tick_number{};
 };
 } // namespace fpsparty::game
 

@@ -3,17 +3,17 @@
 
 #include "game/client/replicated_humanoid.hpp"
 #include "game/core/entity.hpp"
-#include "game/core/entity_id.hpp"
 #include "game/core/entity_world.hpp"
-#include "game/core/humanoid_input_state.hpp"
-#include "game/core/sequence_number.hpp"
+#include "net/core/entity_id.hpp"
+#include "net/core/input_state.hpp"
+#include "net/core/sequence_number.hpp"
 #include "rc.hpp"
 #include <memory_resource>
 
 namespace fpsparty::game {
 class Replicated_player : public Entity, public rc::Object<Replicated_player> {
 public:
-  explicit Replicated_player(Entity_id entity_id);
+  explicit Replicated_player(net::Entity_id entity_id);
 
 protected:
   void on_remove() override;
@@ -23,15 +23,15 @@ public:
 
   void set_humanoid(const rc::Weak<Replicated_humanoid> &value) noexcept;
 
-  const Humanoid_input_state &get_input_state() const noexcept;
+  const net::Input_state &get_input_state() const noexcept;
 
-  void set_input_state(const Humanoid_input_state &value) noexcept;
+  void set_input_state(const net::Input_state &value) noexcept;
 
-  const std::optional<Sequence_number> &
+  const std::optional<net::Sequence_number> &
   get_input_sequence_number() const noexcept;
 
   void set_input_sequence_number(
-      const std::optional<Sequence_number> &value) noexcept;
+      const std::optional<net::Sequence_number> &value) noexcept;
 
 private:
   class Humanoid_remove_listener : public Entity_remove_listener {
@@ -46,8 +46,8 @@ private:
 
   rc::Weak<Replicated_humanoid> _humanoid{};
   Humanoid_remove_listener _humanoid_remove_listener;
-  Humanoid_input_state _input_state{};
-  std::optional<Sequence_number> _input_sequence_number{};
+  net::Input_state _input_state{};
+  std::optional<net::Sequence_number> _input_sequence_number{};
 };
 
 class Replicated_player_load_error : public Entity_world_load_error {};
@@ -58,7 +58,7 @@ public:
       std::pmr::memory_resource *memory_resource =
           std::pmr::get_default_resource()) noexcept;
 
-  rc::Strong<Entity> create_entity(Entity_id entity_id) override;
+  rc::Strong<Entity> create_entity(net::Entity_id entity_id) override;
 
   void load_entity(serial::Reader &reader, Entity &entity,
                    const Entity_world &world) const override;

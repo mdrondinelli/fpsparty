@@ -1,9 +1,9 @@
 #include "server.hpp"
-#include "constants.hpp"
 #include "enet.hpp"
-#include "game/core/entity_id.hpp"
-#include "game/core/sequence_number.hpp"
-#include "net/message_type.hpp"
+#include "net/core/constants.hpp"
+#include "net/core/entity_id.hpp"
+#include "net/core/message_type.hpp"
+#include "net/core/sequence_number.hpp"
 #include "serial/ostream_writer.hpp"
 #include "serial/serialize.hpp"
 #include "serial/span_reader.hpp"
@@ -40,11 +40,11 @@ void Server::disconnect() {
 }
 
 void Server::send_player_join_response(enet::Peer peer,
-                                       game::Entity_id player_entity_id) {
+                                       net::Entity_id player_entity_id) {
   auto writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<Message_type>(writer, Message_type::player_join_response);
-  serialize<game::Entity_id>(writer, player_entity_id);
+  serialize<net::Entity_id>(writer, player_entity_id);
   peer.send(constants::player_initialization_channel_id,
             enet::create_packet_unique({
                 .data = writer.stream().view().data(),
@@ -68,19 +68,19 @@ void Server::send_grid_snapshot(enet::Peer peer,
 }
 
 void Server::send_entity_snapshot(enet::Peer peer,
-                                  game::Sequence_number tick_number,
+                                  net::Sequence_number tick_number,
                                   std::span<const std::byte> public_state,
                                   std::span<const std::byte> player_state) {
   auto packet = enet::create_packet_unique({
       .data = nullptr,
-      .data_length = sizeof(Message_type) + sizeof(game::Sequence_number) +
+      .data_length = sizeof(Message_type) + sizeof(net::Sequence_number) +
                      sizeof(std::uint16_t) + sizeof(std::uint8_t) +
                      public_state.size() + player_state.size(),
   });
   auto writer = serial::Span_writer{std::as_writable_bytes(packet->get_data())};
   using serial::serialize;
   serialize<Message_type>(writer, Message_type::entity_snapshot);
-  serialize<game::Sequence_number>(writer, tick_number);
+  serialize<net::Sequence_number>(writer, tick_number);
   serialize<std::uint16_t>(writer, public_state.size());
   writer.write(public_state);
   writer.write(player_state);
@@ -103,11 +103,11 @@ void Server::on_peer_disconnect(enet::Peer) {}
 
 void Server::on_player_join_request(enet::Peer) {}
 
-void Server::on_player_leave_request(enet::Peer, game::Entity_id) {}
+void Server::on_player_leave_request(enet::Peer, net::Entity_id) {}
 
-void Server::on_player_input_state(enet::Peer, game::Entity_id,
-                                   game::Sequence_number,
-                                   const game::Humanoid_input_state &) {}
+void Server::on_player_input_state(enet::Peer, net::Entity_id,
+                                   net::Sequence_number,
+                                   const net::Input_state &) {}
 
 void Server::handle_event(const enet::Event &e) {
   switch (e.type) {
@@ -136,7 +136,7 @@ void Server::handle_event(const enet::Event &e) {
       return;
     }
     case Message_type::player_leave_request: {
-      const auto player_entity_id = deserialize<game::Entity_id>(reader);
+      const auto player_entity_id = deserialize<net::Entity_id>(reader);
       if (!player_entity_id) {
         std::cerr << "Malformed player leave request packet.\n";
         return;
@@ -145,18 +145,18 @@ void Server::handle_event(const enet::Event &e) {
       return;
     }
     case Message_type::player_input_state: {
-      const auto player_entity_id = deserialize<game::Entity_id>(reader);
+      const auto player_entity_id = deserialize<net::Entity_id>(reader);
       if (!player_entity_id) {
         std::cerr << "Malformed player input state packet.\n";
         return;
       }
       const auto input_sequence_number =
-          deserialize<game::Sequence_number>(reader);
+          deserialize<net::Sequence_number>(reader);
       if (!input_sequence_number) {
         std::cerr << "Malformed player input state packet.\n";
         return;
       }
-      const auto input_state = deserialize<game::Humanoid_input_state>(reader);
+      const auto input_state = deserialize<net::Input_state>(reader);
       if (!input_state) {
         std::cerr << "Malformed player input state packet.\n";
         return;

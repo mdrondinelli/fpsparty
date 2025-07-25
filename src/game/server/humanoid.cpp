@@ -1,17 +1,18 @@
 #include "humanoid.hpp"
-#include "game/core/entity_id.hpp"
+#include "net/core/entity_id.hpp"
 
 namespace fpsparty::game {
-Humanoid::Humanoid(Entity_id entity_id, const Humanoid_create_info &) noexcept
+Humanoid::Humanoid(net::Entity_id entity_id,
+                   const Humanoid_create_info &) noexcept
     : Entity{Entity_type::humanoid, entity_id} {}
 
 void Humanoid::on_remove() {}
 
-const Humanoid_input_state &Humanoid::get_input_state() const noexcept {
+const net::Input_state &Humanoid::get_input_state() const noexcept {
   return _input_state;
 }
 
-void Humanoid::set_input_state(const Humanoid_input_state &value) noexcept {
+void Humanoid::set_input_state(const net::Input_state &value) noexcept {
   _input_state = value;
 }
 
@@ -52,7 +53,7 @@ void Humanoid_dumper::dump_entity(serial::Writer &writer,
   using serial::serialize;
   if (const auto humanoid = dynamic_cast<const Humanoid *>(&entity)) {
     serialize<Eigen::Vector3f>(writer, humanoid->get_position());
-    serialize<Humanoid_input_state>(writer, humanoid->get_input_state());
+    serialize<net::Input_state>(writer, humanoid->get_input_state());
   }
 }
 } // namespace fpsparty::game

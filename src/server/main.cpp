@@ -1,11 +1,11 @@
 #include "constants.hpp"
 #include "enet.hpp"
-#include "game/core/entity_id.hpp"
 #include "game/core/entity_type.hpp"
-#include "game/core/sequence_number.hpp"
 #include "game/server/game.hpp"
 #include "game/server/player.hpp"
-#include "net/constants.hpp"
+#include "net/core/constants.hpp"
+#include "net/core/entity_id.hpp"
+#include "net/core/sequence_number.hpp"
 #include "net/server.hpp"
 #include "serial/ostream_writer.hpp"
 #include <cassert>
@@ -69,8 +69,7 @@ public:
       for (const auto &player : peer_node->players) {
         serialize<game::Entity_type>(player_state_writer,
                                      game::Entity_type::player);
-        serialize<game::Entity_id>(player_state_writer,
-                                   player->get_entity_id());
+        serialize<net::Entity_id>(player_state_writer, player->get_entity_id());
         game::Player_dumper{}.dump_entity(player_state_writer, *player);
       }
       net::Server::send_entity_snapshot(
@@ -125,7 +124,7 @@ protected:
   }
 
   void on_player_leave_request(enet::Peer peer,
-                               game::Entity_id player_entity_id) override {
+                               net::Entity_id player_entity_id) override {
     const auto peer_node = static_cast<Peer_node *>(peer.get_data());
     for (auto it = peer_node->players.begin();
          it != peer_node->players.end();) {
@@ -142,10 +141,9 @@ protected:
     }
   }
 
-  void on_player_input_state(
-      enet::Peer peer, game::Entity_id player_entity_id,
-      game::Sequence_number input_sequence_number,
-      const game::Humanoid_input_state &input_state) override {
+  void on_player_input_state(enet::Peer peer, net::Entity_id player_entity_id,
+                             net::Sequence_number input_sequence_number,
+                             const net::Input_state &input_state) override {
     const auto peer_node = static_cast<Peer_node *>(peer.get_data());
     for (const auto &player : peer_node->players) {
       if (player->get_entity_id() == player_entity_id) {

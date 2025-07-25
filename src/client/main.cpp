@@ -8,12 +8,12 @@
 #include "game/client/replicated_humanoid.hpp"
 #include "game/client/replicated_player.hpp"
 #include "game/client/replicated_projectile.hpp"
-#include "game/core/entity_id.hpp"
-#include "game/core/sequence_number.hpp"
 #include "glfw.hpp"
 #include "math/transformation_matrices.hpp"
 #include "net/client.hpp"
-#include "net/constants.hpp"
+#include "net/core/constants.hpp"
+#include "net/core/entity_id.hpp"
+#include "net/core/sequence_number.hpp"
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
@@ -322,12 +322,12 @@ protected:
 
   // void on_grid_snapshot(serial::Reader &reader) override {}
 
-  void on_player_join_response(game::Entity_id player_id) override {
+  void on_player_join_response(net::Entity_id player_id) override {
     _player_id = player_id;
     std::cout << "Got player join response. id = " << player_id << ".\n";
   }
 
-  void on_entity_snapshot(game::Sequence_number tick_number,
+  void on_entity_snapshot(net::Sequence_number tick_number,
                           serial::Reader &public_state_reader,
                           serial::Reader &player_state_reader) override {
     if (!_has_game_state) {
@@ -412,8 +412,8 @@ private:
   game::Replicated_game _game;
   std::optional<std::uint32_t> _player_id{};
   float _tick_timer{};
-  game::Sequence_number _input_sequence_number{};
-  std::vector<std::pair<game::Humanoid_input_state, game::Sequence_number>>
+  net::Sequence_number _input_sequence_number{};
+  std::vector<std::pair<net::Input_state, net::Sequence_number>>
       _in_flight_input_states{};
 };
 

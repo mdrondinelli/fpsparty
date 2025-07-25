@@ -2,8 +2,8 @@
 #define FPSPARTY_GAME_PROJECTILE_HPP
 
 #include "game/core/entity.hpp"
-#include "game/core/entity_id.hpp"
 #include "game/server/humanoid.hpp"
+#include "net/core/entity_id.hpp"
 #include "rc.hpp"
 #include <Eigen/Dense>
 
@@ -16,7 +16,7 @@ struct Projectile_create_info {
 
 class Projectile : public Entity, public rc::Object<Projectile> {
 public:
-  explicit Projectile(Entity_id entity_id,
+  explicit Projectile(net::Entity_id entity_id,
                       const Projectile_create_info &info) noexcept;
 
   void on_remove() override;

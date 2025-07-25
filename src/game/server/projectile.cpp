@@ -1,5 +1,5 @@
 #include "projectile.hpp"
-#include "game/core/entity_id.hpp"
+#include "net/core/entity_id.hpp"
 
 namespace fpsparty::game {
 Projectile::Creator_remove_listener::Creator_remove_listener(
@@ -10,7 +10,7 @@ void Projectile::Creator_remove_listener::on_remove_entity() {
   projectile->_creator = nullptr;
 }
 
-Projectile::Projectile(Entity_id entity_id,
+Projectile::Projectile(net::Entity_id entity_id,
                        const Projectile_create_info &info) noexcept
     : Entity{Entity_type::projectile, entity_id},
       _creator{info.creator},

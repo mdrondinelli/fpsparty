@@ -1,5 +1,5 @@
 #include "entity.hpp"
-#include "game/core/entity_id.hpp"
+#include "net/core/entity_id.hpp"
 #include <algorithm>
 
 namespace fpsparty::game {
@@ -12,12 +12,12 @@ void on_remove_entity(Entity &entity) noexcept {
 }
 } // namespace detail
 
-Entity::Entity(Entity_type type, Entity_id id) noexcept
+Entity::Entity(Entity_type type, net::Entity_id id) noexcept
     : _entity_type{type}, _entity_id{id} {}
 
 Entity_type Entity::get_entity_type() const noexcept { return _entity_type; }
 
-Entity_id Entity::get_entity_id() const noexcept { return _entity_id; }
+net::Entity_id Entity::get_entity_id() const noexcept { return _entity_id; }
 
 bool Entity::add_remove_listener(Entity_remove_listener *listener) {
   const auto it = std::ranges::find(_removal_listeners, listener);

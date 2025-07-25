@@ -2,9 +2,9 @@
 #include "game/core/constants.hpp"
 #include "game/core/humanoid_movement.hpp"
 #include "game/core/projectile_movement.hpp"
-#include "game/core/sequence_number.hpp"
 #include "game/server/player.hpp"
 #include "math/transformation_matrices.hpp"
+#include "net/core/sequence_number.hpp"
 #include "rc.hpp"
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
@@ -126,7 +126,9 @@ Game::create_projectile(const Projectile_create_info &info) {
   return _projectile_factory.create(_next_entity_id++, info);
 }
 
-Sequence_number Game::get_tick_number() const noexcept { return _tick_number; }
+net::Sequence_number Game::get_tick_number() const noexcept {
+  return _tick_number;
+}
 
 const Grid &Game::get_grid() const noexcept { return _grid; }
 

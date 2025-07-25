@@ -2,11 +2,11 @@
 #define FPSPARTY_GAME_PLAYER_HPP
 
 #include "game/core/entity.hpp"
-#include "game/core/entity_id.hpp"
 #include "game/core/entity_world.hpp"
-#include "game/core/humanoid_input_state.hpp"
-#include "game/core/sequence_number.hpp"
 #include "game/server/humanoid.hpp"
+#include "net/core/entity_id.hpp"
+#include "net/core/input_state.hpp"
+#include "net/core/sequence_number.hpp"
 #include "rc.hpp"
 #include <optional>
 
@@ -15,7 +15,8 @@ struct Player_create_info {};
 
 class Player : public Entity, rc::Object<Player> {
 public:
-  explicit Player(Entity_id entity_id, const Player_create_info &info) noexcept;
+  explicit Player(net::Entity_id entity_id,
+                  const Player_create_info &info) noexcept;
 
   void on_remove() override;
 
@@ -23,12 +24,13 @@ public:
 
   void set_humanoid(const rc::Weak<Humanoid> &value) noexcept;
 
-  const Humanoid_input_state &get_input_state() const noexcept;
+  const net::Input_state &get_input_state() const noexcept;
 
-  std::optional<Sequence_number> get_input_sequence_number() const noexcept;
+  std::optional<net::Sequence_number>
+  get_input_sequence_number() const noexcept;
 
-  void set_input_state(const Humanoid_input_state &input_state,
-                       Sequence_number input_sequence_number) noexcept;
+  void set_input_state(const net::Input_state &input_state,
+                       net::Sequence_number input_sequence_number) noexcept;
 
 private:
   class Humanoid_remove_listener : public Entity_remove_listener {
@@ -43,8 +45,8 @@ private:
 
   rc::Weak<Humanoid> _humanoid{};
   Humanoid_remove_listener _humanoid_remove_listener;
-  Humanoid_input_state _input_state{};
-  std::optional<Sequence_number> _input_sequence_number{};
+  net::Input_state _input_state{};
+  std::optional<net::Sequence_number> _input_sequence_number{};
 };
 
 class Player_dumper : public Entity_dumper {
