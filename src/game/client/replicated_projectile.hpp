@@ -7,7 +7,7 @@
 #include <Eigen/Dense>
 
 namespace fpsparty::game {
-class Replicated_projectile : public Entity, rc::Object<Replicated_projectile> {
+class Replicated_projectile : public Entity {
 public:
   explicit Replicated_projectile(net::Entity_id entity_id) noexcept;
 
@@ -36,7 +36,7 @@ public:
       std::pmr::memory_resource *memory_resource =
           std::pmr::get_default_resource()) noexcept;
 
-  rc::Strong<Entity> create_entity(net::Entity_id entity_id) override;
+  Entity_owner<Entity> create_entity(net::Entity_id entity_id) override;
 
   void load_entity(serial::Reader &reader, Entity &entity,
                    const Entity_world &world) const override;
@@ -44,7 +44,7 @@ public:
   Entity_type get_entity_type() const noexcept override;
 
 private:
-  rc::Factory<Replicated_projectile> _factory{};
+  Entity_factory<Replicated_projectile> _factory{};
 };
 } // namespace fpsparty::game
 

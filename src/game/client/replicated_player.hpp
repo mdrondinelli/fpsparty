@@ -7,11 +7,10 @@
 #include "net/core/entity_id.hpp"
 #include "net/core/input_state.hpp"
 #include "net/core/sequence_number.hpp"
-#include "rc.hpp"
 #include <memory_resource>
 
 namespace fpsparty::game {
-class Replicated_player : public Entity, public rc::Object<Replicated_player> {
+class Replicated_player : public Entity {
 public:
   explicit Replicated_player(net::Entity_id entity_id);
 
@@ -19,9 +18,9 @@ protected:
   void on_remove() override;
 
 public:
-  const rc::Weak<Replicated_humanoid> &get_humanoid() const noexcept;
+  Replicated_humanoid *get_humanoid() const noexcept;
 
-  void set_humanoid(const rc::Weak<Replicated_humanoid> &value) noexcept;
+  void set_humanoid(Replicated_humanoid *value);
 
   const net::Input_state &get_input_state() const noexcept;
 
@@ -44,7 +43,7 @@ private:
     Replicated_player *_player{};
   };
 
-  rc::Weak<Replicated_humanoid> _humanoid{};
+  Replicated_humanoid *_humanoid{};
   Humanoid_remove_listener _humanoid_remove_listener;
   net::Input_state _input_state{};
   std::optional<net::Sequence_number> _input_sequence_number{};
@@ -58,7 +57,7 @@ public:
       std::pmr::memory_resource *memory_resource =
           std::pmr::get_default_resource()) noexcept;
 
-  rc::Strong<Entity> create_entity(net::Entity_id entity_id) override;
+  Entity_owner<Entity> create_entity(net::Entity_id entity_id) override;
 
   void load_entity(serial::Reader &reader, Entity &entity,
                    const Entity_world &world) const override;
@@ -66,7 +65,7 @@ public:
   Entity_type get_entity_type() const noexcept override;
 
 private:
-  rc::Factory<Replicated_player> _factory{};
+  Entity_factory<Replicated_player> _factory{};
 };
 } // namespace fpsparty::game
 

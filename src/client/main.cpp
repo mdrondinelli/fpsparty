@@ -22,11 +22,6 @@
 #include <span>
 #include <volk.h>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_core.h>
-#include <vulkan/vulkan_enums.hpp>
-#include <vulkan/vulkan_funcs.hpp>
-#include <vulkan/vulkan_handles.hpp>
-#include <vulkan/vulkan_structs.hpp>
 
 using namespace fpsparty;
 using namespace fpsparty::client;
@@ -189,8 +184,7 @@ public:
   void render() {
     if (_graphics.begin()) {
       const auto player = get_player();
-      const auto player_humanoid =
-          player ? player->get_humanoid().lock() : nullptr;
+      const auto player_humanoid = player ? player->get_humanoid() : nullptr;
       if (player_humanoid) {
         const auto view_matrix =
             (math::x_rotation_matrix(
@@ -300,10 +294,9 @@ public:
 
   bool has_game_state() const noexcept { return _has_game_state; }
 
-  rc::Strong<game::Replicated_player> get_player() const noexcept {
-    return (_player_id ? _game.get_world().get_entity_by_id(*_player_id)
-                       : nullptr)
-        .downcast<game::Replicated_player>();
+  game::Replicated_player *get_player() const noexcept {
+    return static_cast<game::Replicated_player *>(
+        _player_id ? _game.get_world().get_entity_by_id(*_player_id) : nullptr);
   }
 
   constexpr glfw::Window get_window() const noexcept { return _glfw_window; }

@@ -30,7 +30,7 @@ Replicated_projectile_loader::Replicated_projectile_loader(
     std::pmr::memory_resource *memory_resource) noexcept
     : _factory{memory_resource} {}
 
-rc::Strong<Entity>
+Entity_owner<Entity>
 Replicated_projectile_loader::create_entity(net::Entity_id entity_id) {
   return _factory.create(entity_id);
 }

@@ -4,6 +4,14 @@
 
 namespace fpsparty::game {
 namespace detail {
+bool get_entity_remove_flag(const Entity &entity) noexcept {
+  return entity._remove_flag;
+}
+
+void set_entity_remove_flag(Entity &entity, bool value) noexcept {
+  entity._remove_flag = value;
+}
+
 void on_remove_entity(Entity &entity) noexcept {
   for (const auto listener : entity._removal_listeners) {
     listener->on_remove_entity();

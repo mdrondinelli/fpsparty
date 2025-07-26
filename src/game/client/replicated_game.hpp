@@ -37,10 +37,10 @@ public:
   net::Sequence_number get_tick_number() const noexcept;
 
 private:
-  Entity_world _world{};
   Replicated_humanoid_loader _humanoid_loader{};
   Replicated_projectile_loader _projectile_loader{};
   Replicated_player_loader _player_loader{};
+  Entity_world _world{};
   net::Sequence_number _tick_number{};
 };
 } // namespace fpsparty::game

@@ -37,8 +37,9 @@ void Entity_world::dump(const Entity_world_dump_info &info) const {
 
 void Entity_world::load(const Entity_world_load_info &info) {
   using serial::deserialize;
-  auto temp_entities = std::vector<rc::Strong<Entity>>{};
-  temp_entities.reserve(_entities.capacity());
+  for (const auto &entity : _entities) {
+    detail::set_entity_remove_flag(*entity, true);
+  }
   for (const auto &reader : info.readers) {
     const auto entity_count = deserialize<std::uint32_t>(*reader);
     if (!entity_count) {
@@ -68,19 +69,23 @@ void Entity_world::load(const Entity_world_load_info &info) {
         if (existing_entity) {
           return existing_entity;
         } else {
-          const auto new_entity = (*loader_it)->create_entity(*entity_id);
-          _entities.emplace_back(new_entity);
-          return new_entity;
+          auto new_entity = (*loader_it)->create_entity(*entity_id);
+          const auto new_entity_raw = new_entity.get();
+          _entities.emplace_back(std::move(new_entity));
+          return new_entity_raw;
         }
       }();
+      detail::set_entity_remove_flag(*entity, false);
       (*loader_it)->load_entity(*reader, *entity, *this);
-      temp_entities.emplace_back(std::move(entity));
     }
   }
-  std::swap(_entities, temp_entities);
-  for (const auto &entity : temp_entities) {
-    if (!get_entity_by_id(entity->get_entity_id())) {
-      detail::on_remove_entity(*entity);
+  for (auto it = _entities.begin(); it != _entities.end();) {
+    if (detail::get_entity_remove_flag(**it)) {
+      detail::on_remove_entity(**it);
+      *it = std::move(_entities.back());
+      _entities.pop_back();
+    } else {
+      ++it;
     }
   }
 }
@@ -93,35 +98,32 @@ void Entity_world::reset() {
   }
 }
 
-bool Entity_world::add(const rc::Strong<Entity> &entity) {
-  const auto it = std::ranges::find(_entities, entity);
-  if (it == _entities.end()) {
-    _entities.emplace_back(entity);
-    return true;
-  } else {
-    return false;
-  }
+void Entity_world::add(Entity_owner<Entity> entity) {
+  _entities.emplace_back(std::move(entity));
 }
 
-bool Entity_world::remove(const rc::Strong<Entity> &entity) noexcept {
-  const auto it = std::ranges::find(_entities, entity);
+Entity_owner<Entity> Entity_world::remove(const Entity *entity) noexcept {
+  const auto it = std::ranges::find_if(
+      _entities, [&](const Entity_owner<Entity> &owned_entity) {
+        return owned_entity.get() == entity;
+      });
   if (it != _entities.end()) {
-    detail::on_remove_entity(**it);
+    auto entity = std::move(*it);
+    detail::on_remove_entity(*entity);
     algorithms::unordered_erase_at(_entities, it);
-    return true;
+    return entity;
   } else {
-    return false;
+    return nullptr;
   }
 }
 
-rc::Strong<Entity>
-Entity_world::get_entity_by_id(net::Entity_id id) const noexcept {
+Entity *Entity_world::get_entity_by_id(net::Entity_id id) const noexcept {
   const auto it =
-      std::ranges::find_if(_entities, [&](const rc::Strong<Entity> &entity) {
+      std::ranges::find_if(_entities, [&](const Entity_owner<Entity> &entity) {
         return entity->get_entity_id() == id;
       });
   if (it != _entities.end()) {
-    return *it;
+    return it->get();
   } else {
     return nullptr;
   }

@@ -10,7 +10,7 @@
 namespace fpsparty::game {
 struct Humanoid_create_info {};
 
-class Humanoid : public Entity, public rc::Object<Humanoid> {
+class Humanoid : public Entity {
 public:
   explicit Humanoid(net::Entity_id entity_id,
                     const Humanoid_create_info &info) noexcept;

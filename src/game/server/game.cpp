@@ -5,7 +5,6 @@
 #include "game/server/player.hpp"
 #include "math/transformation_matrices.hpp"
 #include "net/core/sequence_number.hpp"
-#include "rc.hpp"
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
@@ -16,17 +15,17 @@ void Game::tick(float duration) {
   const auto players = _entities.get_entities_of_type<Player>();
   if (_entities.count_entities_of_type<Humanoid>() < 2) {
     for (const auto &player : players) {
-      auto humanoid = player->get_humanoid().lock();
-      if (!humanoid) {
-        humanoid = create_humanoid({});
-        _entities.add(humanoid);
-        player->set_humanoid(humanoid);
+      if (!player->get_humanoid()) {
+        auto humanoid = create_humanoid({});
+        const auto humanoid_raw = humanoid.get();
+        _entities.add(std::move(humanoid));
+        player->set_humanoid(humanoid_raw);
       }
     }
   }
   for (const auto &player : players) {
-    if (const auto player_humanoid = player->get_humanoid().lock()) {
-      player_humanoid->set_input_state(player->get_input_state());
+    if (const auto humanoid = player->get_humanoid()) {
+      humanoid->set_input_state(player->get_input_state());
     }
   }
   const auto humanoids = _entities.get_entities_of_type<Humanoid>();
@@ -113,15 +112,15 @@ void Game::tick(float duration) {
   ++_tick_number;
 }
 
-rc::Strong<Player> Game::create_player(const Player_create_info &info) {
+Entity_owner<Player> Game::create_player(const Player_create_info &info) {
   return _player_factory.create(_next_entity_id++, info);
 }
 
-rc::Strong<Humanoid> Game::create_humanoid(const Humanoid_create_info &info) {
+Entity_owner<Humanoid> Game::create_humanoid(const Humanoid_create_info &info) {
   return _humanoid_factory.create(_next_entity_id++, info);
 }
 
-rc::Strong<Projectile>
+Entity_owner<Projectile>
 Game::create_projectile(const Projectile_create_info &info) {
   return _projectile_factory.create(_next_entity_id++, info);
 }

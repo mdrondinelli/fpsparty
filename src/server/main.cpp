@@ -107,8 +107,7 @@ protected:
     const auto peer_node =
         std::unique_ptr<Peer_node>{static_cast<Peer_node *>(peer.get_data())};
     for (const auto &player : peer_node->players) {
-      const auto humanoid = player->get_humanoid().lock();
-      if (humanoid) {
+      if (const auto humanoid = player->get_humanoid()) {
         _game.get_entities().remove(humanoid);
       }
       _game.get_entities().remove(player);
@@ -117,10 +116,10 @@ protected:
 
   void on_player_join_request(enet::Peer peer) override {
     const auto peer_node = static_cast<Peer_node *>(peer.get_data());
-    const auto player = _game.create_player({});
-    peer_node->players.emplace_back(player);
-    _game.get_entities().add(player);
+    auto player = _game.create_player({});
+    peer_node->players.emplace_back(player.get());
     send_player_join_response(peer, player->get_entity_id());
+    _game.get_entities().add(std::move(player));
   }
 
   void on_player_leave_request(enet::Peer peer,
@@ -129,8 +128,7 @@ protected:
     for (auto it = peer_node->players.begin();
          it != peer_node->players.end();) {
       if ((*it)->get_entity_id() == player_entity_id) {
-        const auto humanoid = (*it)->get_humanoid().lock();
-        if (humanoid) {
+        if (const auto humanoid = (*it)->get_humanoid()) {
           _game.get_entities().remove(humanoid);
         }
         _game.get_entities().remove(*it);
@@ -154,7 +152,7 @@ protected:
 
 private:
   struct Peer_node {
-    std::vector<rc::Strong<game::Player>> players;
+    std::vector<game::Player *> players;
   };
 
   game::Game _game{{}};

@@ -8,7 +8,6 @@
 #include "game/server/projectile.hpp"
 #include "net/core/entity_id.hpp"
 #include "net/core/sequence_number.hpp"
-#include <Eigen/Dense>
 #include <exception>
 
 namespace fpsparty::game {
@@ -26,11 +25,12 @@ public:
 
   void tick(float duration);
 
-  rc::Strong<Player> create_player(const Player_create_info &info);
+  Entity_owner<Player> create_player(const Player_create_info &info);
 
-  rc::Strong<Humanoid> create_humanoid(const Humanoid_create_info &info);
+  Entity_owner<Humanoid> create_humanoid(const Humanoid_create_info &info);
 
-  rc::Strong<Projectile> create_projectile(const Projectile_create_info &info);
+  Entity_owner<Projectile>
+  create_projectile(const Projectile_create_info &info);
 
   net::Sequence_number get_tick_number() const noexcept;
 
@@ -43,9 +43,9 @@ public:
   Entity_world &get_entities() noexcept;
 
 private:
-  rc::Factory<Player> _player_factory{};
-  rc::Factory<Humanoid> _humanoid_factory{};
-  rc::Factory<Projectile> _projectile_factory{};
+  Entity_factory<Player> _player_factory{};
+  Entity_factory<Humanoid> _humanoid_factory{};
+  Entity_factory<Projectile> _projectile_factory{};
   Grid _grid;
   Entity_world _entities{};
   net::Entity_id _next_entity_id{1};

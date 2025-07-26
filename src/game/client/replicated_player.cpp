@@ -16,27 +16,24 @@ Replicated_player::Replicated_player(net::Entity_id entity_id)
     : Entity{Entity_type::player, entity_id}, _humanoid_remove_listener{this} {}
 
 void Replicated_player::on_remove() {
-  const auto humanoid = _humanoid.lock();
-  if (humanoid) {
-    humanoid->remove_remove_listener(&_humanoid_remove_listener);
+  if (_humanoid) {
+    _humanoid->remove_remove_listener(&_humanoid_remove_listener);
   }
 }
 
-const rc::Weak<Replicated_humanoid> &
-Replicated_player::get_humanoid() const noexcept {
+Replicated_humanoid *Replicated_player::get_humanoid() const noexcept {
   return _humanoid;
 }
 
-void Replicated_player::set_humanoid(
-    const rc::Weak<Replicated_humanoid> &value) noexcept {
-  if (const auto humanoid = _humanoid.lock()) {
-    humanoid->remove_remove_listener(&_humanoid_remove_listener);
+void Replicated_player::set_humanoid(Replicated_humanoid *value) {
+  if (_humanoid) {
+    _humanoid->remove_remove_listener(&_humanoid_remove_listener);
   }
   _humanoid = value;
   _input_state = {};
   _input_sequence_number = std::nullopt;
-  if (const auto humanoid = _humanoid.lock()) {
-    humanoid->add_remove_listener(&_humanoid_remove_listener);
+  if (_humanoid) {
+    _humanoid->add_remove_listener(&_humanoid_remove_listener);
   }
 }
 
@@ -63,7 +60,7 @@ Replicated_player_loader::Replicated_player_loader(
     std::pmr::memory_resource *memory_resource) noexcept
     : _factory{memory_resource} {}
 
-rc::Strong<Entity>
+Entity_owner<Entity>
 Replicated_player_loader::create_entity(net::Entity_id entity_id) {
   return _factory.create(entity_id);
 }
@@ -82,8 +79,8 @@ void Replicated_player_loader::load_entity(serial::Reader &reader,
     throw Replicated_player_load_error{};
   }
   if (*humanoid_entity_id) {
-    const auto humanoid = world.get_entity_by_id(*humanoid_entity_id)
-                              .downcast<Replicated_humanoid>();
+    const auto humanoid = dynamic_cast<Replicated_humanoid *>(
+        world.get_entity_by_id(*humanoid_entity_id));
     if (!humanoid) {
       std::cerr << "Failed to get humanoid by entity id.\n";
       throw Replicated_player_load_error{};

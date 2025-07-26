@@ -16,19 +16,17 @@ Player::Player(net::Entity_id entity_id, const Player_create_info &) noexcept
 
 void Player::on_remove() { set_humanoid(nullptr); }
 
-const rc::Weak<Humanoid> &Player::get_humanoid() const noexcept {
-  return _humanoid;
-}
+Humanoid *Player::get_humanoid() const noexcept { return _humanoid; }
 
-void Player::set_humanoid(const rc::Weak<Humanoid> &value) noexcept {
-  if (const auto humanoid = _humanoid.lock()) {
-    humanoid->remove_remove_listener(&_humanoid_remove_listener);
+void Player::set_humanoid(Humanoid *value) noexcept {
+  if (_humanoid) {
+    _humanoid->remove_remove_listener(&_humanoid_remove_listener);
   }
   _humanoid = value;
   _input_state = {};
   _input_sequence_number = std::nullopt;
-  if (const auto humanoid = _humanoid.lock()) {
-    humanoid->add_remove_listener(&_humanoid_remove_listener);
+  if (_humanoid) {
+    _humanoid->add_remove_listener(&_humanoid_remove_listener);
   }
 }
 
@@ -58,7 +56,7 @@ void Player_dumper::dump_entity(serial::Writer &writer,
                                 const Entity &entity) const {
   using serial::serialize;
   if (const auto player = dynamic_cast<const Player *>(&entity)) {
-    const auto humanoid = player->get_humanoid().lock();
+    const auto humanoid = player->get_humanoid();
     const auto humanoid_entity_id = humanoid ? humanoid->get_entity_id() : 0;
     serialize<net::Entity_id>(writer, humanoid_entity_id);
     if (humanoid_entity_id) {

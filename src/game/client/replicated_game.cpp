@@ -12,7 +12,7 @@ Replicated_game::Replicated_game(const Replicated_game_create_info &) {}
 void Replicated_game::tick(float duration) {
   const auto players = _world.get_entities_of_type<Replicated_player>();
   for (const auto &player : players) {
-    if (const auto humanoid = player->get_humanoid().lock()) {
+    if (const auto humanoid = player->get_humanoid()) {
       humanoid->set_input_state(player->get_input_state());
     }
   }

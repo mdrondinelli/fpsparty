@@ -17,23 +17,19 @@ Projectile::Projectile(net::Entity_id entity_id,
       _creator_remove_listener{this},
       _position{info.position},
       _velocity{info.velocity} {
-  const auto creator = _creator.lock();
-  if (creator) {
-    creator->add_remove_listener(&_creator_remove_listener);
+  if (_creator) {
+    _creator->add_remove_listener(&_creator_remove_listener);
   }
 }
 
 void Projectile::on_remove() {
-  const auto creator = _creator.lock();
-  _creator = nullptr;
-  if (creator) {
-    creator->remove_remove_listener(&_creator_remove_listener);
+  if (_creator) {
+    _creator->remove_remove_listener(&_creator_remove_listener);
   }
+  _creator = nullptr;
 }
 
-const rc::Weak<Humanoid> &Projectile::get_creator() const noexcept {
-  return _creator;
-}
+Humanoid *Projectile::get_creator() const noexcept { return _creator; }
 
 const Eigen::Vector3f &Projectile::get_position() const noexcept {
   return _position;
