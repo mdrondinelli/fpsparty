@@ -28,14 +28,6 @@ public:
 
   void disconnect();
 
-  void send_player_join_response(enet::Peer peer, Entity_id player_entity_id);
-
-  void send_grid_snapshot(enet::Peer peer, std::span<const std::byte> state);
-
-  void send_entity_snapshot(enet::Peer peer, Sequence_number tick_number,
-                            std::span<const std::byte> public_state,
-                            std::span<const std::byte> player_state);
-
   std::size_t get_peer_count() const noexcept;
 
   std::pmr::vector<enet::Peer>
@@ -56,6 +48,14 @@ protected:
                                      Entity_id player_entity_id,
                                      Sequence_number input_sequence_number,
                                      const net::Input_state &input_state);
+
+  void send_player_join_response(enet::Peer peer, Entity_id player_entity_id);
+
+  void send_grid_snapshot(enet::Peer peer, std::span<const std::byte> state);
+
+  void send_entity_snapshot(enet::Peer peer, Sequence_number tick_number,
+                            std::span<const std::byte> public_state,
+                            std::span<const std::byte> player_state);
 
 private:
   void handle_event(const enet::Event &e);

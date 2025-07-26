@@ -8,6 +8,26 @@ add_subdirectory(extern/volk-1.4.304)
 add_subdirectory(extern/VulkanMemoryAllocator-3.3.0)
 add_subdirectory(extern/magic_enum-0.9.7)
 
+# libnet
+add_library(
+  net
+  src/net/client.cpp
+  src/net/server.cpp
+)
+target_include_directories(
+  net
+  SYSTEM
+  PUBLIC
+  ${CMAKE_SOURCE_DIR}/extern/eigen-3.4.0
+  ${CMAKE_SOURCE_DIR}/extern/magic_enum-0.9.7/include
+  ${CMAKE_SOURCE_DIR}/extern/enet/include
+)
+target_include_directories(
+  net
+  PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+)
+
 # libgame-core
 add_library(
   game-core
@@ -38,13 +58,14 @@ add_library(
   src/game/server/humanoid.cpp
   src/game/server/player.cpp
   src/game/server/projectile.cpp
+  src/game/server/server.cpp
 )
 target_include_directories(
   game-server
   PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
-target_link_libraries(game-server game-core)
+target_link_libraries(game-server game-core net)
 
 # libgame-client
 add_library(
@@ -59,27 +80,7 @@ target_include_directories(
   PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
-target_link_libraries(game-client game-core)
-
-# libnet
-add_library(
-  net
-  src/net/client.cpp
-  src/net/server.cpp
-)
-target_include_directories(
-  net
-  SYSTEM
-  PUBLIC
-  ${CMAKE_SOURCE_DIR}/extern/eigen-3.4.0
-  ${CMAKE_SOURCE_DIR}/extern/magic_enum-0.9.7/include
-  ${CMAKE_SOURCE_DIR}/extern/enet/include
-)
-target_include_directories(
-  net
-  PRIVATE
-  ${CMAKE_SOURCE_DIR}/src
-)
+target_link_libraries(game-client game-core net)
 
 # server
 add_executable(
