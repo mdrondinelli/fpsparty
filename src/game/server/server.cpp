@@ -107,15 +107,15 @@ void Server::on_player_join_request(enet::Peer peer) {
 void Server::on_player_leave_request(enet::Peer peer,
                                      net::Entity_id player_entity_id) {
   const auto peer_node = static_cast<Peer_node *>(peer.get_data());
-  for (auto it = peer_node->players.begin(); it != peer_node->players.end();) {
+  for (auto it = peer_node->players.begin(); it != peer_node->players.end();
+       ++it) {
     if ((*it)->get_entity_id() == player_entity_id) {
       if (const auto humanoid = (*it)->get_humanoid()) {
         _game.get_entities().remove(humanoid);
       }
       _game.get_entities().remove(*it);
-      it = peer_node->players.erase(it);
-    } else {
-      ++it;
+      peer_node->players.erase(it);
+      return;
     }
   }
 }
