@@ -42,7 +42,8 @@ Player::get_input_sequence_number() const noexcept {
 void Player::set_input_state(
     const net::Input_state &input_state,
     net::Sequence_number input_sequence_number) noexcept {
-  if (input_sequence_number > *_input_sequence_number) {
+  if (!_input_sequence_number ||
+      input_sequence_number > *_input_sequence_number) {
     _input_state = input_state;
     _input_sequence_number = input_sequence_number;
   }
