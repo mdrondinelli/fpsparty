@@ -84,7 +84,7 @@ void Server::send_entity_snapshot(enet::Peer peer,
   serialize<std::uint16_t>(writer, public_state.size());
   writer.write(public_state);
   writer.write(player_state);
-  peer.send(constants::game_state_channel_id, std::move(packet));
+  peer.send(constants::entity_snapshot_channel_id, std::move(packet));
 }
 
 std::size_t Server::get_peer_count() const noexcept { return _peers.size(); }

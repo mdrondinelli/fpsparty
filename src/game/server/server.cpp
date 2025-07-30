@@ -75,7 +75,6 @@ std::size_t Server::get_peer_count() const noexcept {
 void Server::on_peer_connect(enet::Peer peer) {
   std::cout << "Peer connected.\n";
   peer.set_data(new Peer_node);
-  return;
   auto writer = serial::Ostringstream_writer{};
   _game.get_grid().dump(writer);
   send_grid_snapshot(peer, std::as_bytes(std::span{
