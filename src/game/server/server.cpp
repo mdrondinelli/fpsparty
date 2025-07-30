@@ -76,12 +76,12 @@ void Server::on_peer_connect(enet::Peer peer) {
   std::cout << "Peer connected.\n";
   peer.set_data(new Peer_node);
   return;
-  const auto &grid = _game.get_grid();
   auto writer = serial::Ostringstream_writer{};
-  grid.dump(writer);
-  send_grid_snapshot(peer,
-                     std::as_bytes(std::span{writer.stream().view().data(),
-                                             writer.stream().view().size()}));
+  _game.get_grid().dump(writer);
+  send_grid_snapshot(peer, std::as_bytes(std::span{
+                               writer.stream().view().data(),
+                               writer.stream().view().size(),
+                           }));
 }
 
 void Server::on_peer_disconnect(enet::Peer peer) {
