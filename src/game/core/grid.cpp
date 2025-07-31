@@ -23,29 +23,29 @@ void Grid::dump(serial::Writer &writer) const {
   }
 }
 
-bool Grid::is_solid(const Eigen::Vector3i &location) const noexcept {
-  if (!bounds_check(location)) {
+bool Grid::is_solid(const Eigen::Vector3i &indices) const noexcept {
+  if (!bounds_check(indices)) {
     return false;
   }
-  const auto chunk_index = get_chunk_index(location);
+  const auto chunk_index = get_chunk_index(indices);
   const auto chunk_value = _chunks[chunk_index];
-  const auto chunk_relative_x = location.x() % _chunk_side_length;
-  const auto chunk_relative_y = location.y() % _chunk_side_length;
-  const auto chunk_relative_z = location.z() % _chunk_side_length;
+  const auto chunk_relative_x = indices.x() % _chunk_side_length;
+  const auto chunk_relative_y = indices.y() % _chunk_side_length;
+  const auto chunk_relative_z = indices.z() % _chunk_side_length;
   const auto bit_index =
       chunk_relative_x + chunk_relative_y * _chunk_side_length +
       chunk_relative_z * _chunk_side_length * _chunk_side_length;
   return (chunk_value & (std::uint64_t{1} << bit_index)) != 0;
 }
 
-void Grid::set_solid(const Eigen::Vector3i &location, bool value) noexcept {
-  if (!bounds_check(location)) {
+void Grid::set_solid(const Eigen::Vector3i &indices, bool value) noexcept {
+  if (!bounds_check(indices)) {
     return;
   }
-  const auto chunk_index = get_chunk_index(location);
-  const auto chunk_relative_x = location.x() % _chunk_side_length;
-  const auto chunk_relative_y = location.y() % _chunk_side_length;
-  const auto chunk_relative_z = location.z() % _chunk_side_length;
+  const auto chunk_index = get_chunk_index(indices);
+  const auto chunk_relative_x = indices.x() % _chunk_side_length;
+  const auto chunk_relative_y = indices.y() % _chunk_side_length;
+  const auto chunk_relative_z = indices.z() % _chunk_side_length;
   const auto bit_index =
       chunk_relative_x + chunk_relative_y * _chunk_side_length +
       chunk_relative_z * _chunk_side_length * _chunk_side_length;
@@ -56,25 +56,25 @@ void Grid::set_solid(const Eigen::Vector3i &location, bool value) noexcept {
   }
 }
 
-bool Grid::bounds_check(const Eigen::Vector3i &location) const noexcept {
-  if (location.x() < 0) {
+bool Grid::bounds_check(const Eigen::Vector3i &indices) const noexcept {
+  if (indices.x() < 0) {
     return false;
   }
-  if (static_cast<std::size_t>(location.x()) >=
+  if (static_cast<std::size_t>(indices.x()) >=
       _width_chunks * _chunk_side_length) {
     return false;
   }
-  if (location.y() < 0) {
+  if (indices.y() < 0) {
     return false;
   }
-  if (static_cast<std::size_t>(location.y()) >=
+  if (static_cast<std::size_t>(indices.y()) >=
       _height_chunks * _chunk_side_length) {
     return false;
   }
-  if (location.z() < 0) {
+  if (indices.z() < 0) {
     return false;
   }
-  if (static_cast<std::size_t>(location.z()) >=
+  if (static_cast<std::size_t>(indices.z()) >=
       _depth_chunks * _chunk_side_length) {
     return false;
   }
@@ -82,10 +82,10 @@ bool Grid::bounds_check(const Eigen::Vector3i &location) const noexcept {
 }
 
 std::size_t
-Grid::get_chunk_index(const Eigen::Vector3i &location) const noexcept {
-  const auto x = static_cast<std::size_t>(location.x());
-  const auto y = static_cast<std::size_t>(location.y());
-  const auto z = static_cast<std::size_t>(location.z());
+Grid::get_chunk_index(const Eigen::Vector3i &indices) const noexcept {
+  const auto x = static_cast<std::size_t>(indices.x());
+  const auto y = static_cast<std::size_t>(indices.y());
+  const auto z = static_cast<std::size_t>(indices.z());
   return x + y * _width_chunks + z * _width_chunks * _height_chunks;
 }
 } // namespace fpsparty::game

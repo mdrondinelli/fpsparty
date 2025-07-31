@@ -18,16 +18,16 @@ public:
 
   void dump(serial::Writer &writer) const;
 
-  bool is_solid(const Eigen::Vector3i &location) const noexcept;
+  bool is_solid(const Eigen::Vector3i &indices) const noexcept;
 
-  void set_solid(const Eigen::Vector3i &location, bool value) noexcept;
+  void set_solid(const Eigen::Vector3i &indices, bool value) noexcept;
 
-  bool bounds_check(const Eigen::Vector3i &location) const noexcept;
+  bool bounds_check(const Eigen::Vector3i &indices) const noexcept;
 
 private:
   static constexpr auto _chunk_side_length = std::size_t{4};
 
-  std::size_t get_chunk_index(const Eigen::Vector3i &location) const noexcept;
+  std::size_t get_chunk_index(const Eigen::Vector3i &indices) const noexcept;
 
   std::size_t _width_chunks{};
   std::size_t _height_chunks{};
