@@ -9,7 +9,7 @@
 #include <iostream>
 
 namespace fpsparty::net {
-Client::Client(const Create_info &create_info)
+Client::Client(const Client_create_info &create_info)
     : _host{enet::make_client_host_unique(
           {.max_channels = constants::max_channels,
            .incoming_bandwidth = create_info.incoming_bandwidth,

@@ -8,14 +8,14 @@
 #include "serial/reader.hpp"
 
 namespace fpsparty::net {
+struct Client_create_info {
+  std::uint32_t incoming_bandwidth{};
+  std::uint32_t outgoing_bandwidth{};
+};
+
 class Client {
 public:
-  struct Create_info {
-    std::uint32_t incoming_bandwidth{};
-    std::uint32_t outgoing_bandwidth{};
-  };
-
-  explicit Client(const Create_info &create_info);
+  explicit Client(const Client_create_info &create_info);
 
   virtual ~Client() = default;
 

@@ -70,6 +70,7 @@ target_link_libraries(game-server game-core net)
 # libgame-client
 add_library(
   game-client
+  src/game/client/client.cpp
   src/game/client/replicated_game.cpp
   src/game/client/replicated_player.cpp
   src/game/client/replicated_humanoid.cpp

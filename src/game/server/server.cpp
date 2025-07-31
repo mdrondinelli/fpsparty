@@ -68,10 +68,6 @@ void Server::broadcast_game_state() {
   }
 }
 
-std::size_t Server::get_peer_count() const noexcept {
-  return net::Server::get_peer_count();
-}
-
 void Server::on_peer_connect(enet::Peer peer) {
   std::cout << "Peer connected.\n";
   peer.set_data(new Peer_node);

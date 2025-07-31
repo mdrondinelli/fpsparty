@@ -21,8 +21,6 @@ public:
 
   void broadcast_game_state();
 
-  std::size_t get_peer_count() const noexcept;
-
 protected:
   void on_peer_connect(enet::Peer peer) override;
 

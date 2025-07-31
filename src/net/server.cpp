@@ -12,7 +12,7 @@
 #include <span>
 
 namespace fpsparty::net {
-Server::Server(const Create_info &create_info)
+Server::Server(const Server_create_info &create_info)
     : _host{enet::make_server_host_unique({
           .port = create_info.port,
           .max_clients = create_info.max_clients,

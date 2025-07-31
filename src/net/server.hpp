@@ -9,16 +9,16 @@
 #include <memory_resource>
 
 namespace fpsparty::net {
+struct Server_create_info {
+  std::uint16_t port;
+  std::size_t max_clients;
+  std::uint32_t incoming_bandwidth{};
+  std::uint32_t outgoing_bandwidth{};
+};
+
 class Server {
 public:
-  struct Create_info {
-    std::uint16_t port;
-    std::size_t max_clients;
-    std::uint32_t incoming_bandwidth{};
-    std::uint32_t outgoing_bandwidth{};
-  };
-
-  explicit Server(const Create_info &create_info);
+  explicit Server(const Server_create_info &create_info);
 
   virtual ~Server() = default;
 
