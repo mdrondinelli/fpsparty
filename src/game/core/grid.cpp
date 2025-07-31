@@ -10,7 +10,7 @@ Grid::Grid(const Grid_create_info &create_info)
                      _chunk_side_length},
       _depth_chunks{(create_info.depth + (_chunk_side_length - 1)) /
                     _chunk_side_length} {
-  _chunks.reserve(_width_chunks * _height_chunks * _depth_chunks);
+  _chunks.resize(_width_chunks * _height_chunks * _depth_chunks);
 }
 
 void Grid::dump(serial::Writer &writer) const {
