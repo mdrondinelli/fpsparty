@@ -60,11 +60,11 @@ void Replicated_game::reset() {
   _tick_number = 0;
 }
 
-const Entity_world &Replicated_game::get_world() const noexcept {
+const Entity_world &Replicated_game::get_entities() const noexcept {
   return _world;
 }
 
-Entity_world &Replicated_game::get_world() noexcept { return _world; }
+Entity_world &Replicated_game::get_entities() noexcept { return _world; }
 
 std::uint64_t Replicated_game::get_tick_number() const noexcept {
   return _tick_number;

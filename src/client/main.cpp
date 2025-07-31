@@ -213,7 +213,7 @@ public:
                                     vk::IndexType::eUint16);
         // draw other players (cubes)
         for (const auto &other_humanoid :
-             game->get_world()
+             game->get_entities()
                  .get_entities_of_type<game::Replicated_humanoid>()) {
           if (other_humanoid != player_humanoid) {
             const auto model_matrix =
@@ -231,7 +231,7 @@ public:
         }
         // draw projectiles (cubes)
         for (const auto &projectile :
-             game->get_world()
+             game->get_entities()
                  .get_entities_of_type<game::Replicated_projectile>()) {
           const auto model_matrix =
               (math::translation_matrix(projectile->get_position()) *

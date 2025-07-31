@@ -115,7 +115,7 @@ const Replicated_game *Client::get_game() const noexcept {
 Replicated_player *Client::get_player() const noexcept {
   return _player_entity_id
              ? dynamic_cast<Replicated_player *>(
-                   _game->get_world().get_entity_by_id(*_player_entity_id))
+                   _game->get_entities().get_entity_by_id(*_player_entity_id))
              : nullptr;
 }
 } // namespace fpsparty::game

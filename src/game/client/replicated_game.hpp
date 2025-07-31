@@ -30,9 +30,9 @@ public:
 
   void reset();
 
-  const Entity_world &get_world() const noexcept;
+  const Entity_world &get_entities() const noexcept;
 
-  Entity_world &get_world() noexcept;
+  Entity_world &get_entities() noexcept;
 
   net::Sequence_number get_tick_number() const noexcept;
 
