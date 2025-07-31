@@ -13,9 +13,13 @@ struct Client_create_info {
   float tick_duration;
 };
 
-class Client : net::Client {
+class Client {
 public:
   explicit Client(const Client_create_info &info);
+
+  Client(const Client &other) = delete;
+
+  Client &operator=(const Client &other) = delete;
 
   void service_game_state(float duration);
 
@@ -32,18 +36,6 @@ public:
   bool is_connected() const noexcept;
 
 protected:
-  void on_connect() override;
-
-  void on_disconnect() override;
-
-  void on_player_join_response(net::Entity_id player_entity_id) override;
-
-  void on_grid_snapshot(serial::Reader &reader) override;
-
-  void on_entity_snapshot(net::Sequence_number tick_number,
-                          serial::Reader &public_state_reader,
-                          serial::Reader &player_state_reader) override;
-
   Replicated_game *get_game() noexcept;
 
   const Replicated_game *get_game() const noexcept;
@@ -51,6 +43,29 @@ protected:
   Replicated_player *get_player() const noexcept;
 
 private:
+  class Net_client : public net::Client {
+  public:
+    explicit Net_client(const net::Client_create_info &info,
+                        game::Client *game_client) noexcept;
+
+  protected:
+    void on_connect() override;
+
+    void on_disconnect() override;
+
+    void on_player_join_response(net::Entity_id player_entity_id) override;
+
+    void on_grid_snapshot(serial::Reader &reader) override;
+
+    void on_entity_snapshot(net::Sequence_number tick_number,
+                            serial::Reader &public_state_reader,
+                            serial::Reader &player_state_reader) override;
+
+  private:
+    game::Client *_game_client;
+  };
+
+  Net_client _net_client;
   std::optional<Replicated_game> _game{};
   std::optional<net::Entity_id> _player_entity_id{};
   net::Sequence_number _input_sequence_number{};
