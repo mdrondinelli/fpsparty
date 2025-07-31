@@ -10,13 +10,13 @@ namespace fpsparty::game {
 Replicated_game::Replicated_game(const Replicated_game_create_info &) {}
 
 void Replicated_game::tick(float duration) {
-  const auto players = _world.get_entities_of_type<Replicated_player>();
+  const auto players = _entities.get_entities_of_type<Replicated_player>();
   for (const auto &player : players) {
     if (const auto humanoid = player->get_humanoid()) {
       humanoid->set_input_state(player->get_input_state());
     }
   }
-  const auto humanoids = _world.get_entities_of_type<Replicated_humanoid>();
+  const auto humanoids = _entities.get_entities_of_type<Replicated_humanoid>();
   for (const auto &humanoid : humanoids) {
     const auto movement_result = simulate_humanoid_movement({
         .initial_position = humanoid->get_position(),
@@ -25,7 +25,8 @@ void Replicated_game::tick(float duration) {
     });
     humanoid->set_position(movement_result.final_position);
   }
-  const auto projectiles = _world.get_entities_of_type<Replicated_projectile>();
+  const auto projectiles =
+      _entities.get_entities_of_type<Replicated_projectile>();
   for (const auto &projectile : projectiles) {
     const auto movement_result = simulate_projectile_movement({
         .initial_position = projectile->get_position(),
@@ -49,22 +50,22 @@ void Replicated_game::load(const Replicated_game_load_info &info) {
       &_projectile_loader,
       &_player_loader,
   };
-  _world.load({
+  _entities.load({
       .readers = readers,
       .loaders = loaders,
   });
 }
 
 void Replicated_game::reset() {
-  _world.reset();
+  _entities.reset();
   _tick_number = 0;
 }
 
 const Entity_world &Replicated_game::get_entities() const noexcept {
-  return _world;
+  return _entities;
 }
 
-Entity_world &Replicated_game::get_entities() noexcept { return _world; }
+Entity_world &Replicated_game::get_entities() noexcept { return _entities; }
 
 std::uint64_t Replicated_game::get_tick_number() const noexcept {
   return _tick_number;

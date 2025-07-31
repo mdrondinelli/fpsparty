@@ -40,7 +40,7 @@ private:
   Replicated_humanoid_loader _humanoid_loader{};
   Replicated_projectile_loader _projectile_loader{};
   Replicated_player_loader _player_loader{};
-  Entity_world _world{};
+  Entity_world _entities{};
   net::Sequence_number _tick_number{};
 };
 } // namespace fpsparty::game
