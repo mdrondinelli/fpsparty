@@ -8,14 +8,11 @@
 #include "game/server/projectile.hpp"
 #include "net/core/entity_id.hpp"
 #include "net/core/sequence_number.hpp"
-#include <exception>
 
 namespace fpsparty::game {
 struct Game_create_info {
   Grid_create_info grid_info{};
 };
-
-class Game_snapshotting_error : public std::exception {};
 
 class Game {
   struct Impl;
