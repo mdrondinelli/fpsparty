@@ -1,5 +1,5 @@
-#ifndef FPSPARTY_GAME_GRID_HPP
-#define FPSPARTY_GAME_GRID_HPP
+#ifndef FPSPARTY_GAME_CORE_GRID_HPP
+#define FPSPARTY_GAME_CORE_GRID_HPP
 
 #include "serial/reader.hpp"
 #include "serial/writer.hpp"
