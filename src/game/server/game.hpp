@@ -1,5 +1,5 @@
-#ifndef FPSPARTY_GAME_GAME_HPP
-#define FPSPARTY_GAME_GAME_HPP
+#ifndef FPSPARTY_GAME_SERVER_GAME_HPP
+#define FPSPARTY_GAME_SERVER_GAME_HPP
 
 #include "game/core/entity_world.hpp"
 #include "game/core/grid.hpp"
