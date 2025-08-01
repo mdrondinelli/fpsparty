@@ -23,7 +23,7 @@ struct Replicated_game_entities_load_info {
   serial::Reader *player_state_reader{};
 };
 
-class Replicated_game_load_error : public std::exception {};
+class Replicated_game_entities_load_error : public std::exception {};
 
 class Replicated_game {
 public:
