@@ -5,6 +5,7 @@
 #include "game/client/replicated_player.hpp"
 #include "game/client/replicated_projectile.hpp"
 #include "game/core/entity_world.hpp"
+#include "game/core/grid.hpp"
 #include "net/core/sequence_number.hpp"
 #include "serial/reader.hpp"
 #include <exception>
@@ -37,6 +38,7 @@ public:
   net::Sequence_number get_tick_number() const noexcept;
 
 private:
+  Grid _grid{{}};
   Replicated_humanoid_loader _humanoid_loader{};
   Replicated_projectile_loader _projectile_loader{};
   Replicated_player_loader _player_loader{};
