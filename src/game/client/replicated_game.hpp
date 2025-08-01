@@ -1,5 +1,5 @@
-#ifndef FPSPARTY_GAME_REPLICATED_GAME_HPP
-#define FPSPARTY_GAME_REPLICATED_GAME_HPP
+#ifndef FPSPARTY_GAME_CLIENT_REPLICATED_GAME_HPP
+#define FPSPARTY_GAME_CLIENT_REPLICATED_GAME_HPP
 
 #include "game/client/replicated_humanoid.hpp"
 #include "game/client/replicated_player.hpp"
@@ -13,7 +13,11 @@
 namespace fpsparty::game {
 struct Replicated_game_create_info {};
 
-struct Replicated_game_load_info {
+struct Replicated_game_grid_load_info {
+  serial::Reader *reader{};
+};
+
+struct Replicated_game_entities_load_info {
   net::Sequence_number tick_number{};
   serial::Reader *public_state_reader{};
   serial::Reader *player_state_reader{};
@@ -27,7 +31,9 @@ public:
 
   void tick(float duration);
 
-  void load(const Replicated_game_load_info &info);
+  void load_grid(const Replicated_game_grid_load_info &info);
+
+  void load_entities(const Replicated_game_entities_load_info &info);
 
   void reset();
 
