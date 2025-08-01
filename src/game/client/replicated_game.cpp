@@ -38,7 +38,12 @@ void Replicated_game::tick(float duration) {
   }
 }
 
-void Replicated_game::load(const Replicated_game_load_info &info) {
+void Replicated_game::load_grid(const Replicated_game_grid_load_info &info) {
+  _grid.load(*info.reader);
+}
+
+void Replicated_game::load_entities(
+    const Replicated_game_entities_load_info &info) {
   using serial::deserialize;
   _tick_number = info.tick_number;
   const auto readers = std::array<serial::Reader *, 2>{

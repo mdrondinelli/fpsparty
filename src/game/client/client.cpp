@@ -41,7 +41,7 @@ void Client::Net_client::on_entity_snapshot(
     send_player_join_request();
     _game_client->_game = Replicated_game{{}};
   }
-  _game_client->_game->load({
+  _game_client->_game->load_entities({
       .tick_number = tick_number,
       .public_state_reader = &public_state_reader,
       .player_state_reader = &player_state_reader,
