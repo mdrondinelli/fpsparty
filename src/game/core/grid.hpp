@@ -1,9 +1,11 @@
 #ifndef FPSPARTY_GAME_GRID_HPP
 #define FPSPARTY_GAME_GRID_HPP
 
+#include "serial/reader.hpp"
 #include "serial/writer.hpp"
 #include <Eigen/Dense>
 #include <cstddef>
+#include <exception>
 
 namespace fpsparty::game {
 struct Grid_create_info {
@@ -12,9 +14,13 @@ struct Grid_create_info {
   std::size_t depth{};
 };
 
+class Grid_loading_error : public std::exception {};
+
 class Grid {
 public:
   explicit Grid(const Grid_create_info &create_info);
+
+  void load(serial::Reader &reader);
 
   void dump(serial::Writer &writer) const;
 

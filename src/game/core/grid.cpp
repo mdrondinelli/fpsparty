@@ -13,6 +13,33 @@ Grid::Grid(const Grid_create_info &create_info)
   _chunks.resize(_width_chunks * _height_chunks * _depth_chunks);
 }
 
+void Grid::load(serial::Reader &reader) {
+  using serial::deserialize;
+  const auto width_chunks = deserialize<std::uint32_t>(reader);
+  if (!width_chunks) {
+    throw Grid_loading_error{};
+  }
+  const auto height_chunks = deserialize<std::uint32_t>(reader);
+  if (!height_chunks) {
+    throw Grid_loading_error{};
+  }
+  const auto depth_chunks = deserialize<std::uint32_t>(reader);
+  if (!depth_chunks) {
+    throw Grid_loading_error{};
+  }
+  _width_chunks = *width_chunks;
+  _height_chunks = *height_chunks;
+  _depth_chunks = *depth_chunks;
+  _chunks.resize(_width_chunks * _height_chunks * _depth_chunks);
+  for (auto &chunk : _chunks) {
+    const auto chunk_optional = deserialize<std::uint64_t>(reader);
+    if (!chunk_optional) {
+      throw Grid_loading_error{};
+    }
+    chunk = *chunk_optional;
+  }
+}
+
 void Grid::dump(serial::Writer &writer) const {
   using serial::serialize;
   serialize<std::uint32_t>(writer, _width_chunks);
