@@ -8,7 +8,6 @@
 #include "game/core/grid.hpp"
 #include "net/core/sequence_number.hpp"
 #include "serial/reader.hpp"
-#include <exception>
 
 namespace fpsparty::game {
 struct Replicated_game_create_info {};
@@ -22,8 +21,6 @@ struct Replicated_game_entities_load_info {
   serial::Reader *public_state_reader{};
   serial::Reader *player_state_reader{};
 };
-
-class Replicated_game_entities_load_error : public std::exception {};
 
 class Replicated_game {
 public:
