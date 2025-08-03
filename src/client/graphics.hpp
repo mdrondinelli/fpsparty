@@ -1,31 +1,69 @@
 #ifndef FPSPARTY_CLIENT_GRAPHICS_HPP
 #define FPSPARTY_CLIENT_GRAPHICS_HPP
 
+#include "client/graphics_buffer.hpp"
+#include "client/index_buffer.hpp"
+#include "client/staging_buffer.hpp"
+#include "client/vertex_buffer.hpp"
 #include "glfw.hpp"
+#include "rc.hpp"
 #include "vma.hpp"
 #include <Eigen/Dense>
+#include <cstddef>
+#include <span>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_handles.hpp>
-#include <vulkan/vulkan_structs.hpp>
 
 namespace fpsparty::client {
+struct Graphics_create_info {
+  glfw::Window window{};
+  vk::SurfaceKHR surface{};
+  unsigned max_frames_in_flight{2};
+};
+
+class Graphics_buffer_copy_state
+    : public rc::Object<Graphics_buffer_copy_state> {
+public:
+  explicit Graphics_buffer_copy_state(rc::Strong<Graphics_buffer> src_buffer,
+                                      rc::Strong<Graphics_buffer> dst_buffer,
+                                      vk::UniqueCommandBuffer command_buffer,
+                                      vk::UniqueFence fence);
+
+  void await() const;
+
+  bool is_done() const;
+
+private:
+  mutable rc::Strong<Graphics_buffer> _src_buffer;
+  mutable rc::Strong<Graphics_buffer> _dst_buffer;
+  mutable vk::UniqueCommandBuffer _command_buffer;
+  mutable vk::UniqueFence _fence;
+  mutable std::mutex _mutex;
+};
+
 class Graphics {
 public:
-  struct Create_info {
-    glfw::Window window{};
-    vk::SurfaceKHR surface{};
-    unsigned max_frames_in_flight{2};
-  };
-
   constexpr Graphics() noexcept = default;
 
-  explicit Graphics(const Create_info &info);
+  explicit Graphics(const Graphics_create_info &info);
+
+  void collect_garbage();
+
+  std::pair<rc::Strong<Vertex_buffer>, rc::Strong<Graphics_buffer_copy_state>>
+  create_vertex_buffer(std::span<const std::byte> data);
+
+  std::pair<rc::Strong<Index_buffer>, rc::Strong<Graphics_buffer_copy_state>>
+  create_index_buffer(std::span<const std::byte> data);
 
   [[nodiscard]] bool begin();
+
   void end();
 
-  void bind_vertex_buffer(vk::Buffer buffer) noexcept;
-  void bind_index_buffer(vk::Buffer buffer, vk::IndexType index_type) noexcept;
+  void bind_vertex_buffer(rc::Strong<const Vertex_buffer> buffer);
+
+  void bind_index_buffer(rc::Strong<const Index_buffer> buffer,
+                         vk::IndexType index_type);
+
   void draw_indexed(std::uint32_t index_count) noexcept;
 
   void
@@ -42,7 +80,10 @@ private:
     vma::Unique_allocation depth_allocation{};
     vk::UniqueImageView depth_image_view{};
     std::uint32_t swapchain_image_index{};
+    std::vector<rc::Strong<const Graphics_buffer>> used_buffers{};
   };
+
+  vk::UniqueCommandBuffer make_upload_command_buffer();
 
   void remake_swapchain();
 
@@ -55,6 +96,12 @@ private:
   std::vector<vk::UniqueImageView> _swapchain_image_views{};
   vk::UniquePipelineLayout _pipeline_layout{};
   vk::UniquePipeline _pipeline{};
+  rc::Factory<Staging_buffer> _staging_buffer_factory{};
+  rc::Factory<Vertex_buffer> _vertex_buffer_factory{};
+  rc::Factory<Index_buffer> _index_buffer_factory{};
+  vk::UniqueCommandPool _copy_command_pool{};
+  rc::Factory<Graphics_buffer_copy_state> _buffer_copy_state_factory{};
+  std::vector<rc::Strong<Graphics_buffer_copy_state>> _buffer_copy_states{};
   std::vector<Frame_resource> _frame_resources{};
   unsigned _frame_resource_index{};
 };

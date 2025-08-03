@@ -159,11 +159,6 @@ public:
     _glfw_window.set_key_callback(this);
     _glfw_window.set_mouse_button_callback(this);
     _glfw_window.set_cursor_pos_callback(this);
-    _vk_command_pool =
-        Global_vulkan_state::get().device().createCommandPoolUnique({
-            .flags = vk::CommandPoolCreateFlagBits::eTransient,
-            .queueFamilyIndex = Global_vulkan_state::get().queue_family_index(),
-        });
     _floor_vertex_buffer =
         upload_vertices(std::as_bytes(std::span{floor_mesh_vertices}));
     std::cout << "Uploaded floor vertex buffer.\n";
@@ -179,6 +174,7 @@ public:
   }
 
   void render() {
+    _graphics.collect_garbage();
     if (_graphics.begin()) {
       const auto game = get_game();
       const auto player = game ? get_player() : nullptr;
@@ -202,15 +198,14 @@ public:
         const auto view_projection_matrix =
             (projection_matrix * view_matrix).eval();
         // draw floor
-        _graphics.bind_vertex_buffer(_floor_vertex_buffer.get_buffer());
-        _graphics.bind_index_buffer(_floor_index_buffer.get_buffer(),
+        _graphics.bind_vertex_buffer(_floor_vertex_buffer);
+        _graphics.bind_index_buffer(_floor_index_buffer,
                                     vk::IndexType::eUint16);
         _graphics.push_constants(view_projection_matrix);
         _graphics.draw_indexed(floor_mesh_indices.size());
         // draw cubes
-        _graphics.bind_vertex_buffer(_cube_vertex_buffer.get_buffer());
-        _graphics.bind_index_buffer(_cube_index_buffer.get_buffer(),
-                                    vk::IndexType::eUint16);
+        _graphics.bind_vertex_buffer(_cube_vertex_buffer);
+        _graphics.bind_index_buffer(_cube_index_buffer, vk::IndexType::eUint16);
         // draw other players (cubes)
         for (const auto &other_humanoid :
              game->get_entities()
@@ -312,22 +307,25 @@ protected:
   }
 
 private:
-  Vertex_buffer upload_vertices(std::span<const std::byte> data) {
-    return Vertex_buffer{*_vk_command_pool, data};
+  rc::Strong<Vertex_buffer> upload_vertices(std::span<const std::byte> data) {
+    auto [buffer, copy] = _graphics.create_vertex_buffer(data);
+    copy->await();
+    return buffer;
   }
 
-  Index_buffer upload_indices(std::span<const std::byte> data) {
-    return Index_buffer{*_vk_command_pool, data};
+  rc::Strong<Index_buffer> upload_indices(std::span<const std::byte> data) {
+    auto [buffer, copy] = _graphics.create_index_buffer(data);
+    copy->await();
+    return buffer;
   }
 
   glfw::Window _glfw_window{};
   vk::SurfaceKHR _vk_surface{};
   Graphics _graphics{};
-  vk::UniqueCommandPool _vk_command_pool{};
-  Vertex_buffer _floor_vertex_buffer{};
-  Index_buffer _floor_index_buffer{};
-  Vertex_buffer _cube_vertex_buffer{};
-  Index_buffer _cube_index_buffer{};
+  rc::Strong<Vertex_buffer> _floor_vertex_buffer{};
+  rc::Strong<Index_buffer> _floor_index_buffer{};
+  rc::Strong<Vertex_buffer> _cube_vertex_buffer{};
+  rc::Strong<Index_buffer> _cube_index_buffer{};
 };
 
 } // namespace

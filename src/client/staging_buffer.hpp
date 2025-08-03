@@ -1,22 +1,16 @@
 #ifndef FPSPARTY_CLIENT_STAGING_BUFFER_HPP
 #define FPSPARTY_CLIENT_STAGING_BUFFER_HPP
 
-#include "vma.hpp"
+#include "client/graphics_buffer.hpp"
+#include "rc.hpp"
 #include <span>
 #include <vulkan/vulkan.hpp>
 
 namespace fpsparty::client {
-class Staging_buffer {
+class Staging_buffer : public rc::Object<Staging_buffer>,
+                       public Graphics_buffer {
 public:
-  constexpr Staging_buffer() noexcept = default;
-
   explicit Staging_buffer(std::span<const std::byte> data);
-
-  vk::Buffer get_buffer() const { return *_buffer; }
-
-private:
-  vk::UniqueBuffer _buffer{};
-  vma::Unique_allocation _allocation{};
 };
 } // namespace fpsparty::client
 

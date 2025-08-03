@@ -1,11 +1,13 @@
 #include "graphics.hpp"
+#include "algorithms/unordered_erase.hpp"
 #include "client/global_vulkan_state.hpp"
 #include "glfw.hpp"
+#include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <limits>
+#include <mutex>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_enums.hpp>
-#include <vulkan/vulkan_structs.hpp>
 
 namespace fpsparty::client {
 namespace {
@@ -253,10 +255,48 @@ vk::UniqueSemaphore make_semaphore(const char *
 #endif
   return retval;
 }
-
 } // namespace
 
-Graphics::Graphics(const Create_info &info)
+Graphics_buffer_copy_state::Graphics_buffer_copy_state(
+    rc::Strong<Graphics_buffer> src_buffer,
+    rc::Strong<Graphics_buffer> dst_buffer,
+    vk::UniqueCommandBuffer command_buffer, vk::UniqueFence fence)
+    : _src_buffer{std::move(src_buffer)},
+      _dst_buffer{std::move(dst_buffer)},
+      _command_buffer{std::move(command_buffer)},
+      _fence{std::move(fence)} {}
+
+void Graphics_buffer_copy_state::await() const {
+  const auto lock = std::scoped_lock{_mutex};
+  if (!_fence) {
+    return;
+  } else {
+    std::ignore = Global_vulkan_state::get().device().waitForFences(
+        {*_fence}, vk::False, std::numeric_limits<std::uint64_t>::max());
+    _fence = {};
+    _command_buffer = {};
+    _dst_buffer = {};
+    _src_buffer = {};
+  }
+}
+
+bool Graphics_buffer_copy_state::is_done() const {
+  const auto lock = std::scoped_lock{_mutex};
+  if (!_fence) {
+    return true;
+  } else if (Global_vulkan_state::get().device().getFenceStatus(*_fence) ==
+             vk::Result::eSuccess) {
+    _fence = {};
+    _command_buffer = {};
+    _dst_buffer = {};
+    _src_buffer = {};
+    return true;
+  } else {
+    return false;
+  }
+}
+
+Graphics::Graphics(const Graphics_create_info &info)
     : _window{info.window}, _surface{info.surface} {
   std::tie(_swapchain, _swapchain_image_format, _swapchain_image_extent) =
       make_swapchain(_window, _surface);
@@ -266,6 +306,11 @@ Graphics::Graphics(const Create_info &info)
       make_swapchain_image_views(_swapchain_images, _swapchain_image_format);
   _pipeline_layout = make_pipeline_layout();
   _pipeline = make_pipeline(*_pipeline_layout, _swapchain_image_format);
+  _copy_command_pool =
+      Global_vulkan_state::get().device().createCommandPoolUnique({
+          .flags = vk::CommandPoolCreateFlagBits::eTransient,
+          .queueFamilyIndex = Global_vulkan_state::get().queue_family_index(),
+      });
   for (auto i = std::size_t{}; i != info.max_frames_in_flight; ++i) {
     const auto swapchain_image_acquire_semaphore_name =
         "swapchain_image_acquire_semaphores[" + std::to_string(i) + "]";
@@ -340,6 +385,74 @@ Graphics::Graphics(const Create_info &info)
   }
 }
 
+void Graphics::collect_garbage() {
+  algorithms::unordered_erase_many_if(
+      _buffer_copy_states,
+      [&](const rc::Strong<Graphics_buffer_copy_state> &copy) {
+        return copy->is_done();
+      });
+}
+
+std::pair<rc::Strong<Vertex_buffer>, rc::Strong<Graphics_buffer_copy_state>>
+Graphics::create_vertex_buffer(std::span<const std::byte> data) {
+  auto staging_buffer = _staging_buffer_factory.create(data);
+  auto vertex_buffer = _vertex_buffer_factory.create(data.size());
+  auto upload_command_buffer = make_upload_command_buffer();
+  upload_command_buffer->begin({
+      .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+  });
+  upload_command_buffer->copyBuffer(
+      staging_buffer->get_buffer(), vertex_buffer->get_buffer(),
+      {{
+          .srcOffset = 0,
+          .dstOffset = 0,
+          .size = static_cast<vk::DeviceSize>(data.size()),
+      }});
+  upload_command_buffer->end();
+  auto upload_fence = Global_vulkan_state::get().device().createFenceUnique({});
+  Global_vulkan_state::get().queue().submit(
+      {{
+          .commandBufferCount = 1,
+          .pCommandBuffers = &*upload_command_buffer,
+      }},
+      *upload_fence);
+  auto upload_state = _buffer_copy_state_factory.create(
+      std::move(staging_buffer), vertex_buffer,
+      std::move(upload_command_buffer), std::move(upload_fence));
+  _buffer_copy_states.emplace_back(upload_state);
+  return std::pair{std::move(vertex_buffer), std::move(upload_state)};
+}
+
+std::pair<rc::Strong<Index_buffer>, rc::Strong<Graphics_buffer_copy_state>>
+Graphics::create_index_buffer(std::span<const std::byte> data) {
+  auto staging_buffer = _staging_buffer_factory.create(data);
+  auto index_buffer = _index_buffer_factory.create(data.size());
+  auto upload_command_buffer = make_upload_command_buffer();
+  upload_command_buffer->begin({
+      .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+  });
+  upload_command_buffer->copyBuffer(
+      staging_buffer->get_buffer(), index_buffer->get_buffer(),
+      {{
+          .srcOffset = 0,
+          .dstOffset = 0,
+          .size = static_cast<vk::DeviceSize>(data.size()),
+      }});
+  upload_command_buffer->end();
+  auto upload_fence = Global_vulkan_state::get().device().createFenceUnique({});
+  Global_vulkan_state::get().queue().submit(
+      {{
+          .commandBufferCount = 1,
+          .pCommandBuffers = &*upload_command_buffer,
+      }},
+      *upload_fence);
+  auto upload_state = _buffer_copy_state_factory.create(
+      std::move(staging_buffer), index_buffer, std::move(upload_command_buffer),
+      std::move(upload_fence));
+  _buffer_copy_states.emplace_back(upload_state);
+  return std::pair{std::move(index_buffer), std::move(upload_state)};
+}
+
 bool Graphics::begin() {
   auto &frame_resource = _frame_resources[_frame_resource_index];
   try {
@@ -363,6 +476,7 @@ bool Graphics::begin() {
       1, &*frame_resource.work_done_fence);
   Global_vulkan_state::get().device().resetCommandPool(
       *frame_resource.command_pool);
+  frame_resource.used_buffers.clear();
   frame_resource.command_buffer->begin(vk::CommandBufferBeginInfo{
       .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
   });
@@ -490,15 +604,19 @@ void Graphics::end() {
   _frame_resource_index = (_frame_resource_index + 1) % _frame_resources.size();
 }
 
-void Graphics::bind_vertex_buffer(vk::Buffer buffer) noexcept {
-  _frame_resources[_frame_resource_index].command_buffer->bindVertexBuffers(
-      0, {buffer}, {0});
+void Graphics::bind_vertex_buffer(rc::Strong<const Vertex_buffer> buffer) {
+  auto &frame_resource = _frame_resources[_frame_resource_index];
+  frame_resource.command_buffer->bindVertexBuffers(0, {buffer->get_buffer()},
+                                                   {0});
+  frame_resource.used_buffers.emplace_back(std::move(buffer));
 }
 
-void Graphics::bind_index_buffer(vk::Buffer buffer,
-                                 vk::IndexType index_type) noexcept {
-  _frame_resources[_frame_resource_index].command_buffer->bindIndexBuffer(
-      buffer, 0, index_type);
+void Graphics::bind_index_buffer(rc::Strong<const Index_buffer> buffer,
+                                 vk::IndexType index_type) {
+  auto &frame_resource = _frame_resources[_frame_resource_index];
+  frame_resource.command_buffer->bindIndexBuffer(buffer->get_buffer(), 0,
+                                                 index_type);
+  frame_resource.used_buffers.emplace_back(std::move(buffer));
 }
 
 void Graphics::draw_indexed(std::uint32_t index_count) noexcept {
@@ -511,6 +629,15 @@ void Graphics::push_constants(
   _frame_resources[_frame_resource_index].command_buffer->pushConstants(
       *_pipeline_layout, vk::ShaderStageFlagBits::eVertex, 0, 64,
       model_view_projection_matrix.data());
+}
+
+vk::UniqueCommandBuffer Graphics::make_upload_command_buffer() {
+  return std::move(
+      Global_vulkan_state::get().device().allocateCommandBuffersUnique({
+          .commandPool = *_copy_command_pool,
+          .level = vk::CommandBufferLevel::ePrimary,
+          .commandBufferCount = 1,
+      })[0]);
 }
 
 void Graphics::remake_swapchain() {

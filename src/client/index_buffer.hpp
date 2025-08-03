@@ -1,23 +1,23 @@
 #ifndef FPSPARTY_CLIENT_INDEX_BUFFER_HPP
 #define FPSPARTY_CLIENT_INDEX_BUFFER_HPP
 
-#include "vma.hpp"
-#include <span>
-#include <vulkan/vulkan.hpp>
+#include "client/graphics_buffer.hpp"
+#include "rc.hpp"
 
 namespace fpsparty::client {
-class Index_buffer {
+class Index_buffer : public rc::Object<Index_buffer>, public Graphics_buffer {
 public:
-  constexpr Index_buffer() noexcept = default;
+  explicit Index_buffer(std::size_t size);
 
-  explicit Index_buffer(vk::CommandPool command_pool,
-                        std::span<const std::byte> data);
-
-  constexpr vk::Buffer get_buffer() const noexcept { return *_buffer; }
-
+  /*
 private:
-  vk::UniqueBuffer _buffer{};
-  vma::Unique_allocation _allocation{};
+  struct Upload_state {
+    Staging_buffer staging_buffer{};
+    vk::UniqueCommandBuffer command_buffer{};
+    vk::UniqueFence fence{};
+    std::mutex mutex{};
+  };
+  */
 };
 } // namespace fpsparty::client
 
