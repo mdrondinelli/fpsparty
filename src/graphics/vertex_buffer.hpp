@@ -1,5 +1,5 @@
-#ifndef FPSPARTY_CLIENT_VERTEX_BUFFER_HPP
-#define FPSPARTY_CLIENT_VERTEX_BUFFER_HPP
+#ifndef FPSPARTY_GRAPHICS_VERTEX_BUFFER_HPP
+#define FPSPARTY_GRAPHICS_VERTEX_BUFFER_HPP
 
 #include "graphics/graphics_buffer.hpp"
 #include "rc.hpp"

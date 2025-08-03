@@ -1,5 +1,5 @@
-#ifndef FPSPARTY_CLIENT_GRAPHICS_HPP
-#define FPSPARTY_CLIENT_GRAPHICS_HPP
+#ifndef FPSPARTY_GRAPHICS_GRAPHICS_HPP
+#define FPSPARTY_GRAPHICS_GRAPHICS_HPP
 
 #include "glfw.hpp"
 #include "graphics/graphics_buffer.hpp"
