@@ -5,7 +5,7 @@
 #include "vma.hpp"
 #include <vulkan/vulkan.hpp>
 
-namespace fpsparty::client {
+namespace fpsparty::graphics {
 struct Graphics_buffer_create_info {
   vk::BufferCreateInfo buffer_info{};
   vma::Allocation_create_info allocation_info{};
@@ -26,6 +26,6 @@ private:
   vk::UniqueBuffer _buffer{};
   vma::Unique_allocation _allocation{};
 };
-} // namespace fpsparty::client
+} // namespace fpsparty::graphics
 
 #endif

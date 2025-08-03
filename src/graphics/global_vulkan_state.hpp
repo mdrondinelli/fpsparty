@@ -6,7 +6,7 @@
 #include <mutex>
 #include <vulkan/vulkan.hpp>
 
-namespace fpsparty::client {
+namespace fpsparty::graphics {
 class Global_vulkan_state {
 public:
   static const Global_vulkan_state &get() noexcept;
@@ -61,6 +61,6 @@ public:
 private:
   bool _owning{};
 };
-} // namespace fpsparty::client
+} // namespace fpsparty::graphics
 
 #endif

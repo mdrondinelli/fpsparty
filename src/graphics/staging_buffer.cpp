@@ -1,8 +1,8 @@
 #include "staging_buffer.hpp"
-#include "client/global_vulkan_state.hpp"
+#include "graphics/global_vulkan_state.hpp"
 #include <cstring>
 
-namespace fpsparty::client {
+namespace fpsparty::graphics {
 Staging_buffer::Staging_buffer(std::span<const std::byte> data)
     : Graphics_buffer{{
           .buffer_info =
@@ -33,4 +33,4 @@ Staging_buffer::Staging_buffer(std::span<const std::byte> data)
     Global_vulkan_state::get().allocator().unmap_memory(get_allocation());
   }
 }
-} // namespace fpsparty::client
+} // namespace fpsparty::graphics

@@ -1,7 +1,7 @@
 #include "graphics.hpp"
 #include "algorithms/unordered_erase.hpp"
-#include "client/global_vulkan_state.hpp"
 #include "glfw.hpp"
+#include "graphics/global_vulkan_state.hpp"
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -9,7 +9,7 @@
 #include <mutex>
 #include <vulkan/vulkan.hpp>
 
-namespace fpsparty::client {
+namespace fpsparty::graphics {
 namespace {
 std::tuple<vk::UniqueSwapchainKHR, vk::Format, vk::Extent2D>
 make_swapchain(glfw::Window window, vk::SurfaceKHR surface) {
@@ -657,4 +657,4 @@ void Graphics::remake_swapchain() {
     _pipeline = make_pipeline(*_pipeline_layout, _swapchain_image_format);
   }
 }
-} // namespace fpsparty::client
+} // namespace fpsparty::graphics

@@ -1,11 +1,11 @@
 #ifndef FPSPARTY_CLIENT_GRAPHICS_HPP
 #define FPSPARTY_CLIENT_GRAPHICS_HPP
 
-#include "client/graphics_buffer.hpp"
-#include "client/index_buffer.hpp"
-#include "client/staging_buffer.hpp"
-#include "client/vertex_buffer.hpp"
 #include "glfw.hpp"
+#include "graphics/graphics_buffer.hpp"
+#include "graphics/index_buffer.hpp"
+#include "graphics/staging_buffer.hpp"
+#include "graphics/vertex_buffer.hpp"
 #include "rc.hpp"
 #include "vma.hpp"
 #include <Eigen/Dense>
@@ -14,7 +14,7 @@
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_handles.hpp>
 
-namespace fpsparty::client {
+namespace fpsparty::graphics {
 struct Graphics_create_info {
   glfw::Window window{};
   vk::SurfaceKHR surface{};
@@ -105,6 +105,6 @@ private:
   std::vector<Frame_resource> _frame_resources{};
   unsigned _frame_resource_index{};
 };
-} // namespace fpsparty::client
+} // namespace fpsparty::graphics
 
 #endif

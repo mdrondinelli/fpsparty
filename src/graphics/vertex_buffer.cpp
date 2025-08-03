@@ -1,13 +1,13 @@
-#include "index_buffer.hpp"
+#include "vertex_buffer.hpp"
 
-namespace fpsparty::client {
-Index_buffer::Index_buffer(std::size_t size)
+namespace fpsparty::graphics {
+Vertex_buffer::Vertex_buffer(std::size_t size)
     : Graphics_buffer{{
           .buffer_info =
               {
                   .size = static_cast<vk::DeviceSize>(size),
                   .usage = vk::BufferUsageFlagBits::eTransferDst |
-                           vk::BufferUsageFlagBits::eIndexBuffer,
+                           vk::BufferUsageFlagBits::eVertexBuffer,
                   .sharingMode = vk::SharingMode::eExclusive,
               },
           .allocation_info =
@@ -22,4 +22,4 @@ Index_buffer::Index_buffer(std::size_t size)
                   .priority = {},
               },
       }} {}
-} // namespace fpsparty::client
+} // namespace fpsparty::graphics

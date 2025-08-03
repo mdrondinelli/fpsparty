@@ -6,7 +6,7 @@
 #include <volk.h>
 #include <vulkan/vulkan_handles.hpp>
 
-namespace fpsparty::client {
+namespace fpsparty::graphics {
 namespace {
 const auto vk_device_extensions = std::array{vk::KHRSwapchainExtensionName};
 
@@ -214,4 +214,4 @@ Global_vulkan_state_guard::~Global_vulkan_state_guard() {
     Global_vulkan_state::remove_reference();
   }
 }
-} // namespace fpsparty::client
+} // namespace fpsparty::graphics

@@ -1,7 +1,7 @@
 #include "graphics_buffer.hpp"
-#include "client/global_vulkan_state.hpp"
+#include "graphics/global_vulkan_state.hpp"
 
-namespace fpsparty::client {
+namespace fpsparty::graphics {
 Graphics_buffer::Graphics_buffer(const Graphics_buffer_create_info &info) {
   std::tie(_buffer, _allocation) =
       Global_vulkan_state::get().allocator().create_buffer_unique(
@@ -18,4 +18,4 @@ vk::Buffer Graphics_buffer::get_buffer() const noexcept { return *_buffer; }
 vma::Allocation Graphics_buffer::get_allocation() const noexcept {
   return *_allocation;
 }
-} // namespace fpsparty::client
+} // namespace fpsparty::graphics

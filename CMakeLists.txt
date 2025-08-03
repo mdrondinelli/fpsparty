@@ -24,7 +24,7 @@ target_include_directories(
 )
 target_include_directories(
   net
-  PRIVATE
+  PUBLIC
   ${CMAKE_SOURCE_DIR}/src
 )
 
@@ -46,7 +46,7 @@ target_include_directories(
 )
 target_include_directories(
   game-core
-  PRIVATE
+  PUBLIC
   ${CMAKE_SOURCE_DIR}/src
 )
 target_compile_definitions(game-core PUBLIC FPSPARTY_SERIAL_EIGEN)
@@ -62,7 +62,7 @@ add_library(
 )
 target_include_directories(
   game-server
-  PRIVATE
+  PUBLIC
   ${CMAKE_SOURCE_DIR}/src
 )
 target_link_libraries(game-server game-core net)
@@ -78,7 +78,7 @@ add_library(
 )
 target_include_directories(
   game-client
-  PRIVATE
+  PUBLIC
   ${CMAKE_SOURCE_DIR}/src
 )
 target_link_libraries(game-client game-core net)
@@ -102,26 +102,43 @@ target_include_directories(
 target_link_directories(server PRIVATE ${CMAKE_SOURCE_DIR}/extern/enet/.libs)
 target_link_libraries(server enet game-server net)
 
-# client
-add_executable(
-  client
-  src/client/graphics.cpp
-  src/client/graphics_buffer.cpp
-  src/client/global_vulkan_state.cpp
-  src/client/index_buffer.cpp
-  src/client/main.cpp
-  src/client/staging_buffer.cpp
-  src/client/vertex_buffer.cpp
+# graphics
+add_library(
+  graphics
+  src/graphics/graphics.cpp
+  src/graphics/graphics_buffer.cpp
+  src/graphics/global_vulkan_state.cpp
+  src/graphics/index_buffer.cpp
+  src/graphics/staging_buffer.cpp
+  src/graphics/vertex_buffer.cpp
   src/vma.cpp
 )
 target_compile_definitions(
-  client
-  PRIVATE
+  graphics
+  PUBLIC
   GLFW_INCLUDE_VULKAN
   VK_NO_PROTOTYPES
   VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
   VMA_STATIC_VULKAN_FUNCTIONS=0
   VMA_DYNAMIC_VULKAN_FUNCTIONS=0
+)
+target_include_directories(
+  graphics
+  SYSTEM
+  PUBLIC
+  ${CMAKE_SOURCE_DIR}/extern/eigen-3.4.0
+)
+target_include_directories(
+  graphics
+  PUBLIC
+  ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(graphics glfw volk GPUOpen::VulkanMemoryAllocator)
+
+# client
+add_executable(
+  client
+  src/client/main.cpp
 )
 target_include_directories(
   client
@@ -136,30 +153,33 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/src
 )
 target_link_directories(client PRIVATE ${CMAKE_SOURCE_DIR}/extern/enet/.libs)
-target_link_libraries(client enet glfw volk GPUOpen::VulkanMemoryAllocator game-client net)
+target_link_libraries(client enet net game-client graphics)
 
 # compiler options
-set_property(TARGET game-core game-server game-client net server client PROPERTY CXX_STANDARD 23)
-set_property(TARGET game-core game-server game-client net server client PROPERTY CXX_STANDARD_REQUIRED ON)
-set_property(TARGET game-core game-server game-client net server client PROPERTY CXX_EXTENSIONS OFF)
+set_property(TARGET net game-core game-server game-client server graphics client PROPERTY CXX_STANDARD 23)
+set_property(TARGET net game-core game-server game-client server graphics client PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET net game-core game-server game-client server graphics client PROPERTY CXX_EXTENSIONS OFF)
 if (MSVC)
+  target_compile_options(net PRIVATE /W4 /WX)
   target_compile_options(game-core PRIVATE /W4 /WX)
   target_compile_options(game-server PRIVATE /W4 /WX)
   target_compile_options(game-client PRIVATE /W4 /WX)
-  target_compile_options(net PRIVATE /W4 /WX)
   target_compile_options(server PRIVATE /W4 /WX)
+  target_compile_options(graphics PRIVATE /W4 /WX)
   target_compile_options(client PRIVATE /W4 /WX)
 else()
+  target_compile_options(net PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
   target_compile_options(game-core PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
   target_compile_options(game-server PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
   target_compile_options(game-client PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
-  target_compile_options(net PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
-  target_compile_options(client PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
   target_compile_options(server PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
+  target_compile_options(graphics PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
+  target_compile_options(client PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
+  target_link_options(net PRIVATE -stdlib=libc++ -lc++abi)
   target_link_options(game-core PRIVATE -stdlib=libc++ -lc++abi)
   target_link_options(game-server PRIVATE -stdlib=libc++ -lc++abi)
   target_link_options(game-client PRIVATE -stdlib=libc++ -lc++abi)
-  target_link_options(net PRIVATE -stdlib=libc++ -lc++abi)
-  target_link_options(client PRIVATE -stdlib=libc++ -lc++abi)
   target_link_options(server PRIVATE -stdlib=libc++ -lc++abi)
+  target_link_options(graphics PRIVATE -stdlib=libc++ -lc++abi)
+  target_link_options(client PRIVATE -stdlib=libc++ -lc++abi)
 endif()

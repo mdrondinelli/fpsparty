@@ -1,14 +1,11 @@
-#include "client/global_vulkan_state.hpp"
-#include "client/graphics.hpp"
-#include "client/index_buffer.hpp"
-#include "client/vertex_buffer.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
 #include "game/client/client.hpp"
-#include "game/client/replicated_humanoid.hpp"
-#include "game/client/replicated_player.hpp"
-#include "game/client/replicated_projectile.hpp"
 #include "glfw.hpp"
+#include "graphics/global_vulkan_state.hpp"
+#include "graphics/graphics.hpp"
+#include "graphics/index_buffer.hpp"
+#include "graphics/vertex_buffer.hpp"
 #include "math/transformation_matrices.hpp"
 #include "net/core/constants.hpp"
 #include <csignal>
@@ -22,7 +19,6 @@
 #include <vulkan/vulkan.hpp>
 
 using namespace fpsparty;
-using namespace fpsparty::client;
 
 namespace vk {
 DispatchLoaderDynamic defaultDispatchLoaderDynamic;
@@ -36,7 +32,7 @@ void handle_signal(int signal) { signal_status = signal; }
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
-      Global_vulkan_state::get().instance(), window);
+      graphics::Global_vulkan_state::get().instance(), window);
   std::cout << "Created VkSurfaceKHR.\n";
   return retval;
 }
@@ -307,13 +303,15 @@ protected:
   }
 
 private:
-  rc::Strong<Vertex_buffer> upload_vertices(std::span<const std::byte> data) {
+  rc::Strong<graphics::Vertex_buffer>
+  upload_vertices(std::span<const std::byte> data) {
     auto [buffer, copy] = _graphics.create_vertex_buffer(data);
     copy->await();
     return buffer;
   }
 
-  rc::Strong<Index_buffer> upload_indices(std::span<const std::byte> data) {
+  rc::Strong<graphics::Index_buffer>
+  upload_indices(std::span<const std::byte> data) {
     auto [buffer, copy] = _graphics.create_index_buffer(data);
     copy->await();
     return buffer;
@@ -321,11 +319,11 @@ private:
 
   glfw::Window _glfw_window{};
   vk::SurfaceKHR _vk_surface{};
-  Graphics _graphics{};
-  rc::Strong<Vertex_buffer> _floor_vertex_buffer{};
-  rc::Strong<Index_buffer> _floor_index_buffer{};
-  rc::Strong<Vertex_buffer> _cube_vertex_buffer{};
-  rc::Strong<Index_buffer> _cube_index_buffer{};
+  graphics::Graphics _graphics{};
+  rc::Strong<graphics::Vertex_buffer> _floor_vertex_buffer{};
+  rc::Strong<graphics::Index_buffer> _floor_index_buffer{};
+  rc::Strong<graphics::Vertex_buffer> _cube_vertex_buffer{};
+  rc::Strong<graphics::Index_buffer> _cube_index_buffer{};
 };
 
 } // namespace
@@ -343,7 +341,7 @@ int main() {
       .client_api = glfw::Client_api::no_api,
   });
   std::cout << "Opened window.\n";
-  const auto vulkan_guard = Global_vulkan_state_guard{{}};
+  const auto vulkan_guard = graphics::Global_vulkan_state_guard{{}};
   const auto vk_surface = make_vk_surface(*glfw_window);
   auto client = Client{{
       .client_info = {},
@@ -376,7 +374,7 @@ int main() {
     loop_duration = now - loop_time;
     loop_time = now;
   }
-  Global_vulkan_state::get().device().waitIdle();
+  graphics::Global_vulkan_state::get().device().waitIdle();
   std::cout << "Exiting.\n";
   return 0;
 }
