@@ -23,17 +23,47 @@ bool unordered_erase_one(std::vector<T, Allocator> &container, const U &value) {
   }
 }
 
+template <typename T, typename Allocator, typename Predicate>
+bool unordered_erase_one_if(std::vector<T, Allocator> &container,
+                            Predicate &&predicate) {
+  const auto it = std::ranges::find_if(container, predicate);
+  if (it != container.end()) {
+    unordered_erase_at(container, it);
+    return true;
+  } else {
+    return false;
+  }
+}
+
 template <typename T, typename Allocator, typename U = T>
 std::size_t unordered_erase_many(std::vector<T, Allocator> &container,
                                  const U &value) {
   auto retval = std::size_t{};
-  auto it = container.begin();
-  while (it != container.end()) {
+  auto index = std::size_t{};
+  while (index != container.size()) {
+    const auto it = container.begin() + index;
     if (*it == value) {
       unordered_erase_at(container, it);
       ++retval;
     } else {
-      ++it;
+      ++index;
+    }
+  }
+  return retval;
+}
+
+template <typename T, typename Allocator, typename Predicate>
+std::size_t unordered_erase_many_if(std::vector<T, Allocator> &container,
+                                    Predicate predicate) {
+  auto retval = std::size_t{};
+  auto index = std::size_t{};
+  while (index != container.size()) {
+    const auto it = container.begin() + index;
+    if (predicate(*it)) {
+      unordered_erase_at(container, it);
+      ++retval;
+    } else {
+      ++index;
     }
   }
   return retval;
