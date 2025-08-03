@@ -258,8 +258,7 @@ vk::UniqueSemaphore make_semaphore(const char *
 } // namespace
 
 Graphics_buffer_copy_state::Graphics_buffer_copy_state(
-    rc::Strong<Graphics_buffer> src_buffer,
-    rc::Strong<Graphics_buffer> dst_buffer,
+    rc::Strong<Buffer> src_buffer, rc::Strong<Buffer> dst_buffer,
     vk::UniqueCommandBuffer command_buffer, vk::UniqueFence fence)
     : _src_buffer{std::move(src_buffer)},
       _dst_buffer{std::move(dst_buffer)},

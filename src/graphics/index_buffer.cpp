@@ -2,7 +2,7 @@
 
 namespace fpsparty::graphics {
 Index_buffer::Index_buffer(std::size_t size)
-    : Graphics_buffer{{
+    : Buffer{{
           .buffer_info =
               {
                   .size = static_cast<vk::DeviceSize>(size),

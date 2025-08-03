@@ -2,7 +2,7 @@
 #define FPSPARTY_GRAPHICS_GRAPHICS_HPP
 
 #include "glfw.hpp"
-#include "graphics/graphics_buffer.hpp"
+#include "graphics/buffer.hpp"
 #include "graphics/index_buffer.hpp"
 #include "graphics/staging_buffer.hpp"
 #include "graphics/vertex_buffer.hpp"
@@ -24,8 +24,8 @@ struct Graphics_create_info {
 class Graphics_buffer_copy_state
     : public rc::Object<Graphics_buffer_copy_state> {
 public:
-  explicit Graphics_buffer_copy_state(rc::Strong<Graphics_buffer> src_buffer,
-                                      rc::Strong<Graphics_buffer> dst_buffer,
+  explicit Graphics_buffer_copy_state(rc::Strong<Buffer> src_buffer,
+                                      rc::Strong<Buffer> dst_buffer,
                                       vk::UniqueCommandBuffer command_buffer,
                                       vk::UniqueFence fence);
 
@@ -34,8 +34,8 @@ public:
   bool is_done() const;
 
 private:
-  mutable rc::Strong<Graphics_buffer> _src_buffer;
-  mutable rc::Strong<Graphics_buffer> _dst_buffer;
+  mutable rc::Strong<Buffer> _src_buffer;
+  mutable rc::Strong<Buffer> _dst_buffer;
   mutable vk::UniqueCommandBuffer _command_buffer;
   mutable vk::UniqueFence _fence;
   mutable std::mutex _mutex;
@@ -80,7 +80,7 @@ private:
     vma::Unique_allocation depth_allocation{};
     vk::UniqueImageView depth_image_view{};
     std::uint32_t swapchain_image_index{};
-    std::vector<rc::Strong<const Graphics_buffer>> used_buffers{};
+    std::vector<rc::Strong<const Buffer>> used_buffers{};
   };
 
   vk::UniqueCommandBuffer make_upload_command_buffer();

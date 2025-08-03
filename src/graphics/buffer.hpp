@@ -1,19 +1,19 @@
-#ifndef FPSPARTY_GRAPHICS_GRAPHICS_BUFFER_HPP
-#define FPSPARTY_GRAPHICS_GRAPHICS_BUFFER_HPP
+#ifndef FPSPARTY_GRAPHICS_BUFFER_HPP
+#define FPSPARTY_GRAPHICS_BUFFER_HPP
 
 #include "rc.hpp"
 #include "vma.hpp"
 #include <vulkan/vulkan.hpp>
 
 namespace fpsparty::graphics {
-struct Graphics_buffer_create_info {
+struct Buffer_create_info {
   vk::BufferCreateInfo buffer_info{};
   vma::Allocation_create_info allocation_info{};
 };
 
-class Graphics_buffer : public rc::Object<Graphics_buffer> {
+class Buffer : public rc::Object<Buffer> {
 public:
-  explicit Graphics_buffer(const Graphics_buffer_create_info &info);
+  explicit Buffer(const Buffer_create_info &info);
 
   vk::Buffer get_buffer() const noexcept;
 

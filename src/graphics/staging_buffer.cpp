@@ -4,7 +4,7 @@
 
 namespace fpsparty::graphics {
 Staging_buffer::Staging_buffer(std::span<const std::byte> data)
-    : Graphics_buffer{{
+    : Buffer{{
           .buffer_info =
               {
                   .size = static_cast<vk::DeviceSize>(data.size()),
