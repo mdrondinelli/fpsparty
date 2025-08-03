@@ -26,6 +26,7 @@ public:
 
   virtual ~Base_object() = default;
 
+protected:
   virtual void finalize() noexcept {}
 
 private:
@@ -34,8 +35,8 @@ private:
   template <typename T> friend class Factory;
 
   std::pmr::memory_resource *_memory_resource{};
-  std::atomic<std::size_t> _strong_reference_count{};
-  std::atomic<std::size_t> _weak_reference_count{};
+  mutable std::atomic<std::size_t> _strong_reference_count{};
+  mutable std::atomic<std::size_t> _weak_reference_count{};
 };
 
 namespace detail {
@@ -75,11 +76,13 @@ public:
   ~Strong() {
     if (_object) {
       if (--_object->_strong_reference_count == 0) {
-        _object->finalize();
+        const auto base_object = static_cast<Base_object *>(
+            const_cast<std::remove_const_t<T> *>(_object));
+        base_object->finalize();
         if (--_object->_weak_reference_count == 0) {
           auto allocator =
-              std::pmr::polymorphic_allocator{_object->_memory_resource};
-          allocator.delete_object(_object);
+              std::pmr::polymorphic_allocator{base_object->_memory_resource};
+          allocator.delete_object(base_object);
         }
       }
     }
