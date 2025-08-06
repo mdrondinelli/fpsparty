@@ -49,8 +49,6 @@ bool Client::is_connected() const noexcept {
   return net::Client::is_connected();
 }
 
-void Client::on_update_grid() {}
-
 Replicated_game *Client::get_game() noexcept {
   return _game ? &*_game : nullptr;
 }
@@ -89,6 +87,8 @@ void Client::on_grid_snapshot(serial::Reader &reader) {
   _game->load_grid({.reader = &reader});
   on_update_grid();
 }
+
+void Client::on_update_grid() {}
 
 void Client::on_entity_snapshot(net::Sequence_number tick_number,
                                 serial::Reader &public_state_reader,
