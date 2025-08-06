@@ -35,8 +35,6 @@ public:
 
   bool is_connected() const noexcept;
 
-  virtual void on_update_grid();
-
 protected:
   void on_connect() override;
 
@@ -45,6 +43,8 @@ protected:
   void on_player_join_response(net::Entity_id player_entity_id) override;
 
   void on_grid_snapshot(serial::Reader &reader) override;
+
+  virtual void on_update_grid();
 
   void on_entity_snapshot(net::Sequence_number tick_number,
                           serial::Reader &public_state_reader,
