@@ -24,21 +24,43 @@ public:
 
   void dump(serial::Writer &writer) const;
 
-  bool is_solid(const Eigen::Vector3i &indices) const noexcept;
+  bool is_x_plane_solid(const Eigen::Vector3i &indices) const noexcept;
 
-  void set_solid(const Eigen::Vector3i &indices, bool value) noexcept;
+  bool is_y_plane_solid(const Eigen::Vector3i &indices) const noexcept;
+
+  bool is_z_plane_solid(const Eigen::Vector3i &indices) const noexcept;
+
+  void set_x_plane_solid(const Eigen::Vector3i &indices, bool value) noexcept;
+
+  void set_y_plane_solid(const Eigen::Vector3i &indices, bool value) noexcept;
+
+  void set_z_plane_solid(const Eigen::Vector3i &indices, bool value) noexcept;
 
   bool bounds_check(const Eigen::Vector3i &indices) const noexcept;
 
 private:
+  struct Chunk {
+    std::uint64_t x_bits;
+    std::uint64_t y_bits;
+    std::uint64_t z_bits;
+  };
+
   static constexpr auto _chunk_side_length = std::size_t{4};
+
+  static constexpr auto get_bit_index(const Eigen::Vector3i &indices) noexcept {
+    const auto i = indices.x() % _chunk_side_length;
+    const auto j = indices.y() % _chunk_side_length;
+    const auto k = indices.z() % _chunk_side_length;
+    return k * _chunk_side_length * _chunk_side_length +
+           j * _chunk_side_length + i;
+  }
 
   std::size_t get_chunk_index(const Eigen::Vector3i &indices) const noexcept;
 
   std::size_t _width_chunks{};
   std::size_t _height_chunks{};
   std::size_t _depth_chunks{};
-  std::vector<std::uint64_t> _chunks{};
+  std::vector<Chunk> _chunks{};
 };
 } // namespace fpsparty::game
 

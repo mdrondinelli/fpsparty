@@ -49,6 +49,8 @@ bool Client::is_connected() const noexcept {
   return net::Client::is_connected();
 }
 
+void Client::on_update_grid() {}
+
 Replicated_game *Client::get_game() noexcept {
   return _game ? &*_game : nullptr;
 }
@@ -85,6 +87,7 @@ void Client::on_player_join_response(net::Entity_id player_entity_id) {
 void Client::on_grid_snapshot(serial::Reader &reader) {
   std::cout << "Got grid snapshot.\n";
   _game->load_grid({.reader = &reader});
+  on_update_grid();
 }
 
 void Client::on_entity_snapshot(net::Sequence_number tick_number,

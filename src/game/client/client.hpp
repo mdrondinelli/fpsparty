@@ -35,6 +35,8 @@ public:
 
   bool is_connected() const noexcept;
 
+  virtual void on_update_grid();
+
 protected:
   void on_connect() override;
 
