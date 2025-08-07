@@ -4,13 +4,12 @@
 
 namespace fpsparty::game {
 Grid::Grid(const Grid_create_info &create_info)
-    : _axial_chunk_counts{
+    : _chunk_counts{
           (create_info.width + (Chunk::edge_length - 1)) / Chunk::edge_length,
           (create_info.height + (Chunk::edge_length - 1)) / Chunk::edge_length,
           (create_info.depth + (Chunk::edge_length - 1)) / Chunk::edge_length,
       } {
-  _chunks.resize(_axial_chunk_counts[0] * _axial_chunk_counts[1] *
-                 _axial_chunk_counts[2]);
+  _chunks.resize(_chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2]);
 }
 
 void Grid::load(serial::Reader &reader) {
@@ -27,9 +26,8 @@ void Grid::load(serial::Reader &reader) {
   if (!z_chunk_count) {
     throw Grid_loading_error{};
   }
-  _axial_chunk_counts = {*x_chunk_count, *y_chunk_count, *z_chunk_count};
-  _chunks.resize(_axial_chunk_counts[0] * _axial_chunk_counts[1] *
-                 _axial_chunk_counts[2]);
+  _chunk_counts = {*x_chunk_count, *y_chunk_count, *z_chunk_count};
+  _chunks.resize(_chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2]);
   for (auto &chunk : _chunks) {
     const auto x_bits = deserialize<std::uint64_t>(reader);
     if (!x_bits) {
@@ -50,13 +48,25 @@ void Grid::load(serial::Reader &reader) {
 void Grid::dump(serial::Writer &writer) const {
   using serial::serialize;
   for (auto i = 0; i != 3; ++i) {
-    serialize<std::uint32_t>(writer, _axial_chunk_counts[i]);
+    serialize<std::uint32_t>(writer, _chunk_counts[i]);
   }
   for (const auto &chunk : _chunks) {
     for (auto i = 0; i != 3; ++i) {
       serialize<std::uint64_t>(writer, chunk.bits[i]);
     }
   }
+}
+
+Chunk_span Grid::get_chunks() noexcept {
+  return {_chunks.data(), _chunk_counts};
+}
+
+Const_chunk_span Grid::get_chunks() const noexcept {
+  return {_chunks.data(), _chunk_counts};
+}
+
+Const_chunk_span Grid::get_const_chunks() const noexcept {
+  return {_chunks.data(), _chunk_counts};
 }
 
 /*
