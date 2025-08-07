@@ -4,10 +4,14 @@
 #include "serial/reader.hpp"
 #include "serial/writer.hpp"
 #include <Eigen/Dense>
+#include <array>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 
 namespace fpsparty::game {
+enum class Axis { x, y, z };
+
 struct Grid_create_info {
   std::size_t width{};
   std::size_t height{};
@@ -15,6 +19,42 @@ struct Grid_create_info {
 };
 
 class Grid_loading_error : public std::exception {};
+
+class Chunk {
+public:
+  static constexpr auto edge_length = std::size_t{4};
+
+  static constexpr auto get_bit_index(const Eigen::Vector3i &offsets) noexcept {
+    const auto i = offsets.x() % edge_length;
+    const auto j = offsets.y() % edge_length;
+    const auto k = offsets.z() % edge_length;
+    return k * edge_length * edge_length + j * edge_length + i;
+  }
+
+  Chunk() noexcept = default;
+
+  constexpr Chunk(std::uint64_t x_bits, std::uint64_t y_bits,
+                  std::uint64_t z_bits) noexcept
+      : bits{x_bits, y_bits, z_bits} {}
+
+  constexpr bool is_solid(Axis axis,
+                          const Eigen::Vector3i &offsets) const noexcept {
+    const auto bit_index = get_bit_index(offsets);
+    return bits[static_cast<int>(axis)] & (std::uint64_t{1} << bit_index);
+  }
+
+  constexpr void set_solid(Axis axis, const Eigen::Vector3i &offsets,
+                           bool value) noexcept {
+    const auto bit_index = get_bit_index(offsets);
+    if (value) {
+      bits[static_cast<int>(axis)] |= (std::uint64_t{1} << bit_index);
+    } else {
+      bits[static_cast<int>(axis)] &= ~(std::uint64_t{1} << bit_index);
+    }
+  }
+
+  std::array<std::uint64_t, 3> bits;
+};
 
 class Grid {
 public:
@@ -24,42 +64,10 @@ public:
 
   void dump(serial::Writer &writer) const;
 
-  bool is_x_plane_solid(const Eigen::Vector3i &indices) const noexcept;
-
-  bool is_y_plane_solid(const Eigen::Vector3i &indices) const noexcept;
-
-  bool is_z_plane_solid(const Eigen::Vector3i &indices) const noexcept;
-
-  void set_x_plane_solid(const Eigen::Vector3i &indices, bool value) noexcept;
-
-  void set_y_plane_solid(const Eigen::Vector3i &indices, bool value) noexcept;
-
-  void set_z_plane_solid(const Eigen::Vector3i &indices, bool value) noexcept;
-
-  bool bounds_check(const Eigen::Vector3i &indices) const noexcept;
-
 private:
-  struct Chunk {
-    std::uint64_t x_bits;
-    std::uint64_t y_bits;
-    std::uint64_t z_bits;
-  };
+  // std::size_t get_chunk_index(const Eigen::Vector3i &indices) const noexcept;
 
-  static constexpr auto _chunk_side_length = std::size_t{4};
-
-  static constexpr auto get_bit_index(const Eigen::Vector3i &indices) noexcept {
-    const auto i = indices.x() % _chunk_side_length;
-    const auto j = indices.y() % _chunk_side_length;
-    const auto k = indices.z() % _chunk_side_length;
-    return k * _chunk_side_length * _chunk_side_length +
-           j * _chunk_side_length + i;
-  }
-
-  std::size_t get_chunk_index(const Eigen::Vector3i &indices) const noexcept;
-
-  std::size_t _width_chunks{};
-  std::size_t _height_chunks{};
-  std::size_t _depth_chunks{};
+  std::array<std::size_t, 3> _axial_chunk_counts;
   std::vector<Chunk> _chunks{};
 };
 } // namespace fpsparty::game
