@@ -12,6 +12,15 @@
 #include <utility>
 
 namespace fpsparty::game {
+namespace detail {
+constexpr std::size_t
+linearize_chunk_offset(std::array<std::size_t, 3> chunk_counts,
+                       std::array<std::size_t, 3> chunk_offset) noexcept {
+  return chunk_offset[0] + chunk_offset[1] * chunk_counts[0] +
+         chunk_offset[2] * chunk_counts[0] * chunk_counts[1];
+}
+} // namespace detail
+
 enum class Axis { x, y, z };
 
 struct Grid_create_info {
@@ -59,10 +68,10 @@ public:
 };
 
 template <typename T>
-  requires std::is_same_v<std::remove_const_t<T>, Chunk>
+requires std::is_same_v<std::remove_const_t<T>, Chunk>
 class Chunk_span_template {
   template <typename U>
-    requires std::is_same_v<std::remove_const_t<U>, Chunk>
+  requires std::is_same_v<std::remove_const_t<U>, Chunk>
   class Iterator_template {
     friend class Chunk_span_template;
 
@@ -74,7 +83,7 @@ class Chunk_span_template {
               static_cast<int>(_chunk_offset[1]),
               static_cast<int>(_chunk_offset[2]),
           },
-          _data + linearize_chunk_offset(_chunk_counts, _chunk_offset),
+          _data + detail::linearize_chunk_offset(_chunk_counts, _chunk_offset),
       };
     }
 
@@ -147,13 +156,6 @@ public:
   }
 
 private:
-  static constexpr std::size_t
-  linearize_chunk_offset(std::array<std::size_t, 3> chunk_counts,
-                         std::array<std::size_t, 3> chunk_offset) noexcept {
-    return chunk_offset[0] + chunk_offset[1] * chunk_counts[0] +
-           chunk_offset[2] * chunk_counts[0] * chunk_counts[1];
-  }
-
   T *_data;
   std::array<std::size_t, 3> _chunk_counts;
 };
