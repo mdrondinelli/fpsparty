@@ -177,6 +177,8 @@ public:
 
   Const_chunk_span get_const_chunks() const noexcept;
 
+  void fill(Axis normal, const Eigen::AlignedBox2i &bounds);
+
 private:
   // std::size_t get_chunk_index(const Eigen::Vector3i &indices) const noexcept;
 
