@@ -171,17 +171,21 @@ public:
 
   void dump(serial::Writer &writer) const;
 
+  void fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds);
+
   Chunk_span get_chunks() noexcept;
 
   Const_chunk_span get_chunks() const noexcept;
 
   Const_chunk_span get_const_chunks() const noexcept;
 
-  void fill(Axis normal, const Eigen::AlignedBox2i &bounds);
+  std::size_t get_width() const noexcept;
+
+  std::size_t get_height() const noexcept;
+
+  std::size_t get_depth() const noexcept;
 
 private:
-  // std::size_t get_chunk_index(const Eigen::Vector3i &indices) const noexcept;
-
   std::array<std::size_t, 3> _chunk_counts;
   std::vector<Chunk> _chunks{};
 };
