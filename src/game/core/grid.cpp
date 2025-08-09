@@ -94,12 +94,8 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
       for (auto y = min_y; y != max_y; ++y) {
         const auto j = y / Chunk::edge_length;
         const auto y_0 = static_cast<int>(j * Chunk::edge_length);
-        const auto chunk_index = detail::linearize_chunk_offset(
-            _chunk_counts, {
-                               static_cast<std::size_t>(i),
-                               static_cast<std::size_t>(j),
-                               static_cast<std::size_t>(k),
-                           });
+        const auto chunk_index =
+            detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
         auto &chunk = _chunks[chunk_index];
         chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, true);
       }
@@ -125,12 +121,8 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
       for (auto x = min_x; x != max_x; ++x) {
         const auto i = x / Chunk::edge_length;
         const auto x_0 = static_cast<int>(i * Chunk::edge_length);
-        const auto chunk_index = detail::linearize_chunk_offset(
-            _chunk_counts, {
-                               static_cast<std::size_t>(i),
-                               static_cast<std::size_t>(j),
-                               static_cast<std::size_t>(k),
-                           });
+        const auto chunk_index =
+            detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
         auto &chunk = _chunks[chunk_index];
         chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, true);
       }
@@ -156,12 +148,8 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
       for (auto x = min_x; x != max_x; ++x) {
         const auto i = x / Chunk::edge_length;
         const auto x_0 = static_cast<int>(i * Chunk::edge_length);
-        const auto chunk_index = detail::linearize_chunk_offset(
-            _chunk_counts, {
-                               static_cast<std::size_t>(i),
-                               static_cast<std::size_t>(j),
-                               static_cast<std::size_t>(k),
-                           });
+        const auto chunk_index =
+            detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
         auto &chunk = _chunks[chunk_index];
         chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, true);
       }
