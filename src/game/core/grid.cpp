@@ -71,7 +71,6 @@ Const_chunk_span Grid::get_const_chunks() const noexcept {
 
 void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
   // TODO: optimize this to take advantage of bitwise ops
-  // TODO: handle out of bounds
   if (layer < 0) {
     return;
   }
