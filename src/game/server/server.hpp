@@ -6,10 +6,8 @@
 
 namespace fpsparty::game {
 struct Server_create_info {
-  std::uint16_t port;
-  std::size_t max_clients;
-  std::uint32_t incoming_bandwidth{};
-  std::uint32_t outgoing_bandwidth{};
+  net::Server_create_info net_info;
+  Game_create_info game_info;
   float tick_duration;
 };
 
@@ -36,7 +34,7 @@ protected:
                              const net::Input_state &input_state) override;
 
 private:
-  Game _game{{}};
+  Game _game;
   float _tick_duration{};
   float _tick_timer{};
 };

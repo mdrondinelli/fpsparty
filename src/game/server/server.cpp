@@ -13,11 +13,8 @@ struct Peer_node {
 } // namespace
 
 Server::Server(const Server_create_info &info)
-    : net::Server{{.port = info.port,
-                   .max_clients = info.max_clients,
-                   .incoming_bandwidth = info.incoming_bandwidth,
-                   .outgoing_bandwidth = info.outgoing_bandwidth}},
-      _game{{}},
+    : net::Server{info.net_info},
+      _game{info.game_info},
       _tick_duration{info.tick_duration} {}
 
 bool Server::service_game_state(float duration) {
