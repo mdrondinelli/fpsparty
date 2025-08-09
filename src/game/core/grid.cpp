@@ -78,7 +78,7 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
   case Axis::x: {
     const auto x = layer;
     const auto i = x / Chunk::edge_length;
-    const auto x_0 = static_cast<int>(x - i * Chunk::edge_length);
+    const auto x_0 = static_cast<int>(i * Chunk::edge_length);
     if (i >= _chunk_counts[0]) {
       return;
     }
@@ -90,10 +90,10 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
         std::min(static_cast<int>(get_depth()), bounds.max().y());
     for (auto z = min_z; z != max_z; ++z) {
       const auto k = z / Chunk::edge_length;
-      const auto z_0 = static_cast<int>(z - k * Chunk::edge_length);
+      const auto z_0 = static_cast<int>(k * Chunk::edge_length);
       for (auto y = min_y; y != max_y; ++y) {
         const auto j = y / Chunk::edge_length;
-        const auto y_0 = static_cast<int>(y - j * Chunk::edge_length);
+        const auto y_0 = static_cast<int>(j * Chunk::edge_length);
         const auto chunk_index = detail::linearize_chunk_offset(
             _chunk_counts, {
                                static_cast<std::size_t>(i),
@@ -109,7 +109,7 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
   case Axis::y: {
     const auto y = layer;
     const auto j = y / Chunk::edge_length;
-    const auto y_0 = static_cast<int>(y - j * Chunk::edge_length);
+    const auto y_0 = static_cast<int>(j * Chunk::edge_length);
     if (j >= _chunk_counts[1]) {
       return;
     }
@@ -121,10 +121,10 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
         std::min(static_cast<int>(get_depth()), bounds.max().y());
     for (auto z = min_z; z != max_z; ++z) {
       const auto k = z / Chunk::edge_length;
-      const auto z_0 = static_cast<int>(z - k * Chunk::edge_length);
+      const auto z_0 = static_cast<int>(k * Chunk::edge_length);
       for (auto x = min_x; x != max_x; ++x) {
         const auto i = x / Chunk::edge_length;
-        const auto x_0 = static_cast<int>(x - i * Chunk::edge_length);
+        const auto x_0 = static_cast<int>(i * Chunk::edge_length);
         const auto chunk_index = detail::linearize_chunk_offset(
             _chunk_counts, {
                                static_cast<std::size_t>(i),
@@ -140,7 +140,7 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
   case Axis::z: {
     const auto z = layer;
     const auto k = z / Chunk::edge_length;
-    const auto z_0 = static_cast<int>(z - k * Chunk::edge_length);
+    const auto z_0 = static_cast<int>(k * Chunk::edge_length);
     if (k >= _chunk_counts[2]) {
       return;
     }
@@ -152,10 +152,10 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
         std::min(static_cast<int>(get_height()), bounds.max().y());
     for (auto y = min_y; y != max_y; ++y) {
       const auto j = y / Chunk::edge_length;
-      const auto y_0 = static_cast<int>(y - j * Chunk::edge_length);
+      const auto y_0 = static_cast<int>(j * Chunk::edge_length);
       for (auto x = min_x; x != max_x; ++x) {
         const auto i = x / Chunk::edge_length;
-        const auto x_0 = static_cast<int>(x - i * Chunk::edge_length);
+        const auto x_0 = static_cast<int>(i * Chunk::edge_length);
         const auto chunk_index = detail::linearize_chunk_offset(
             _chunk_counts, {
                                static_cast<std::size_t>(i),
