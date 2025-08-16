@@ -66,6 +66,10 @@ void Replicated_game::reset() {
   _tick_number = 0;
 }
 
+const Grid &Replicated_game::get_grid() const noexcept { return _grid; }
+
+Grid &Replicated_game::get_grid() noexcept { return _grid; }
+
 const Entity_world &Replicated_game::get_entities() const noexcept {
   return _entities;
 }

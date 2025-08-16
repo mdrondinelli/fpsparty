@@ -106,9 +106,15 @@ target_link_libraries(server enet game-server net)
 add_library(
   graphics
   src/graphics/buffer.cpp
+  src/graphics/work.cpp
+  src/graphics/work_recorder.cpp
+  src/graphics/work_resource.cpp
+  src/graphics/work_resource_pool.cpp
   src/graphics/graphics.cpp
   src/graphics/global_vulkan_state.cpp
   src/graphics/index_buffer.cpp
+  src/graphics/pipeline.cpp
+  src/graphics/shader.cpp
   src/graphics/staging_buffer.cpp
   src/graphics/vertex_buffer.cpp
   src/vma.cpp

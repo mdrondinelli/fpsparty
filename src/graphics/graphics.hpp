@@ -4,8 +4,13 @@
 #include "glfw.hpp"
 #include "graphics/buffer.hpp"
 #include "graphics/index_buffer.hpp"
+#include "graphics/pipeline.hpp"
 #include "graphics/staging_buffer.hpp"
 #include "graphics/vertex_buffer.hpp"
+#include "graphics/work.hpp"
+#include "graphics/work_recorder.hpp"
+#include "graphics/work_resource.hpp"
+#include "graphics/work_resource_pool.hpp"
 #include "rc.hpp"
 #include "vma.hpp"
 #include <Eigen/Dense>
@@ -21,66 +26,47 @@ struct Graphics_create_info {
   unsigned max_frames_in_flight{2};
 };
 
-class Graphics_buffer_copy_state
-    : public rc::Object<Graphics_buffer_copy_state> {
-public:
-  explicit Graphics_buffer_copy_state(rc::Strong<Buffer> src_buffer,
-                                      rc::Strong<Buffer> dst_buffer,
-                                      vk::UniqueCommandBuffer command_buffer,
-                                      vk::UniqueFence fence);
-
-  void await() const;
-
-  bool is_done() const;
-
-private:
-  mutable rc::Strong<Buffer> _src_buffer;
-  mutable rc::Strong<Buffer> _dst_buffer;
-  mutable vk::UniqueCommandBuffer _command_buffer;
-  mutable vk::UniqueFence _fence;
-  mutable std::mutex _mutex;
-};
-
 class Graphics {
 public:
   constexpr Graphics() noexcept = default;
 
-  explicit Graphics(const Graphics_create_info &info);
+  explicit Graphics(const Graphics_create_info info);
 
-  void collect_garbage();
+  void poll_works();
 
-  std::pair<rc::Strong<Vertex_buffer>, rc::Strong<Graphics_buffer_copy_state>>
-  create_vertex_buffer(std::span<const std::byte> data);
+  rc::Strong<Pipeline_layout>
+  create_pipeline_layout(const Pipeline_layout_create_info &info);
 
-  std::pair<rc::Strong<Index_buffer>, rc::Strong<Graphics_buffer_copy_state>>
-  create_index_buffer(std::span<const std::byte> data);
+  rc::Strong<Pipeline> create_pipeline(const Pipeline_create_info &info);
 
-  [[nodiscard]] bool begin();
+  rc::Strong<Staging_buffer>
+  create_staging_buffer(std::span<const std::byte> data);
 
-  void end();
+  rc::Strong<Vertex_buffer> create_vertex_buffer(std::size_t size);
 
-  void bind_vertex_buffer(rc::Strong<const Vertex_buffer> buffer);
+  rc::Strong<Index_buffer> create_index_buffer(std::size_t size);
 
-  void bind_index_buffer(rc::Strong<const Index_buffer> buffer,
-                         vk::IndexType index_type);
+  Work_recorder begin_transient_work();
 
-  void draw_indexed(std::uint32_t index_count) noexcept;
+  rc::Strong<Work> end_transient_work(Work_recorder commands);
 
-  void
-  push_constants(const Eigen::Matrix4f &model_view_projection_matrix) noexcept;
+  Work_recorder *begin_frame_work();
+
+  rc::Strong<Work> end_frame_work();
 
 private:
+  struct Transient_work_resource {
+    vk::UniqueCommandPool command_pool;
+    vk::CommandBuffer command_buffer;
+  };
+
   struct Frame_resource {
     vk::UniqueSemaphore swapchain_image_acquire_semaphore{};
     vk::UniqueSemaphore swapchain_image_release_semaphore{};
     vk::UniqueFence work_done_fence{};
     vk::UniqueCommandPool command_pool{};
     vk::UniqueCommandBuffer command_buffer{};
-    vk::UniqueImage depth_image{};
-    vma::Unique_allocation depth_allocation{};
-    vk::UniqueImageView depth_image_view{};
     std::uint32_t swapchain_image_index{};
-    std::vector<rc::Strong<const Buffer>> used_buffers{};
   };
 
   vk::UniqueCommandBuffer make_upload_command_buffer();
@@ -94,14 +80,13 @@ private:
   vk::Extent2D _swapchain_image_extent{};
   std::vector<vk::Image> _swapchain_images{};
   std::vector<vk::UniqueImageView> _swapchain_image_views{};
-  vk::UniquePipelineLayout _pipeline_layout{};
-  vk::UniquePipeline _pipeline{};
+  rc::Factory<Pipeline_layout> _pipeline_layout_factory{};
+  rc::Factory<Pipeline> _pipeline_factory{};
   rc::Factory<Staging_buffer> _staging_buffer_factory{};
   rc::Factory<Vertex_buffer> _vertex_buffer_factory{};
   rc::Factory<Index_buffer> _index_buffer_factory{};
-  vk::UniqueCommandPool _copy_command_pool{};
-  rc::Factory<Graphics_buffer_copy_state> _buffer_copy_state_factory{};
-  std::vector<rc::Strong<Graphics_buffer_copy_state>> _buffer_copy_states{};
+  detail::Work_resource_pool _work_resource_pool{};
+  std::vector<rc::Strong<Work>> _pending_works{};
   std::vector<Frame_resource> _frame_resources{};
   unsigned _frame_resource_index{};
 };

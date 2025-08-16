@@ -1,7 +1,10 @@
 #include "graphics.hpp"
 #include "algorithms/unordered_erase.hpp"
 #include "glfw.hpp"
+#include "graphics/copy_command_list.hpp"
 #include "graphics/global_vulkan_state.hpp"
+#include "graphics/work_recorder.hpp"
+#include "graphics/work_resource.hpp"
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -384,14 +387,43 @@ Graphics::Graphics(const Graphics_create_info &info)
   }
 }
 
-void Graphics::collect_garbage() {
+void Graphics::poll_works() {
+  for (const auto &work : _pending_works) {
+    if (detail::poll_work(*work)) {
+      auto resource = detail::release_work(*work);
+      detail::reset_work_resource(resource);
+      _work_resource_pool.push(std::move(resource));
+    }
+  }
   algorithms::unordered_erase_many_if(
-      _buffer_copy_states,
-      [&](const rc::Strong<Graphics_buffer_copy_state> &copy) {
-        return copy->is_done();
-      });
+      _pending_works,
+      [&](const rc::Strong<Work> &work) { return work->is_done(); });
 }
 
+rc::Strong<Pipeline_layout>
+Graphics::create_pipeline_layout(const Pipeline_layout_create_info &info) {
+  return _pipeline_layout_factory.create(info);
+}
+
+rc::Strong<Pipeline>
+Graphics::create_pipeline(const Pipeline_create_info &info) {
+  return _pipeline_factory.create(info);
+}
+
+rc::Strong<Staging_buffer>
+Graphics::create_staging_buffer(std::span<const std::byte> data) {
+  return _staging_buffer_factory.create(data);
+}
+
+rc::Strong<Vertex_buffer> Graphics::create_vertex_buffer(std::size_t size) {
+  return _vertex_buffer_factory.create(size);
+}
+
+rc::Strong<Index_buffer> Graphics::create_index_buffer(std::size_t size) {
+  return _index_buffer_factory.create(size);
+}
+
+/*
 std::pair<rc::Strong<Vertex_buffer>, rc::Strong<Graphics_buffer_copy_state>>
 Graphics::create_vertex_buffer(std::span<const std::byte> data) {
   auto staging_buffer = _staging_buffer_factory.create(data);
@@ -450,6 +482,11 @@ Graphics::create_index_buffer(std::span<const std::byte> data) {
       std::move(upload_fence));
   _buffer_copy_states.emplace_back(upload_state);
   return std::pair{std::move(index_buffer), std::move(upload_state)};
+}
+*/
+
+Work_recorder Graphics::begin_transient_work() {
+  return detail::acquire_work_recorder(_work_resource_pool.pop());
 }
 
 bool Graphics::begin() {

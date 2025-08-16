@@ -2,12 +2,11 @@
 #define FPSPARTY_GRAPHICS_STAGING_BUFFER_HPP
 
 #include "graphics/buffer.hpp"
-#include "rc.hpp"
 #include <span>
 #include <vulkan/vulkan.hpp>
 
 namespace fpsparty::graphics {
-class Staging_buffer : public rc::Object<Staging_buffer>, public Buffer {
+class Staging_buffer : public Buffer {
 public:
   explicit Staging_buffer(std::span<const std::byte> data);
 };

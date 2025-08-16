@@ -241,6 +241,12 @@ public:
   constexpr glfw::Window get_window() const noexcept { return _glfw_window; }
 
 protected:
+  void on_update_grid() override {
+    std::cout << get_game()->get_grid().get_width() << " width\n";
+    std::cout << get_game()->get_grid().get_height() << " height\n";
+    std::cout << get_game()->get_grid().get_depth() << " depth\n";
+  }
+
   void on_key(glfw::Window, glfw::Key key, int, glfw::Press_action action,
               int) override {
     if (key == glfw::Key::k_escape && action == glfw::Press_action::press) {
