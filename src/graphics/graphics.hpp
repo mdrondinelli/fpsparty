@@ -2,22 +2,17 @@
 #define FPSPARTY_GRAPHICS_GRAPHICS_HPP
 
 #include "glfw.hpp"
-#include "graphics/buffer.hpp"
 #include "graphics/index_buffer.hpp"
 #include "graphics/pipeline.hpp"
 #include "graphics/staging_buffer.hpp"
 #include "graphics/vertex_buffer.hpp"
 #include "graphics/work.hpp"
 #include "graphics/work_recorder.hpp"
-#include "graphics/work_resource.hpp"
 #include "graphics/work_resource_pool.hpp"
 #include "rc.hpp"
-#include "vma.hpp"
-#include <Eigen/Dense>
 #include <cstddef>
 #include <span>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_handles.hpp>
 
 namespace fpsparty::graphics {
 struct Graphics_create_info {

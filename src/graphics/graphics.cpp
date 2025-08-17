@@ -1,7 +1,6 @@
 #include "graphics.hpp"
 #include "algorithms/unordered_erase.hpp"
 #include "glfw.hpp"
-#include "graphics/copy_command_list.hpp"
 #include "graphics/global_vulkan_state.hpp"
 #include "graphics/work_recorder.hpp"
 #include "graphics/work_resource.hpp"
@@ -9,7 +8,6 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
-#include <mutex>
 #include <vulkan/vulkan.hpp>
 
 namespace fpsparty::graphics {
