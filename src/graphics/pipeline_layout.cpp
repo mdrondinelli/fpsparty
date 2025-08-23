@@ -23,7 +23,10 @@ Pipeline_layout::Pipeline_layout(const Pipeline_layout_create_info &info) {
       });
 }
 
-vk::PipelineLayout Pipeline_layout::get_vk_pipeline_layout() const noexcept {
-  return *_vk_pipeline_layout;
+namespace detail {
+vk::PipelineLayout get_pipeline_layout_vk_pipeline_layout(
+    const Pipeline_layout &pipeline_layout) noexcept {
+  return *pipeline_layout._vk_pipeline_layout;
 }
+} // namespace detail
 } // namespace fpsparty::graphics

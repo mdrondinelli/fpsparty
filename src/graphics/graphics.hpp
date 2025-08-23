@@ -7,17 +7,20 @@
 #include "graphics/staging_buffer.hpp"
 #include "graphics/vertex_buffer.hpp"
 #include "graphics/work.hpp"
+#include "graphics/work_queue.hpp"
 #include "graphics/work_recorder.hpp"
 #include "graphics/work_resource_pool.hpp"
 #include "rc.hpp"
 #include <cstddef>
 #include <span>
 #include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_enums.hpp>
 
 namespace fpsparty::graphics {
 struct Graphics_create_info {
-  glfw::Window window{};
-  vk::SurfaceKHR surface{};
+  glfw::Window window;
+  vk::SurfaceKHR surface;
+  bool vsync_preferred{true};
   unsigned max_frames_in_flight{2};
 };
 
@@ -25,7 +28,7 @@ class Graphics {
 public:
   constexpr Graphics() noexcept = default;
 
-  explicit Graphics(const Graphics_create_info info);
+  explicit Graphics(const Graphics_create_info &info);
 
   void poll_works();
 
@@ -41,47 +44,51 @@ public:
 
   rc::Strong<Index_buffer> create_index_buffer(std::size_t size);
 
-  Work_recorder begin_transient_work();
+  Work_recorder record_transient_work();
 
-  rc::Strong<Work> end_transient_work(Work_recorder commands);
+  rc::Strong<Work> submit_transient_work(Work_recorder recorder);
 
-  Work_recorder *begin_frame_work();
+  std::pair<Work_recorder, rc::Strong<Image>> record_frame_work();
 
-  rc::Strong<Work> end_frame_work();
+  rc::Strong<Work> submit_frame_work(Work_recorder recorder);
+
+  bool is_vsync_preferred() const noexcept;
+
+  void set_vsync_preferred(bool value);
 
 private:
-  struct Transient_work_resource {
-    vk::UniqueCommandPool command_pool;
-    vk::CommandBuffer command_buffer;
-  };
-
   struct Frame_resource {
     vk::UniqueSemaphore swapchain_image_acquire_semaphore{};
     vk::UniqueSemaphore swapchain_image_release_semaphore{};
-    vk::UniqueFence work_done_fence{};
-    vk::UniqueCommandPool command_pool{};
-    vk::UniqueCommandBuffer command_buffer{};
     std::uint32_t swapchain_image_index{};
+    rc::Strong<Work> pending_work{};
   };
 
-  vk::UniqueCommandBuffer make_upload_command_buffer();
+  void init_swapchain(vk::PresentModeKHR present_mode);
 
-  void remake_swapchain();
+  void deinit_swapchain();
+
+  vk::PresentModeKHR select_swapchain_present_mode() const noexcept;
 
   glfw::Window _window{};
   vk::SurfaceKHR _surface{};
-  vk::UniqueSwapchainKHR _swapchain{};
+  std::vector<vk::PresentModeKHR> _surface_present_modes{};
+  bool _vsync_preferred{};
   vk::Format _swapchain_image_format{};
   vk::Extent2D _swapchain_image_extent{};
-  std::vector<vk::Image> _swapchain_images{};
-  std::vector<vk::UniqueImageView> _swapchain_image_views{};
+  vk::PresentModeKHR _swapchain_present_mode{};
+  vk::UniqueSwapchainKHR _swapchain{};
+  std::vector<vk::Image> _vk_swapchain_images{};
+  std::vector<vk::UniqueImageView> _vk_swapchain_image_views{};
+  std::vector<rc::Strong<Image>> _swapchain_images{};
   rc::Factory<Pipeline_layout> _pipeline_layout_factory{};
   rc::Factory<Pipeline> _pipeline_factory{};
   rc::Factory<Staging_buffer> _staging_buffer_factory{};
   rc::Factory<Vertex_buffer> _vertex_buffer_factory{};
   rc::Factory<Index_buffer> _index_buffer_factory{};
-  detail::Work_resource_pool _work_resource_pool{};
-  std::vector<rc::Strong<Work>> _pending_works{};
+  rc::Factory<Image> _image_factory{};
+  detail::Work_resource_pool _work_resources{};
+  detail::Work_queue _works{};
   std::vector<Frame_resource> _frame_resources{};
   unsigned _frame_resource_index{};
 };

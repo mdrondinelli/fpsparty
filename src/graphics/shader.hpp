@@ -4,9 +4,14 @@
 #include <cstdint>
 #include <span>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_handles.hpp>
 
 namespace fpsparty::graphics {
+class Shader;
+
+namespace detail {
+vk::ShaderModule get_shader_vk_shader_module(const Shader &shader) noexcept;
+}
+
 struct Shader_create_info {
   std::span<const std::uint32_t> code;
 };
@@ -15,9 +20,9 @@ class Shader {
 public:
   explicit Shader(const Shader_create_info &info);
 
-  vk::ShaderModule get_vk_shader_module() const noexcept;
-
 private:
+  friend vk::ShaderModule
+  detail::get_shader_vk_shader_module(const Shader &shader) noexcept;
   vk::UniqueShaderModule _vk_shader_module{};
 };
 

@@ -13,7 +13,8 @@ struct Header {
   std::pmr::memory_resource *memory_resource{};
   std::atomic<std::uint32_t> strong_reference_count{};
   std::atomic<std::uint32_t> weak_reference_count{};
-  std::uint64_t object_offset;
+  std::uint32_t wrapper_size{};
+  std::uint32_t wrapper_align{};
 };
 
 template <typename T> struct Wrapper {
@@ -27,12 +28,14 @@ template <typename T> class Weak;
 template <typename T> class Factory;
 
 namespace detail {
-template <typename T> Strong<T> construct_strong(Header *header) noexcept {
-  return Strong<T>{header};
+template <typename T>
+Strong<T> construct_strong(Header *header, T *object) noexcept {
+  return Strong<T>{header, object};
 }
 
-template <typename T> Strong<T> construct_weak(Header *header) noexcept {
-  return Weak<T>{header};
+template <typename T>
+Strong<T> construct_weak(Header *header, T *object) noexcept {
+  return Weak<T>{header, object};
 }
 } // namespace detail
 
@@ -42,7 +45,8 @@ public:
 
   constexpr Strong(std::nullptr_t) noexcept {}
 
-  Strong(const Strong &other) noexcept : _header{other._header} {
+  Strong(const Strong &other) noexcept
+      : _header{other._header}, _object{other._object} {
     if (_header) {
       ++_header->strong_reference_count;
       ++_header->weak_reference_count;
@@ -56,7 +60,8 @@ public:
   }
 
   constexpr Strong(Strong &&other) noexcept
-      : _header{std::exchange(other._header, nullptr)} {}
+      : _header{std::exchange(other._header, nullptr)},
+        _object{std::exchange(other._object, nullptr)} {}
 
   constexpr Strong &operator=(Strong &&other) noexcept {
     auto temp{std::move(other)};
@@ -67,11 +72,12 @@ public:
   ~Strong() {
     if (_header) {
       if (--_header->strong_reference_count == 0) {
-        (*this)->~T();
+        _object->~T();
         if (--_header->weak_reference_count == 0) {
           auto allocator =
               std::pmr::polymorphic_allocator{_header->memory_resource};
-          allocator.delete_object(_header);
+          allocator.deallocate_bytes(_header, _header->wrapper_size,
+                                     _header->wrapper_align);
         }
       }
     }
@@ -84,7 +90,7 @@ public:
       ++_header->strong_reference_count;
       ++_header->weak_reference_count;
     }
-    return detail::construct_strong<const T>(_header);
+    return detail::construct_strong<const T>(_header, _object);
   }
 
   template <typename U>
@@ -94,7 +100,7 @@ public:
       ++_header->strong_reference_count;
       ++_header->weak_reference_count;
     }
-    return detail::construct_strong<U>(_header);
+    return detail::construct_strong<U>(_header, _object);
   }
 
   template <std::derived_from<T> U> Strong<U> downcast() const noexcept {
@@ -109,31 +115,31 @@ public:
     return nullptr;
   }
 
-  constexpr T &operator*() const noexcept { return *operator->(); }
+  constexpr T &operator*() const noexcept { return *_object; }
 
-  constexpr T *operator->() const noexcept {
-    return std::launder(static_cast<T *>(
-        static_cast<void *>(static_cast<char *>(static_cast<void *>(_header)) +
-                            _header->object_offset)));
+  constexpr T *operator->() const noexcept { return _object; }
+
+  friend bool operator==(const Strong &lhs, const Strong &rhs) noexcept {
+    return lhs._header == rhs._header;
   }
-
-  friend bool operator==(const Strong &lhs,
-                         const Strong &rhs) noexcept = default;
 
 private:
   friend class Factory<T>;
   friend class Weak<T>;
 
-  friend Strong<T> detail::construct_strong<T>(detail::Header *header) noexcept;
+  friend Strong<T> detail::construct_strong<T>(detail::Header *header,
+                                               T *object) noexcept;
 
-  constexpr explicit Strong(detail::Header *header) noexcept
-      : _header{header} {}
+  constexpr explicit Strong(detail::Header *header, T *object) noexcept
+      : _header{header}, _object{object} {}
 
   constexpr void swap(Strong &other) noexcept {
     std::swap(_header, other._header);
+    std::swap(_object, other._object);
   }
 
   detail::Header *_header{};
+  T *_object{};
 };
 
 template <typename T> class Weak {
@@ -142,13 +148,15 @@ public:
 
   constexpr Weak(std::nullptr_t) noexcept {}
 
-  Weak(const Strong<T> &strong) : _header{strong._header} {
+  Weak(const Strong<T> &strong)
+      : _header{strong._header}, _object{strong._object} {
     if (_header) {
       ++_header->weak_reference_count;
     }
   }
 
-  Weak(const Weak &other) noexcept : _header{other._header} {
+  Weak(const Weak &other) noexcept
+      : _header{other._header}, _object{other._object} {
     if (_header) {
       ++_header->weak_reference_count;
     }
@@ -161,7 +169,8 @@ public:
   }
 
   constexpr Weak(Weak &&other) noexcept
-      : _header{std::exchange(other._header, nullptr)} {}
+      : _header{std::exchange(other._header, nullptr)},
+        _object{std::exchange(other._object, nullptr)} {}
 
   Weak &operator=(Weak &&other) noexcept {
     auto temp{std::move(other)};
@@ -174,7 +183,8 @@ public:
       if (--_header->weak_reference_count == 0) {
         auto allocator =
             std::pmr::polymorphic_allocator{_header->memory_resource};
-        allocator.delete_object(_header);
+        allocator.deallocate_bytes(_header, _header->wrapper_size,
+                                   _header->wrapper_align);
       }
     }
   }
@@ -183,7 +193,7 @@ public:
     if (_header) {
       ++_header->weak_reference_count;
     }
-    return detail::construct_weak<const T>(_header);
+    return detail::construct_weak<const T>(_header, _object);
   }
 
   Strong<T> lock() const noexcept {
@@ -192,14 +202,16 @@ public:
       while (old_count != 0) {
         if (_header->strong_reference_count.compare_exchange_weak(
                 old_count, old_count + 1)) {
-          return detail::construct_strong<T>(_header);
+          return detail::construct_strong<T>(_header, _object);
         }
       }
     }
     return Strong<T>{};
   }
 
-  friend bool operator==(const Weak &lhs, const Weak &rhs) noexcept = default;
+  friend bool operator==(const Weak &lhs, const Weak &rhs) noexcept {
+    return lhs._header == rhs._header;
+  }
 
   friend bool operator==(const Weak &lhs, const Strong<T> &rhs) noexcept {
     return lhs._header == rhs._header;
@@ -210,13 +222,15 @@ public:
   }
 
 private:
-  friend Weak<T> detail::construct_weak<T>(detail::Header *header) noexcept;
+  friend Weak<T> detail::construct_weak<T>(detail::Header *header,
+                                           T *object) noexcept;
 
   constexpr void swap(Weak &other) noexcept {
     std::swap(_header, other._header);
   }
 
   detail::Header *_header{};
+  T *_object;
 };
 
 template <typename T> class Factory {
@@ -232,18 +246,24 @@ public:
 
   template <typename... Args> Strong<T> create(Args &&...args) {
     auto allocator = std::pmr::polymorphic_allocator{_memory_resource.get()};
-    const auto wrapper = allocator.new_object<detail::Wrapper<T>>();
-    try {
-      new (&wrapper->storage) T(std::forward<Args>(args)...);
-    } catch (...) {
-      allocator.delete_object(wrapper);
-      throw;
-    }
+    const auto memory = allocator.allocate_bytes(sizeof(detail::Wrapper<T>),
+                                                 alignof(detail::Wrapper<T>));
+    const auto wrapper = new (memory) detail::Wrapper<T>;
+    const auto object = [&]() {
+      try {
+        return new (&wrapper->storage) T(std::forward<Args>(args)...);
+      } catch (...) {
+        allocator.deallocate_bytes(wrapper, sizeof(detail::Wrapper<T>),
+                                   alignof(detail::Wrapper<T>));
+        throw;
+      }
+    }();
     wrapper->header.memory_resource = _memory_resource.get();
     ++wrapper->header.strong_reference_count;
     ++wrapper->header.weak_reference_count;
-    wrapper->header.object_offset = offsetof(detail::Wrapper<T>, storage);
-    return detail::construct_strong<T>(&wrapper->header);
+    wrapper->header.wrapper_size = sizeof(detail::Wrapper<T>);
+    wrapper->header.wrapper_align = alignof(detail::Wrapper<T>);
+    return detail::construct_strong<T>(&wrapper->header, object);
   }
 
 private:

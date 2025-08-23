@@ -1,5 +1,6 @@
 #include "pipeline.hpp"
 #include "global_vulkan_state.hpp"
+#include "graphics/pipeline_layout.hpp"
 #include <vector>
 #include <vulkan/vulkan.hpp>
 
@@ -10,7 +11,7 @@ Pipeline::Pipeline(const Pipeline_create_info &info) : _layout{info.layout} {
   for (const auto &shader_stage : info.shader_stages) {
     vk_shader_stages.push_back({
         .stage = static_cast<vk::ShaderStageFlagBits>(shader_stage.stage),
-        .module = shader_stage.shader->get_vk_shader_module(),
+        .module = detail::get_shader_vk_shader_module(*shader_stage.shader),
         .pName = "main",
     });
   }
@@ -78,9 +79,10 @@ Pipeline::Pipeline(const Pipeline_create_info &info) : _layout{info.layout} {
           static_cast<std::uint32_t>(vk_color_blend_attachment_states.size()),
       .pAttachments = vk_color_blend_attachment_states.data(),
   };
-  const auto always_dynamic_states = std::array<vk::DynamicState, 5>{
-      vk::DynamicState::ePrimitiveTopology, vk::DynamicState::eViewport,
-      vk::DynamicState::eScissor,           vk::DynamicState::eCullMode,
+  const auto always_dynamic_states = std::array<vk::DynamicState, 4>{
+      vk::DynamicState::eViewport,
+      vk::DynamicState::eScissor,
+      vk::DynamicState::eCullMode,
       vk::DynamicState::eFrontFace,
   };
   const auto conditionally_dynamic_states = std::array<vk::DynamicState, 3>{
@@ -117,25 +119,36 @@ Pipeline::Pipeline(const Pipeline_create_info &info) : _layout{info.layout} {
                                    ? vk::Format::eD32Sfloat
                                    : vk::Format::eUndefined,
   };
-  _vk_pipeline =
-      std::move(Global_vulkan_state::get()
-                    .device()
-                    .createGraphicsPipelinesUnique(
-                        {}, {vk::GraphicsPipelineCreateInfo{
-                                .pNext = &vk_rendering_info,
-                                .stageCount = static_cast<std::uint32_t>(
-                                    vk_shader_stages.size()),
-                                .pStages = vk_shader_stages.data(),
-                                .pVertexInputState = &vk_vertex_input_state,
-                                .pInputAssemblyState = &vk_input_assembly_state,
-                                .pViewportState = &vk_viewport_state,
-                                .pRasterizationState = &vk_rasterization_state,
-                                .pMultisampleState = &vk_multisample_state,
-                                .pDepthStencilState = &vk_depth_stencil_state,
-                                .pColorBlendState = &vk_color_blend_state,
-                                .pDynamicState = &vk_dynamic_state,
-                                .layout = info.layout->get_vk_pipeline_layout(),
-                            }})
-                    .value[0]);
+  _vk_pipeline = std::move(
+      Global_vulkan_state::get()
+          .device()
+          .createGraphicsPipelinesUnique(
+              {}, {vk::GraphicsPipelineCreateInfo{
+                      .pNext = &vk_rendering_info,
+                      .stageCount =
+                          static_cast<std::uint32_t>(vk_shader_stages.size()),
+                      .pStages = vk_shader_stages.data(),
+                      .pVertexInputState = &vk_vertex_input_state,
+                      .pInputAssemblyState = &vk_input_assembly_state,
+                      .pViewportState = &vk_viewport_state,
+                      .pRasterizationState = &vk_rasterization_state,
+                      .pMultisampleState = &vk_multisample_state,
+                      .pDepthStencilState = &vk_depth_stencil_state,
+                      .pColorBlendState = &vk_color_blend_state,
+                      .pDynamicState = &vk_dynamic_state,
+                      .layout = detail::get_pipeline_layout_vk_pipeline_layout(
+                          *info.layout),
+                  }})
+          .value[0]);
 }
+
+const rc::Strong<Pipeline_layout> &Pipeline::get_layout() const noexcept {
+  return _layout;
+}
+
+namespace detail {
+vk::Pipeline get_pipeline_vk_pipeline(const Pipeline &pipeline) noexcept {
+  return *pipeline._vk_pipeline;
+}
+} // namespace detail
 } // namespace fpsparty::graphics

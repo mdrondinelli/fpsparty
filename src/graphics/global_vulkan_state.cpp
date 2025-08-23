@@ -178,6 +178,17 @@ const Global_vulkan_state &Global_vulkan_state::get() noexcept {
   return *_global_instance;
 }
 
+void Global_vulkan_state::submit(const vk::SubmitInfo &info,
+                                 vk::Fence fence) const {
+  const auto lock = std::scoped_lock{_queue_mutex};
+  _queue.submit({info}, fence);
+}
+
+vk::Result Global_vulkan_state::present(const vk::PresentInfoKHR &info) const {
+  const auto lock = std::scoped_lock{_queue_mutex};
+  return _queue.presentKHR(info);
+}
+
 void Global_vulkan_state::add_reference() {
   const auto lock = std::scoped_lock{_global_instance_mutex};
   const auto refcount = _global_instance_refcount++;

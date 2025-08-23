@@ -23,9 +23,11 @@ public:
 
   vk::Device device() const noexcept { return *_device; }
 
-  vk::Queue queue() const noexcept { return _queue; }
-
   vma::Allocator allocator() const noexcept { return *_allocator; }
+
+  void submit(const vk::SubmitInfo &info, vk::Fence fence) const;
+
+  vk::Result present(const vk::PresentInfoKHR &info) const;
 
 private:
   friend class Global_vulkan_state_guard;
@@ -45,6 +47,7 @@ private:
   std::uint32_t _queue_family_index{};
   vk::UniqueDevice _device{};
   vk::Queue _queue{};
+  mutable std::mutex _queue_mutex{};
   vma::Unique_allocator _allocator{};
 };
 

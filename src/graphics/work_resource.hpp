@@ -13,10 +13,10 @@ struct Work_resource {
   vk::UniqueFence vk_fence;
   vk::UniqueCommandPool vk_command_pool;
   vk::CommandBuffer vk_command_buffer;
-  std::vector<rc::Strong<const Buffer>> buffers;
-  std::vector<rc::Strong<const Image>> images;
-  std::vector<rc::Strong<const Pipeline>> pipelines;
-  std::vector<rc::Strong<const Pipeline_layout>> pipeline_layouts;
+  std::vector<rc::Strong<const Buffer>> buffers{};
+  std::vector<rc::Strong<const Image>> images{};
+  std::vector<rc::Strong<const Pipeline>> pipelines{};
+  std::vector<rc::Strong<const Pipeline_layout>> pipeline_layouts{};
 };
 
 Work_resource create_work_resource();

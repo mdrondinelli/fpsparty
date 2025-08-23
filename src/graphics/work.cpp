@@ -4,14 +4,6 @@
 
 namespace fpsparty::graphics {
 namespace detail {
-Work acquire_work(Work_resource resource) noexcept {
-  return Work{std::move(resource)};
-}
-
-Work_resource release_work(Work &work) noexcept {
-  return std::move(work._resource);
-}
-
 bool poll_work(Work &work) {
   if (work._done.load()) {
     return true;
@@ -22,6 +14,10 @@ bool poll_work(Work &work) {
   } else {
     return false;
   }
+}
+
+Work_resource release_work(Work &work) noexcept {
+  return std::move(work._resource);
 }
 } // namespace detail
 
@@ -35,4 +31,6 @@ void Work::await() const {
       {*_resource.vk_fence}, vk::False,
       std::numeric_limits<std::uint64_t>::max());
 }
+
+Work::Work(detail::Work_resource resource) : _resource{std::move(resource)} {}
 } // namespace fpsparty::graphics

@@ -106,17 +106,20 @@ target_link_libraries(server enet game-server net)
 add_library(
   graphics
   src/graphics/buffer.cpp
-  src/graphics/work.cpp
-  src/graphics/work_recorder.cpp
-  src/graphics/work_resource.cpp
-  src/graphics/work_resource_pool.cpp
+  src/graphics/image.cpp
   src/graphics/graphics.cpp
   src/graphics/global_vulkan_state.cpp
   src/graphics/index_buffer.cpp
+  src/graphics/pipeline_layout.cpp
   src/graphics/pipeline.cpp
   src/graphics/shader.cpp
   src/graphics/staging_buffer.cpp
   src/graphics/vertex_buffer.cpp
+  src/graphics/work.cpp
+  src/graphics/work_queue.cpp
+  src/graphics/work_recorder.cpp
+  src/graphics/work_resource.cpp
+  src/graphics/work_resource_pool.cpp
   src/vma.cpp
 )
 target_compile_definitions(
@@ -144,6 +147,7 @@ target_link_libraries(graphics glfw volk GPUOpen::VulkanMemoryAllocator)
 # client
 add_executable(
   client
+  src/client/frame_counter.cpp
   src/client/main.cpp
 )
 target_include_directories(

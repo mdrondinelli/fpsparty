@@ -1,6 +1,7 @@
 #ifndef FPSPARTY_GRAPHICS_PIPELINE_HPP
 #define FPSPARTY_GRAPHICS_PIPELINE_HPP
 
+#include "graphics/image_format.hpp"
 #include "graphics/pipeline_layout.hpp"
 #include "graphics/shader.hpp"
 #include "graphics/shader_stage.hpp"
@@ -9,6 +10,12 @@
 #include <vulkan/vulkan.hpp>
 
 namespace fpsparty::graphics {
+class Pipeline;
+
+namespace detail {
+vk::Pipeline get_pipeline_vk_pipeline(const Pipeline &pipeline) noexcept;
+}
+
 struct Pipeline_shader_stage_create_info {
   Shader_stage_flag_bits stage;
   Shader *shader;
@@ -39,16 +46,12 @@ struct Pipeline_depth_state_create_info {
   bool depth_attachment_enabled;
 };
 
-enum class Color_attachment_format {
-  b8g8r8a8_srgb = static_cast<int>(vk::Format::eB8G8R8A8Srgb),
-};
-
 struct Pipeline_color_state_create_info {
-  std::span<const Color_attachment_format> color_attachment_formats;
+  std::span<const Image_format> color_attachment_formats;
 };
 
 struct Pipeline_create_info {
-  std::span<Pipeline_shader_stage_create_info> shader_stages;
+  std::span<const Pipeline_shader_stage_create_info> shader_stages;
   Pipeline_vertex_input_state_create_info vertex_input_state;
   Pipeline_depth_state_create_info depth_state;
   Pipeline_color_state_create_info color_state;
@@ -61,9 +64,10 @@ public:
 
   const rc::Strong<Pipeline_layout> &get_layout() const noexcept;
 
-  vk::Pipeline get_vk_pipeline() const noexcept;
-
 private:
+  friend vk::Pipeline
+  detail::get_pipeline_vk_pipeline(const Pipeline &pipeline) noexcept;
+
   rc::Strong<Pipeline_layout> _layout;
   vk::UniquePipeline _vk_pipeline;
 };

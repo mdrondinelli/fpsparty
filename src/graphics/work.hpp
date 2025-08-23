@@ -7,11 +7,9 @@ namespace fpsparty::graphics {
 class Work;
 
 namespace detail {
-Work acquire_work(Work_resource resource) noexcept;
+bool poll_work(Work &work);
 
 Work_resource release_work(Work &work) noexcept;
-
-bool poll_work(Work &work);
 } // namespace detail
 
 class Work {
@@ -21,11 +19,11 @@ public:
   void await() const;
 
 private:
-  friend Work detail::acquire_work(detail::Work_resource resource) noexcept;
-
-  friend detail::Work_resource detail::release_work(Work &work) noexcept;
+  friend class rc::Factory<Work>;
 
   friend bool detail::poll_work(Work &work);
+
+  friend detail::Work_resource detail::release_work(Work &work) noexcept;
 
   explicit Work(detail::Work_resource resource);
 

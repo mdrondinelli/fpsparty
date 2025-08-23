@@ -10,10 +10,6 @@ Shader::Shader(const Shader_create_info &info)
               .pCode = info.code.data(),
           })} {}
 
-vk::ShaderModule Shader::get_vk_shader_module() const noexcept {
-  return *_vk_shader_module;
-}
-
 Shader load_shader(const char *path) {
   auto input_stream = std::ifstream{};
   input_stream.exceptions(std::ios::badbit | std::ios::failbit);
@@ -25,4 +21,10 @@ Shader load_shader(const char *path) {
   input_stream.read(reinterpret_cast<char *>(bytecode.data()), size);
   return Shader{{.code = bytecode}};
 }
+
+namespace detail {
+vk::ShaderModule get_shader_vk_shader_module(const Shader &shader) noexcept {
+  return *shader._vk_shader_module;
+}
+} // namespace detail
 } // namespace fpsparty::graphics

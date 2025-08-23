@@ -7,6 +7,13 @@
 #include <vulkan/vulkan.hpp>
 
 namespace fpsparty::graphics {
+class Pipeline_layout;
+
+namespace detail {
+vk::PipelineLayout get_pipeline_layout_vk_pipeline_layout(
+    const Pipeline_layout &pipeline_layout) noexcept;
+}
+
 struct Push_constant_range {
   Shader_stage_flags stage_flags;
   std::uint32_t offset;
@@ -21,9 +28,10 @@ class Pipeline_layout {
 public:
   explicit Pipeline_layout(const Pipeline_layout_create_info &info);
 
-  vk::PipelineLayout get_vk_pipeline_layout() const noexcept;
-
 private:
+  friend vk::PipelineLayout detail::get_pipeline_layout_vk_pipeline_layout(
+      const Pipeline_layout &pipeline_layout) noexcept;
+
   vk::UniquePipelineLayout _vk_pipeline_layout{};
 };
 } // namespace fpsparty::graphics
