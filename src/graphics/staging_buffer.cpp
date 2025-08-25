@@ -27,10 +27,11 @@ Staging_buffer::Staging_buffer(std::span<const std::byte> data)
               },
       }} {
   if (!data.empty()) {
+    const auto allocation = detail::get_buffer_vma_allocation(*this);
     void *mapped_memory =
-        Global_vulkan_state::get().allocator().map_memory(get_allocation());
+        Global_vulkan_state::get().allocator().map_memory(allocation);
     std::memcpy(mapped_memory, data.data(), data.size());
-    Global_vulkan_state::get().allocator().unmap_memory(get_allocation());
+    Global_vulkan_state::get().allocator().unmap_memory(allocation);
   }
 }
 } // namespace fpsparty::graphics

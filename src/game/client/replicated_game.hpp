@@ -34,6 +34,10 @@ public:
 
   void reset();
 
+  const Grid &get_grid() const noexcept;
+
+  Grid &get_grid() noexcept;
+
   const Entity_world &get_entities() const noexcept;
 
   Entity_world &get_entities() noexcept;
