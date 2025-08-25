@@ -21,10 +21,4 @@ Shader load_shader(const char *path) {
   input_stream.read(reinterpret_cast<char *>(bytecode.data()), size);
   return Shader{{.code = bytecode}};
 }
-
-namespace detail {
-vk::ShaderModule get_shader_vk_shader_module(const Shader &shader) noexcept {
-  return *shader._vk_shader_module;
-}
-} // namespace detail
 } // namespace fpsparty::graphics

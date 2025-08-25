@@ -27,6 +27,13 @@ private:
 };
 
 Shader load_shader(const char *path);
+
+namespace detail {
+inline vk::ShaderModule
+get_shader_vk_shader_module(const Shader &shader) noexcept {
+  return *shader._vk_shader_module;
+}
+} // namespace detail
 } // namespace fpsparty::graphics
 
 #endif
