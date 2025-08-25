@@ -14,7 +14,6 @@
 #include <cstddef>
 #include <span>
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_enums.hpp>
 
 namespace fpsparty::graphics {
 struct Graphics_create_info {
