@@ -165,26 +165,28 @@ rc::Strong<Work> Graphics::submit_transient_work(Work_recorder recorder) {
 
 std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
   auto &frame_resource = _frame_resources[_frame_resource_index];
+  frame_resource.swapchain_image_index = [&]() {
+    for (;;) {
+      try {
+        const auto swapchain_image_index =
+            Global_vulkan_state::get().device().acquireNextImageKHR(
+                *_swapchain, std::numeric_limits<std::uint64_t>::max(),
+                *frame_resource.swapchain_image_acquire_semaphore);
+        return swapchain_image_index.value;
+      } catch (const vk::OutOfDateKHRError &e) {
+        deinit_swapchain();
+        init_swapchain(select_swapchain_present_mode());
+      }
+    }
+  }();
   if (frame_resource.pending_work) {
     frame_resource.pending_work->await();
     frame_resource.pending_work = nullptr;
   }
-  for (;;) {
-    try {
-      const auto swapchain_image_index =
-          Global_vulkan_state::get().device().acquireNextImageKHR(
-              *_swapchain, std::numeric_limits<std::uint64_t>::max(),
-              *frame_resource.swapchain_image_acquire_semaphore);
-      frame_resource.swapchain_image_index = swapchain_image_index.value;
-      return std::pair{
-          detail::acquire_work_recorder(_work_resources.pop()),
-          _swapchain_images.at(frame_resource.swapchain_image_index),
-      };
-    } catch (const vk::OutOfDateKHRError &e) {
-      deinit_swapchain();
-      init_swapchain(select_swapchain_present_mode());
-    }
-  }
+  return {
+      detail::acquire_work_recorder(_work_resources.pop()),
+      _swapchain_images.at(frame_resource.swapchain_image_index),
+  };
 }
 
 rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {
