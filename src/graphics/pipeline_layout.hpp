@@ -34,6 +34,13 @@ private:
 
   vk::UniquePipelineLayout _vk_pipeline_layout{};
 };
+
+namespace detail {
+inline vk::PipelineLayout get_pipeline_layout_vk_pipeline_layout(
+    const Pipeline_layout &pipeline_layout) noexcept {
+  return *pipeline_layout._vk_pipeline_layout;
+}
+} // namespace detail
 } // namespace fpsparty::graphics
 
 #endif

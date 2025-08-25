@@ -22,11 +22,4 @@ Pipeline_layout::Pipeline_layout(const Pipeline_layout_create_info &info) {
           .pPushConstantRanges = vk_push_constant_ranges.data(),
       });
 }
-
-namespace detail {
-vk::PipelineLayout get_pipeline_layout_vk_pipeline_layout(
-    const Pipeline_layout &pipeline_layout) noexcept {
-  return *pipeline_layout._vk_pipeline_layout;
-}
-} // namespace detail
 } // namespace fpsparty::graphics
