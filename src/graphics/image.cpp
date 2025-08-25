@@ -48,16 +48,4 @@ Image::~Image() {
     Global_vulkan_state::get().device().destroyImage(_vk_image);
   }
 }
-
-Image_format Image::get_format() const noexcept { return _format; }
-
-const Eigen::Vector3i &Image::get_extent() const noexcept { return _extent; }
-
-std::uint32_t Image::get_mip_level_count() const noexcept {
-  return _mip_level_count;
-}
-
-std::uint32_t Image::get_array_layer_count() const noexcept {
-  return _array_layer_count;
-}
 } // namespace fpsparty::graphics

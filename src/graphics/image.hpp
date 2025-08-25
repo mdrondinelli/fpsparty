@@ -36,13 +36,17 @@ class Image {
 public:
   ~Image();
 
-  Image_format get_format() const noexcept;
+  Image_format get_format() const noexcept { return _format; }
 
-  const Eigen::Vector3i &get_extent() const noexcept;
+  const Eigen::Vector3i &get_extent() const noexcept { return _extent; }
 
-  std::uint32_t get_mip_level_count() const noexcept;
+  std::uint32_t get_mip_level_count() const noexcept {
+    return _mip_level_count;
+  }
 
-  std::uint32_t get_array_layer_count() const noexcept;
+  std::uint32_t get_array_layer_count() const noexcept {
+    return _array_layer_count;
+  }
 
 private:
   friend class rc::Factory<Image>;
