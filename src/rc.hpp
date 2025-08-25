@@ -240,6 +240,7 @@ private:
 
   constexpr void swap(Weak &other) noexcept {
     std::swap(_header, other._header);
+    std::swap(_object, other._object);
   }
 
   detail::Header *_header{};
