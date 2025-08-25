@@ -145,10 +145,4 @@ Pipeline::Pipeline(const Pipeline_create_info &info) : _layout{info.layout} {
 const rc::Strong<Pipeline_layout> &Pipeline::get_layout() const noexcept {
   return _layout;
 }
-
-namespace detail {
-vk::Pipeline get_pipeline_vk_pipeline(const Pipeline &pipeline) noexcept {
-  return *pipeline._vk_pipeline;
-}
-} // namespace detail
 } // namespace fpsparty::graphics

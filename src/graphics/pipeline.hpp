@@ -71,6 +71,13 @@ private:
   rc::Strong<Pipeline_layout> _layout;
   vk::UniquePipeline _vk_pipeline;
 };
+
+namespace detail {
+inline vk::Pipeline
+get_pipeline_vk_pipeline(const Pipeline &pipeline) noexcept {
+  return *pipeline._vk_pipeline;
+}
+} // namespace detail
 } // namespace fpsparty::graphics
 
 #endif
