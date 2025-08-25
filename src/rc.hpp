@@ -243,7 +243,7 @@ private:
   }
 
   detail::Header *_header{};
-  T *_object;
+  T *_object{};
 };
 
 template <typename T> class Factory {
