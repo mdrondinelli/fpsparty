@@ -103,13 +103,26 @@ public:
     return detail::construct_strong<U>(_header, _object);
   }
 
-  template <std::derived_from<T> U> Strong<U> downcast() const noexcept {
+  template <std::derived_from<T> U> Strong<U> static_downcast() const noexcept {
     if (_header != nullptr) {
-      const auto u = dynamic_cast<U *>(operator->());
-      if (u != nullptr) {
+      const auto object = static_cast<U *>(_object);
+      if (object != nullptr) {
         ++_header->strong_reference_count;
         ++_header->weak_reference_count;
-        return detail::construct_strong<U>(_header);
+        return detail::construct_strong<U>(_header, object);
+      }
+    }
+    return nullptr;
+  }
+
+  template <std::derived_from<T> U>
+  Strong<U> dynamic_downcast() const noexcept {
+    if (_header != nullptr) {
+      const auto object = dynamic_cast<U *>(_object);
+      if (object != nullptr) {
+        ++_header->strong_reference_count;
+        ++_header->weak_reference_count;
+        return detail::construct_strong<U>(_header, object);
       }
     }
     return nullptr;
