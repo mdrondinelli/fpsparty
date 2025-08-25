@@ -50,7 +50,7 @@ public:
 
   void end_rendering();
 
-  void bind_pipeline(rc::Strong<Pipeline> pipeline);
+  void bind_pipeline(rc::Strong<const Pipeline> pipeline);
 
   void set_cull_mode(Cull_mode cull_mode);
 

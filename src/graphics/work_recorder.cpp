@@ -104,7 +104,7 @@ void Work_recorder::begin_rendering(const Rendering_begin_info &info) {
 
 void Work_recorder::end_rendering() { get_command_buffer().endRendering(); }
 
-void Work_recorder::bind_pipeline(rc::Strong<Pipeline> pipeline) {
+void Work_recorder::bind_pipeline(rc::Strong<const Pipeline> pipeline) {
   get_command_buffer().bindPipeline(
       vk::PipelineBindPoint::eGraphics,
       detail::get_pipeline_vk_pipeline(*pipeline));
