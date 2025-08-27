@@ -1,7 +1,9 @@
 #ifndef FPSPARTY_GRAPHICS_WORK_HPP
 #define FPSPARTY_GRAPHICS_WORK_HPP
 
+#include "graphics/work_done_callback.hpp"
 #include "graphics/work_resource.hpp"
+#include "rc.hpp"
 
 namespace fpsparty::graphics {
 class Work;
@@ -12,8 +14,10 @@ bool poll_work(Work &work);
 Work_resource release_work(Work &work) noexcept;
 } // namespace detail
 
-class Work {
+class Work : public rc::From_this<Work> {
 public:
+  void add_done_callback(Work_done_callback *work);
+
   bool is_done() const;
 
   void await() const;
