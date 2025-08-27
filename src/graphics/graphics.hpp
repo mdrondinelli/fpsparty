@@ -73,6 +73,12 @@ private:
   vk::SurfaceKHR _surface{};
   std::vector<vk::PresentModeKHR> _surface_present_modes{};
   bool _vsync_preferred{};
+  rc::Factory<Pipeline_layout> _pipeline_layout_factory{};
+  rc::Factory<Pipeline> _pipeline_factory{};
+  rc::Factory<Staging_buffer> _staging_buffer_factory{};
+  rc::Factory<Vertex_buffer> _vertex_buffer_factory{};
+  rc::Factory<Index_buffer> _index_buffer_factory{};
+  rc::Factory<Image> _image_factory{};
   vk::Format _swapchain_image_format{};
   vk::Extent2D _swapchain_image_extent{};
   vk::PresentModeKHR _swapchain_present_mode{};
@@ -80,12 +86,6 @@ private:
   std::vector<vk::Image> _vk_swapchain_images{};
   std::vector<vk::UniqueImageView> _vk_swapchain_image_views{};
   std::vector<rc::Strong<Image>> _swapchain_images{};
-  rc::Factory<Pipeline_layout> _pipeline_layout_factory{};
-  rc::Factory<Pipeline> _pipeline_factory{};
-  rc::Factory<Staging_buffer> _staging_buffer_factory{};
-  rc::Factory<Vertex_buffer> _vertex_buffer_factory{};
-  rc::Factory<Index_buffer> _index_buffer_factory{};
-  rc::Factory<Image> _image_factory{};
   detail::Work_resource_pool _work_resources{};
   detail::Work_queue _works{};
   std::vector<Frame_resource> _frame_resources{};

@@ -5,6 +5,7 @@
 #include "graphics/image.hpp"
 #include "graphics/pipeline.hpp"
 #include "graphics/pipeline_layout.hpp"
+#include "graphics/work_done_callback.hpp"
 #include "rc.hpp"
 #include <vulkan/vulkan.hpp>
 
@@ -17,6 +18,7 @@ struct Work_resource {
   std::vector<rc::Strong<const Image>> images{};
   std::vector<rc::Strong<const Pipeline>> pipelines{};
   std::vector<rc::Strong<const Pipeline_layout>> pipeline_layouts{};
+  std::vector<Work_done_callback *> done_callbacks{};
 };
 
 Work_resource create_work_resource();
