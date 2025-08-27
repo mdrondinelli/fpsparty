@@ -10,6 +10,7 @@
 #include "graphics/shader_stage.hpp"
 #include "graphics/synchronization_scope.hpp"
 #include "graphics/vertex_buffer.hpp"
+#include "graphics/work_done_callback.hpp"
 #include "math/transformation_matrices.hpp"
 #include "net/core/constants.hpp"
 #include <csignal>
@@ -140,7 +141,8 @@ const auto cube_mesh_indices = std::vector<std::uint16_t>{
 class Client : public game::Client,
                glfw::Key_callback,
                glfw::Mouse_button_callback,
-               glfw::Cursor_pos_callback {
+               glfw::Cursor_pos_callback,
+               graphics::Work_done_callback {
 public:
   struct Create_info {
     game::Client_create_info client_info;
@@ -283,7 +285,8 @@ public:
         },
         {}, graphics::Image_layout::general,
         graphics::Image_layout::present_src, swapchain_image);
-    _graphics.submit_frame_work(std::move(work_recorder));
+    _graphics.submit_frame_work(std::move(work_recorder))
+        ->add_done_callback(this);
   }
 
   constexpr glfw::Window get_window() const noexcept { return _glfw_window; }
@@ -354,6 +357,10 @@ protected:
         player->set_input_state(input_state);
       }
     }
+  }
+
+  void on_work_done(const rc::Strong<graphics::Work> &work) override {
+    std::cout << "Work done: " << &*work << "\n";
   }
 
 private:
