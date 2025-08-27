@@ -71,9 +71,11 @@ public:
 
   ~Strong() {
     if (_header) {
-      if (--_header->strong_reference_count == 0) {
+      const auto new_strong_reference_count = --_header->strong_reference_count;
+      const auto new_weak_reference_count = --_header->weak_reference_count;
+      if (new_strong_reference_count == 0) {
         _object->~T();
-        if (--_header->weak_reference_count == 0) {
+        if (new_weak_reference_count == 0) {
           auto allocator =
               std::pmr::polymorphic_allocator{_header->memory_resource};
           allocator.deallocate_bytes(_header, _header->wrapper_size,
