@@ -3,6 +3,7 @@
 
 #include <array>
 #include <atomic>
+#include <cassert>
 #include <concepts>
 #include <cstddef>
 #include <memory_resource>
@@ -30,11 +31,15 @@ template <typename T> class Factory;
 namespace detail {
 template <typename T>
 Strong<T> construct_strong(Header *header, T *object) noexcept {
+  assert(header);
+  assert(object);
   return Strong<T>{header, object};
 }
 
 template <typename T>
 Strong<T> construct_weak(Header *header, T *object) noexcept {
+  assert(header);
+  assert(object);
   return Weak<T>{header, object};
 }
 } // namespace detail
