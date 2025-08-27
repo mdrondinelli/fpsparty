@@ -7,6 +7,7 @@
 #include <concepts>
 #include <cstddef>
 #include <memory_resource>
+#include <type_traits>
 
 namespace fpsparty::rc {
 namespace detail {
@@ -101,7 +102,7 @@ public:
   }
 
   template <typename U>
-  requires std::derived_from<T, U>
+    requires std::derived_from<T, U>
   operator Strong<U>() const noexcept {
     if (_header) {
       ++_header->strong_reference_count;
@@ -254,6 +255,39 @@ private:
   T *_object{};
 };
 
+namespace detail {
+struct From_this_base {
+  Header *header{};
+};
+} // namespace detail
+
+template <typename T> class From_this : virtual detail::From_this_base {
+public:
+  friend class Factory<T>;
+
+  rc::Strong<const T> strong_from_this() const {
+    ++header->strong_reference_count;
+    ++header->weak_reference_count;
+    return detail::construct_strong<T>(header, static_cast<T *>(this));
+  }
+
+  rc::Strong<T> strong_from_this() {
+    ++header->strong_reference_count;
+    ++header->weak_reference_count;
+    return detail::construct_strong<T>(header, static_cast<T *>(this));
+  }
+
+  rc::Weak<const T> weak_from_this() const {
+    ++header->weak_reference_count;
+    return detail::construct_weak<T>(header, static_cast<T *>(this));
+  }
+
+  rc::Weak<T> weak_from_this() {
+    ++header->weak_reference_count;
+    return detail::construct_weak<T>(header, static_cast<T *>(this));
+  }
+};
+
 template <typename T> class Factory {
 public:
   Factory() noexcept : Factory{std::pmr::get_default_resource()} {}
@@ -279,6 +313,9 @@ public:
         throw;
       }
     }();
+    if constexpr (std::is_base_of_v<detail::From_this_base, T>) {
+      static_cast<detail::From_this_base *>(object)->header = &wrapper->header;
+    }
     wrapper->header.memory_resource = _memory_resource.get();
     ++wrapper->header.strong_reference_count;
     ++wrapper->header.weak_reference_count;
