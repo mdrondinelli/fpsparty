@@ -101,8 +101,16 @@ public:
     return detail::construct_strong<const T>(_header, _object);
   }
 
+  operator Strong<const T>() &&noexcept {
+    const auto temp_header = _header;
+    const auto temp_object = _object;
+    _header = nullptr;
+    _object = nullptr;
+    return detail::construct_strong<const T>(temp_header, temp_object);
+  }
+
   template <typename U>
-    requires std::derived_from<T, U>
+  requires std::derived_from<T, U>
   operator Strong<U>() const noexcept {
     if (_header) {
       ++_header->strong_reference_count;
@@ -111,14 +119,33 @@ public:
     return detail::construct_strong<U>(_header, _object);
   }
 
+  template <typename U>
+  requires std::derived_from<T, U>
+  operator Strong<U>() &&noexcept {
+    const auto temp_header = _header;
+    const auto temp_object = _object;
+    _header = nullptr;
+    _object = nullptr;
+    return detail::construct_strong<U>(temp_header, temp_object);
+  }
+
   template <std::derived_from<T> U> Strong<U> static_downcast() const noexcept {
     if (_header != nullptr) {
       const auto object = static_cast<U *>(_object);
-      if (object != nullptr) {
-        ++_header->strong_reference_count;
-        ++_header->weak_reference_count;
-        return detail::construct_strong<U>(_header, object);
-      }
+      ++_header->strong_reference_count;
+      ++_header->weak_reference_count;
+      return detail::construct_strong<U>(_header, object);
+    }
+    return nullptr;
+  }
+
+  template <std::derived_from<T> U> Strong<U> static_downcast() &&noexcept {
+    const auto header = _header;
+    if (header != nullptr) {
+      const auto object = static_cast<U *>(_object);
+      _header = nullptr;
+      _object = nullptr;
+      return detail::construct_strong<U>(header, object);
     }
     return nullptr;
   }
@@ -131,6 +158,19 @@ public:
         ++_header->strong_reference_count;
         ++_header->weak_reference_count;
         return detail::construct_strong<U>(_header, object);
+      }
+    }
+    return nullptr;
+  }
+
+  template <std::derived_from<T> U> Strong<U> dynamic_downcast() &&noexcept {
+    const auto header = _header;
+    if (header != nullptr) {
+      const auto object = dynamic_cast<U *>(_object);
+      if (object != nullptr) {
+        _header = nullptr;
+        _object = nullptr;
+        return detail::construct_strong<U>(header, object);
       }
     }
     return nullptr;
@@ -217,6 +257,14 @@ public:
     return detail::construct_weak<const T>(_header, _object);
   }
 
+  operator Weak<const T>() &&noexcept {
+    const auto temp_header = _header;
+    const auto temp_object = _object;
+    _header = nullptr;
+    _object = nullptr;
+    return detail::construct_weak<const T>(temp_header, temp_object);
+  }
+
   Strong<T> lock() const noexcept {
     if (_header) {
       auto old_count = _header->strong_reference_count.load();
@@ -268,7 +316,7 @@ public:
   rc::Strong<const T> strong_from_this() const {
     ++header->strong_reference_count;
     ++header->weak_reference_count;
-    return detail::construct_strong<T>(header, static_cast<T *>(this));
+    return detail::construct_strong<const T>(header, static_cast<T *>(this));
   }
 
   rc::Strong<T> strong_from_this() {
@@ -279,7 +327,7 @@ public:
 
   rc::Weak<const T> weak_from_this() const {
     ++header->weak_reference_count;
-    return detail::construct_weak<T>(header, static_cast<T *>(this));
+    return detail::construct_weak<const T>(header, static_cast<T *>(this));
   }
 
   rc::Weak<T> weak_from_this() {
