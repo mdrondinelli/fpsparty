@@ -122,9 +122,9 @@ Graphics::Graphics(const Graphics_create_info &info)
         "swapchain_image_release_semaphores[" + std::to_string(i) + "]";
     _frame_resources.push_back({
         .swapchain_image_acquire_semaphore =
-            make_semaphore("swapchain_image_acquire_semaphore"),
+            make_semaphore(swapchain_image_acquire_semaphore_name.c_str()),
         .swapchain_image_release_semaphore =
-            make_semaphore("swapchain_image_release_semaphore"),
+            make_semaphore(swapchain_image_release_semaphore_name.c_str()),
     });
   }
 }
