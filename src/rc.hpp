@@ -180,6 +180,8 @@ public:
 
   constexpr T *operator->() const noexcept { return _object; }
 
+  constexpr T *get() const noexcept { return _object; };
+
   friend bool operator==(const Strong &lhs, const Strong &rhs) noexcept {
     return lhs._header == rhs._header;
   }
@@ -376,5 +378,13 @@ private:
   std::unique_ptr<std::pmr::synchronized_pool_resource> _memory_resource;
 };
 } // namespace fpsparty::rc
+
+namespace std {
+template <class T> struct hash<fpsparty::rc::Strong<T>> {
+  std::size_t operator()(const fpsparty::rc::Strong<T> &p) const noexcept {
+    return std::hash<T *>{}(p.get());
+  }
+};
+} // namespace std
 
 #endif
