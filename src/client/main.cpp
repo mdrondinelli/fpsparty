@@ -359,8 +359,8 @@ protected:
     }
   }
 
-  void on_work_done(const rc::Strong<graphics::Work> &work) override {
-    std::cout << "Work done: " << &*work << "\n";
+  void on_work_done(const graphics::Work &work) override {
+    std::cout << "Work done: " << &work << "\n";
   }
 
 private:
