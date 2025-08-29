@@ -4,6 +4,7 @@
 #include "graphics/graphics.hpp"
 #include "graphics/image.hpp"
 #include "graphics/recycler.hpp"
+
 namespace fpsparty::client {
 class Depth_image_factory {
 public:
