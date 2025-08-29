@@ -205,6 +205,9 @@ public:
         },
         graphics::Image_layout::undefined, graphics::Image_layout::general,
         swapchain_image);
+    _depth_images.set_predicate(graphics::recycler_predicates::Image_extent{
+        swapchain_image->get_extent(),
+    });
     auto depth_image = _depth_images.pop();
     work_recorder.begin_rendering({
         .color_image = swapchain_image,
