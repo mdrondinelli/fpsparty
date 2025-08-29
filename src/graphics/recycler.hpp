@@ -32,6 +32,16 @@ public:
     }
   }
 
+  rc::Strong<Resource> pop(const Predicate &predicate) {
+    set_predicate(predicate);
+    return pop();
+  }
+
+  rc::Strong<Resource> pop(Predicate &&predicate) {
+    set_predicate(std::move(predicate));
+    return pop();
+  }
+
   rc::Strong<Resource> pop() {
     if (!_free_resources.empty()) {
       auto retval = std::move(_free_resources.back());
