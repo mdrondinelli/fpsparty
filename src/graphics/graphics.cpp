@@ -212,10 +212,17 @@ rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {
     if (present_result == vk::Result::eSuboptimalKHR) {
       throw vk::OutOfDateKHRError{"Subobtimal queue present result"};
     }
+    const auto framebuffer_size = _window.get_framebuffer_size();
+    if (_swapchain_image_extent.width !=
+            static_cast<std::uint32_t>(framebuffer_size[0]) ||
+        _swapchain_image_extent.height !=
+            static_cast<std::uint32_t>(framebuffer_size[1])) {
+      throw vk::OutOfDateKHRError{"Framebuffer size mismatch"};
+    }
     if (const auto selected_swapchain_present_mode =
             select_swapchain_present_mode();
         _swapchain_present_mode != selected_swapchain_present_mode) {
-      throw vk::OutOfDateKHRError{"Suboptimal present mode"};
+      throw vk::OutOfDateKHRError{"Present mode mismatch"};
     }
   } catch (const vk::OutOfDateKHRError &e) {
     deinit_swapchain();
