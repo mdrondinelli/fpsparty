@@ -1,3 +1,4 @@
+#include "client/depth_image_recycler.hpp"
 #include "client/frame_counter.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
@@ -466,6 +467,7 @@ private:
   vk::SurfaceKHR _vk_surface{};
   client::Frame_counter _frame_counter{};
   graphics::Graphics _graphics{};
+  client::Depth_image_recycler _depth_images;
   graphics::Shader _vertex_shader;
   graphics::Shader _fragment_shader;
   rc::Strong<graphics::Pipeline> _graphics_pipeline{};
