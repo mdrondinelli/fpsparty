@@ -53,9 +53,11 @@ void Work_recorder::transition_image_layout(
           {
               .aspectMask = vk::ImageAspectFlagBits::eColor,
               .baseMipLevel = 0,
-              .levelCount = image->get_mip_level_count(),
+              .levelCount =
+                  static_cast<std::uint32_t>(image->get_mip_level_count()),
               .baseArrayLayer = 0,
-              .layerCount = image->get_array_layer_count(),
+              .layerCount =
+                  static_cast<std::uint32_t>(image->get_array_layer_count()),
           },
   };
   get_command_buffer().pipelineBarrier2({
@@ -80,7 +82,7 @@ void Work_recorder::begin_rendering(const Rendering_begin_info &info) {
       .imageLayout = vk::ImageLayout::eDepthAttachmentOptimal,
       .loadOp = vk::AttachmentLoadOp::eClear,
       .storeOp = vk::AttachmentStoreOp::eStore,
-      .clearValue = {vk::ClearDepthStencilValue{.depth = 1.0f}},
+      .clearValue = {vk::ClearDepthStencilValue{.depth = 0.0f}},
   };
   get_command_buffer().beginRendering({
       .renderArea = {.offset = {0, 0},
@@ -140,6 +142,19 @@ void Work_recorder::set_scissor(const Eigen::Vector2i &extent) {
                  },
          }});
 }
+
+void Work_recorder::set_depth_test_enabled(bool enabled) {
+  get_command_buffer().setDepthTestEnable(enabled ? vk::True : vk::False);
+}
+
+void Work_recorder::set_depth_write_enabled(bool enabled) {
+  get_command_buffer().setDepthWriteEnable(enabled ? vk::True : vk::False);
+}
+
+void Work_recorder::set_depth_compare_op(Compare_op op) {
+  get_command_buffer().setDepthCompareOp(static_cast<vk::CompareOp>(op));
+}
+
 void Work_recorder::bind_vertex_buffer(rc::Strong<const Vertex_buffer> buffer) {
   get_command_buffer().bindVertexBuffers(
       0, {detail::get_buffer_vk_buffer(*buffer)}, {0});

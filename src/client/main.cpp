@@ -1,3 +1,4 @@
+#include "client/depth_image_recycler.hpp"
 #include "client/frame_counter.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
@@ -141,8 +142,7 @@ const auto cube_mesh_indices = std::vector<std::uint16_t>{
 class Client : public game::Client,
                glfw::Key_callback,
                glfw::Mouse_button_callback,
-               glfw::Cursor_pos_callback,
-               graphics::Work_done_callback {
+               glfw::Cursor_pos_callback {
 public:
   struct Create_info {
     game::Client_create_info client_info;
@@ -159,6 +159,10 @@ public:
             .surface = _vk_surface,
             .vsync_preferred = false,
         }},
+        _depth_images{
+            graphics::recycler_predicates::Image_extent{},
+            client::Depth_image_factory{&_graphics},
+        },
         _vertex_shader{
             graphics::load_shader("./assets/shaders/shader.vert.spv")},
         _fragment_shader{
@@ -197,8 +201,13 @@ public:
         },
         graphics::Image_layout::undefined, graphics::Image_layout::general,
         swapchain_image);
+    auto depth_image =
+        _depth_images.pop(graphics::recycler_predicates::Image_extent{
+            swapchain_image->get_extent(),
+        });
     work_recorder.begin_rendering({
         .color_image = swapchain_image,
+        .depth_image = depth_image,
     });
     work_recorder.bind_pipeline(
         get_graphics_pipeline(swapchain_image->get_format()));
@@ -206,6 +215,9 @@ public:
     work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
     work_recorder.set_viewport(swapchain_image->get_extent().head<2>());
     work_recorder.set_scissor(swapchain_image->get_extent().head<2>());
+    work_recorder.set_depth_test_enabled(true);
+    work_recorder.set_depth_write_enabled(true);
+    work_recorder.set_depth_compare_op(graphics::Compare_op::greater);
     const auto game = get_game();
     const auto player = game ? get_player() : nullptr;
     const auto player_humanoid = player ? player->get_humanoid() : nullptr;
@@ -233,8 +245,6 @@ public:
           graphics::Shader_stage_flag_bits::vertex, 0,
           std::as_bytes(std::span{&view_projection_matrix, 1}));
       work_recorder.draw_indexed(floor_mesh_indices.size());
-      // _graphics.push_constants(view_projection_matrix);
-      // _graphics.draw_indexed(floor_mesh_indices.size());
       // draw cubes
       work_recorder.bind_vertex_buffer(_cube_vertex_buffer);
       work_recorder.bind_index_buffer(_cube_index_buffer,
@@ -285,8 +295,8 @@ public:
         },
         {}, graphics::Image_layout::general,
         graphics::Image_layout::present_src, swapchain_image);
-    _graphics.submit_frame_work(std::move(work_recorder))
-        ->add_done_callback(this);
+    auto frame_work = _graphics.submit_frame_work(std::move(work_recorder));
+    _depth_images.push(std::move(depth_image), std::move(frame_work));
   }
 
   constexpr glfw::Window get_window() const noexcept { return _glfw_window; }
@@ -357,10 +367,6 @@ protected:
         player->set_input_state(input_state);
       }
     }
-  }
-
-  void on_work_done(const graphics::Work &work) override {
-    std::cout << "Work done: " << &work << "\n";
   }
 
 private:
@@ -450,7 +456,7 @@ private:
               },
           .depth_state =
               {
-                  .depth_attachment_enabled = false,
+                  .depth_attachment_enabled = true,
               },
           .color_state =
               {
@@ -466,6 +472,7 @@ private:
   vk::SurfaceKHR _vk_surface{};
   client::Frame_counter _frame_counter{};
   graphics::Graphics _graphics{};
+  client::Depth_image_recycler _depth_images;
   graphics::Shader _vertex_shader;
   graphics::Shader _fragment_shader;
   rc::Strong<graphics::Pipeline> _graphics_pipeline{};
