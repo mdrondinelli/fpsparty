@@ -98,10 +98,11 @@ vk::UniqueSemaphore make_semaphore(const char *
 ) {
   auto retval = Global_vulkan_state::get().device().createSemaphoreUnique({});
 #ifndef FPSPARTY_VULKAN_NDEBUG
-  Global_vulkan_state::get().device().setDebugUtilsObjectNameEXT(
-      {.objectType = vk::ObjectType::eSemaphore,
-       .objectHandle = std::bit_cast<std::uint64_t>(*retval),
-       .pObjectName = debug_name});
+  Global_vulkan_state::get().device().setDebugUtilsObjectNameEXT({
+      .objectType = vk::ObjectType::eSemaphore,
+      .objectHandle = std::bit_cast<std::uint64_t>(*retval),
+      .pObjectName = debug_name,
+  });
 #endif
   return retval;
 }
