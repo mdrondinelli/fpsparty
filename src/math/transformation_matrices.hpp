@@ -68,8 +68,7 @@ constexpr Eigen::Matrix4f perspective_projection_matrix(float zoom_x,
   auto retval = Eigen::Matrix4f{Eigen::Matrix4f::Zero()};
   retval(0, 0) = -1.0f / zoom_x;
   retval(1, 1) = -1.0f / zoom_y;
-  retval(2, 2) = 1.0f;
-  retval(2, 3) = -z_near;
+  retval(2, 3) = z_near;
   retval(3, 2) = 1.0f;
   return retval;
 }

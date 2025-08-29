@@ -17,7 +17,7 @@ public:
   Recycler() = default;
 
   template <typename P, typename F>
-  Recycler(P &&predicate, F &&factory)
+  explicit Recycler(P &&predicate, F &&factory)
       : _predicate{std::forward<P>(predicate)},
         _factory{std::forward<F>(factory)} {}
 

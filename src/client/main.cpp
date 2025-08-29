@@ -142,8 +142,7 @@ const auto cube_mesh_indices = std::vector<std::uint16_t>{
 class Client : public game::Client,
                glfw::Key_callback,
                glfw::Mouse_button_callback,
-               glfw::Cursor_pos_callback,
-               graphics::Work_done_callback {
+               glfw::Cursor_pos_callback {
 public:
   struct Create_info {
     game::Client_create_info client_info;
@@ -160,6 +159,14 @@ public:
             .surface = _vk_surface,
             .vsync_preferred = false,
         }},
+        _depth_images{
+            graphics::recycler_predicates::Image_extent{{
+                create_info.glfw_window.get_framebuffer_size()[0],
+                create_info.glfw_window.get_framebuffer_size()[1],
+                1,
+            }},
+            client::Depth_image_factory{&_graphics},
+        },
         _vertex_shader{
             graphics::load_shader("./assets/shaders/shader.vert.spv")},
         _fragment_shader{
@@ -198,8 +205,10 @@ public:
         },
         graphics::Image_layout::undefined, graphics::Image_layout::general,
         swapchain_image);
+    auto depth_image = _depth_images.pop();
     work_recorder.begin_rendering({
         .color_image = swapchain_image,
+        .depth_image = depth_image,
     });
     work_recorder.bind_pipeline(
         get_graphics_pipeline(swapchain_image->get_format()));
@@ -207,6 +216,9 @@ public:
     work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
     work_recorder.set_viewport(swapchain_image->get_extent().head<2>());
     work_recorder.set_scissor(swapchain_image->get_extent().head<2>());
+    work_recorder.set_depth_test_enabled(true);
+    work_recorder.set_depth_write_enabled(true);
+    work_recorder.set_depth_compare_op(graphics::Compare_op::greater);
     const auto game = get_game();
     const auto player = game ? get_player() : nullptr;
     const auto player_humanoid = player ? player->get_humanoid() : nullptr;
@@ -286,8 +298,8 @@ public:
         },
         {}, graphics::Image_layout::general,
         graphics::Image_layout::present_src, swapchain_image);
-    _graphics.submit_frame_work(std::move(work_recorder))
-        ->add_done_callback(this);
+    auto frame_work = _graphics.submit_frame_work(std::move(work_recorder));
+    _depth_images.push(std::move(depth_image), std::move(frame_work));
   }
 
   constexpr glfw::Window get_window() const noexcept { return _glfw_window; }
@@ -358,10 +370,6 @@ protected:
         player->set_input_state(input_state);
       }
     }
-  }
-
-  void on_work_done(const graphics::Work &work) override {
-    std::cout << "Work done: " << &work << "\n";
   }
 
 private:
@@ -451,7 +459,7 @@ private:
               },
           .depth_state =
               {
-                  .depth_attachment_enabled = false,
+                  .depth_attachment_enabled = true,
               },
           .color_state =
               {

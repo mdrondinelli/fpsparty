@@ -2,6 +2,7 @@
 #define FPSPARTY_GRAPHICS_COMMAND_LIST_HPP
 
 #include "graphics/buffer.hpp"
+#include "graphics/compare_op.hpp"
 #include "graphics/cull_mode.hpp"
 #include "graphics/front_face.hpp"
 #include "graphics/image.hpp"
@@ -59,6 +60,12 @@ public:
   void set_viewport(const Eigen::Vector2i &extent);
 
   void set_scissor(const Eigen::Vector2i &extent);
+
+  void set_depth_test_enabled(bool enabled);
+
+  void set_depth_write_enabled(bool enabled);
+
+  void set_depth_compare_op(Compare_op op);
 
   void bind_vertex_buffer(rc::Strong<const Vertex_buffer> buffer);
 
