@@ -104,6 +104,8 @@ private:
 namespace recycler_predicates {
 class Image_extent {
 public:
+  Image_extent() = default;
+
   explicit Image_extent(const Eigen::Vector3i &extent) : _extent{extent} {}
 
   bool operator()(const Image &image) const noexcept {
@@ -113,7 +115,7 @@ public:
   const Eigen::Vector3i &get_extent() const noexcept { return _extent; }
 
 private:
-  Eigen::Vector3i _extent;
+  Eigen::Vector3i _extent{Eigen::Vector3i::Zero()};
 };
 } // namespace recycler_predicates
 } // namespace fpsparty::graphics
