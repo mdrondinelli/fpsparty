@@ -245,8 +245,6 @@ public:
           graphics::Shader_stage_flag_bits::vertex, 0,
           std::as_bytes(std::span{&view_projection_matrix, 1}));
       work_recorder.draw_indexed(floor_mesh_indices.size());
-      // _graphics.push_constants(view_projection_matrix);
-      // _graphics.draw_indexed(floor_mesh_indices.size());
       // draw cubes
       work_recorder.bind_vertex_buffer(_cube_vertex_buffer);
       work_recorder.bind_index_buffer(_cube_index_buffer,
