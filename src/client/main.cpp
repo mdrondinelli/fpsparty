@@ -160,11 +160,7 @@ public:
             .vsync_preferred = false,
         }},
         _depth_images{
-            graphics::recycler_predicates::Image_extent{{
-                create_info.glfw_window.get_framebuffer_size()[0],
-                create_info.glfw_window.get_framebuffer_size()[1],
-                1,
-            }},
+            graphics::recycler_predicates::Image_extent{},
             client::Depth_image_factory{&_graphics},
         },
         _vertex_shader{
