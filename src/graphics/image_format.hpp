@@ -6,6 +6,7 @@
 namespace fpsparty::graphics {
 enum class Image_format {
   b8g8r8a8_srgb = static_cast<int>(vk::Format::eB8G8R8A8Srgb),
+  d32_sfloat = static_cast<int>(vk::Format::eD32Sfloat),
 };
 }
 
