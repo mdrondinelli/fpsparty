@@ -2,6 +2,7 @@
 #define FPSPARTY_GRAPHICS_GRAPHICS_HPP
 
 #include "glfw.hpp"
+#include "graphics/image.hpp"
 #include "graphics/index_buffer.hpp"
 #include "graphics/pipeline.hpp"
 #include "graphics/staging_buffer.hpp"
@@ -42,6 +43,8 @@ public:
   rc::Strong<Vertex_buffer> create_vertex_buffer(std::size_t size);
 
   rc::Strong<Index_buffer> create_index_buffer(std::size_t size);
+
+  rc::Strong<Image> create_image(const Image_create_info &info);
 
   Work_recorder record_transient_work();
 

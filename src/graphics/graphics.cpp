@@ -154,6 +154,10 @@ rc::Strong<Index_buffer> Graphics::create_index_buffer(std::size_t size) {
   return _index_buffer_factory.create(size);
 }
 
+rc::Strong<Image> Graphics::create_image(const Image_create_info &info) {
+  return _image_factory.create(info);
+}
+
 Work_recorder Graphics::record_transient_work() {
   return detail::acquire_work_recorder(_work_resources.pop());
 }
