@@ -104,9 +104,10 @@ private:
 namespace recycler_predicates {
 class Image_extent {
 public:
-  Image_extent() = default;
+  Image_extent() noexcept = default;
 
-  explicit Image_extent(const Eigen::Vector3i &extent) : _extent{extent} {}
+  explicit Image_extent(const Eigen::Vector3i &extent) noexcept
+      : _extent{extent} {}
 
   bool operator()(const Image &image) const noexcept {
     return image.get_extent() == _extent;
