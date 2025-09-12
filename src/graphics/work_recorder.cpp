@@ -173,8 +173,12 @@ void Work_recorder::bind_index_buffer(rc::Strong<const Index_buffer> buffer,
   add_reference(std::move(buffer));
 }
 
-void Work_recorder::draw_indexed(std::uint32_t index_count) noexcept {
-  get_command_buffer().drawIndexed(index_count, 1, 0, 0, 0);
+void Work_recorder::draw_indexed(const Indexed_draw_info &info) noexcept {
+  get_command_buffer().drawIndexed(info.index_count,
+                                   info.instance_count,
+                                   info.first_index,
+                                   info.vertex_offset,
+                                   info.first_instance);
 }
 
 void Work_recorder::push_constants(
