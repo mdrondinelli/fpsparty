@@ -28,6 +28,39 @@ int main() {
       .game_info = {.grid_info = {.width = 256, .height = 256, .depth = 256}},
       .tick_duration = constants::tick_duration,
   }};
+  // green floor
+  server.get_game().get_grid().fill(game::Axis::y,
+                                    0,
+                                    {
+                                        Eigen::Vector2i{0, 0},
+                                        Eigen::Vector2i{16, 16},
+                                    });
+  // red walls
+  server.get_game().get_grid().fill(game::Axis::x,
+                                    4,
+                                    {
+                                        Eigen::Vector2i{0, 4},
+                                        Eigen::Vector2i{1, 12},
+                                    });
+  server.get_game().get_grid().fill(game::Axis::x,
+                                    12,
+                                    {
+                                        Eigen::Vector2i{0, 4},
+                                        Eigen::Vector2i{1, 12},
+                                    });
+  // blue walls
+  server.get_game().get_grid().fill(game::Axis::z,
+                                    4,
+                                    {
+                                        Eigen::Vector2i{4, 0},
+                                        Eigen::Vector2i{12, 1},
+                                    });
+  server.get_game().get_grid().fill(game::Axis::z,
+                                    12,
+                                    {
+                                        Eigen::Vector2i{4, 0},
+                                        Eigen::Vector2i{12, 1},
+                                    });
   std::cout << "Server running on port " << net::constants::port << ".\n";
   using Clock = std::chrono::high_resolution_clock;
   using Duration = Clock::duration;
