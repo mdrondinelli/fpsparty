@@ -9,7 +9,7 @@
 namespace fpsparty::graphics {
 class Global_vulkan_state {
 public:
-  static const Global_vulkan_state &get() noexcept;
+  static Global_vulkan_state &get() noexcept;
 
   vk::Instance instance() const noexcept { return *_instance; }
 
@@ -25,9 +25,9 @@ public:
 
   vma::Allocator allocator() const noexcept { return *_allocator; }
 
-  void submit(const vk::SubmitInfo &info, vk::Fence fence) const;
+  void submit(const vk::SubmitInfo &info, vk::Fence fence);
 
-  vk::Result present(const vk::PresentInfoKHR &info) const;
+  vk::Result present(const vk::PresentInfoKHR &info);
 
 private:
   friend class Global_vulkan_state_guard;
@@ -47,7 +47,7 @@ private:
   std::uint32_t _queue_family_index{};
   vk::UniqueDevice _device{};
   vk::Queue _queue{};
-  mutable std::mutex _queue_mutex{};
+  std::mutex _queue_mutex{};
   vma::Unique_allocator _allocator{};
 };
 

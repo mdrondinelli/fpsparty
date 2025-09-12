@@ -174,17 +174,16 @@ std::unique_ptr<Global_vulkan_state> Global_vulkan_state::_global_instance{};
 unsigned int Global_vulkan_state::_global_instance_refcount{};
 std::mutex Global_vulkan_state::_global_instance_mutex{};
 
-const Global_vulkan_state &Global_vulkan_state::get() noexcept {
+Global_vulkan_state &Global_vulkan_state::get() noexcept {
   return *_global_instance;
 }
 
-void Global_vulkan_state::submit(const vk::SubmitInfo &info,
-                                 vk::Fence fence) const {
+void Global_vulkan_state::submit(const vk::SubmitInfo &info, vk::Fence fence) {
   const auto lock = std::scoped_lock{_queue_mutex};
   _queue.submit({info}, fence);
 }
 
-vk::Result Global_vulkan_state::present(const vk::PresentInfoKHR &info) const {
+vk::Result Global_vulkan_state::present(const vk::PresentInfoKHR &info) {
   const auto lock = std::scoped_lock{_queue_mutex};
   return _queue.presentKHR(info);
 }
