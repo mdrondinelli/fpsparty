@@ -29,7 +29,8 @@ protected:
   void on_player_leave_request(enet::Peer peer,
                                net::Entity_id player_entity_id) override;
 
-  void on_player_input_state(enet::Peer peer, net::Entity_id player_entity_id,
+  void on_player_input_state(enet::Peer peer,
+                             net::Entity_id player_entity_id,
                              net::Sequence_number input_sequence_number,
                              const net::Input_state &input_state) override;
 
