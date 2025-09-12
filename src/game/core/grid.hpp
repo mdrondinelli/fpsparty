@@ -149,11 +149,11 @@ public:
   }
 
   Iterator end() const noexcept {
-    return {_data, _chunk_counts, _chunk_counts};
+    return {_data, _chunk_counts, {0, 0, _chunk_counts[2]}};
   }
 
   Const_iterator cend() const noexcept {
-    return {_data, _chunk_counts, _chunk_counts};
+    return {_data, _chunk_counts, {0, 0, _chunk_counts[2]}};
   }
 
 private:
