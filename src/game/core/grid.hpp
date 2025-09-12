@@ -109,7 +109,8 @@ class Chunk_span_template {
 
   private:
     constexpr Iterator_template(
-        U *data, const std::array<std::size_t, 3> &chunk_counts,
+        U *data,
+        const std::array<std::size_t, 3> &chunk_counts,
         const std::array<std::size_t, 3> &chunk_offset) noexcept
         : _data{data},
           _chunk_counts{chunk_counts},
