@@ -44,7 +44,8 @@ public:
 
   Chunk() noexcept = default;
 
-  constexpr Chunk(std::uint64_t x_bits, std::uint64_t y_bits,
+  constexpr Chunk(std::uint64_t x_bits,
+                  std::uint64_t y_bits,
                   std::uint64_t z_bits) noexcept
       : bits{x_bits, y_bits, z_bits} {}
 
@@ -54,8 +55,8 @@ public:
     return bits[static_cast<int>(axis)] & (std::uint64_t{1} << bit_index);
   }
 
-  constexpr void set_solid(Axis axis, const Eigen::Vector3i &offset,
-                           bool value) noexcept {
+  constexpr void
+  set_solid(Axis axis, const Eigen::Vector3i &offset, bool value) noexcept {
     const auto bit_index = get_bit_index(offset);
     if (value) {
       bits[static_cast<int>(axis)] |= (std::uint64_t{1} << bit_index);
