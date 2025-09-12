@@ -187,9 +187,6 @@ public:
 
   void render() {
     _frame_counter.notify();
-    if (const auto frame_rate = _frame_counter.get_frame_rate()) {
-      std::cout << "frame rate: " << static_cast<int>(*frame_rate) << " fps\n";
-    }
     _graphics.poll_works();
     auto [work_recorder, swapchain_image] = _graphics.record_frame_work();
     work_recorder.transition_image_layout(
