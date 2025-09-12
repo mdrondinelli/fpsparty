@@ -149,6 +149,7 @@ add_executable(
   client
   src/client/depth_image_recycler.cpp
   src/client/frame_counter.cpp
+  src/client/grid_mesh.cpp
   src/client/main.cpp
 )
 target_include_directories(
