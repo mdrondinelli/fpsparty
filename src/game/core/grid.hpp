@@ -107,6 +107,11 @@ class Chunk_span_template {
       return temp;
     }
 
+    friend bool operator==(const Iterator_template &lhs,
+                           const Iterator_template &rhs) noexcept {
+      return lhs._chunk_offset == rhs._chunk_offset;
+    }
+
   private:
     constexpr Iterator_template(
         U *data,
