@@ -1,5 +1,6 @@
 #include "client/depth_image_recycler.hpp"
 #include "client/frame_counter.hpp"
+#include "client/grid_mesh.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
 #include "game/client/client.hpp"
@@ -20,6 +21,7 @@
 #include <iostream>
 #include <magic_enum/magic_enum.hpp>
 #include <numbers>
+#include <optional>
 #include <span>
 #include <volk.h>
 #include <vulkan/vulkan.hpp>
@@ -163,20 +165,18 @@ public:
             graphics::recycler_predicates::Image_extent{},
             client::Depth_image_factory{&_graphics},
         },
-        _vertex_shader{
+        _grid_vertex_shader{
+            graphics::load_shader("./assets/shaders/grid.vert.spv")},
+        _grid_fragment_shader{
+            graphics::load_shader("./assets/shaders/grid.frag.spv")},
+        _mesh_vertex_shader{
             graphics::load_shader("./assets/shaders/shader.vert.spv")},
-        _fragment_shader{
+        _mesh_fragment_shader{
             graphics::load_shader("./assets/shaders/shader.frag.spv")} {
     // _graphics.set_vsync_preferred(false);
     _glfw_window.set_key_callback(this);
     _glfw_window.set_mouse_button_callback(this);
     _glfw_window.set_cursor_pos_callback(this);
-    _floor_vertex_buffer =
-        upload_vertices(std::as_bytes(std::span{floor_mesh_vertices}));
-    std::cout << "Uploaded floor vertex buffer.\n";
-    _floor_index_buffer =
-        upload_indices(std::as_bytes(std::span{floor_mesh_indices}));
-    std::cout << "Uploaded floor index buffer.\n";
     _cube_vertex_buffer =
         upload_vertices(std::as_bytes(std::span{cube_mesh_vertices}));
     std::cout << "Uploaded cube vertex buffer.\n";
@@ -196,7 +196,8 @@ public:
                 graphics::Pipeline_stage_flag_bits::color_attachment_output,
             .access_mask = graphics::Access_flag_bits::color_attachment_write,
         },
-        graphics::Image_layout::undefined, graphics::Image_layout::general,
+        graphics::Image_layout::undefined,
+        graphics::Image_layout::general,
         swapchain_image);
     auto depth_image =
         _depth_images.pop(graphics::recycler_predicates::Image_extent{
@@ -206,10 +207,8 @@ public:
         .color_image = swapchain_image,
         .depth_image = depth_image,
     });
-    work_recorder.bind_pipeline(
-        get_graphics_pipeline(swapchain_image->get_format()));
-    work_recorder.set_cull_mode(graphics::Cull_mode::back);
-    work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
+    const auto [grid_pipeline, mesh_pipeline] =
+        get_graphics_pipelines(swapchain_image->get_format());
     work_recorder.set_viewport(swapchain_image->get_extent().head<2>());
     work_recorder.set_scissor(swapchain_image->get_extent().head<2>());
     work_recorder.set_depth_test_enabled(true);
@@ -230,19 +229,99 @@ public:
           static_cast<float>(swapchain_image->get_extent().y());
       const auto projection_matrix = math::perspective_projection_matrix(
           aspect_ratio > 1.0f ? 1.0f : aspect_ratio,
-          aspect_ratio > 1.0f ? 1.0f / aspect_ratio : 1.0f, 0.1f);
+          aspect_ratio > 1.0f ? 1.0f / aspect_ratio : 1.0f,
+          0.1f);
       const auto view_projection_matrix =
           (projection_matrix * view_matrix).eval();
+      // draw grid
+      if (_grid_mesh->is_uploaded()) {
+        work_recorder.bind_pipeline(grid_pipeline);
+        work_recorder.set_cull_mode(graphics::Cull_mode::none);
+        work_recorder.bind_vertex_buffer(_grid_mesh->get_vertex_buffer());
+        work_recorder.bind_index_buffer(_grid_mesh->get_index_buffer(),
+                                        graphics::Index_type::u32);
+        work_recorder.push_constants(
+            grid_pipeline->get_layout(),
+            graphics::Shader_stage_flag_bits::vertex,
+            0,
+            std::as_bytes(std::span{&view_projection_matrix, 1}));
+        const auto pos_x_normal =
+            Eigen::Vector4f{1.0f, 0.0f, 0.0f, 1.0f / 16.0f};
+        const auto neg_x_normal =
+            Eigen::Vector4f{-1.0f, 0.0f, 0.0f, 1.0f / 16.0f};
+        const auto pos_y_normal =
+            Eigen::Vector4f{0.0f, 1.0f, 0.0f, 1.0f / 16.0f};
+        const auto neg_y_normal =
+            Eigen::Vector4f{0.0f, -1.0f, 0.0f, 1.0f / 16.0f};
+        const auto pos_z_normal =
+            Eigen::Vector4f{0.0f, 0.0f, 1.0f, 1.0f / 16.0f};
+        const auto neg_z_normal =
+            Eigen::Vector4f{0.0f, 0.0f, -1.0f, 1.0f / 16.0f};
+        work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
+        work_recorder.push_constants(
+            grid_pipeline->get_layout(),
+            graphics::Shader_stage_flag_bits::vertex |
+                graphics::Shader_stage_flag_bits::fragment,
+            64,
+            std::as_bytes(std::span{&pos_x_normal, 1}));
+        _grid_mesh->record_draw_command(work_recorder, game::Axis::x);
+        work_recorder.set_front_face(graphics::Front_face::clockwise);
+        work_recorder.push_constants(
+            grid_pipeline->get_layout(),
+            graphics::Shader_stage_flag_bits::vertex |
+                graphics::Shader_stage_flag_bits::fragment,
+            64,
+            std::as_bytes(std::span{&neg_x_normal, 1}));
+        _grid_mesh->record_draw_command(work_recorder, game::Axis::x);
+        work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
+        work_recorder.push_constants(
+            grid_pipeline->get_layout(),
+            graphics::Shader_stage_flag_bits::vertex |
+                graphics::Shader_stage_flag_bits::fragment,
+            64,
+            std::as_bytes(std::span{&pos_y_normal, 1}));
+        _grid_mesh->record_draw_command(work_recorder, game::Axis::y);
+        work_recorder.set_front_face(graphics::Front_face::clockwise);
+        work_recorder.push_constants(
+            grid_pipeline->get_layout(),
+            graphics::Shader_stage_flag_bits::vertex |
+                graphics::Shader_stage_flag_bits::fragment,
+            64,
+            std::as_bytes(std::span{&neg_y_normal, 1}));
+        _grid_mesh->record_draw_command(work_recorder, game::Axis::y);
+        work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
+        work_recorder.push_constants(
+            grid_pipeline->get_layout(),
+            graphics::Shader_stage_flag_bits::vertex |
+                graphics::Shader_stage_flag_bits::fragment,
+            64,
+            std::as_bytes(std::span{&pos_z_normal, 1}));
+        _grid_mesh->record_draw_command(work_recorder, game::Axis::z);
+        work_recorder.set_front_face(graphics::Front_face::clockwise);
+        work_recorder.push_constants(
+            grid_pipeline->get_layout(),
+            graphics::Shader_stage_flag_bits::vertex |
+                graphics::Shader_stage_flag_bits::fragment,
+            64,
+            std::as_bytes(std::span{&neg_z_normal, 1}));
+        _grid_mesh->record_draw_command(work_recorder, game::Axis::z);
+      }
+      /*
       // draw floor
       work_recorder.bind_vertex_buffer(_floor_vertex_buffer);
       work_recorder.bind_index_buffer(_floor_index_buffer,
                                       graphics::Index_type::u16);
       work_recorder.push_constants(
-          _graphics_pipeline->get_layout(),
-          graphics::Shader_stage_flag_bits::vertex, 0,
+          _mesh_pipeline->get_layout(),
+          graphics::Shader_stage_flag_bits::vertex,
+          0,
           std::as_bytes(std::span{&view_projection_matrix, 1}));
       work_recorder.draw_indexed(floor_mesh_indices.size());
+      */
       // draw cubes
+      work_recorder.bind_pipeline(mesh_pipeline);
+      work_recorder.set_cull_mode(graphics::Cull_mode::back);
+      work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
       work_recorder.bind_vertex_buffer(_cube_vertex_buffer);
       work_recorder.bind_index_buffer(_cube_index_buffer,
                                       graphics::Index_type::u16);
@@ -260,10 +339,14 @@ public:
           const auto model_view_projection_matrix =
               (view_projection_matrix * model_matrix).eval();
           work_recorder.push_constants(
-              _graphics_pipeline->get_layout(),
-              graphics::Shader_stage_flag_bits::vertex, 0,
+              _mesh_pipeline->get_layout(),
+              graphics::Shader_stage_flag_bits::vertex,
+              0,
               std::as_bytes(std::span{&model_view_projection_matrix, 1}));
-          work_recorder.draw_indexed(cube_mesh_indices.size());
+          work_recorder.draw_indexed({
+              .index_count =
+                  static_cast<std::uint32_t>(cube_mesh_indices.size()),
+          });
         }
       }
       // draw projectiles (cubes)
@@ -277,10 +360,13 @@ public:
         const auto model_view_projection_matrix =
             (view_projection_matrix * model_matrix).eval();
         work_recorder.push_constants(
-            _graphics_pipeline->get_layout(),
-            graphics::Shader_stage_flag_bits::vertex, 0,
+            _mesh_pipeline->get_layout(),
+            graphics::Shader_stage_flag_bits::vertex,
+            0,
             std::as_bytes(std::span{&model_view_projection_matrix, 1}));
-        work_recorder.draw_indexed(cube_mesh_indices.size());
+        work_recorder.draw_indexed({
+            .index_count = static_cast<std::uint32_t>(cube_mesh_indices.size()),
+        });
       }
     }
     work_recorder.end_rendering();
@@ -290,8 +376,10 @@ public:
                 graphics::Pipeline_stage_flag_bits::color_attachment_output,
             .access_mask = graphics::Access_flag_bits::color_attachment_write,
         },
-        {}, graphics::Image_layout::general,
-        graphics::Image_layout::present_src, swapchain_image);
+        {},
+        graphics::Image_layout::general,
+        graphics::Image_layout::present_src,
+        swapchain_image);
     auto frame_work = _graphics.submit_frame_work(std::move(work_recorder));
     _depth_images.push(std::move(depth_image), std::move(frame_work));
   }
@@ -303,9 +391,17 @@ protected:
     std::cout << get_game()->get_grid().get_width() << " width\n";
     std::cout << get_game()->get_grid().get_height() << " height\n";
     std::cout << get_game()->get_grid().get_depth() << " depth\n";
+    _grid_mesh =
+        std::make_unique<client::Grid_mesh>(client::Grid_mesh_create_info{
+            .graphics = &_graphics,
+            .grid = &get_game()->get_grid(),
+        });
   }
 
-  void on_key(glfw::Window, glfw::Key key, int, glfw::Press_action action,
+  void on_key(glfw::Window,
+              glfw::Key key,
+              int,
+              glfw::Press_action action,
               int) override {
     if (key == glfw::Key::k_escape && action == glfw::Press_action::press) {
       _glfw_window.set_cursor_input_mode(glfw::Cursor_input_mode::normal);
@@ -332,8 +428,10 @@ protected:
     }
   }
 
-  void on_mouse_button(glfw::Window, glfw::Mouse_button button,
-                       glfw::Press_state action, int) override {
+  void on_mouse_button(glfw::Window,
+                       glfw::Mouse_button button,
+                       glfw::Press_state action,
+                       int) override {
     if (button == glfw::Mouse_button::mb_right &&
         action == glfw::Press_state::press) {
       _glfw_window.set_cursor_input_mode(glfw::Cursor_input_mode::disabled);
@@ -348,9 +446,9 @@ protected:
     }
   }
 
-  void on_cursor_pos(glfw::Window, double, double, double dxpos,
-                     double dypos) override {
-    if (const auto player = get_player()) {
+  void on_cursor_pos(
+      glfw::Window, double, double, double dxpos, double dypos) override {
+    if (const auto player = has_game_state() ? get_player() : nullptr) {
       if (_glfw_window.get_cursor_input_mode() ==
           glfw::Cursor_input_mode::disabled) {
         auto input_state = player->get_input_state();
@@ -358,9 +456,9 @@ protected:
             static_cast<float>(dxpos * constants::mouselook_sensititvity);
         input_state.pitch +=
             static_cast<float>(dypos * constants::mouselook_sensititvity);
-        input_state.pitch =
-            std::clamp(input_state.pitch, -0.5f * std::numbers::pi_v<float>,
-                       0.5f * std::numbers::pi_v<float>);
+        input_state.pitch = std::clamp(input_state.pitch,
+                                       -0.5f * std::numbers::pi_v<float>,
+                                       0.5f * std::numbers::pi_v<float>);
         player->set_input_state(input_state);
       }
     }
@@ -372,7 +470,8 @@ private:
     const auto staging_buffer = _graphics.create_staging_buffer(data);
     auto vertex_buffer = _graphics.create_vertex_buffer(data.size());
     auto work_recorder = _graphics.record_transient_work();
-    work_recorder.copy_buffer(staging_buffer, vertex_buffer,
+    work_recorder.copy_buffer(staging_buffer,
+                              vertex_buffer,
                               {
                                   .src_offset = 0,
                                   .dst_offset = 0,
@@ -388,7 +487,8 @@ private:
     const auto staging_buffer = _graphics.create_staging_buffer(data);
     auto index_buffer = _graphics.create_index_buffer(data.size());
     auto work_recorder = _graphics.record_transient_work();
-    work_recorder.copy_buffer(staging_buffer, index_buffer,
+    work_recorder.copy_buffer(staging_buffer,
+                              index_buffer,
                               {
                                   .src_offset = 0,
                                   .dst_offset = 0,
@@ -399,70 +499,137 @@ private:
     return index_buffer;
   }
 
-  rc::Strong<graphics::Pipeline>
-  get_graphics_pipeline(graphics::Image_format swapchain_image_format) {
-    if (!_graphics_pipeline_swapchain_image_format ||
-        *_graphics_pipeline_swapchain_image_format != swapchain_image_format) {
-      const auto push_constant_range = graphics::Push_constant_range{
-          .stage_flags = graphics::Shader_stage_flag_bits::vertex,
-          .offset = 0,
-          .size = 64,
-      };
-      const auto pipeline_layout =
-          _graphics_pipeline
-              ? _graphics_pipeline->get_layout()
-              : _graphics.create_pipeline_layout({
-                    .push_constant_ranges = {&push_constant_range, 1},
-                });
-      const auto shader_stages =
-          std::vector<graphics::Pipeline_shader_stage_create_info>{
-              {
-                  .stage = graphics::Shader_stage_flag_bits::vertex,
-                  .shader = &_vertex_shader,
-              },
-              {
-                  .stage = graphics::Shader_stage_flag_bits::fragment,
-                  .shader = &_fragment_shader,
-              },
-          };
-      const auto vertex_binding = graphics::Vertex_binding_description{
-          .binding = 0,
-          .stride = 24,
-      };
-      const auto vertex_attributes =
-          std::vector<graphics::Vertex_attribute_description>{
-              {
-                  .location = 0,
-                  .binding = 0,
-                  .format = graphics::Vertex_attribute_format::r32g32b32_sfloat,
-                  .offset = 0,
-              },
-              {
-                  .location = 1,
-                  .binding = 0,
-                  .format = graphics::Vertex_attribute_format::r32g32b32_sfloat,
-                  .offset = 12,
-              }};
-      const auto color_attachment_format = swapchain_image_format;
-      _graphics_pipeline = _graphics.create_pipeline({
-          .shader_stages = std::span{shader_stages},
-          .vertex_input_state =
-              {
-                  .bindings = {&vertex_binding, 1},
-                  .attributes = vertex_attributes,
-              },
-          .depth_state =
-              {
-                  .depth_attachment_enabled = true,
-              },
-          .color_state =
-              {
-                  .color_attachment_formats = {&color_attachment_format, 1},
-              },
-          .layout = pipeline_layout,
-      });
+  std::tuple<rc::Strong<graphics::Pipeline>, rc::Strong<graphics::Pipeline>>
+  get_graphics_pipelines(graphics::Image_format swapchain_image_format) {
+    if (!_pipelines_color_format ||
+        *_pipelines_color_format != swapchain_image_format) {
+      _grid_pipeline = make_grid_pipeline(swapchain_image_format);
+      _mesh_pipeline = make_mesh_pipeline(swapchain_image_format);
     }
-    return _graphics_pipeline;
+    return {_grid_pipeline, _mesh_pipeline};
+  }
+
+  rc::Strong<graphics::Pipeline>
+  make_grid_pipeline(graphics::Image_format swapchain_image_format) {
+    const auto push_constant_ranges = std::array{
+        graphics::Push_constant_range{
+            .stage_flags = graphics::Shader_stage_flag_bits::vertex,
+            .offset = 0,
+            .size = 80,
+        },
+        graphics::Push_constant_range{
+            .stage_flags = graphics::Shader_stage_flag_bits::fragment,
+            .offset = 64,
+            .size = 16,
+        },
+    };
+    const auto pipeline_layout =
+        _grid_pipeline ? _grid_pipeline->get_layout()
+                       : _graphics.create_pipeline_layout({
+                             .push_constant_ranges = push_constant_ranges,
+                         });
+    const auto shader_stages =
+        std::vector<graphics::Pipeline_shader_stage_create_info>{
+            {
+                .stage = graphics::Shader_stage_flag_bits::vertex,
+                .shader = &_grid_vertex_shader,
+            },
+            {
+                .stage = graphics::Shader_stage_flag_bits::fragment,
+                .shader = &_grid_fragment_shader,
+            },
+        };
+    const auto vertex_binding = graphics::Vertex_binding_description{
+        .binding = 0,
+        .stride = 12,
+    };
+    const auto vertex_attributes = std::array{
+        graphics::Vertex_attribute_description{
+            .location = 0,
+            .binding = 0,
+            .format = graphics::Vertex_attribute_format::r32g32b32_sfloat,
+            .offset = 0,
+        },
+    };
+    const auto color_attachment_format = swapchain_image_format;
+    return _graphics.create_pipeline({
+        .shader_stages = std::span{shader_stages},
+        .vertex_input_state =
+            {
+                .bindings = {&vertex_binding, 1},
+                .attributes = vertex_attributes,
+            },
+        .depth_state =
+            {
+                .depth_attachment_enabled = true,
+            },
+        .color_state =
+            {
+                .color_attachment_formats = {&color_attachment_format, 1},
+            },
+        .layout = pipeline_layout,
+    });
+  }
+
+  rc::Strong<graphics::Pipeline>
+  make_mesh_pipeline(graphics::Image_format swapchain_image_format) {
+    const auto push_constant_range = graphics::Push_constant_range{
+        .stage_flags = graphics::Shader_stage_flag_bits::vertex,
+        .offset = 0,
+        .size = 64,
+    };
+    const auto pipeline_layout =
+        _mesh_pipeline ? _mesh_pipeline->get_layout()
+                       : _graphics.create_pipeline_layout({
+                             .push_constant_ranges = {&push_constant_range, 1},
+                         });
+    const auto shader_stages =
+        std::vector<graphics::Pipeline_shader_stage_create_info>{
+            {
+                .stage = graphics::Shader_stage_flag_bits::vertex,
+                .shader = &_mesh_vertex_shader,
+            },
+            {
+                .stage = graphics::Shader_stage_flag_bits::fragment,
+                .shader = &_mesh_fragment_shader,
+            },
+        };
+    const auto vertex_binding = graphics::Vertex_binding_description{
+        .binding = 0,
+        .stride = 24,
+    };
+    const auto vertex_attributes =
+        std::vector<graphics::Vertex_attribute_description>{
+            {
+                .location = 0,
+                .binding = 0,
+                .format = graphics::Vertex_attribute_format::r32g32b32_sfloat,
+                .offset = 0,
+            },
+            {
+                .location = 1,
+                .binding = 0,
+                .format = graphics::Vertex_attribute_format::r32g32b32_sfloat,
+                .offset = 12,
+            }};
+    const auto color_attachment_format = swapchain_image_format;
+    return _graphics.create_pipeline({
+        .shader_stages = std::span{shader_stages},
+        .vertex_input_state =
+            {
+                .bindings = {&vertex_binding, 1},
+                .attributes = vertex_attributes,
+            },
+        .depth_state =
+            {
+                .depth_attachment_enabled = true,
+            },
+        .color_state =
+            {
+                .color_attachment_formats = {&color_attachment_format, 1},
+            },
+        .layout = pipeline_layout,
+    });
   }
 
   glfw::Window _glfw_window{};
@@ -470,13 +637,14 @@ private:
   client::Frame_counter _frame_counter{};
   graphics::Graphics _graphics{};
   client::Depth_image_recycler _depth_images;
-  graphics::Shader _vertex_shader;
-  graphics::Shader _fragment_shader;
-  rc::Strong<graphics::Pipeline> _graphics_pipeline{};
-  std::optional<graphics::Image_format>
-      _graphics_pipeline_swapchain_image_format{};
-  rc::Strong<graphics::Vertex_buffer> _floor_vertex_buffer{};
-  rc::Strong<graphics::Index_buffer> _floor_index_buffer{};
+  graphics::Shader _grid_vertex_shader;
+  graphics::Shader _grid_fragment_shader;
+  graphics::Shader _mesh_vertex_shader;
+  graphics::Shader _mesh_fragment_shader;
+  rc::Strong<graphics::Pipeline> _grid_pipeline{};
+  rc::Strong<graphics::Pipeline> _mesh_pipeline{};
+  std::optional<graphics::Image_format> _pipelines_color_format{};
+  std::unique_ptr<client::Grid_mesh> _grid_mesh;
   rc::Strong<graphics::Vertex_buffer> _cube_vertex_buffer{};
   rc::Strong<graphics::Index_buffer> _cube_index_buffer{};
 };
