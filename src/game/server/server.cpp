@@ -65,6 +65,10 @@ void Server::broadcast_game_state() {
   }
 }
 
+const Game &Server::get_game() const noexcept { return _game; }
+
+Game &Server::get_game() noexcept { return _game; }
+
 void Server::on_peer_connect(enet::Peer peer) {
   std::cout << "Peer connected.\n";
   peer.set_data(new Peer_node);

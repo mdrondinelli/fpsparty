@@ -19,6 +19,10 @@ public:
 
   void broadcast_game_state();
 
+  const Game &get_game() const noexcept;
+
+  Game &get_game() noexcept;
+
 protected:
   void on_peer_connect(enet::Peer peer) override;
 
