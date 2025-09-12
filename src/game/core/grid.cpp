@@ -58,14 +58,20 @@ void Grid::dump(serial::Writer &writer) const {
 }
 
 Chunk_span Grid::get_chunks() noexcept {
+  assert(_chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2] ==
+         _chunks.size());
   return {_chunks.data(), _chunk_counts};
 }
 
 Const_chunk_span Grid::get_chunks() const noexcept {
+  assert(_chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2] ==
+         _chunks.size());
   return {_chunks.data(), _chunk_counts};
 }
 
 Const_chunk_span Grid::get_const_chunks() const noexcept {
+  assert(_chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2] ==
+         _chunks.size());
   return {_chunks.data(), _chunk_counts};
 }
 
