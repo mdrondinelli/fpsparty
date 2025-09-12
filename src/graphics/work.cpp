@@ -44,12 +44,12 @@ void Work::remove_done_callback(Work_done_callback *callback) {
 bool Work::is_done() const { return _done.load(); }
 
 void Work::await() const {
-  if (_done.load()) {
-    return;
+  if (!is_done()) {
+    std::ignore = Global_vulkan_state::get().device().waitForFences(
+        {*_resource.vk_fence},
+        vk::False,
+        std::numeric_limits<std::uint64_t>::max());
   }
-  std::ignore = Global_vulkan_state::get().device().waitForFences(
-      {*_resource.vk_fence}, vk::False,
-      std::numeric_limits<std::uint64_t>::max());
 }
 
 Work::Work(detail::Work_resource resource) : _resource{std::move(resource)} {}
