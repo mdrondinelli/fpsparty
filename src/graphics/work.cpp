@@ -1,5 +1,6 @@
 #include "work.hpp"
 
+#include "algorithms/unordered_erase.hpp"
 #include "graphics/global_vulkan_state.hpp"
 
 namespace fpsparty::graphics {
@@ -25,8 +26,19 @@ Work_resource release_work(Work &work) noexcept {
 }
 } // namespace detail
 
-void Work::add_done_callback(Work_done_callback *done_callback) {
-  _resource.done_callbacks.emplace_back(done_callback);
+void Work::add_done_callback(Work_done_callback *callback) {
+  if (is_done()) {
+    callback->on_work_done(*this);
+  } else {
+    _resource.done_callbacks.emplace_back(callback);
+  }
+}
+
+void Work::remove_done_callback(Work_done_callback *callback) {
+  algorithms::unordered_erase_one_if(
+      _resource.done_callbacks, [&](Work_done_callback *contained_callback) {
+        return contained_callback == callback;
+      });
 }
 
 bool Work::is_done() const { return _done.load(); }

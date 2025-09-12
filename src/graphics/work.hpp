@@ -16,7 +16,9 @@ Work_resource release_work(Work &work) noexcept;
 
 class Work : public rc::From_this<Work> {
 public:
-  void add_done_callback(Work_done_callback *work);
+  void add_done_callback(Work_done_callback *callback);
+
+  void remove_done_callback(Work_done_callback *callback);
 
   bool is_done() const;
 
