@@ -21,9 +21,11 @@ public:
       : _predicate{std::forward<P>(predicate)},
         _factory{std::forward<F>(factory)} {}
 
-  Recycler(const Recycler &other) = delete;
-
-  Recycler &operator=(const Recycler &other) = delete;
+  ~Recycler() {
+    for (const auto &[resource, work] : _unfree_resources) {
+      work->remove_done_callback(this);
+    }
+  }
 
   void push(rc::Strong<Resource> resource, rc::Strong<Work> work) {
     if (_predicate(*resource)) {
