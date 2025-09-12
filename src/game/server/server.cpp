@@ -53,7 +53,8 @@ void Server::broadcast_game_state() {
       Player_dumper{}.dump_entity(player_state_writer, *player);
     }
     net::Server::send_entity_snapshot(
-        peer, _game.get_tick_number(),
+        peer,
+        _game.get_tick_number(),
         std::as_bytes(std::span{
             public_state_writer.stream().view().data(),
             public_state_writer.stream().view().size(),
@@ -74,10 +75,11 @@ void Server::on_peer_connect(enet::Peer peer) {
   peer.set_data(new Peer_node);
   auto writer = serial::Ostringstream_writer{};
   _game.get_grid().dump(writer);
-  send_grid_snapshot(peer, std::as_bytes(std::span{
-                               writer.stream().view().data(),
-                               writer.stream().view().size(),
-                           }));
+  send_grid_snapshot(peer,
+                     std::as_bytes(std::span{
+                         writer.stream().view().data(),
+                         writer.stream().view().size(),
+                     }));
 }
 
 void Server::on_peer_disconnect(enet::Peer peer) {
