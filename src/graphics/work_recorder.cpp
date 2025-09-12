@@ -23,7 +23,8 @@ void Work_recorder::copy_buffer(rc::Strong<const Buffer> src,
                                 rc::Strong<Buffer> dst,
                                 const Buffer_copy_info &info) {
   get_command_buffer().copyBuffer(
-      detail::get_buffer_vk_buffer(*src), detail::get_buffer_vk_buffer(*dst),
+      detail::get_buffer_vk_buffer(*src),
+      detail::get_buffer_vk_buffer(*dst),
       vk::BufferCopy{
           .srcOffset = static_cast<vk::DeviceSize>(info.src_offset),
           .dstOffset = static_cast<vk::DeviceSize>(info.dst_offset),
@@ -35,8 +36,10 @@ void Work_recorder::copy_buffer(rc::Strong<const Buffer> src,
 
 void Work_recorder::transition_image_layout(
     const Synchronization_scope &src_scope,
-    const Synchronization_scope &dst_scope, Image_layout old_layout,
-    Image_layout new_layout, rc::Strong<Image> image) {
+    const Synchronization_scope &dst_scope,
+    Image_layout old_layout,
+    Image_layout new_layout,
+    rc::Strong<Image> image) {
   const auto barrier = vk::ImageMemoryBarrier2{
       .srcStageMask =
           static_cast<vk::PipelineStageFlags2>(src_scope.stage_mask),
@@ -134,13 +137,14 @@ void Work_recorder::set_viewport(const Eigen::Vector2i &extent) {
 
 void Work_recorder::set_scissor(const Eigen::Vector2i &extent) {
   get_command_buffer().setScissor(
-      0, {{
-             .extent =
-                 {
-                     static_cast<std::uint32_t>(extent.x()),
-                     static_cast<std::uint32_t>(extent.y()),
-                 },
-         }});
+      0,
+      {{
+          .extent =
+              {
+                  static_cast<std::uint32_t>(extent.x()),
+                  static_cast<std::uint32_t>(extent.y()),
+              },
+      }});
 }
 
 void Work_recorder::set_depth_test_enabled(bool enabled) {
@@ -163,7 +167,8 @@ void Work_recorder::bind_vertex_buffer(rc::Strong<const Vertex_buffer> buffer) {
 
 void Work_recorder::bind_index_buffer(rc::Strong<const Index_buffer> buffer,
                                       Index_type index_type) {
-  get_command_buffer().bindIndexBuffer(detail::get_buffer_vk_buffer(*buffer), 0,
+  get_command_buffer().bindIndexBuffer(detail::get_buffer_vk_buffer(*buffer),
+                                       0,
                                        static_cast<vk::IndexType>(index_type));
   add_reference(std::move(buffer));
 }
@@ -174,12 +179,15 @@ void Work_recorder::draw_indexed(std::uint32_t index_count) noexcept {
 
 void Work_recorder::push_constants(
     rc::Strong<const Pipeline_layout> pipeline_layout,
-    Shader_stage_flags stage_flags, std::uint32_t offset,
+    Shader_stage_flags stage_flags,
+    std::uint32_t offset,
     std::span<const std::byte> data) noexcept {
   get_command_buffer().pushConstants(
       detail::get_pipeline_layout_vk_pipeline_layout(*pipeline_layout),
-      static_cast<vk::ShaderStageFlags>(stage_flags), offset,
-      static_cast<std::uint32_t>(data.size()), data.data());
+      static_cast<vk::ShaderStageFlags>(stage_flags),
+      offset,
+      static_cast<std::uint32_t>(data.size()),
+      data.data());
   add_reference(std::move(pipeline_layout));
 }
 
