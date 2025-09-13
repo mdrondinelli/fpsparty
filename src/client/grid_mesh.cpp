@@ -1,7 +1,6 @@
 #include "grid_mesh.hpp"
 #include "client/grid_vertex.hpp"
 #include "serial/span_writer.hpp"
-#include <iostream>
 #include <vector>
 
 namespace fpsparty::client {
