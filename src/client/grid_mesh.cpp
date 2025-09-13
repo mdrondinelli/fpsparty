@@ -1,35 +1,42 @@
 #include "grid_mesh.hpp"
 #include "client/grid_vertex.hpp"
+#include "game/core/constants.hpp"
 #include "serial/span_writer.hpp"
 #include <vector>
 
 namespace fpsparty::client {
 namespace {
-constexpr auto cell_stride = 1.0f;
-constexpr auto wall_half_thickness = 1.0f / 16.0f;
-
 std::pair<std::array<Grid_vertex, 4>, std::array<std::uint32_t, 6>>
 generate_face(const Eigen::Vector3i &cell_indices,
               const Eigen::Vector3f &u,
               const Eigen::Vector3f &v,
               std::uint32_t face_begin_index) {
-  const auto cell_position = (cell_indices.cast<float>() * cell_stride).eval();
+  const auto cell_position =
+      (cell_indices.cast<float>() * game::constants::grid_cell_stride).eval();
   auto vertices = std::array<Grid_vertex, 4>{
       Grid_vertex{
-          .position =
-              cell_position + u * wall_half_thickness + v * wall_half_thickness,
+          .position = cell_position +
+                      u * game::constants::grid_wall_thickness * 0.5f +
+                      v * game::constants::grid_wall_thickness * 0.5f,
       },
       Grid_vertex{
-          .position = cell_position + u * (cell_stride - wall_half_thickness) +
-                      v * wall_half_thickness,
+          .position = cell_position +
+                      u * (game::constants::grid_cell_stride -
+                           game::constants::grid_wall_thickness * 0.5f) +
+                      v * game::constants::grid_wall_thickness * 0.5f,
       },
       Grid_vertex{
-          .position = cell_position + u * (cell_stride - wall_half_thickness) +
-                      v * (cell_stride - wall_half_thickness),
+          .position = cell_position +
+                      u * (game::constants::grid_cell_stride -
+                           game::constants::grid_wall_thickness * 0.5f) +
+                      v * (game::constants::grid_cell_stride -
+                           game::constants::grid_wall_thickness * 0.5f),
       },
       Grid_vertex{
-          .position = cell_position + u * wall_half_thickness +
-                      v * (cell_stride - wall_half_thickness),
+          .position = cell_position +
+                      u * game::constants::grid_wall_thickness * 0.5f +
+                      v * (game::constants::grid_cell_stride -
+                           game::constants::grid_wall_thickness * 0.5f),
       },
   };
   auto indices = std::array<std::uint32_t, 6>{

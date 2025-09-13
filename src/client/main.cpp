@@ -4,6 +4,7 @@
 #include "constants.hpp"
 #include "enet.hpp"
 #include "game/client/client.hpp"
+#include "game/core/constants.hpp"
 #include "glfw.hpp"
 #include "graphics/global_vulkan_state.hpp"
 #include "graphics/graphics.hpp"
@@ -245,18 +246,42 @@ public:
             graphics::Shader_stage_flag_bits::vertex,
             0,
             std::as_bytes(std::span{&view_projection_matrix, 1}));
-        const auto pos_x_normal =
-            Eigen::Vector4f{1.0f, 0.0f, 0.0f, 1.0f / 16.0f};
-        const auto neg_x_normal =
-            Eigen::Vector4f{-1.0f, 0.0f, 0.0f, 1.0f / 16.0f};
-        const auto pos_y_normal =
-            Eigen::Vector4f{0.0f, 1.0f, 0.0f, 1.0f / 16.0f};
-        const auto neg_y_normal =
-            Eigen::Vector4f{0.0f, -1.0f, 0.0f, 1.0f / 16.0f};
-        const auto pos_z_normal =
-            Eigen::Vector4f{0.0f, 0.0f, 1.0f, 1.0f / 16.0f};
-        const auto neg_z_normal =
-            Eigen::Vector4f{0.0f, 0.0f, -1.0f, 1.0f / 16.0f};
+        const auto pos_x_normal = Eigen::Vector4f{
+            1.0f,
+            0.0f,
+            0.0f,
+            game::constants::grid_wall_thickness * 0.5f,
+        };
+        const auto neg_x_normal = Eigen::Vector4f{
+            -1.0f,
+            0.0f,
+            0.0f,
+            game::constants::grid_wall_thickness * 0.5f,
+        };
+        const auto pos_y_normal = Eigen::Vector4f{
+            0.0f,
+            1.0f,
+            0.0f,
+            game::constants::grid_wall_thickness * 0.5f,
+        };
+        const auto neg_y_normal = Eigen::Vector4f{
+            0.0f,
+            -1.0f,
+            0.0f,
+            game::constants::grid_wall_thickness * 0.5f,
+        };
+        const auto pos_z_normal = Eigen::Vector4f{
+            0.0f,
+            0.0f,
+            1.0f,
+            game::constants::grid_wall_thickness * 0.5f,
+        };
+        const auto neg_z_normal = Eigen::Vector4f{
+            0.0f,
+            0.0f,
+            -1.0f,
+            game::constants::grid_wall_thickness * 0.5f,
+        };
         work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
         work_recorder.push_constants(
             grid_pipeline->get_layout(),
