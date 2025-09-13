@@ -40,10 +40,10 @@ enum class Allocation_create_flag_bits {
   e_within_budget = VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT,
   e_can_alias = VMA_ALLOCATION_CREATE_CAN_ALIAS_BIT,
   e_host_access_sequential_write =
-      VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
   e_host_access_random = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
   e_host_access_allow_transfer_instead =
-      VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT,
+    VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT,
   e_strategy_min_memory = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT,
   e_strategy_min_offset = VMA_ALLOCATION_CREATE_STRATEGY_MIN_OFFSET_BIT,
   e_strategy_best_fit = VMA_ALLOCATION_CREATE_STRATEGY_BEST_FIT_BIT,
@@ -52,12 +52,13 @@ enum class Allocation_create_flag_bits {
 
 using Allocation_create_flags = Flags<Allocation_create_flag_bits>;
 
-constexpr Allocation_create_flags
-operator|(Allocation_create_flag_bits lhs,
-          Allocation_create_flag_bits rhs) noexcept {
+constexpr Allocation_create_flags operator|(
+  Allocation_create_flag_bits lhs, Allocation_create_flag_bits rhs
+) noexcept {
   return Allocation_create_flags{
-      static_cast<Allocation_create_flags::Value>(lhs) |
-      static_cast<Allocation_create_flags::Value>(rhs)};
+    static_cast<Allocation_create_flags::Value>(lhs) |
+    static_cast<Allocation_create_flags::Value>(rhs)
+  };
 }
 
 constexpr VmaAllocationCreateFlags c_repr(Allocation_create_flags flags) {
@@ -89,25 +90,29 @@ public:
 
   constexpr operator VmaAllocator() const noexcept { return _value; }
 
-  std::tuple<vk::Buffer, vma::Allocation>
-  create_buffer(const vk::BufferCreateInfo &buffer_create_info,
-                const Allocation_create_info &allocation_create_info,
-                Allocation_info *allocation_info = nullptr) const;
+  std::tuple<vk::Buffer, vma::Allocation> create_buffer(
+    const vk::BufferCreateInfo &buffer_create_info,
+    const Allocation_create_info &allocation_create_info,
+    Allocation_info *allocation_info = nullptr
+  ) const;
 
-  std::tuple<vk::UniqueBuffer, vma::Unique_allocation>
-  create_buffer_unique(const vk::BufferCreateInfo &buffer_create_info,
-                       const Allocation_create_info &allocation_create_info,
-                       Allocation_info *allocation_info = nullptr) const;
+  std::tuple<vk::UniqueBuffer, vma::Unique_allocation> create_buffer_unique(
+    const vk::BufferCreateInfo &buffer_create_info,
+    const Allocation_create_info &allocation_create_info,
+    Allocation_info *allocation_info = nullptr
+  ) const;
 
-  std::tuple<vk::Image, vma::Allocation>
-  create_image(const vk::ImageCreateInfo &image_create_info,
-               const Allocation_create_info &allocation_create_info,
-               Allocation_info *allocation_info = nullptr) const;
+  std::tuple<vk::Image, vma::Allocation> create_image(
+    const vk::ImageCreateInfo &image_create_info,
+    const Allocation_create_info &allocation_create_info,
+    Allocation_info *allocation_info = nullptr
+  ) const;
 
-  std::tuple<vk::UniqueImage, vma::Unique_allocation>
-  create_image_unique(const vk::ImageCreateInfo &image_create_info,
-                      const Allocation_create_info &allocation_create_info,
-                      Allocation_info *allocation_info = nullptr) const;
+  std::tuple<vk::UniqueImage, vma::Unique_allocation> create_image_unique(
+    const vk::ImageCreateInfo &image_create_info,
+    const Allocation_create_info &allocation_create_info,
+    Allocation_info *allocation_info = nullptr
+  ) const;
 
   void *map_memory(Allocation allocation) const;
 
@@ -183,8 +188,9 @@ class Unique_allocation {
 public:
   constexpr Unique_allocation() noexcept = default;
 
-  constexpr explicit Unique_allocation(Allocation value,
-                                       Allocator owner) noexcept
+  constexpr explicit Unique_allocation(
+    Allocation value, Allocator owner
+  ) noexcept
       : _value{value}, _owner{owner} {}
 
   constexpr Unique_allocation(Unique_allocation &&other) noexcept
@@ -219,18 +225,25 @@ private:
   Allocator _owner{};
 };
 
-inline std::tuple<vk::Buffer, vma::Allocation>
-Allocator::create_buffer(const vk::BufferCreateInfo &buffer_create_info,
-                         const Allocation_create_info &allocation_create_info,
-                         Allocation_info *allocation_info) const {
+inline std::tuple<vk::Buffer, vma::Allocation> Allocator::create_buffer(
+  const vk::BufferCreateInfo &buffer_create_info,
+  const Allocation_create_info &allocation_create_info,
+  Allocation_info *allocation_info
+) const {
   auto c_buffer_create_info = VkBufferCreateInfo{};
-  std::memcpy(&c_buffer_create_info, &buffer_create_info,
-              sizeof(VkBufferCreateInfo));
+  std::memcpy(
+    &c_buffer_create_info, &buffer_create_info, sizeof(VkBufferCreateInfo)
+  );
   auto c_buffer = VkBuffer{};
   auto c_allocation = VmaAllocation{};
-  const auto result =
-      vmaCreateBuffer(_value, &c_buffer_create_info, &allocation_create_info,
-                      &c_buffer, &c_allocation, allocation_info);
+  const auto result = vmaCreateBuffer(
+    _value,
+    &c_buffer_create_info,
+    &allocation_create_info,
+    &c_buffer,
+    &c_allocation,
+    allocation_info
+  );
   if (vk::Result{result} != vk::Result::eSuccess) {
     throw Buffer_creation_error{};
   }
@@ -239,29 +252,39 @@ Allocator::create_buffer(const vk::BufferCreateInfo &buffer_create_info,
 
 inline std::tuple<vk::UniqueBuffer, vma::Unique_allocation>
 Allocator::create_buffer_unique(
-    const vk::BufferCreateInfo &buffer_create_info,
-    const Allocation_create_info &allocation_create_info,
-    Allocation_info *allocation_info) const {
+  const vk::BufferCreateInfo &buffer_create_info,
+  const Allocation_create_info &allocation_create_info,
+  Allocation_info *allocation_info
+) const {
   auto allocator_info = VmaAllocatorInfo{};
   vmaGetAllocatorInfo(_value, &allocator_info);
-  const auto [buffer, allocation] = create_buffer(
-      buffer_create_info, allocation_create_info, allocation_info);
-  return std::tuple{vk::UniqueBuffer{buffer, vk::Device{allocator_info.device}},
-                    Unique_allocation{allocation, *this}};
+  const auto [buffer, allocation] =
+    create_buffer(buffer_create_info, allocation_create_info, allocation_info);
+  return std::tuple{
+    vk::UniqueBuffer{buffer, vk::Device{allocator_info.device}},
+    Unique_allocation{allocation, *this}
+  };
 }
 
-inline std::tuple<vk::Image, vma::Allocation>
-Allocator::create_image(const vk::ImageCreateInfo &image_create_info,
-                        const Allocation_create_info &allocation_create_info,
-                        Allocation_info *allocation_info) const {
+inline std::tuple<vk::Image, vma::Allocation> Allocator::create_image(
+  const vk::ImageCreateInfo &image_create_info,
+  const Allocation_create_info &allocation_create_info,
+  Allocation_info *allocation_info
+) const {
   auto c_image_create_info = VkImageCreateInfo{};
-  std::memcpy(&c_image_create_info, &image_create_info,
-              sizeof(VkImageCreateInfo));
+  std::memcpy(
+    &c_image_create_info, &image_create_info, sizeof(VkImageCreateInfo)
+  );
   auto c_image = VkImage{};
   auto c_allocation = VmaAllocation{};
-  const auto result =
-      vmaCreateImage(_value, &c_image_create_info, &allocation_create_info,
-                     &c_image, &c_allocation, allocation_info);
+  const auto result = vmaCreateImage(
+    _value,
+    &c_image_create_info,
+    &allocation_create_info,
+    &c_image,
+    &c_allocation,
+    allocation_info
+  );
   if (vk::Result{result} != vk::Result::eSuccess) {
     throw Buffer_creation_error{};
   }
@@ -270,15 +293,18 @@ Allocator::create_image(const vk::ImageCreateInfo &image_create_info,
 
 inline std::tuple<vk::UniqueImage, vma::Unique_allocation>
 Allocator::create_image_unique(
-    const vk::ImageCreateInfo &image_create_info,
-    const Allocation_create_info &allocation_create_info,
-    Allocation_info *allocation_info) const {
+  const vk::ImageCreateInfo &image_create_info,
+  const Allocation_create_info &allocation_create_info,
+  Allocation_info *allocation_info
+) const {
   auto allocator_info = VmaAllocatorInfo{};
   vmaGetAllocatorInfo(_value, &allocator_info);
   const auto [image, allocation] =
-      create_image(image_create_info, allocation_create_info, allocation_info);
-  return std::tuple{vk::UniqueImage{image, vk::Device{allocator_info.device}},
-                    Unique_allocation{allocation, *this}};
+    create_image(image_create_info, allocation_create_info, allocation_info);
+  return std::tuple{
+    vk::UniqueImage{image, vk::Device{allocator_info.device}},
+    Unique_allocation{allocation, *this}
+  };
 }
 
 inline void *Allocator::map_memory(Allocation allocation) const {
@@ -302,7 +328,7 @@ inline Vulkan_functions
 import_functions_from_volk(const Allocator::Create_info &create_info) {
   auto vulkan_functions = VmaVulkanFunctions{};
   const auto result =
-      vmaImportVulkanFunctionsFromVolk(&create_info, &vulkan_functions);
+    vmaImportVulkanFunctionsFromVolk(&create_info, &vulkan_functions);
   if (vk::Result{result} != vk::Result::eSuccess) {
     throw Function_importing_error{};
   }

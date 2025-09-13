@@ -5,18 +5,18 @@ namespace fpsparty::graphics::detail {
 Work_resource create_work_resource() {
   const auto device = Global_vulkan_state::get().device();
   auto command_pool = device.createCommandPoolUnique({
-      .flags = vk::CommandPoolCreateFlagBits::eTransient,
-      .queueFamilyIndex = Global_vulkan_state::get().queue_family_index(),
+    .flags = vk::CommandPoolCreateFlagBits::eTransient,
+    .queueFamilyIndex = Global_vulkan_state::get().queue_family_index(),
   });
   const auto command_buffer = device.allocateCommandBuffers({
-      .commandPool = *command_pool,
-      .level = vk::CommandBufferLevel::ePrimary,
-      .commandBufferCount = 1,
+    .commandPool = *command_pool,
+    .level = vk::CommandBufferLevel::ePrimary,
+    .commandBufferCount = 1,
   })[0];
   return {
-      .vk_fence = device.createFenceUnique({}),
-      .vk_command_pool = std::move(command_pool),
-      .vk_command_buffer = command_buffer,
+    .vk_fence = device.createFenceUnique({}),
+    .vk_command_pool = std::move(command_pool),
+    .vk_command_buffer = command_buffer,
   };
 }
 

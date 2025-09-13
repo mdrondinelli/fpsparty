@@ -15,16 +15,17 @@ void Work_queue::poll(Work_resource_pool &resource_pool) {
     }
   }
   algorithms::unordered_erase_many_if(
-      _pending_works,
-      [&](const rc::Strong<Work> &work) { return work->is_done(); });
+    _pending_works,
+    [&](const rc::Strong<Work> &work) { return work->is_done(); }
+  );
 }
 
 rc::Strong<Work> Work_queue::submit(const Work_queue_submit_info &info) {
   const auto wait_stage =
-      vk::PipelineStageFlags{vk::PipelineStageFlagBits::eTopOfPipe};
+    vk::PipelineStageFlags{vk::PipelineStageFlagBits::eTopOfPipe};
   auto vk_submit_info = vk::SubmitInfo{
-      .commandBufferCount = 1,
-      .pCommandBuffers = &info.resource->vk_command_buffer,
+    .commandBufferCount = 1,
+    .pCommandBuffers = &info.resource->vk_command_buffer,
   };
   if (info.wait_semaphore) {
     vk_submit_info.waitSemaphoreCount = 1;

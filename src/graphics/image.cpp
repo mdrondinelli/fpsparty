@@ -13,46 +13,47 @@ Image::Image(const Image_create_info &info) {
                           : info.dimensionality == 2 ? vk::ImageType::e2D
                                                      : vk::ImageType::e3D;
   auto [vk_image, vma_allocation] =
-      Global_vulkan_state::get().allocator().create_image_unique(
+    Global_vulkan_state::get().allocator().create_image_unique(
+      {
+        .imageType = image_type,
+        .format = static_cast<vk::Format>(info.format),
+        .extent =
           {
-              .imageType = image_type,
-              .format = static_cast<vk::Format>(info.format),
-              .extent =
-                  {
-                      .width = static_cast<std::uint32_t>(info.extent.x()),
-                      .height = static_cast<std::uint32_t>(info.extent.y()),
-                      .depth = static_cast<std::uint32_t>(info.extent.z()),
-                  },
-              .mipLevels = static_cast<std::uint32_t>(info.mip_level_count),
-              .arrayLayers = static_cast<std::uint32_t>(info.array_layer_count),
-              .samples = vk::SampleCountFlagBits::e1,
-              .tiling = vk::ImageTiling::eOptimal,
-              .usage = static_cast<vk::ImageUsageFlags>(info.usage),
-              .sharingMode = vk::SharingMode::eExclusive,
-              .initialLayout = vk::ImageLayout::eUndefined,
+            .width = static_cast<std::uint32_t>(info.extent.x()),
+            .height = static_cast<std::uint32_t>(info.extent.y()),
+            .depth = static_cast<std::uint32_t>(info.extent.z()),
           },
-          {
-              .flags = {},
-              .usage = c_repr(vma::Memory_usage::e_auto),
-              .requiredFlags = {},
-              .preferredFlags = {},
-              .memoryTypeBits = {},
-              .pool = {},
-              .pUserData = {},
-              .priority = {},
-          });
+        .mipLevels = static_cast<std::uint32_t>(info.mip_level_count),
+        .arrayLayers = static_cast<std::uint32_t>(info.array_layer_count),
+        .samples = vk::SampleCountFlagBits::e1,
+        .tiling = vk::ImageTiling::eOptimal,
+        .usage = static_cast<vk::ImageUsageFlags>(info.usage),
+        .sharingMode = vk::SharingMode::eExclusive,
+        .initialLayout = vk::ImageLayout::eUndefined,
+      },
+      {
+        .flags = {},
+        .usage = c_repr(vma::Memory_usage::e_auto),
+        .requiredFlags = {},
+        .preferredFlags = {},
+        .memoryTypeBits = {},
+        .pool = {},
+        .pUserData = {},
+        .priority = {},
+      }
+    );
   _vk_image = vk_image.release();
   _vk_image_view = Global_vulkan_state::get().device().createImageView({
-      .image = _vk_image,
-      .viewType = static_cast<vk::ImageViewType>(image_type),
-      .format = static_cast<vk::Format>(info.format),
-      .subresourceRange =
-          {
-              .aspectMask =
-                  detail::get_image_format_vk_image_aspect_flags(info.format),
-              .levelCount = static_cast<std::uint32_t>(info.mip_level_count),
-              .layerCount = static_cast<std::uint32_t>(info.array_layer_count),
-          },
+    .image = _vk_image,
+    .viewType = static_cast<vk::ImageViewType>(image_type),
+    .format = static_cast<vk::Format>(info.format),
+    .subresourceRange =
+      {
+        .aspectMask =
+          detail::get_image_format_vk_image_aspect_flags(info.format),
+        .levelCount = static_cast<std::uint32_t>(info.mip_level_count),
+        .layerCount = static_cast<std::uint32_t>(info.array_layer_count),
+      },
   });
   _vma_allocation = std::move(vma_allocation);
   _format = info.format;

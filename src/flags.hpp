@@ -5,7 +5,8 @@
 
 namespace fpsparty {
 template <class T>
-requires(std::is_enum_v<T>) class Flags {
+  requires(std::is_enum_v<T>)
+class Flags {
 public:
   using Value = std::underlying_type_t<T>;
 

@@ -9,9 +9,11 @@
 #include <utility>
 
 namespace fpsparty::serial {
-template <typename T, typename CharT = T::char_type,
-          typename Traits = std::char_traits<CharT>>
-requires std::derived_from<T, std::basic_ostream<CharT, Traits>>
+template <
+  typename T,
+  typename CharT = T::char_type,
+  typename Traits = std::char_traits<CharT>>
+  requires std::derived_from<T, std::basic_ostream<CharT, Traits>>
 class Ostream_writer : public Writer {
 public:
   template <typename... Args>

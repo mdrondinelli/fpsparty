@@ -9,13 +9,13 @@ enum class Image_usage_flag_bits {
   sampled = static_cast<int>(vk::ImageUsageFlagBits::eSampled),
   color_attachment = static_cast<int>(vk::ImageUsageFlagBits::eColorAttachment),
   depth_attachment =
-      static_cast<int>(vk::ImageUsageFlagBits::eDepthStencilAttachment),
+    static_cast<int>(vk::ImageUsageFlagBits::eDepthStencilAttachment),
 };
 
 using Image_usage_flags = Flags<Image_usage_flag_bits>;
 
-constexpr Image_usage_flags operator|(Image_usage_flag_bits lhs,
-                                      Image_usage_flag_bits rhs) noexcept {
+constexpr Image_usage_flags
+operator|(Image_usage_flag_bits lhs, Image_usage_flag_bits rhs) noexcept {
   return Image_usage_flags{lhs} | rhs;
 }
 } // namespace fpsparty::graphics

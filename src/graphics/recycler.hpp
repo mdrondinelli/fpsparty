@@ -77,17 +77,20 @@ public:
 private:
   void on_change_predicate() {
     algorithms::unordered_erase_many_if(
-        _free_resources, [&](const rc::Strong<Resource> &resource) {
-          return !_predicate(*resource);
-        });
+      _free_resources,
+      [&](const rc::Strong<Resource> &resource) {
+        return !_predicate(*resource);
+      }
+    );
   }
 
   void on_work_done(const Work &work) {
     const auto it = std::ranges::find_if(
-        _unfree_resources,
-        [&](const std::pair<rc::Strong<Resource>, rc::Strong<Work>> &pair) {
-          return pair.second.get() == &work;
-        });
+      _unfree_resources,
+      [&](const std::pair<rc::Strong<Resource>, rc::Strong<Work>> &pair) {
+        return pair.second.get() == &work;
+      }
+    );
     if (it != _unfree_resources.end()) {
       if (_predicate(*it->first)) {
         _free_resources.emplace_back(std::move(it->first));
@@ -98,7 +101,7 @@ private:
 
   std::vector<rc::Strong<Resource>> _free_resources;
   std::vector<std::pair<rc::Strong<Resource>, rc::Strong<Work>>>
-      _unfree_resources;
+    _unfree_resources;
   Predicate _predicate;
   Factory _factory;
 };

@@ -15,8 +15,8 @@ struct Buffer_create_info {
 
 constexpr vk::Buffer get_buffer_vk_buffer(const Buffer &buffer) noexcept;
 
-constexpr vma::Allocation
-get_buffer_vma_allocation(const Buffer &buffer) noexcept;
+constexpr vma::Allocation get_buffer_vma_allocation(const Buffer &buffer
+) noexcept;
 } // namespace detail
 
 class Buffer {
@@ -26,8 +26,8 @@ public:
   virtual ~Buffer() = default;
 
 private:
-  friend constexpr vk::Buffer
-  detail::get_buffer_vk_buffer(const Buffer &buffer) noexcept;
+  friend constexpr vk::Buffer detail::get_buffer_vk_buffer(const Buffer &buffer
+  ) noexcept;
 
   friend constexpr vma::Allocation
   detail::get_buffer_vma_allocation(const Buffer &buffer) noexcept;
@@ -41,8 +41,8 @@ constexpr vk::Buffer get_buffer_vk_buffer(const Buffer &buffer) noexcept {
   return *buffer._vk_buffer;
 }
 
-constexpr vma::Allocation
-get_buffer_vma_allocation(const Buffer &buffer) noexcept {
+constexpr vma::Allocation get_buffer_vma_allocation(const Buffer &buffer
+) noexcept {
   return *buffer._vma_allocation;
 }
 } // namespace detail

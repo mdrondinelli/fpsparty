@@ -65,16 +65,16 @@ public:
   const rc::Strong<Pipeline_layout> &get_layout() const noexcept;
 
 private:
-  friend vk::Pipeline
-  detail::get_pipeline_vk_pipeline(const Pipeline &pipeline) noexcept;
+  friend vk::Pipeline detail::get_pipeline_vk_pipeline(const Pipeline &pipeline
+  ) noexcept;
 
   rc::Strong<Pipeline_layout> _layout;
   vk::UniquePipeline _vk_pipeline;
 };
 
 namespace detail {
-inline vk::Pipeline
-get_pipeline_vk_pipeline(const Pipeline &pipeline) noexcept {
+inline vk::Pipeline get_pipeline_vk_pipeline(const Pipeline &pipeline
+) noexcept {
   return *pipeline._vk_pipeline;
 }
 } // namespace detail

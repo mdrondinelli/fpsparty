@@ -83,9 +83,10 @@ public:
         _object->~T();
         if (new_weak_reference_count == 0) {
           auto allocator =
-              std::pmr::polymorphic_allocator{_header->memory_resource};
-          allocator.deallocate_bytes(_header, _header->wrapper_size,
-                                     _header->wrapper_align);
+            std::pmr::polymorphic_allocator{_header->memory_resource};
+          allocator.deallocate_bytes(
+            _header, _header->wrapper_size, _header->wrapper_align
+          );
         }
       }
     }
@@ -101,7 +102,7 @@ public:
     return detail::construct_strong<const T>(_header, _object);
   }
 
-  operator Strong<const T>() &&noexcept {
+  operator Strong<const T>() && noexcept {
     const auto temp_header = _header;
     const auto temp_object = _object;
     _header = nullptr;
@@ -110,7 +111,7 @@ public:
   }
 
   template <typename U>
-  requires std::derived_from<T, U>
+    requires std::derived_from<T, U>
   operator Strong<U>() const noexcept {
     if (_header) {
       ++_header->strong_reference_count;
@@ -120,8 +121,8 @@ public:
   }
 
   template <typename U>
-  requires std::derived_from<T, U>
-  operator Strong<U>() &&noexcept {
+    requires std::derived_from<T, U>
+  operator Strong<U>() && noexcept {
     const auto temp_header = _header;
     const auto temp_object = _object;
     _header = nullptr;
@@ -139,7 +140,7 @@ public:
     return nullptr;
   }
 
-  template <std::derived_from<T> U> Strong<U> static_downcast() &&noexcept {
+  template <std::derived_from<T> U> Strong<U> static_downcast() && noexcept {
     const auto header = _header;
     if (header != nullptr) {
       const auto object = static_cast<U *>(_object);
@@ -163,7 +164,7 @@ public:
     return nullptr;
   }
 
-  template <std::derived_from<T> U> Strong<U> dynamic_downcast() &&noexcept {
+  template <std::derived_from<T> U> Strong<U> dynamic_downcast() && noexcept {
     const auto header = _header;
     if (header != nullptr) {
       const auto object = dynamic_cast<U *>(_object);
@@ -190,8 +191,8 @@ private:
   friend class Factory<T>;
   friend class Weak<T>;
 
-  friend Strong<T> detail::construct_strong<T>(detail::Header *header,
-                                               T *object) noexcept;
+  friend Strong<T>
+  detail::construct_strong<T>(detail::Header *header, T *object) noexcept;
 
   constexpr explicit Strong(detail::Header *header, T *object) noexcept
       : _header{header}, _object{object} {}
@@ -245,9 +246,10 @@ public:
     if (_header) {
       if (--_header->weak_reference_count == 0) {
         auto allocator =
-            std::pmr::polymorphic_allocator{_header->memory_resource};
-        allocator.deallocate_bytes(_header, _header->wrapper_size,
-                                   _header->wrapper_align);
+          std::pmr::polymorphic_allocator{_header->memory_resource};
+        allocator.deallocate_bytes(
+          _header, _header->wrapper_size, _header->wrapper_align
+        );
       }
     }
   }
@@ -259,7 +261,7 @@ public:
     return detail::construct_weak<const T>(_header, _object);
   }
 
-  operator Weak<const T>() &&noexcept {
+  operator Weak<const T>() && noexcept {
     const auto temp_header = _header;
     const auto temp_object = _object;
     _header = nullptr;
@@ -272,7 +274,8 @@ public:
       auto old_count = _header->strong_reference_count.load();
       while (old_count != 0) {
         if (_header->strong_reference_count.compare_exchange_weak(
-                old_count, old_count + 1)) {
+              old_count, old_count + 1
+            )) {
           return detail::construct_strong<T>(_header, _object);
         }
       }
@@ -293,8 +296,8 @@ public:
   }
 
 private:
-  friend Weak<T> detail::construct_weak<T>(detail::Header *header,
-                                           T *object) noexcept;
+  friend Weak<T>
+  detail::construct_weak<T>(detail::Header *header, T *object) noexcept;
 
   constexpr void swap(Weak &other) noexcept {
     std::swap(_header, other._header);
@@ -344,22 +347,25 @@ public:
 
   explicit Factory(std::pmr::memory_resource *upstream_memory_resource) noexcept
       : _memory_resource{std::make_unique<std::pmr::synchronized_pool_resource>(
-            std::pmr::pool_options{
-                .largest_required_pool_block = sizeof(detail::Wrapper<T>),
-            },
-            upstream_memory_resource)} {}
+          std::pmr::pool_options{
+            .largest_required_pool_block = sizeof(detail::Wrapper<T>),
+          },
+          upstream_memory_resource
+        )} {}
 
   template <typename... Args> Strong<T> create(Args &&...args) {
     auto allocator = std::pmr::polymorphic_allocator{_memory_resource.get()};
-    const auto memory = allocator.allocate_bytes(sizeof(detail::Wrapper<T>),
-                                                 alignof(detail::Wrapper<T>));
+    const auto memory = allocator.allocate_bytes(
+      sizeof(detail::Wrapper<T>), alignof(detail::Wrapper<T>)
+    );
     const auto wrapper = new (memory) detail::Wrapper<T>;
     const auto object = [&]() {
       try {
         return new (&wrapper->storage) T(std::forward<Args>(args)...);
       } catch (...) {
-        allocator.deallocate_bytes(wrapper, sizeof(detail::Wrapper<T>),
-                                   alignof(detail::Wrapper<T>));
+        allocator.deallocate_bytes(
+          wrapper, sizeof(detail::Wrapper<T>), alignof(detail::Wrapper<T>)
+        );
         throw;
       }
     }();

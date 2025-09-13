@@ -26,37 +26,43 @@ inline std::span<const char *> get_required_instance_extensions() {
   return std::span{extensions, extension_count};
 }
 
-inline GLFWvkproc get_instance_proc_address(vk::Instance instance,
-                                            const char *procname) {
+inline GLFWvkproc
+get_instance_proc_address(vk::Instance instance, const char *procname) {
   return glfwGetInstanceProcAddress(instance, procname);
 }
 
-inline int get_physical_device_presentation_support(vk::Instance instance,
-                                                    vk::PhysicalDevice device,
-                                                    std::uint32_t queuefamily) {
-  return glfwGetPhysicalDevicePresentationSupport(instance, device,
-                                                  queuefamily);
+inline int get_physical_device_presentation_support(
+  vk::Instance instance, vk::PhysicalDevice device, std::uint32_t queuefamily
+) {
+  return glfwGetPhysicalDevicePresentationSupport(
+    instance, device, queuefamily
+  );
 }
 
-inline vk::SurfaceKHR
-create_window_surface(vk::Instance instance, GLFWwindow *window,
-                      const vk::AllocationCallbacks *allocator = nullptr) {
+inline vk::SurfaceKHR create_window_surface(
+  vk::Instance instance,
+  GLFWwindow *window,
+  const vk::AllocationCallbacks *allocator = nullptr
+) {
   auto native_allocator = VkAllocationCallbacks{};
   if (allocator) {
     std::memcpy(&native_allocator, allocator, sizeof(VkAllocationCallbacks));
   }
   auto surface = VkSurfaceKHR{};
   std::ignore = glfwCreateWindowSurface(
-      instance, window, allocator ? &native_allocator : nullptr, &surface);
+    instance, window, allocator ? &native_allocator : nullptr, &surface
+  );
   return surface;
 }
 
 inline vk::UniqueSurfaceKHR create_window_surface_unique(
-    vk::Instance instance, GLFWwindow *window,
-    const vk::AllocationCallbacks *allocator = nullptr) {
+  vk::Instance instance,
+  GLFWwindow *window,
+  const vk::AllocationCallbacks *allocator = nullptr
+) {
   return vk::UniqueSurfaceKHR{
-      create_window_surface(instance, window, allocator),
-      instance,
+    create_window_surface(instance, window, allocator),
+    instance,
   };
 }
 #endif
@@ -308,16 +314,18 @@ class Mouse_button_callback {
 public:
   virtual ~Mouse_button_callback() = default;
 
-  virtual void on_mouse_button(Window window, Mouse_button button,
-                               Press_state action, int mods) = 0;
+  virtual void on_mouse_button(
+    Window window, Mouse_button button, Press_state action, int mods
+  ) = 0;
 };
 
 class Cursor_pos_callback {
 public:
   virtual ~Cursor_pos_callback() = default;
 
-  virtual void on_cursor_pos(Window window, double xpos, double ypos,
-                             double dxpos, double dypos) = 0;
+  virtual void on_cursor_pos(
+    Window window, double xpos, double ypos, double dxpos, double dypos
+  ) = 0;
 };
 
 class Cursor_enter_callback {
@@ -338,8 +346,9 @@ class Key_callback {
 public:
   virtual ~Key_callback() = default;
 
-  virtual void on_key(Window window, Key key, int scancode, Press_action action,
-                      int mods) = 0;
+  virtual void on_key(
+    Window window, Key key, int scancode, Press_action action, int mods
+  ) = 0;
 };
 
 class Char_callback {
@@ -353,8 +362,8 @@ class Char_mods_callback {
 public:
   virtual ~Char_mods_callback() = default;
 
-  virtual void on_char_mods(Window window, unsigned int codepoint,
-                            int mods) = 0;
+  virtual void
+  on_char_mods(Window window, unsigned int codepoint, int mods) = 0;
 };
 
 class Drop_callback {
@@ -426,12 +435,14 @@ public:
     bool doublebuffer{true};
     Client_api client_api{Client_api::opengl_api};
     Context_creation_api context_creation_api{
-        Context_creation_api::native_context_api};
+      Context_creation_api::native_context_api
+    };
     int context_version_major{1};
     int context_version_minor{1};
     Context_robustness context_robustness{Context_robustness::no_robustness};
     Context_release_behavior context_release_behavior{
-        Context_release_behavior::any};
+      Context_release_behavior::any
+    };
     bool opengl_forward_compat{false};
     bool context_debug{false};
     Opengl_profile opengl_profile{Opengl_profile::any};
@@ -461,8 +472,8 @@ public:
   }
 
   Cursor_input_mode get_cursor_input_mode() const {
-    return static_cast<Cursor_input_mode>(
-        glfwGetInputMode(_value, GLFW_CURSOR));
+    return static_cast<Cursor_input_mode>(glfwGetInputMode(_value, GLFW_CURSOR)
+    );
   }
 
   void set_cursor_input_mode(Cursor_input_mode value) const {
@@ -475,7 +486,8 @@ public:
 
   Press_state get_mouse_button(Mouse_button button) const {
     return static_cast<Press_state>(
-        glfwGetMouseButton(_value, static_cast<int>(button)));
+      glfwGetMouseButton(_value, static_cast<int>(button))
+    );
   }
 
   void set_key_callback(Key_callback *callback) const noexcept {
@@ -490,8 +502,8 @@ public:
     get_user_data().char_mods_callback = callback;
   }
 
-  void
-  set_mouse_button_callback(Mouse_button_callback *callback) const noexcept {
+  void set_mouse_button_callback(Mouse_button_callback *callback
+  ) const noexcept {
     get_user_data().mouse_button_callback = callback;
   }
 
@@ -499,8 +511,8 @@ public:
     get_user_data().cursor_pos_callback = callback;
   }
 
-  void
-  set_cursor_enter_callback(Cursor_enter_callback *callback) const noexcept {
+  void set_cursor_enter_callback(Cursor_enter_callback *callback
+  ) const noexcept {
     get_user_data().cursor_enter_callback = callback;
   }
 
@@ -537,8 +549,9 @@ inline Window create_window(const Window::Create_info &create_info) {
   glfwWindowHint(GLFW_FLOATING, create_info.floating);
   glfwWindowHint(GLFW_MAXIMIZED, create_info.maximized);
   glfwWindowHint(GLFW_CENTER_CURSOR, create_info.center_cursor);
-  glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER,
-                 create_info.transparent_framebuffer);
+  glfwWindowHint(
+    GLFW_TRANSPARENT_FRAMEBUFFER, create_info.transparent_framebuffer
+  );
   glfwWindowHint(GLFW_FOCUS_ON_SHOW, create_info.focus_on_show);
   glfwWindowHint(GLFW_SCALE_TO_MONITOR, create_info.scale_to_monitor);
   glfwWindowHint(GLFW_SCALE_FRAMEBUFFER, create_info.scale_framebuffer);
@@ -562,105 +575,135 @@ inline Window create_window(const Window::Create_info &create_info) {
   glfwWindowHint(GLFW_SRGB_CAPABLE, create_info.srgb_capable);
   glfwWindowHint(GLFW_DOUBLEBUFFER, create_info.doublebuffer);
   glfwWindowHint(GLFW_CLIENT_API, static_cast<int>(create_info.client_api));
-  glfwWindowHint(GLFW_CONTEXT_CREATION_API,
-                 static_cast<int>(create_info.context_creation_api));
+  glfwWindowHint(
+    GLFW_CONTEXT_CREATION_API,
+    static_cast<int>(create_info.context_creation_api)
+  );
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, create_info.context_version_major);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, create_info.context_version_minor);
-  glfwWindowHint(GLFW_CONTEXT_ROBUSTNESS,
-                 static_cast<int>(create_info.context_robustness));
-  glfwWindowHint(GLFW_CONTEXT_RELEASE_BEHAVIOR,
-                 static_cast<int>(create_info.context_release_behavior));
+  glfwWindowHint(
+    GLFW_CONTEXT_ROBUSTNESS, static_cast<int>(create_info.context_robustness)
+  );
+  glfwWindowHint(
+    GLFW_CONTEXT_RELEASE_BEHAVIOR,
+    static_cast<int>(create_info.context_release_behavior)
+  );
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, create_info.opengl_forward_compat);
   glfwWindowHint(GLFW_CONTEXT_DEBUG, create_info.context_debug);
-  glfwWindowHint(GLFW_OPENGL_PROFILE,
-                 static_cast<int>(create_info.opengl_profile));
+  glfwWindowHint(
+    GLFW_OPENGL_PROFILE, static_cast<int>(create_info.opengl_profile)
+  );
   glfwWindowHint(GLFW_WIN32_KEYBOARD_MENU, create_info.win32_keyboard_menu);
   glfwWindowHint(GLFW_WIN32_SHOWDEFAULT, create_info.win32_showdefault);
   glfwWindowHintString(GLFW_COCOA_FRAME_NAME, create_info.cocoa_frame_name);
-  glfwWindowHint(GLFW_COCOA_GRAPHICS_SWITCHING,
-                 create_info.cocoa_graphics_switching);
+  glfwWindowHint(
+    GLFW_COCOA_GRAPHICS_SWITCHING, create_info.cocoa_graphics_switching
+  );
   glfwWindowHintString(GLFW_WAYLAND_APP_ID, create_info.wayland_app_id);
   glfwWindowHintString(GLFW_X11_CLASS_NAME, create_info.x11_class_name);
   glfwWindowHintString(GLFW_X11_INSTANCE_NAME, create_info.x11_instance_name);
   auto user_data = std::make_unique<Window::User_data>();
-  const auto window = glfwCreateWindow(create_info.width, create_info.height,
-                                       create_info.title, nullptr, nullptr);
-  glfwSetKeyCallback(window, [](GLFWwindow *window, int key, int scancode,
-                                int action, int mods) {
-    const auto user_data =
+  const auto window = glfwCreateWindow(
+    create_info.width, create_info.height, create_info.title, nullptr, nullptr
+  );
+  glfwSetKeyCallback(
+    window,
+    [](GLFWwindow *window, int key, int scancode, int action, int mods) {
+      const auto user_data =
         static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
-    if (user_data->key_callback) {
-      user_data->key_callback->on_key(window, static_cast<Key>(key), scancode,
-                                      static_cast<Press_action>(action), mods);
+      if (user_data->key_callback) {
+        user_data->key_callback->on_key(
+          window,
+          static_cast<Key>(key),
+          scancode,
+          static_cast<Press_action>(action),
+          mods
+        );
+      }
     }
-  });
+  );
   glfwSetCharCallback(window, [](GLFWwindow *window, unsigned int codepoint) {
     const auto user_data =
-        static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
+      static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
     if (user_data->char_callback) {
       user_data->char_callback->on_char(window, codepoint);
     }
   });
   glfwSetCharModsCallback(
-      window, [](GLFWwindow *window, unsigned int codepoint, int mods) {
-        const auto user_data =
-            static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
-        if (user_data->char_mods_callback) {
-          user_data->char_mods_callback->on_char_mods(window, codepoint, mods);
-        }
-      });
+    window,
+    [](GLFWwindow *window, unsigned int codepoint, int mods) {
+      const auto user_data =
+        static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
+      if (user_data->char_mods_callback) {
+        user_data->char_mods_callback->on_char_mods(window, codepoint, mods);
+      }
+    }
+  );
   glfwSetMouseButtonCallback(
-      window, [](GLFWwindow *window, int button, int action, int mods) {
-        const auto user_data =
-            static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
-        if (user_data->mouse_button_callback) {
-          user_data->mouse_button_callback->on_mouse_button(
-              window, static_cast<Mouse_button>(button),
-              static_cast<Press_state>(action), mods);
-        }
-      });
+    window,
+    [](GLFWwindow *window, int button, int action, int mods) {
+      const auto user_data =
+        static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
+      if (user_data->mouse_button_callback) {
+        user_data->mouse_button_callback->on_mouse_button(
+          window,
+          static_cast<Mouse_button>(button),
+          static_cast<Press_state>(action),
+          mods
+        );
+      }
+    }
+  );
   glfwSetCursorPosCallback(
-      window, [](GLFWwindow *window, double xpos, double ypos) {
-        const auto user_data =
-            static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
-        if (user_data->cursor_pos_callback) {
-          auto dxpos = 0.0;
-          auto dypos = 0.0;
-          if (user_data->cursor_pos_valid) {
-            dxpos = xpos - user_data->cursor_pos_x;
-            dypos = ypos - user_data->cursor_pos_y;
-          }
-          user_data->cursor_pos_callback->on_cursor_pos(window, xpos, ypos,
-                                                        dxpos, dypos);
-          user_data->cursor_pos_x = xpos;
-          user_data->cursor_pos_y = ypos;
-          user_data->cursor_pos_valid = true;
+    window,
+    [](GLFWwindow *window, double xpos, double ypos) {
+      const auto user_data =
+        static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
+      if (user_data->cursor_pos_callback) {
+        auto dxpos = 0.0;
+        auto dypos = 0.0;
+        if (user_data->cursor_pos_valid) {
+          dxpos = xpos - user_data->cursor_pos_x;
+          dypos = ypos - user_data->cursor_pos_y;
         }
-      });
+        user_data->cursor_pos_callback->on_cursor_pos(
+          window, xpos, ypos, dxpos, dypos
+        );
+        user_data->cursor_pos_x = xpos;
+        user_data->cursor_pos_y = ypos;
+        user_data->cursor_pos_valid = true;
+      }
+    }
+  );
   glfwSetCursorEnterCallback(window, [](GLFWwindow *window, int entered) {
     const auto user_data =
-        *static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
+      *static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
     if (user_data.cursor_enter_callback) {
       user_data.cursor_enter_callback->on_cursor_enter(window, entered);
     }
   });
   glfwSetScrollCallback(
-      window, [](GLFWwindow *window, double xoffset, double yoffset) {
-        const auto user_data =
-            *static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
-        if (user_data.scroll_callback) {
-          user_data.scroll_callback->on_scroll(window, xoffset, yoffset);
-        }
-      });
-  glfwSetDropCallback(window, [](GLFWwindow *window, int path_count,
-                                 const char **paths) {
-    const auto user_data =
+    window,
+    [](GLFWwindow *window, double xoffset, double yoffset) {
+      const auto user_data =
         *static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
-    if (user_data.drop_callback) {
-      user_data.drop_callback->on_drop(window,
-                                       std::span{paths, paths + path_count});
+      if (user_data.scroll_callback) {
+        user_data.scroll_callback->on_scroll(window, xoffset, yoffset);
+      }
     }
-  });
+  );
+  glfwSetDropCallback(
+    window,
+    [](GLFWwindow *window, int path_count, const char **paths) {
+      const auto user_data =
+        *static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
+      if (user_data.drop_callback) {
+        user_data.drop_callback->on_drop(
+          window, std::span{paths, paths + path_count}
+        );
+      }
+    }
+  );
   glfwSetWindowUserPointer(window, user_data.release());
   return window;
 }
@@ -700,8 +743,8 @@ private:
   Window _value{};
 };
 
-inline Unique_window
-create_window_unique(const Window::Create_info &create_info) {
+inline Unique_window create_window_unique(const Window::Create_info &create_info
+) {
   return Unique_window{create_window(create_info)};
 }
 

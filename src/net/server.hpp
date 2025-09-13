@@ -30,9 +30,10 @@ public:
 
   std::size_t get_peer_count() const noexcept;
 
-  std::pmr::vector<enet::Peer>
-  get_peers(std::pmr::memory_resource *memory_resource =
-                std::pmr::get_default_resource()) const;
+  std::pmr::vector<enet::Peer> get_peers(
+    std::pmr::memory_resource *memory_resource =
+      std::pmr::get_default_resource()
+  ) const;
 
 protected:
   virtual void on_peer_connect(enet::Peer);
@@ -41,21 +42,26 @@ protected:
 
   virtual void on_player_join_request(enet::Peer);
 
-  virtual void on_player_leave_request(enet::Peer peer,
-                                       Entity_id player_entity_id);
+  virtual void
+  on_player_leave_request(enet::Peer peer, Entity_id player_entity_id);
 
-  virtual void on_player_input_state(enet::Peer peer,
-                                     Entity_id player_entity_id,
-                                     Sequence_number input_sequence_number,
-                                     const net::Input_state &input_state);
+  virtual void on_player_input_state(
+    enet::Peer peer,
+    Entity_id player_entity_id,
+    Sequence_number input_sequence_number,
+    const net::Input_state &input_state
+  );
 
   void send_player_join_response(enet::Peer peer, Entity_id player_entity_id);
 
   void send_grid_snapshot(enet::Peer peer, std::span<const std::byte> state);
 
-  void send_entity_snapshot(enet::Peer peer, Sequence_number tick_number,
-                            std::span<const std::byte> public_state,
-                            std::span<const std::byte> player_state);
+  void send_entity_snapshot(
+    enet::Peer peer,
+    Sequence_number tick_number,
+    std::span<const std::byte> public_state,
+    std::span<const std::byte> player_state
+  );
 
 private:
   void handle_event(const enet::Event &e);

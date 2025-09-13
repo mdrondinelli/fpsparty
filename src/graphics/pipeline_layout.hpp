@@ -10,8 +10,9 @@ namespace fpsparty::graphics {
 class Pipeline_layout;
 
 namespace detail {
-vk::PipelineLayout get_pipeline_layout_vk_pipeline_layout(
-    const Pipeline_layout &pipeline_layout) noexcept;
+vk::PipelineLayout
+get_pipeline_layout_vk_pipeline_layout(const Pipeline_layout &pipeline_layout
+) noexcept;
 }
 
 struct Push_constant_range {
@@ -30,14 +31,16 @@ public:
 
 private:
   friend vk::PipelineLayout detail::get_pipeline_layout_vk_pipeline_layout(
-      const Pipeline_layout &pipeline_layout) noexcept;
+    const Pipeline_layout &pipeline_layout
+  ) noexcept;
 
   vk::UniquePipelineLayout _vk_pipeline_layout{};
 };
 
 namespace detail {
-inline vk::PipelineLayout get_pipeline_layout_vk_pipeline_layout(
-    const Pipeline_layout &pipeline_layout) noexcept {
+inline vk::PipelineLayout
+get_pipeline_layout_vk_pipeline_layout(const Pipeline_layout &pipeline_layout
+) noexcept {
   return *pipeline_layout._vk_pipeline_layout;
 }
 } // namespace detail

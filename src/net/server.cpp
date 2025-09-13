@@ -14,11 +14,11 @@
 namespace fpsparty::net {
 Server::Server(const Server_create_info &create_info)
     : _host{enet::make_server_host_unique({
-          .port = create_info.port,
-          .max_clients = create_info.max_clients,
-          .max_channels = constants::max_channels,
-          .incoming_bandwidth = create_info.incoming_bandwidth,
-          .outgoing_bandwidth = create_info.outgoing_bandwidth,
+        .port = create_info.port,
+        .max_clients = create_info.max_clients,
+        .max_channels = constants::max_channels,
+        .incoming_bandwidth = create_info.incoming_bandwidth,
+        .outgoing_bandwidth = create_info.outgoing_bandwidth,
       })} {}
 
 void Server::poll_events() {
@@ -39,26 +39,30 @@ void Server::disconnect() {
   }
 }
 
-void Server::send_player_join_response(enet::Peer peer,
-                                       net::Entity_id player_entity_id) {
+void Server::send_player_join_response(
+  enet::Peer peer, net::Entity_id player_entity_id
+) {
   auto writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<Message_type>(writer, Message_type::player_join_response);
   serialize<net::Entity_id>(writer, player_entity_id);
-  peer.send(constants::player_initialization_channel_id,
-            enet::create_packet_unique({
-                .data = writer.stream().view().data(),
-                .data_length = writer.stream().view().size(),
-                .flags = enet::Packet_flag_bits::reliable,
-            }));
+  peer.send(
+    constants::player_initialization_channel_id,
+    enet::create_packet_unique({
+      .data = writer.stream().view().data(),
+      .data_length = writer.stream().view().size(),
+      .flags = enet::Packet_flag_bits::reliable,
+    })
+  );
 }
 
-void Server::send_grid_snapshot(enet::Peer peer,
-                                std::span<const std::byte> state) {
+void Server::send_grid_snapshot(
+  enet::Peer peer, std::span<const std::byte> state
+) {
   auto packet = enet::create_packet_unique({
-      .data = nullptr,
-      .data_length = sizeof(Message_type) + state.size(),
-      .flags = enet::Packet_flag_bits::reliable,
+    .data = nullptr,
+    .data_length = sizeof(Message_type) + state.size(),
+    .flags = enet::Packet_flag_bits::reliable,
   });
   auto writer = serial::Span_writer{std::as_writable_bytes(packet->get_data())};
   using serial::serialize;
@@ -67,15 +71,17 @@ void Server::send_grid_snapshot(enet::Peer peer,
   peer.send(constants::grid_snapshot_channel_id, std::move(packet));
 }
 
-void Server::send_entity_snapshot(enet::Peer peer,
-                                  net::Sequence_number tick_number,
-                                  std::span<const std::byte> public_state,
-                                  std::span<const std::byte> player_state) {
+void Server::send_entity_snapshot(
+  enet::Peer peer,
+  net::Sequence_number tick_number,
+  std::span<const std::byte> public_state,
+  std::span<const std::byte> player_state
+) {
   auto packet = enet::create_packet_unique({
-      .data = nullptr,
-      .data_length = sizeof(Message_type) + sizeof(net::Sequence_number) +
-                     sizeof(std::uint16_t) + sizeof(std::uint8_t) +
-                     public_state.size() + player_state.size(),
+    .data = nullptr,
+    .data_length = sizeof(Message_type) + sizeof(net::Sequence_number) +
+                   sizeof(std::uint16_t) + sizeof(std::uint8_t) +
+                   public_state.size() + player_state.size(),
   });
   auto writer = serial::Span_writer{std::as_writable_bytes(packet->get_data())};
   using serial::serialize;
@@ -105,9 +111,9 @@ void Server::on_player_join_request(enet::Peer) {}
 
 void Server::on_player_leave_request(enet::Peer, net::Entity_id) {}
 
-void Server::on_player_input_state(enet::Peer, net::Entity_id,
-                                   net::Sequence_number,
-                                   const net::Input_state &) {}
+void Server::
+  on_player_input_state(enet::Peer, net::Entity_id, net::Sequence_number, const net::Input_state &) {
+}
 
 void Server::handle_event(const enet::Event &e) {
   switch (e.type) {
@@ -151,7 +157,7 @@ void Server::handle_event(const enet::Event &e) {
         return;
       }
       const auto input_sequence_number =
-          deserialize<net::Sequence_number>(reader);
+        deserialize<net::Sequence_number>(reader);
       if (!input_sequence_number) {
         std::cerr << "Malformed player input state packet.\n";
         return;
@@ -161,8 +167,9 @@ void Server::handle_event(const enet::Event &e) {
         std::cerr << "Malformed player input state packet.\n";
         return;
       }
-      on_player_input_state(e.peer, *player_entity_id, *input_sequence_number,
-                            *input_state);
+      on_player_input_state(
+        e.peer, *player_entity_id, *input_sequence_number, *input_state
+      );
       return;
     }
     default:

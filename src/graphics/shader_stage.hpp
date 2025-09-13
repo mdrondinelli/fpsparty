@@ -12,10 +12,12 @@ enum class Shader_stage_flag_bits {
 
 using Shader_stage_flags = Flags<Shader_stage_flag_bits>;
 
-constexpr Shader_stage_flags operator|(Shader_stage_flag_bits lhs,
-                                       Shader_stage_flag_bits rhs) noexcept {
-  return Shader_stage_flags{static_cast<Shader_stage_flags::Value>(lhs) |
-                            static_cast<Shader_stage_flags::Value>(rhs)};
+constexpr Shader_stage_flags
+operator|(Shader_stage_flag_bits lhs, Shader_stage_flag_bits rhs) noexcept {
+  return Shader_stage_flags{
+    static_cast<Shader_stage_flags::Value>(lhs) |
+    static_cast<Shader_stage_flags::Value>(rhs)
+  };
 }
 } // namespace fpsparty::graphics
 

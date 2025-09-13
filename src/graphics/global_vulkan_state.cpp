@@ -13,9 +13,9 @@ const auto vk_device_extensions = std::array{vk::KHRSwapchainExtensionName};
 vk::UniqueInstance make_vk_instance() {
   volkInitialize();
   const auto app_info = vk::ApplicationInfo{
-      .pApplicationName = "FPS Party",
-      .pEngineName = "FPS Party",
-      .apiVersion = vk::ApiVersion13,
+    .pApplicationName = "FPS Party",
+    .pEngineName = "FPS Party",
+    .apiVersion = vk::ApiVersion13,
   };
 #ifndef FPSPARTY_VULKAN_NDEBUG
   std::cout << "Enabling Vulkan validation layers.\n";
@@ -30,17 +30,18 @@ vk::UniqueInstance make_vk_instance() {
   const auto extensions = glfw::get_required_instance_extensions();
 #endif
   const auto create_info = vk::InstanceCreateInfo{
-      .pApplicationInfo = &app_info,
+    .pApplicationInfo = &app_info,
 #ifndef FPSPARTY_VULKAN_NDEBUG
-      .enabledLayerCount = static_cast<std::uint32_t>(layers.size()),
-      .ppEnabledLayerNames = layers.data(),
+    .enabledLayerCount = static_cast<std::uint32_t>(layers.size()),
+    .ppEnabledLayerNames = layers.data(),
 #endif
-      .enabledExtensionCount = static_cast<std::uint32_t>(extensions.size()),
-      .ppEnabledExtensionNames = extensions.data(),
+    .enabledExtensionCount = static_cast<std::uint32_t>(extensions.size()),
+    .ppEnabledExtensionNames = extensions.data(),
   };
   const auto vkGetInstanceProcAddr =
-      vk::DynamicLoader{}.getProcAddress<PFN_vkGetInstanceProcAddr>(
-          "vkGetInstanceProcAddr");
+    vk::DynamicLoader{}.getProcAddress<PFN_vkGetInstanceProcAddr>(
+      "vkGetInstanceProcAddr"
+    );
   vk::defaultDispatchLoaderDynamic.init(vkGetInstanceProcAddr);
   auto instance = vk::createInstanceUnique(create_info);
   volkLoadInstance(*instance);
@@ -67,7 +68,8 @@ find_vk_physical_device(vk::Instance instance) {
       for (auto i = std::uint32_t{}; i != queue_families.size(); ++i) {
         if ((queue_families[i].queueFlags & vk::QueueFlagBits::eGraphics) &&
             glfw::get_physical_device_presentation_support(
-                instance, physical_device, i)) {
+              instance, physical_device, i
+            )) {
           return i;
         }
       }
@@ -81,7 +83,7 @@ find_vk_physical_device(vk::Instance instance) {
     }
     const auto has_extensions = [&]() {
       const auto available_extensions =
-          physical_device.enumerateDeviceExtensionProperties();
+        physical_device.enumerateDeviceExtensionProperties();
       for (const auto extension : vk_device_extensions) {
         auto extension_found = false;
         for (const auto &available_extension : available_extensions) {
@@ -106,38 +108,38 @@ find_vk_physical_device(vk::Instance instance) {
     return std::tuple{physical_device, *queue_family_index};
   }
   std::cout
-      << "Throwing an error because no viable VkPhysicalDevice was found.\n";
+    << "Throwing an error because no viable VkPhysicalDevice was found.\n";
   throw std::runtime_error{"No viable VkPhysicalDevice was found."};
 }
 
-std::tuple<vk::UniqueDevice, vk::Queue>
-make_vk_device(vk::PhysicalDevice physical_device,
-               std::uint32_t queue_family_index) {
+std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
+  vk::PhysicalDevice physical_device, std::uint32_t queue_family_index
+) {
   const auto queue_priority = 1.0f;
   const auto queue_create_info = vk::DeviceQueueCreateInfo{
-      .queueFamilyIndex = queue_family_index,
-      .queueCount = 1,
-      .pQueuePriorities = &queue_priority,
+    .queueFamilyIndex = queue_family_index,
+    .queueCount = 1,
+    .pQueuePriorities = &queue_priority,
   };
   auto extended_dynamic_state_features =
-      vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT{
-          .extendedDynamicState = true,
-      };
+    vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT{
+      .extendedDynamicState = true,
+    };
   auto vulkan_1_3_features = vk::PhysicalDeviceVulkan13Features{
-      .pNext = &extended_dynamic_state_features,
-      .synchronization2 = true,
-      .dynamicRendering = true,
+    .pNext = &extended_dynamic_state_features,
+    .synchronization2 = true,
+    .dynamicRendering = true,
   };
   const auto features = vk::PhysicalDeviceFeatures2{
-      .pNext = &vulkan_1_3_features,
+    .pNext = &vulkan_1_3_features,
   };
   auto device = physical_device.createDeviceUnique({
-      .pNext = &features,
-      .queueCreateInfoCount = 1,
-      .pQueueCreateInfos = &queue_create_info,
-      .enabledExtensionCount =
-          static_cast<std::uint32_t>(vk_device_extensions.size()),
-      .ppEnabledExtensionNames = vk_device_extensions.data(),
+    .pNext = &features,
+    .queueCreateInfoCount = 1,
+    .pQueueCreateInfos = &queue_create_info,
+    .enabledExtensionCount =
+      static_cast<std::uint32_t>(vk_device_extensions.size()),
+    .ppEnabledExtensionNames = vk_device_extensions.data(),
   });
   volkLoadDevice(*device);
   const auto queue = device->getQueue(queue_family_index, 0);
@@ -145,21 +147,21 @@ make_vk_device(vk::PhysicalDevice physical_device,
   return std::tuple{std::move(device), queue};
 }
 
-vma::Unique_allocator make_vma_allocator(vk::Instance instance,
-                                         vk::PhysicalDevice physical_device,
-                                         vk::Device device) {
+vma::Unique_allocator make_vma_allocator(
+  vk::Instance instance, vk::PhysicalDevice physical_device, vk::Device device
+) {
   auto create_info = vma::Allocator::Create_info{
-      .flags = {},
-      .physicalDevice = physical_device,
-      .device = device,
-      .preferredLargeHeapBlockSize = 0,
-      .pAllocationCallbacks = nullptr,
-      .pDeviceMemoryCallbacks = nullptr,
-      .pHeapSizeLimit = nullptr,
-      .pVulkanFunctions = nullptr,
-      .instance = instance,
-      .vulkanApiVersion = vk::ApiVersion13,
-      .pTypeExternalMemoryHandleTypes = nullptr,
+    .flags = {},
+    .physicalDevice = physical_device,
+    .device = device,
+    .preferredLargeHeapBlockSize = 0,
+    .pAllocationCallbacks = nullptr,
+    .pDeviceMemoryCallbacks = nullptr,
+    .pHeapSizeLimit = nullptr,
+    .pVulkanFunctions = nullptr,
+    .instance = instance,
+    .vulkanApiVersion = vk::ApiVersion13,
+    .pTypeExternalMemoryHandleTypes = nullptr,
   };
   const auto vulkan_functions = vma::import_functions_from_volk(create_info);
   create_info.pVulkanFunctions = &vulkan_functions;
@@ -193,7 +195,7 @@ void Global_vulkan_state::add_reference() {
   const auto refcount = _global_instance_refcount++;
   if (refcount == 0) {
     _global_instance =
-        std::unique_ptr<Global_vulkan_state>{new Global_vulkan_state};
+      std::unique_ptr<Global_vulkan_state>{new Global_vulkan_state};
   }
 }
 
@@ -208,9 +210,9 @@ void Global_vulkan_state::remove_reference() noexcept {
 Global_vulkan_state::Global_vulkan_state() {
   _instance = make_vk_instance();
   std::tie(_physical_device, _queue_family_index) =
-      find_vk_physical_device(*_instance);
+    find_vk_physical_device(*_instance);
   std::tie(_device, _queue) =
-      make_vk_device(_physical_device, _queue_family_index);
+    make_vk_device(_physical_device, _queue_family_index);
   _allocator = make_vma_allocator(*_instance, _physical_device, *_device);
 }
 

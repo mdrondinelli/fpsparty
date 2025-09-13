@@ -47,15 +47,19 @@ struct Indexed_draw_info {
 
 class Work_recorder {
 public:
-  void copy_buffer(rc::Strong<const Buffer> src,
-                   rc::Strong<Buffer> dst,
-                   const Buffer_copy_info &info);
+  void copy_buffer(
+    rc::Strong<const Buffer> src,
+    rc::Strong<Buffer> dst,
+    const Buffer_copy_info &info
+  );
 
-  void transition_image_layout(const Synchronization_scope &src_scope,
-                               const Synchronization_scope &dst_scope,
-                               Image_layout old_layout,
-                               Image_layout new_layout,
-                               rc::Strong<Image> image);
+  void transition_image_layout(
+    const Synchronization_scope &src_scope,
+    const Synchronization_scope &dst_scope,
+    Image_layout old_layout,
+    Image_layout new_layout,
+    rc::Strong<Image> image
+  );
 
   void begin_rendering(const Rendering_begin_info &info);
 
@@ -79,15 +83,18 @@ public:
 
   void bind_vertex_buffer(rc::Strong<const Vertex_buffer> buffer);
 
-  void bind_index_buffer(rc::Strong<const Index_buffer> buffer,
-                         Index_type index_type);
+  void bind_index_buffer(
+    rc::Strong<const Index_buffer> buffer, Index_type index_type
+  );
 
   void draw_indexed(const Indexed_draw_info &info) noexcept;
 
-  void push_constants(rc::Strong<const Pipeline_layout> pipeline_layout,
-                      Shader_stage_flags stage_flags,
-                      std::uint32_t offset,
-                      std::span<const std::byte> data) noexcept;
+  void push_constants(
+    rc::Strong<const Pipeline_layout> pipeline_layout,
+    Shader_stage_flags stage_flags,
+    std::uint32_t offset,
+    std::span<const std::byte> data
+  ) noexcept;
 
 private:
   friend Work_recorder

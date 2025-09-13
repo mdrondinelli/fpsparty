@@ -9,17 +9,17 @@ Pipeline_layout::Pipeline_layout(const Pipeline_layout_create_info &info) {
   vk_push_constant_ranges.reserve(info.push_constant_ranges.size());
   for (const auto &push_constant_range : info.push_constant_ranges) {
     vk_push_constant_ranges.emplace_back(vk::PushConstantRange{
-        .stageFlags =
-            static_cast<vk::ShaderStageFlags>(push_constant_range.stage_flags),
-        .offset = push_constant_range.offset,
-        .size = push_constant_range.size,
+      .stageFlags =
+        static_cast<vk::ShaderStageFlags>(push_constant_range.stage_flags),
+      .offset = push_constant_range.offset,
+      .size = push_constant_range.size,
     });
   }
   _vk_pipeline_layout =
-      Global_vulkan_state::get().device().createPipelineLayoutUnique({
-          .pushConstantRangeCount =
-              static_cast<std::uint32_t>(vk_push_constant_ranges.size()),
-          .pPushConstantRanges = vk_push_constant_ranges.data(),
-      });
+    Global_vulkan_state::get().device().createPipelineLayoutUnique({
+      .pushConstantRangeCount =
+        static_cast<std::uint32_t>(vk_push_constant_ranges.size()),
+      .pPushConstantRanges = vk_push_constant_ranges.data(),
+    });
 }
 } // namespace fpsparty::graphics

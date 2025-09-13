@@ -73,7 +73,7 @@ template <> struct Serializer<float> {
 };
 
 template <typename T>
-requires std::is_enum_v<T>
+  requires std::is_enum_v<T>
 struct Serializer<T> {
   void write(Writer &writer, T value) const {
     const auto casted_value = std::bit_cast<std::underlying_type_t<T>>(value);
