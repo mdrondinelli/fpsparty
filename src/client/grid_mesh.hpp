@@ -21,7 +21,13 @@ public:
 
   ~Grid_mesh();
 
-  void record_draw_command(graphics::Work_recorder &recorder, game::Axis axis);
+  void record_face_drawing_command(
+    graphics::Work_recorder &recorder, game::Axis axis
+  );
+
+  void record_edge_drawing_command(
+    graphics::Work_recorder &recorder, game::Axis axis
+  );
 
   bool is_uploaded() const noexcept;
 

@@ -161,7 +161,7 @@ Grid_mesh::~Grid_mesh() {
   }
 }
 
-void Grid_mesh::record_draw_command(
+void Grid_mesh::record_face_drawing_command(
   graphics::Work_recorder &recorder, game::Axis axis
 ) {
   assert(is_uploaded());

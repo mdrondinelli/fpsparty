@@ -168,17 +168,13 @@ public:
           client::Depth_image_factory{&_graphics},
         },
         _grid_vertex_shader{
-          graphics::load_shader("./assets/shaders/grid.vert.spv")
-        },
+          graphics::load_shader("./assets/shaders/grid.vert.spv")},
         _grid_fragment_shader{
-          graphics::load_shader("./assets/shaders/grid.frag.spv")
-        },
+          graphics::load_shader("./assets/shaders/grid.frag.spv")},
         _mesh_vertex_shader{
-          graphics::load_shader("./assets/shaders/shader.vert.spv")
-        },
+          graphics::load_shader("./assets/shaders/shader.vert.spv")},
         _mesh_fragment_shader{
-          graphics::load_shader("./assets/shaders/shader.frag.spv")
-        } {
+          graphics::load_shader("./assets/shaders/shader.frag.spv")} {
     // _graphics.set_vsync_preferred(false);
     _glfw_window.set_key_callback(this);
     _glfw_window.set_mouse_button_callback(this);
@@ -300,7 +296,7 @@ public:
           64,
           std::as_bytes(std::span{&pos_x_normal, 1})
         );
-        _grid_mesh->record_draw_command(work_recorder, game::Axis::x);
+        _grid_mesh->record_draw_faces_command(work_recorder, game::Axis::x);
         work_recorder.set_front_face(graphics::Front_face::clockwise);
         work_recorder.push_constants(
           grid_pipeline->get_layout(),
@@ -309,7 +305,7 @@ public:
           64,
           std::as_bytes(std::span{&neg_x_normal, 1})
         );
-        _grid_mesh->record_draw_command(work_recorder, game::Axis::x);
+        _grid_mesh->record_draw_faces_command(work_recorder, game::Axis::x);
         work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
         work_recorder.push_constants(
           grid_pipeline->get_layout(),
@@ -318,7 +314,7 @@ public:
           64,
           std::as_bytes(std::span{&pos_y_normal, 1})
         );
-        _grid_mesh->record_draw_command(work_recorder, game::Axis::y);
+        _grid_mesh->record_draw_faces_command(work_recorder, game::Axis::y);
         work_recorder.set_front_face(graphics::Front_face::clockwise);
         work_recorder.push_constants(
           grid_pipeline->get_layout(),
@@ -327,7 +323,7 @@ public:
           64,
           std::as_bytes(std::span{&neg_y_normal, 1})
         );
-        _grid_mesh->record_draw_command(work_recorder, game::Axis::y);
+        _grid_mesh->record_draw_faces_command(work_recorder, game::Axis::y);
         work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
         work_recorder.push_constants(
           grid_pipeline->get_layout(),
@@ -336,7 +332,7 @@ public:
           64,
           std::as_bytes(std::span{&pos_z_normal, 1})
         );
-        _grid_mesh->record_draw_command(work_recorder, game::Axis::z);
+        _grid_mesh->record_draw_faces_command(work_recorder, game::Axis::z);
         work_recorder.set_front_face(graphics::Front_face::clockwise);
         work_recorder.push_constants(
           grid_pipeline->get_layout(),
@@ -345,7 +341,7 @@ public:
           64,
           std::as_bytes(std::span{&neg_z_normal, 1})
         );
-        _grid_mesh->record_draw_command(work_recorder, game::Axis::z);
+        _grid_mesh->record_draw_faces_command(work_recorder, game::Axis::z);
       }
       /*
       // draw floor
@@ -473,8 +469,7 @@ protected:
   void on_mouse_button(
     glfw::Window, glfw::Mouse_button button, glfw::Press_state action, int
   ) override {
-    if (button == glfw::Mouse_button::mb_right &&
-        action == glfw::Press_state::press) {
+    if (button == glfw::Mouse_button::mb_right && action == glfw::Press_state::press) {
       _glfw_window.set_cursor_input_mode(glfw::Cursor_input_mode::disabled);
     } else if (has_game_state()) {
       if (const auto player = get_player()) {
@@ -490,8 +485,7 @@ protected:
   void on_cursor_pos(glfw::Window, double, double, double dxpos, double dypos)
     override {
     if (const auto player = has_game_state() ? get_player() : nullptr) {
-      if (_glfw_window.get_cursor_input_mode() ==
-          glfw::Cursor_input_mode::disabled) {
+      if (_glfw_window.get_cursor_input_mode() == glfw::Cursor_input_mode::disabled) {
         auto input_state = player->get_input_state();
         input_state.yaw -=
           static_cast<float>(dxpos * constants::mouselook_sensititvity);
@@ -545,8 +539,7 @@ private:
 
   std::tuple<rc::Strong<graphics::Pipeline>, rc::Strong<graphics::Pipeline>>
   get_graphics_pipelines(graphics::Image_format swapchain_image_format) {
-    if (!_pipelines_color_format ||
-        *_pipelines_color_format != swapchain_image_format) {
+    if (!_pipelines_color_format || *_pipelines_color_format != swapchain_image_format) {
       _grid_pipeline = make_grid_pipeline(swapchain_image_format);
       _mesh_pipeline = make_mesh_pipeline(swapchain_image_format);
     }
@@ -655,8 +648,7 @@ private:
           .binding = 0,
           .format = graphics::Vertex_attribute_format::r32g32b32_sfloat,
           .offset = 12,
-        }
-      };
+        }};
     const auto color_attachment_format = swapchain_image_format;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
