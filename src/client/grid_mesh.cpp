@@ -145,13 +145,13 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
     );
     _upload_work = info.graphics->submit_transient_work(std::move(recorder));
     _upload_work->add_done_callback(this);
-    _draw_infos[0].index_count = x_indices.size();
-    _draw_infos[1].index_count = y_indices.size();
-    _draw_infos[2].index_count = z_indices.size();
-    _draw_infos[1].first_index = x_indices.size();
-    _draw_infos[2].first_index = x_indices.size() + y_indices.size();
-    _draw_infos[1].vertex_offset = x_vertices.size();
-    _draw_infos[2].vertex_offset = x_vertices.size() + y_vertices.size();
+    _face_draw_infos[0].index_count = x_indices.size();
+    _face_draw_infos[1].index_count = y_indices.size();
+    _face_draw_infos[2].index_count = z_indices.size();
+    _face_draw_infos[1].first_index = x_indices.size();
+    _face_draw_infos[2].first_index = x_indices.size() + y_indices.size();
+    _face_draw_infos[1].vertex_offset = x_vertices.size();
+    _face_draw_infos[2].vertex_offset = x_vertices.size() + y_vertices.size();
   }
 }
 
@@ -165,7 +165,7 @@ void Grid_mesh::record_draw_command(
   graphics::Work_recorder &recorder, game::Axis axis
 ) {
   assert(is_uploaded());
-  recorder.draw_indexed(_draw_infos[static_cast<int>(axis)]);
+  recorder.draw_indexed(_face_draw_infos[static_cast<int>(axis)]);
 }
 
 bool Grid_mesh::is_uploaded() const noexcept {

@@ -35,7 +35,7 @@ private:
   rc::Strong<graphics::Vertex_buffer> _vertex_buffer{};
   rc::Strong<graphics::Index_buffer> _index_buffer{};
   rc::Strong<graphics::Work> _upload_work{};
-  std::array<graphics::Indexed_draw_info, 3> _draw_infos;
+  std::array<graphics::Indexed_draw_info, 3> _face_draw_infos;
 };
 } // namespace fpsparty::client
 
