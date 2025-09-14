@@ -7,7 +7,7 @@
 namespace fpsparty::client {
 namespace {
 std::pair<std::array<Grid_vertex, 4>, std::array<std::uint32_t, 6>>
-generate_face(
+generate_face_geometry(
   const Eigen::Vector3i &cell_indices,
   const Eigen::Vector3f &u,
   const Eigen::Vector3f &v,
@@ -15,7 +15,7 @@ generate_face(
 ) {
   const auto cell_position =
     (cell_indices.cast<float>() * game::constants::grid_cell_stride).eval();
-  auto vertices = std::array<Grid_vertex, 4>{
+  const auto vertices = std::array<Grid_vertex, 4>{
     Grid_vertex{
       .position = cell_position +
                   u * game::constants::grid_wall_thickness * 0.5f +
@@ -41,7 +41,7 @@ generate_face(
                        game::constants::grid_wall_thickness * 0.5f),
     },
   };
-  auto indices = std::array<std::uint32_t, 6>{
+  const auto indices = std::array<std::uint32_t, 6>{
     face_begin_index + 0,
     face_begin_index + 1,
     face_begin_index + 2,
@@ -71,7 +71,7 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
             chunk_indices.z() * n + z,
           };
           if (chunk->is_solid(game::Axis::x, {x, y, z})) {
-            const auto [face_vertices, face_indices] = generate_face(
+            const auto [face_vertices, face_indices] = generate_face_geometry(
               cell_indices,
               {0.0f, 1.0f, 0.0f},
               {0.0f, 0.0f, 1.0f},
@@ -81,7 +81,7 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
             x_indices.append_range(face_indices);
           }
           if (chunk->is_solid(game::Axis::y, {x, y, z})) {
-            const auto [face_vertices, face_indices] = generate_face(
+            const auto [face_vertices, face_indices] = generate_face_geometry(
               cell_indices,
               {0.0f, 0.0f, 1.0f},
               {1.0f, 0.0f, 0.0f},
@@ -91,7 +91,7 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
             y_indices.append_range(face_indices);
           }
           if (chunk->is_solid(game::Axis::z, {x, y, z})) {
-            const auto [face_vertices, face_indices] = generate_face(
+            const auto [face_vertices, face_indices] = generate_face_geometry(
               cell_indices,
               {1.0f, 0.0f, 0.0f},
               {0.0f, 1.0f, 0.0f},
