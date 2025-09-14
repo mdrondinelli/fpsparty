@@ -1,6 +1,7 @@
 #include "grid_mesh.hpp"
 #include "client/grid_vertex.hpp"
 #include "game/core/constants.hpp"
+#include "game/core/grid.hpp"
 #include "serial/span_writer.hpp"
 #include <vector>
 
@@ -11,8 +12,7 @@ generate_face_geometry(
   const Eigen::Vector3i &cell_indices,
   const Eigen::Vector3f &u,
   const Eigen::Vector3f &v,
-  std::uint32_t face_begin_index
-) {
+  std::uint32_t face_begin_index) {
   const auto cell_position =
     (cell_indices.cast<float>() * game::constants::grid_cell_stride).eval();
   const auto vertices = std::array<Grid_vertex, 4>{
@@ -51,17 +51,23 @@ generate_face_geometry(
   };
   return {vertices, indices};
 }
-} // namespace
 
-Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
-  auto x_vertices = std::vector<Grid_vertex>{};
-  auto y_vertices = std::vector<Grid_vertex>{};
-  auto z_vertices = std::vector<Grid_vertex>{};
-  auto x_indices = std::vector<std::uint32_t>{};
-  auto y_indices = std::vector<std::uint32_t>{};
-  auto z_indices = std::vector<std::uint32_t>{};
+struct Faces_geometry_generation_result {
+  std::array<std::vector<Grid_vertex>, 3> vertices;
+  std::array<std::vector<std::uint32_t>, 3> indices;
+};
+
+Faces_geometry_generation_result
+generate_faces_geometry(const game::Grid &grid) {
+  auto retval = Faces_geometry_generation_result{};
+  auto &x_vertices = retval.vertices[0];
+  auto &y_vertices = retval.vertices[1];
+  auto &z_vertices = retval.vertices[2];
+  auto &x_indices = retval.indices[0];
+  auto &y_indices = retval.indices[1];
+  auto &z_indices = retval.indices[2];
   constexpr auto n = static_cast<int>(game::Chunk::edge_length);
-  for (const auto &[chunk_indices, chunk] : info.grid->get_chunks()) {
+  for (const auto &[chunk_indices, chunk] : grid.get_chunks()) {
     for (auto x = 0; x != n; ++x) {
       for (auto y = 0; y != n; ++y) {
         for (auto z = 0; z != n; ++z) {
@@ -75,8 +81,7 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
               cell_indices,
               {0.0f, 1.0f, 0.0f},
               {0.0f, 0.0f, 1.0f},
-              static_cast<std::uint32_t>(x_vertices.size())
-            );
+              static_cast<std::uint32_t>(x_vertices.size()));
             x_vertices.append_range(face_vertices);
             x_indices.append_range(face_indices);
           }
@@ -85,8 +90,7 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
               cell_indices,
               {0.0f, 0.0f, 1.0f},
               {1.0f, 0.0f, 0.0f},
-              static_cast<std::uint32_t>(y_vertices.size())
-            );
+              static_cast<std::uint32_t>(y_vertices.size()));
             y_vertices.append_range(face_vertices);
             y_indices.append_range(face_indices);
           }
@@ -95,8 +99,7 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
               cell_indices,
               {1.0f, 0.0f, 0.0f},
               {0.0f, 1.0f, 0.0f},
-              static_cast<std::uint32_t>(z_vertices.size())
-            );
+              static_cast<std::uint32_t>(z_vertices.size()));
             z_vertices.append_range(face_vertices);
             z_indices.append_range(face_indices);
           }
@@ -104,22 +107,34 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
       }
     }
   }
+  return retval;
+}
+} // namespace
+
+Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
+  const auto faces_geometry = generate_faces_geometry(*info.grid);
+  auto &x_face_vertices = faces_geometry.vertices[0];
+  auto &y_face_vertices = faces_geometry.vertices[1];
+  auto &z_face_vertices = faces_geometry.vertices[2];
+  auto &x_face_indices = faces_geometry.indices[0];
+  auto &y_face_indices = faces_geometry.indices[1];
+  auto &z_face_indices = faces_geometry.indices[2];
   const auto vertex_buffer_size =
-    (x_vertices.size() + y_vertices.size() + z_vertices.size()) *
+    (x_face_vertices.size() + y_face_vertices.size() + z_face_vertices.size()) *
     sizeof(Grid_vertex);
   const auto index_buffer_size =
-    (x_indices.size() + y_indices.size() + z_indices.size()) *
+    (x_face_indices.size() + y_face_indices.size() + z_face_indices.size()) *
     sizeof(std::uint32_t);
   if (vertex_buffer_size > 0 && index_buffer_size > 0) {
     auto staging_data = std::vector<std::byte>{};
     staging_data.resize(vertex_buffer_size + index_buffer_size);
     auto staging_data_writer = serial::Span_writer{staging_data};
-    staging_data_writer.write(std::as_bytes(std::span{x_vertices}));
-    staging_data_writer.write(std::as_bytes(std::span{y_vertices}));
-    staging_data_writer.write(std::as_bytes(std::span{z_vertices}));
-    staging_data_writer.write(std::as_bytes(std::span{x_indices}));
-    staging_data_writer.write(std::as_bytes(std::span{y_indices}));
-    staging_data_writer.write(std::as_bytes(std::span{z_indices}));
+    staging_data_writer.write(std::as_bytes(std::span{x_face_vertices}));
+    staging_data_writer.write(std::as_bytes(std::span{y_face_vertices}));
+    staging_data_writer.write(std::as_bytes(std::span{z_face_vertices}));
+    staging_data_writer.write(std::as_bytes(std::span{x_face_indices}));
+    staging_data_writer.write(std::as_bytes(std::span{y_face_indices}));
+    staging_data_writer.write(std::as_bytes(std::span{z_face_indices}));
     const auto staging_buffer =
       info.graphics->create_staging_buffer(staging_data);
     _vertex_buffer = info.graphics->create_vertex_buffer(vertex_buffer_size);
@@ -132,8 +147,7 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
         .src_offset = 0,
         .dst_offset = 0,
         .size = vertex_buffer_size,
-      }
-    );
+      });
     recorder.copy_buffer(
       staging_buffer,
       _index_buffer,
@@ -141,17 +155,18 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
         .src_offset = vertex_buffer_size,
         .dst_offset = 0,
         .size = index_buffer_size,
-      }
-    );
+      });
     _upload_work = info.graphics->submit_transient_work(std::move(recorder));
     _upload_work->add_done_callback(this);
-    _face_draw_infos[0].index_count = x_indices.size();
-    _face_draw_infos[1].index_count = y_indices.size();
-    _face_draw_infos[2].index_count = z_indices.size();
-    _face_draw_infos[1].first_index = x_indices.size();
-    _face_draw_infos[2].first_index = x_indices.size() + y_indices.size();
-    _face_draw_infos[1].vertex_offset = x_vertices.size();
-    _face_draw_infos[2].vertex_offset = x_vertices.size() + y_vertices.size();
+    _face_draw_infos[0].index_count = x_face_indices.size();
+    _face_draw_infos[1].index_count = y_face_indices.size();
+    _face_draw_infos[2].index_count = z_face_indices.size();
+    _face_draw_infos[1].first_index = x_face_indices.size();
+    _face_draw_infos[2].first_index =
+      x_face_indices.size() + y_face_indices.size();
+    _face_draw_infos[1].vertex_offset = x_face_vertices.size();
+    _face_draw_infos[2].vertex_offset =
+      x_face_vertices.size() + y_face_vertices.size();
   }
 }
 
@@ -162,8 +177,7 @@ Grid_mesh::~Grid_mesh() {
 }
 
 void Grid_mesh::record_face_drawing_command(
-  graphics::Work_recorder &recorder, game::Axis axis
-) {
+  graphics::Work_recorder &recorder, game::Axis axis) {
   assert(is_uploaded());
   recorder.draw_indexed(_face_draw_infos[static_cast<int>(axis)]);
 }
