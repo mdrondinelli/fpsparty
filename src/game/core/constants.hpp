@@ -11,7 +11,7 @@ constexpr auto projectile_forward_speed = 15.0f;
 constexpr auto projectile_up_speed = 2.0f;
 constexpr auto projectile_half_extent = 0.125f;
 constexpr auto grid_cell_stride = 1.0f;
-constexpr auto grid_wall_thickness = 1.0f / 8.0f;
+constexpr auto grid_wall_thickness = 1.0f / 4.0f;
 } // namespace fpsparty::game::constants
 
 #endif
