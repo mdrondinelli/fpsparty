@@ -35,8 +35,7 @@ int main() {
     {
       Eigen::Vector2i{0, 0},
       Eigen::Vector2i{16, 16},
-    }
-  );
+    });
   // red walls
   server.get_game().get_grid().fill(
     game::Axis::x,
@@ -44,16 +43,28 @@ int main() {
     {
       Eigen::Vector2i{0, 4},
       Eigen::Vector2i{1, 12},
-    }
-  );
+    });
   server.get_game().get_grid().fill(
     game::Axis::x,
     12,
     {
       Eigen::Vector2i{0, 4},
       Eigen::Vector2i{1, 12},
-    }
-  );
+    });
+  server.get_game().get_grid().fill(
+    game::Axis::x,
+    4,
+    {
+      Eigen::Vector2i{2, 4},
+      Eigen::Vector2i{3, 12},
+    });
+  server.get_game().get_grid().fill(
+    game::Axis::x,
+    12,
+    {
+      Eigen::Vector2i{2, 4},
+      Eigen::Vector2i{3, 12},
+    });
   // blue walls
   server.get_game().get_grid().fill(
     game::Axis::z,
@@ -61,16 +72,28 @@ int main() {
     {
       Eigen::Vector2i{4, 0},
       Eigen::Vector2i{12, 1},
-    }
-  );
+    });
   server.get_game().get_grid().fill(
     game::Axis::z,
     12,
     {
       Eigen::Vector2i{4, 0},
       Eigen::Vector2i{12, 1},
-    }
-  );
+    });
+  server.get_game().get_grid().fill(
+    game::Axis::z,
+    4,
+    {
+      Eigen::Vector2i{4, 2},
+      Eigen::Vector2i{12, 3},
+    });
+  server.get_game().get_grid().fill(
+    game::Axis::z,
+    12,
+    {
+      Eigen::Vector2i{4, 2},
+      Eigen::Vector2i{12, 3},
+    });
   std::cout << "Server running on port " << net::constants::port << ".\n";
   using Clock = std::chrono::high_resolution_clock;
   using Duration = Clock::duration;
@@ -79,10 +102,9 @@ int main() {
   while (!signal_status) {
     server.poll_events();
     if (server.service_game_state(
-          std::chrono::duration_cast<std::chrono::duration<float>>(loop_duration
-          )
-            .count()
-        )) {
+          std::chrono::duration_cast<std::chrono::duration<float>>(
+            loop_duration)
+            .count())) {
       server.broadcast_game_state();
     }
     const auto now = Clock::now();

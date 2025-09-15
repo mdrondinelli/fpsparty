@@ -13,9 +13,9 @@
 
 namespace fpsparty::game {
 namespace detail {
-constexpr std::size_t
-linearize_chunk_offset(std::array<std::size_t, 3> chunk_counts,
-                       std::array<std::size_t, 3> chunk_offset) noexcept {
+constexpr std::size_t linearize_chunk_offset(
+  std::array<std::size_t, 3> chunk_counts,
+  std::array<std::size_t, 3> chunk_offset) noexcept {
   return chunk_offset[0] + chunk_offset[1] * chunk_counts[0] +
          chunk_offset[2] * chunk_counts[0] * chunk_counts[1];
 }
@@ -44,13 +44,12 @@ public:
 
   Chunk() noexcept = default;
 
-  constexpr Chunk(std::uint64_t x_bits,
-                  std::uint64_t y_bits,
-                  std::uint64_t z_bits) noexcept
+  constexpr Chunk(
+    std::uint64_t x_bits, std::uint64_t y_bits, std::uint64_t z_bits) noexcept
       : bits{x_bits, y_bits, z_bits} {}
 
-  constexpr bool is_solid(Axis axis,
-                          const Eigen::Vector3i &offset) const noexcept {
+  constexpr bool
+  is_solid(Axis axis, const Eigen::Vector3i &offset) const noexcept {
     const auto bit_index = get_bit_index(offset);
     return bits[static_cast<int>(axis)] & (std::uint64_t{1} << bit_index);
   }
@@ -79,12 +78,12 @@ class Chunk_span_template {
   public:
     std::pair<Eigen::Vector3i, U *> operator*() const noexcept {
       return {
-          {
-              static_cast<int>(_chunk_offset[0]),
-              static_cast<int>(_chunk_offset[1]),
-              static_cast<int>(_chunk_offset[2]),
-          },
-          _data + detail::linearize_chunk_offset(_chunk_counts, _chunk_offset),
+        {
+          static_cast<int>(_chunk_offset[0]),
+          static_cast<int>(_chunk_offset[1]),
+          static_cast<int>(_chunk_offset[2]),
+        },
+        _data + detail::linearize_chunk_offset(_chunk_counts, _chunk_offset),
       };
     }
 
@@ -107,16 +106,16 @@ class Chunk_span_template {
       return temp;
     }
 
-    friend bool operator==(const Iterator_template &lhs,
-                           const Iterator_template &rhs) noexcept {
+    friend bool operator==(
+      const Iterator_template &lhs, const Iterator_template &rhs) noexcept {
       return lhs._chunk_offset == rhs._chunk_offset;
     }
 
   private:
     constexpr Iterator_template(
-        U *data,
-        const std::array<std::size_t, 3> &chunk_counts,
-        const std::array<std::size_t, 3> &chunk_offset) noexcept
+      U *data,
+      const std::array<std::size_t, 3> &chunk_counts,
+      const std::array<std::size_t, 3> &chunk_offset) noexcept
         : _data{data},
           _chunk_counts{chunk_counts},
           _chunk_offset{chunk_offset} {}
@@ -130,28 +129,30 @@ public:
   using Iterator = Iterator_template<T>;
   using Const_iterator = Iterator_template<const T>;
 
-  Chunk_span_template(T *data,
-                      const std::array<std::size_t, 3> &chunk_counts) noexcept
+  Chunk_span_template(
+    T *data, const std::array<std::size_t, 3> &chunk_counts) noexcept
       : _data{data}, _chunk_counts{chunk_counts} {}
 
   Iterator begin() const noexcept {
-    return {_data,
-            _chunk_counts,
-            {
-                std::size_t{},
-                std::size_t{},
-                std::size_t{},
-            }};
+    return {
+      _data,
+      _chunk_counts,
+      {
+        std::size_t{},
+        std::size_t{},
+        std::size_t{},
+      }};
   }
 
   Const_iterator cbegin() const noexcept {
-    return {_data,
-            _chunk_counts,
-            {
-                std::size_t{},
-                std::size_t{},
-                std::size_t{},
-            }};
+    return {
+      _data,
+      _chunk_counts,
+      {
+        std::size_t{},
+        std::size_t{},
+        std::size_t{},
+      }};
   }
 
   Iterator end() const noexcept {
@@ -179,6 +180,22 @@ public:
   void dump(serial::Writer &writer) const;
 
   void fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds);
+
+  bool
+  is_solid(Axis normal, const Eigen::Vector3i &cell_indices) const noexcept;
+
+  Chunk *get_chunk(const Eigen::Vector3i &chunk_indices) noexcept;
+
+  const Chunk *get_chunk(const Eigen::Vector3i &chunk_indices) const noexcept;
+
+  Chunk *get_chunk_unsafe(const Eigen::Vector3i &chunk_indices) noexcept;
+
+  const Chunk *
+  get_chunk_unsafe(const Eigen::Vector3i &chunk_indices) const noexcept;
+
+  bool bounds_check_cell(const Eigen::Vector3i &cell_indices) const noexcept;
+
+  bool bounds_check_chunk(const Eigen::Vector3i &chunk_indices) const noexcept;
 
   Chunk_span get_chunks() noexcept;
 

@@ -5,9 +5,9 @@
 namespace fpsparty::game {
 Grid::Grid(const Grid_create_info &create_info)
     : _chunk_counts{
-          (create_info.width + (Chunk::edge_length - 1)) / Chunk::edge_length,
-          (create_info.height + (Chunk::edge_length - 1)) / Chunk::edge_length,
-          (create_info.depth + (Chunk::edge_length - 1)) / Chunk::edge_length,
+        (create_info.width + (Chunk::edge_length - 1)) / Chunk::edge_length,
+        (create_info.height + (Chunk::edge_length - 1)) / Chunk::edge_length,
+        (create_info.depth + (Chunk::edge_length - 1)) / Chunk::edge_length,
       } {
   _chunks.resize(_chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2]);
 }
@@ -58,20 +58,20 @@ void Grid::dump(serial::Writer &writer) const {
 }
 
 Chunk_span Grid::get_chunks() noexcept {
-  assert(_chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2] ==
-         _chunks.size());
+  assert(
+    _chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2] == _chunks.size());
   return {_chunks.data(), _chunk_counts};
 }
 
 Const_chunk_span Grid::get_chunks() const noexcept {
-  assert(_chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2] ==
-         _chunks.size());
+  assert(
+    _chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2] == _chunks.size());
   return {_chunks.data(), _chunk_counts};
 }
 
 Const_chunk_span Grid::get_const_chunks() const noexcept {
-  assert(_chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2] ==
-         _chunks.size());
+  assert(
+    _chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2] == _chunks.size());
   return {_chunks.data(), _chunk_counts};
 }
 
@@ -91,9 +91,9 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
     const auto min_y = std::max(0, bounds.min().x());
     const auto min_z = std::max(0, bounds.min().y());
     const auto max_y =
-        std::min(static_cast<int>(get_height()), bounds.max().x());
+      std::min(static_cast<int>(get_height()), bounds.max().x());
     const auto max_z =
-        std::min(static_cast<int>(get_depth()), bounds.max().y());
+      std::min(static_cast<int>(get_depth()), bounds.max().y());
     for (auto z = min_z; z != max_z; ++z) {
       const auto k = z / Chunk::edge_length;
       const auto z_0 = static_cast<int>(k * Chunk::edge_length);
@@ -101,7 +101,7 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
         const auto j = y / Chunk::edge_length;
         const auto y_0 = static_cast<int>(j * Chunk::edge_length);
         const auto chunk_index =
-            detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
+          detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
         auto &chunk = _chunks[chunk_index];
         chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, true);
       }
@@ -118,9 +118,9 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
     const auto min_x = std::max(0, bounds.min().x());
     const auto min_z = std::max(0, bounds.min().y());
     const auto max_x =
-        std::min(static_cast<int>(get_width()), bounds.max().x());
+      std::min(static_cast<int>(get_width()), bounds.max().x());
     const auto max_z =
-        std::min(static_cast<int>(get_depth()), bounds.max().y());
+      std::min(static_cast<int>(get_depth()), bounds.max().y());
     for (auto z = min_z; z != max_z; ++z) {
       const auto k = z / Chunk::edge_length;
       const auto z_0 = static_cast<int>(k * Chunk::edge_length);
@@ -128,7 +128,7 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
         const auto i = x / Chunk::edge_length;
         const auto x_0 = static_cast<int>(i * Chunk::edge_length);
         const auto chunk_index =
-            detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
+          detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
         auto &chunk = _chunks[chunk_index];
         chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, true);
       }
@@ -145,9 +145,9 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
     const auto min_x = std::max(0, bounds.min().x());
     const auto min_y = std::max(0, bounds.min().y());
     const auto max_x =
-        std::min(static_cast<int>(get_width()), bounds.max().x());
+      std::min(static_cast<int>(get_width()), bounds.max().x());
     const auto max_y =
-        std::min(static_cast<int>(get_height()), bounds.max().y());
+      std::min(static_cast<int>(get_height()), bounds.max().y());
     for (auto y = min_y; y != max_y; ++y) {
       const auto j = y / Chunk::edge_length;
       const auto y_0 = static_cast<int>(j * Chunk::edge_length);
@@ -155,7 +155,7 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
         const auto i = x / Chunk::edge_length;
         const auto x_0 = static_cast<int>(i * Chunk::edge_length);
         const auto chunk_index =
-            detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
+          detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
         auto &chunk = _chunks[chunk_index];
         chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, true);
       }
@@ -163,6 +163,75 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
     break;
   }
   }
+}
+
+bool Grid::is_solid(
+  Axis normal, const Eigen::Vector3i &cell_indices) const noexcept {
+  if (bounds_check_cell(cell_indices)) {
+    const auto chunk_indices = (cell_indices / Chunk::edge_length).eval();
+    const auto cell_offset = cell_indices - chunk_indices * Chunk::edge_length;
+    return get_chunk_unsafe(chunk_indices)->is_solid(normal, cell_offset);
+  } else {
+    return false;
+  }
+}
+
+Chunk *Grid::get_chunk(const Eigen::Vector3i &chunk_indices) noexcept {
+  if (bounds_check_chunk(chunk_indices)) {
+    return get_chunk_unsafe(chunk_indices);
+  } else {
+    return nullptr;
+  }
+}
+
+const Chunk *
+Grid::get_chunk(const Eigen::Vector3i &chunk_indices) const noexcept {
+  if (bounds_check_chunk(chunk_indices)) {
+    return get_chunk_unsafe(chunk_indices);
+  } else {
+    return nullptr;
+  }
+}
+
+Chunk *Grid::get_chunk_unsafe(const Eigen::Vector3i &chunk_indices) noexcept {
+  return &_chunks[detail::linearize_chunk_offset(
+    _chunk_counts,
+    {
+      static_cast<std::size_t>(chunk_indices[0]),
+      static_cast<std::size_t>(chunk_indices[1]),
+      static_cast<std::size_t>(chunk_indices[2]),
+    })];
+}
+
+const Chunk *
+Grid::get_chunk_unsafe(const Eigen::Vector3i &chunk_indices) const noexcept {
+  return &_chunks[detail::linearize_chunk_offset(
+    _chunk_counts,
+    {
+      static_cast<std::size_t>(chunk_indices[0]),
+      static_cast<std::size_t>(chunk_indices[1]),
+      static_cast<std::size_t>(chunk_indices[2]),
+    })];
+}
+
+bool Grid::bounds_check_cell(
+  const Eigen::Vector3i &cell_indices) const noexcept {
+  return cell_indices[0] >= 0 &&
+         static_cast<std::size_t>(cell_indices[0]) < get_width() &&
+         cell_indices[1] >= 0 &&
+         static_cast<std::size_t>(cell_indices[1]) < get_height() &&
+         cell_indices[2] >= 0 &&
+         static_cast<std::size_t>(cell_indices[2]) < get_depth();
+}
+
+bool Grid::bounds_check_chunk(
+  const Eigen::Vector3i &chunk_indices) const noexcept {
+  return chunk_indices[0] >= 0 &&
+         static_cast<std::size_t>(chunk_indices[0]) < _chunk_counts[0] &&
+         chunk_indices[1] >= 0 &&
+         static_cast<std::size_t>(chunk_indices[1]) < _chunk_counts[1] &&
+         chunk_indices[2] >= 0 &&
+         static_cast<std::size_t>(chunk_indices[2]) < _chunk_counts[2];
 }
 
 std::size_t Grid::get_width() const noexcept {

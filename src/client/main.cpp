@@ -16,6 +16,7 @@
 #include "graphics/work_done_callback.hpp"
 #include "math/transformation_matrices.hpp"
 #include "net/core/constants.hpp"
+#include <Eigen/src/Core/Matrix.h>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
@@ -41,8 +42,7 @@ void handle_signal(int signal) { signal_status = signal; }
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
-    graphics::Global_vulkan_state::get().instance(), window
-  );
+    graphics::Global_vulkan_state::get().instance(), window);
   std::cout << "Created VkSurfaceKHR.\n";
   return retval;
 }
@@ -200,8 +200,7 @@ public:
       },
       graphics::Image_layout::undefined,
       graphics::Image_layout::general,
-      swapchain_image
-    );
+      swapchain_image);
     auto depth_image =
       _depth_images.pop(graphics::recycler_predicates::Image_extent{
         swapchain_image->get_extent(),
@@ -224,9 +223,8 @@ public:
       const auto view_matrix =
         (math::x_rotation_matrix(-player_humanoid->get_input_state().pitch) *
          math::y_rotation_matrix(-player_humanoid->get_input_state().yaw) *
-         math::translation_matrix(
-           -(player_humanoid->get_position() + Eigen::Vector3f::UnitY() * 1.7f)
-         ))
+         math::translation_matrix(-(
+           player_humanoid->get_position() + Eigen::Vector3f::UnitY() * 1.7f)))
           .eval();
       const auto aspect_ratio =
         static_cast<float>(swapchain_image->get_extent().x()) /
@@ -234,8 +232,7 @@ public:
       const auto projection_matrix = math::perspective_projection_matrix(
         aspect_ratio > 1.0f ? 1.0f : aspect_ratio,
         aspect_ratio > 1.0f ? 1.0f / aspect_ratio : 1.0f,
-        0.1f
-      );
+        0.1f);
       const auto view_projection_matrix =
         (projection_matrix * view_matrix).eval();
       // draw grid
@@ -244,104 +241,82 @@ public:
         work_recorder.set_cull_mode(graphics::Cull_mode::none);
         work_recorder.bind_vertex_buffer(_grid_mesh->get_vertex_buffer());
         work_recorder.bind_index_buffer(
-          _grid_mesh->get_index_buffer(), graphics::Index_type::u32
-        );
+          _grid_mesh->get_index_buffer(), graphics::Index_type::u32);
         work_recorder.push_constants(
           grid_pipeline->get_layout(),
           graphics::Shader_stage_flag_bits::vertex,
           0,
-          std::as_bytes(std::span{&view_projection_matrix, 1})
-        );
-        const auto pos_x_normal = Eigen::Vector4f{
+          std::as_bytes(std::span{&view_projection_matrix, 1}));
+        auto record_normal_push_constant = [&](const Eigen::Vector4f &value) {
+          work_recorder.push_constants(
+            grid_pipeline->get_layout(),
+            graphics::Shader_stage_flag_bits::vertex |
+              graphics::Shader_stage_flag_bits::fragment,
+            64,
+            std::as_bytes(std::span{&value, 1}));
+        };
+        work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
+        record_normal_push_constant({1.0f, 0.0f, 0.0f, 0.0f});
+        _grid_mesh->record_edge_drawing_command(
+          work_recorder, game::Axis::x, client::Sign::positive);
+        record_normal_push_constant({-1.0f, 0.0f, 0.0f, 0.0f});
+        _grid_mesh->record_edge_drawing_command(
+          work_recorder, game::Axis::x, client::Sign::negative);
+        record_normal_push_constant({0.0f, 1.0f, 0.0f, 0.0f});
+        _grid_mesh->record_edge_drawing_command(
+          work_recorder, game::Axis::y, client::Sign::positive);
+        record_normal_push_constant({0.0f, -1.0f, 0.0f, 0.0f});
+        _grid_mesh->record_edge_drawing_command(
+          work_recorder, game::Axis::y, client::Sign::negative);
+        record_normal_push_constant({0.0f, 0.0f, 1.0f, 0.0f});
+        _grid_mesh->record_edge_drawing_command(
+          work_recorder, game::Axis::z, client::Sign::positive);
+        record_normal_push_constant({0.0f, 0.0f, -1.0f, 0.0f});
+        _grid_mesh->record_edge_drawing_command(
+          work_recorder, game::Axis::z, client::Sign::negative);
+        record_normal_push_constant({
           1.0f,
           0.0f,
           0.0f,
           game::constants::grid_wall_thickness * 0.5f,
-        };
-        const auto neg_x_normal = Eigen::Vector4f{
-          -1.0f,
-          0.0f,
-          0.0f,
-          game::constants::grid_wall_thickness * 0.5f,
-        };
-        const auto pos_y_normal = Eigen::Vector4f{
+        });
+        _grid_mesh->record_face_drawing_command(work_recorder, game::Axis::x);
+        record_normal_push_constant({
           0.0f,
           1.0f,
           0.0f,
           game::constants::grid_wall_thickness * 0.5f,
-        };
-        const auto neg_y_normal = Eigen::Vector4f{
-          0.0f,
-          -1.0f,
-          0.0f,
-          game::constants::grid_wall_thickness * 0.5f,
-        };
-        const auto pos_z_normal = Eigen::Vector4f{
+        });
+        _grid_mesh->record_face_drawing_command(work_recorder, game::Axis::y);
+        record_normal_push_constant({
           0.0f,
           0.0f,
           1.0f,
           game::constants::grid_wall_thickness * 0.5f,
-        };
-        const auto neg_z_normal = Eigen::Vector4f{
+        });
+        _grid_mesh->record_face_drawing_command(work_recorder, game::Axis::z);
+        work_recorder.set_front_face(graphics::Front_face::clockwise);
+        record_normal_push_constant({
+          -1.0f,
+          0.0f,
+          0.0f,
+          game::constants::grid_wall_thickness * 0.5f,
+        });
+        _grid_mesh->record_face_drawing_command(work_recorder, game::Axis::x);
+        record_normal_push_constant({
+          0.0f,
+          -1.0f,
+          0.0f,
+          game::constants::grid_wall_thickness * 0.5f,
+        });
+        _grid_mesh->record_face_drawing_command(work_recorder, game::Axis::y);
+        record_normal_push_constant({
           0.0f,
           0.0f,
           -1.0f,
           game::constants::grid_wall_thickness * 0.5f,
-        };
-        work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
-        work_recorder.push_constants(
-          grid_pipeline->get_layout(),
-          graphics::Shader_stage_flag_bits::vertex |
-            graphics::Shader_stage_flag_bits::fragment,
-          64,
-          std::as_bytes(std::span{&pos_x_normal, 1})
-        );
-        _grid_mesh->record_draw_faces_command(work_recorder, game::Axis::x);
-        work_recorder.set_front_face(graphics::Front_face::clockwise);
-        work_recorder.push_constants(
-          grid_pipeline->get_layout(),
-          graphics::Shader_stage_flag_bits::vertex |
-            graphics::Shader_stage_flag_bits::fragment,
-          64,
-          std::as_bytes(std::span{&neg_x_normal, 1})
-        );
-        _grid_mesh->record_draw_faces_command(work_recorder, game::Axis::x);
-        work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
-        work_recorder.push_constants(
-          grid_pipeline->get_layout(),
-          graphics::Shader_stage_flag_bits::vertex |
-            graphics::Shader_stage_flag_bits::fragment,
-          64,
-          std::as_bytes(std::span{&pos_y_normal, 1})
-        );
-        _grid_mesh->record_draw_faces_command(work_recorder, game::Axis::y);
-        work_recorder.set_front_face(graphics::Front_face::clockwise);
-        work_recorder.push_constants(
-          grid_pipeline->get_layout(),
-          graphics::Shader_stage_flag_bits::vertex |
-            graphics::Shader_stage_flag_bits::fragment,
-          64,
-          std::as_bytes(std::span{&neg_y_normal, 1})
-        );
-        _grid_mesh->record_draw_faces_command(work_recorder, game::Axis::y);
-        work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
-        work_recorder.push_constants(
-          grid_pipeline->get_layout(),
-          graphics::Shader_stage_flag_bits::vertex |
-            graphics::Shader_stage_flag_bits::fragment,
-          64,
-          std::as_bytes(std::span{&pos_z_normal, 1})
-        );
-        _grid_mesh->record_draw_faces_command(work_recorder, game::Axis::z);
-        work_recorder.set_front_face(graphics::Front_face::clockwise);
-        work_recorder.push_constants(
-          grid_pipeline->get_layout(),
-          graphics::Shader_stage_flag_bits::vertex |
-            graphics::Shader_stage_flag_bits::fragment,
-          64,
-          std::as_bytes(std::span{&neg_z_normal, 1})
-        );
-        _grid_mesh->record_draw_faces_command(work_recorder, game::Axis::z);
+        });
+        _grid_mesh->record_face_drawing_command(work_recorder, game::Axis::z);
       }
       /*
       // draw floor
@@ -361,17 +336,16 @@ public:
       work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
       work_recorder.bind_vertex_buffer(_cube_vertex_buffer);
       work_recorder.bind_index_buffer(
-        _cube_index_buffer, graphics::Index_type::u16
-      );
+        _cube_index_buffer, graphics::Index_type::u16);
       // draw other players (cubes)
       for (const auto &other_humanoid :
-           game->get_entities().get_entities_of_type<game::Replicated_humanoid>(
-           )) {
+           game->get_entities()
+             .get_entities_of_type<game::Replicated_humanoid>()) {
         if (other_humanoid != player_humanoid) {
           const auto model_matrix =
             (math::translation_matrix(
-               other_humanoid->get_position() + Eigen::Vector3f::UnitY() * 0.9f
-             ) *
+               other_humanoid->get_position() +
+               Eigen::Vector3f::UnitY() * 0.9f) *
              math::y_rotation_matrix(other_humanoid->get_input_state().yaw) *
              math::axis_aligned_scale_matrix({0.7f, 1.8f, 0.7f}))
               .eval();
@@ -381,8 +355,7 @@ public:
             _mesh_pipeline->get_layout(),
             graphics::Shader_stage_flag_bits::vertex,
             0,
-            std::as_bytes(std::span{&model_view_projection_matrix, 1})
-          );
+            std::as_bytes(std::span{&model_view_projection_matrix, 1}));
           work_recorder.draw_indexed({
             .index_count = static_cast<std::uint32_t>(cube_mesh_indices.size()),
           });
@@ -402,8 +375,7 @@ public:
           _mesh_pipeline->get_layout(),
           graphics::Shader_stage_flag_bits::vertex,
           0,
-          std::as_bytes(std::span{&model_view_projection_matrix, 1})
-        );
+          std::as_bytes(std::span{&model_view_projection_matrix, 1}));
         work_recorder.draw_indexed({
           .index_count = static_cast<std::uint32_t>(cube_mesh_indices.size()),
         });
@@ -419,8 +391,7 @@ public:
       {},
       graphics::Image_layout::general,
       graphics::Image_layout::present_src,
-      swapchain_image
-    );
+      swapchain_image);
     auto frame_work = _graphics.submit_frame_work(std::move(work_recorder));
     _depth_images.push(std::move(depth_image), std::move(frame_work));
   }
@@ -439,8 +410,8 @@ protected:
       });
   }
 
-  void on_key(glfw::Window, glfw::Key key, int, glfw::Press_action action, int)
-    override {
+  void on_key(
+    glfw::Window, glfw::Key key, int, glfw::Press_action action, int) override {
     if (key == glfw::Key::k_escape && action == glfw::Press_action::press) {
       _glfw_window.set_cursor_input_mode(glfw::Cursor_input_mode::normal);
     } else if (has_game_state()) {
@@ -467,9 +438,13 @@ protected:
   }
 
   void on_mouse_button(
-    glfw::Window, glfw::Mouse_button button, glfw::Press_state action, int
-  ) override {
-    if (button == glfw::Mouse_button::mb_right && action == glfw::Press_state::press) {
+    glfw::Window,
+    glfw::Mouse_button button,
+    glfw::Press_state action,
+    int) override {
+    if (
+      button == glfw::Mouse_button::mb_right &&
+      action == glfw::Press_state::press) {
       _glfw_window.set_cursor_input_mode(glfw::Cursor_input_mode::disabled);
     } else if (has_game_state()) {
       if (const auto player = get_player()) {
@@ -482,17 +457,21 @@ protected:
     }
   }
 
-  void on_cursor_pos(glfw::Window, double, double, double dxpos, double dypos)
-    override {
+  void on_cursor_pos(
+    glfw::Window, double, double, double dxpos, double dypos) override {
     if (const auto player = has_game_state() ? get_player() : nullptr) {
-      if (_glfw_window.get_cursor_input_mode() == glfw::Cursor_input_mode::disabled) {
+      if (
+        _glfw_window.get_cursor_input_mode() ==
+        glfw::Cursor_input_mode::disabled) {
         auto input_state = player->get_input_state();
         input_state.yaw -=
           static_cast<float>(dxpos * constants::mouselook_sensititvity);
         input_state.pitch +=
           static_cast<float>(dypos * constants::mouselook_sensititvity);
-        input_state.pitch = std::
-          clamp(input_state.pitch, -0.5f * std::numbers::pi_v<float>, 0.5f * std::numbers::pi_v<float>);
+        input_state.pitch = std::clamp(
+          input_state.pitch,
+          -0.5f * std::numbers::pi_v<float>,
+          0.5f * std::numbers::pi_v<float>);
         player->set_input_state(input_state);
       }
     }
@@ -511,8 +490,7 @@ private:
         .src_offset = 0,
         .dst_offset = 0,
         .size = data.size(),
-      }
-    );
+      });
     auto work = _graphics.submit_transient_work(std::move(work_recorder));
     work->await();
     return vertex_buffer;
@@ -530,8 +508,7 @@ private:
         .src_offset = 0,
         .dst_offset = 0,
         .size = data.size(),
-      }
-    );
+      });
     auto work = _graphics.submit_transient_work(std::move(work_recorder));
     work->await();
     return index_buffer;
@@ -539,7 +516,9 @@ private:
 
   std::tuple<rc::Strong<graphics::Pipeline>, rc::Strong<graphics::Pipeline>>
   get_graphics_pipelines(graphics::Image_format swapchain_image_format) {
-    if (!_pipelines_color_format || *_pipelines_color_format != swapchain_image_format) {
+    if (
+      !_pipelines_color_format ||
+      *_pipelines_color_format != swapchain_image_format) {
       _grid_pipeline = make_grid_pipeline(swapchain_image_format);
       _mesh_pipeline = make_mesh_pipeline(swapchain_image_format);
     }
@@ -724,8 +703,7 @@ int main() {
     if (client.has_game_state()) {
       client.service_game_state(
         std::chrono::duration_cast<std::chrono::duration<float>>(loop_duration)
-          .count()
-      );
+          .count());
     } else if (!client.is_connecting() && !client.is_connected()) {
       break;
     }

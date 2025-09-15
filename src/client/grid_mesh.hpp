@@ -1,6 +1,7 @@
 #ifndef FPSPARTY_CLIENT_GRID_MESH_HPP
 #define FPSPARTY_CLIENT_GRID_MESH_HPP
 
+#include "client/sign.hpp"
 #include "game/core/grid.hpp"
 #include "graphics/graphics.hpp"
 #include "graphics/index_buffer.hpp"
@@ -22,12 +23,10 @@ public:
   ~Grid_mesh();
 
   void record_face_drawing_command(
-    graphics::Work_recorder &recorder, game::Axis axis
-  );
+    graphics::Work_recorder &recorder, game::Axis axis);
 
   void record_edge_drawing_command(
-    graphics::Work_recorder &recorder, game::Axis axis
-  );
+    graphics::Work_recorder &recorder, game::Axis axis, client::Sign sign);
 
   bool is_uploaded() const noexcept;
 
@@ -42,6 +41,7 @@ private:
   rc::Strong<graphics::Index_buffer> _index_buffer{};
   rc::Strong<graphics::Work> _upload_work{};
   std::array<graphics::Indexed_draw_info, 3> _face_draw_infos;
+  std::array<std::array<graphics::Indexed_draw_info, 2>, 3> _edge_draw_infos;
 };
 } // namespace fpsparty::client
 
