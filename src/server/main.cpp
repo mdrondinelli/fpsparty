@@ -36,6 +36,7 @@ int main() {
       Eigen::Vector2i{0, 0},
       Eigen::Vector2i{16, 16},
     });
+  // bottom rims
   server.get_game().get_grid().fill(
     game::Axis::y,
     1,
@@ -46,6 +47,22 @@ int main() {
   server.get_game().get_grid().fill(
     game::Axis::y,
     1,
+    {
+      Eigen::Vector2i{4, 4},
+      Eigen::Vector2i{12, 12},
+    },
+    false);
+  // top rims
+  server.get_game().get_grid().fill(
+    game::Axis::y,
+    2,
+    {
+      Eigen::Vector2i{3, 3},
+      Eigen::Vector2i{13, 13},
+    });
+  server.get_game().get_grid().fill(
+    game::Axis::y,
+    2,
     {
       Eigen::Vector2i{4, 4},
       Eigen::Vector2i{12, 12},
