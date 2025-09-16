@@ -23,10 +23,10 @@ public:
   ~Grid_mesh();
 
   void record_face_drawing_command(
-    graphics::Work_recorder &recorder, game::Axis axis);
+    graphics::Work_recorder &recorder, game::Axis normal);
 
   void record_edge_drawing_command(
-    graphics::Work_recorder &recorder, game::Axis axis, client::Sign sign);
+    graphics::Work_recorder &recorder, game::Axis normal, client::Sign sign);
 
   bool is_uploaded() const noexcept;
 
