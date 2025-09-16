@@ -75,7 +75,8 @@ Const_chunk_span Grid::get_const_chunks() const noexcept {
   return {_chunks.data(), _chunk_counts};
 }
 
-void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
+void Grid::fill(
+  Axis normal, int layer, const Eigen::AlignedBox2i &bounds, bool solid) {
   // TODO: optimize this to take advantage of bitwise ops
   if (layer < 0) {
     return;
@@ -103,7 +104,7 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
         const auto chunk_index =
           detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
         auto &chunk = _chunks[chunk_index];
-        chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, true);
+        chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, solid);
       }
     }
     break;
@@ -130,7 +131,7 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
         const auto chunk_index =
           detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
         auto &chunk = _chunks[chunk_index];
-        chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, true);
+        chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, solid);
       }
     }
     break;
@@ -157,7 +158,7 @@ void Grid::fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds) {
         const auto chunk_index =
           detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
         auto &chunk = _chunks[chunk_index];
-        chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, true);
+        chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, solid);
       }
     }
     break;

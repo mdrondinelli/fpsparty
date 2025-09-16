@@ -179,7 +179,11 @@ public:
 
   void dump(serial::Writer &writer) const;
 
-  void fill(Axis normal, int layer, const Eigen::AlignedBox2i &bounds);
+  void fill(
+    Axis normal,
+    int layer,
+    const Eigen::AlignedBox2i &bounds,
+    bool solid = true);
 
   bool
   is_solid(Axis normal, const Eigen::Vector3i &cell_indices) const noexcept;
