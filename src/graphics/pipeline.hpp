@@ -3,6 +3,7 @@
 
 #include "graphics/image_format.hpp"
 #include "graphics/pipeline_layout.hpp"
+#include "graphics/primitive_topology.hpp"
 #include "graphics/shader.hpp"
 #include "graphics/shader_stage.hpp"
 #include "rc.hpp"
@@ -42,6 +43,10 @@ struct Pipeline_vertex_input_state_create_info {
   std::span<const Vertex_attribute_description> attributes;
 };
 
+struct Pipeline_input_assembly_state_create_info {
+  Primitive_topology primitive_topology;
+};
+
 struct Pipeline_depth_state_create_info {
   bool depth_attachment_enabled;
 };
@@ -53,6 +58,7 @@ struct Pipeline_color_state_create_info {
 struct Pipeline_create_info {
   std::span<const Pipeline_shader_stage_create_info> shader_stages;
   Pipeline_vertex_input_state_create_info vertex_input_state;
+  Pipeline_input_assembly_state_create_info input_assembly_state;
   Pipeline_depth_state_create_info depth_state;
   Pipeline_color_state_create_info color_state;
   rc::Strong<Pipeline_layout> layout;
@@ -65,16 +71,16 @@ public:
   const rc::Strong<Pipeline_layout> &get_layout() const noexcept;
 
 private:
-  friend vk::Pipeline detail::get_pipeline_vk_pipeline(const Pipeline &pipeline
-  ) noexcept;
+  friend vk::Pipeline
+  detail::get_pipeline_vk_pipeline(const Pipeline &pipeline) noexcept;
 
   rc::Strong<Pipeline_layout> _layout;
   vk::UniquePipeline _vk_pipeline;
 };
 
 namespace detail {
-inline vk::Pipeline get_pipeline_vk_pipeline(const Pipeline &pipeline
-) noexcept {
+inline vk::Pipeline
+get_pipeline_vk_pipeline(const Pipeline &pipeline) noexcept {
   return *pipeline._vk_pipeline;
 }
 } // namespace detail

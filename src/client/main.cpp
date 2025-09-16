@@ -575,6 +575,10 @@ private:
           .bindings = {&vertex_binding, 1},
           .attributes = vertex_attributes,
         },
+      .input_assembly_state =
+        {
+          .primitive_topology = graphics::Primitive_topology::triangle_list,
+        },
       .depth_state =
         {
           .depth_attachment_enabled = true,
@@ -635,6 +639,10 @@ private:
         {
           .bindings = {&vertex_binding, 1},
           .attributes = vertex_attributes,
+        },
+      .input_assembly_state =
+        {
+          .primitive_topology = graphics::Primitive_topology::triangle_list,
         },
       .depth_state =
         {

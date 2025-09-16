@@ -44,7 +44,8 @@ Pipeline::Pipeline(const Pipeline_create_info &info) : _layout{info.layout} {
     .pVertexAttributeDescriptions = vk_vertex_attributes.data(),
   };
   const auto vk_input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo{
-    .topology = vk::PrimitiveTopology::eTriangleList,
+    .topology = static_cast<vk::PrimitiveTopology>(
+      info.input_assembly_state.primitive_topology),
     .primitiveRestartEnable = vk::False,
   };
   const auto vk_viewport_state = vk::PipelineViewportStateCreateInfo{
@@ -65,8 +66,7 @@ Pipeline::Pipeline(const Pipeline_create_info &info) : _layout{info.layout} {
   auto vk_color_blend_attachment_states =
     std::vector<vk::PipelineColorBlendAttachmentState>{};
   vk_color_blend_attachment_states.reserve(
-    info.color_state.color_attachment_formats.size()
-  );
+    info.color_state.color_attachment_formats.size());
   for (auto i = std::size_t{};
        i != info.color_state.color_attachment_formats.size();
        ++i) {
@@ -96,8 +96,7 @@ Pipeline::Pipeline(const Pipeline_create_info &info) : _layout{info.layout} {
   vk_dynamic_states.reserve(
     always_dynamic_states.size() + (info.depth_state.depth_attachment_enabled
                                       ? conditionally_dynamic_states.size()
-                                      : 0)
-  );
+                                      : 0));
   vk_dynamic_states.append_range(always_dynamic_states);
   if (info.depth_state.depth_attachment_enabled) {
     vk_dynamic_states.append_range(conditionally_dynamic_states);
@@ -108,13 +107,11 @@ Pipeline::Pipeline(const Pipeline_create_info &info) : _layout{info.layout} {
   };
   auto vk_color_attachment_formats = std::vector<vk::Format>{};
   vk_color_attachment_formats.reserve(
-    info.color_state.color_attachment_formats.size()
-  );
+    info.color_state.color_attachment_formats.size());
   for (const auto &color_attachment_format :
        info.color_state.color_attachment_formats) {
     vk_color_attachment_formats.emplace_back(
-      static_cast<vk::Format>(color_attachment_format)
-    );
+      static_cast<vk::Format>(color_attachment_format));
   }
   const auto vk_rendering_info = vk::PipelineRenderingCreateInfo{
     .colorAttachmentCount =
@@ -143,10 +140,8 @@ Pipeline::Pipeline(const Pipeline_create_info &info) : _layout{info.layout} {
           .pDynamicState = &vk_dynamic_state,
           .layout =
             detail::get_pipeline_layout_vk_pipeline_layout(*info.layout),
-        }}
-      )
-      .value[0]
-  );
+        }})
+      .value[0]);
 }
 
 const rc::Strong<Pipeline_layout> &Pipeline::get_layout() const noexcept {
