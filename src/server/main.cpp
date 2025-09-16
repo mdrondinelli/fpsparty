@@ -36,6 +36,21 @@ int main() {
       Eigen::Vector2i{0, 0},
       Eigen::Vector2i{16, 16},
     });
+  server.get_game().get_grid().fill(
+    game::Axis::y,
+    1,
+    {
+      Eigen::Vector2i{3, 3},
+      Eigen::Vector2i{13, 13},
+    });
+  server.get_game().get_grid().fill(
+    game::Axis::y,
+    1,
+    {
+      Eigen::Vector2i{4, 4},
+      Eigen::Vector2i{12, 12},
+    },
+    false);
   // red walls
   server.get_game().get_grid().fill(
     game::Axis::x,
