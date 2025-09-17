@@ -19,28 +19,34 @@ generate_face_geometry(
     (cell_indices.cast<float>() * game::constants::grid_cell_stride).eval();
   const auto vertices = std::array<Grid_vertex, 4>{
     Grid_vertex{
-      .position = cell_position +
-                  u * game::constants::grid_wall_thickness * 0.5f +
-                  v * game::constants::grid_wall_thickness * 0.5f,
+      .position =
+        Eigen::Vector3f::Constant(game::constants::grid_wall_thickness * 0.5f) +
+        cell_position + u * game::constants::grid_wall_thickness * 0.5f +
+        v * game::constants::grid_wall_thickness * 0.5f,
     },
     Grid_vertex{
-      .position = cell_position +
-                  u * (game::constants::grid_cell_stride -
-                       game::constants::grid_wall_thickness * 0.5f) +
-                  v * game::constants::grid_wall_thickness * 0.5f,
+      .position =
+        Eigen::Vector3f::Constant(game::constants::grid_wall_thickness * 0.5f) +
+        cell_position +
+        u * (game::constants::grid_cell_stride -
+             game::constants::grid_wall_thickness * 0.5f) +
+        v * game::constants::grid_wall_thickness * 0.5f,
     },
     Grid_vertex{
-      .position = cell_position +
-                  u * (game::constants::grid_cell_stride -
-                       game::constants::grid_wall_thickness * 0.5f) +
-                  v * (game::constants::grid_cell_stride -
-                       game::constants::grid_wall_thickness * 0.5f),
+      .position =
+        Eigen::Vector3f::Constant(game::constants::grid_wall_thickness * 0.5f) +
+        cell_position +
+        u * (game::constants::grid_cell_stride -
+             game::constants::grid_wall_thickness * 0.5f) +
+        v * (game::constants::grid_cell_stride -
+             game::constants::grid_wall_thickness * 0.5f),
     },
     Grid_vertex{
-      .position = cell_position +
-                  u * game::constants::grid_wall_thickness * 0.5f +
-                  v * (game::constants::grid_cell_stride -
-                       game::constants::grid_wall_thickness * 0.5f),
+      .position =
+        Eigen::Vector3f::Constant(game::constants::grid_wall_thickness * 0.5f) +
+        cell_position + u * game::constants::grid_wall_thickness * 0.5f +
+        v * (game::constants::grid_cell_stride -
+             game::constants::grid_wall_thickness * 0.5f),
     },
   };
   const auto indices = std::array<std::uint32_t, 6>{
@@ -65,30 +71,38 @@ generate_edge_geometry(
     (cell_indices.cast<float>() * game::constants::grid_cell_stride).eval();
   const auto vertices = std::array<Grid_vertex, 4>{
     Grid_vertex{
-      .position = cell_position +
-                  major_axis * game::constants::grid_wall_thickness * 0.5f +
-                  minor_axis * game::constants::grid_wall_thickness * 0.5f +
-                  normal * game::constants::grid_wall_thickness * 0.5f,
+      .position =
+        Eigen::Vector3f::Constant(game::constants::grid_wall_thickness * 0.5f) +
+        cell_position +
+        major_axis * game::constants::grid_wall_thickness * 0.5f +
+        minor_axis * game::constants::grid_wall_thickness * 0.5f +
+        normal * game::constants::grid_wall_thickness * 0.5f,
     },
     Grid_vertex{
-      .position = cell_position +
-                  major_axis * (game::constants::grid_cell_stride -
-                                game::constants::grid_wall_thickness * 0.5f) +
-                  minor_axis * game::constants::grid_wall_thickness * 0.5f +
-                  normal * game::constants::grid_wall_thickness * 0.5f,
+      .position =
+        Eigen::Vector3f::Constant(game::constants::grid_wall_thickness * 0.5f) +
+        cell_position +
+        major_axis * (game::constants::grid_cell_stride -
+                      game::constants::grid_wall_thickness * 0.5f) +
+        minor_axis * game::constants::grid_wall_thickness * 0.5f +
+        normal * game::constants::grid_wall_thickness * 0.5f,
     },
     Grid_vertex{
-      .position = cell_position +
-                  major_axis * (game::constants::grid_cell_stride -
-                                game::constants::grid_wall_thickness * 0.5f) -
-                  minor_axis * game::constants::grid_wall_thickness * 0.5f +
-                  normal * game::constants::grid_wall_thickness * 0.5f,
+      .position =
+        Eigen::Vector3f::Constant(game::constants::grid_wall_thickness * 0.5f) +
+        cell_position +
+        major_axis * (game::constants::grid_cell_stride -
+                      game::constants::grid_wall_thickness * 0.5f) -
+        minor_axis * game::constants::grid_wall_thickness * 0.5f +
+        normal * game::constants::grid_wall_thickness * 0.5f,
     },
     Grid_vertex{
-      .position = cell_position +
-                  major_axis * game::constants::grid_wall_thickness * 0.5f -
-                  minor_axis * game::constants::grid_wall_thickness * 0.5f +
-                  normal * game::constants::grid_wall_thickness * 0.5f,
+      .position =
+        Eigen::Vector3f::Constant(game::constants::grid_wall_thickness * 0.5f) +
+        cell_position +
+        major_axis * game::constants::grid_wall_thickness * 0.5f -
+        minor_axis * game::constants::grid_wall_thickness * 0.5f +
+        normal * game::constants::grid_wall_thickness * 0.5f,
     },
   };
   const auto indices = std::array<std::uint32_t, 6>{
@@ -113,28 +127,32 @@ generate_vertex_geometry(
     (cell_indices.cast<float>() * game::constants::grid_cell_stride).eval();
   const auto vertices = std::array<Grid_vertex, 4>{
     Grid_vertex{
-      .position = cell_position +
-                  u * game::constants::grid_wall_thickness * 0.5f +
-                  v * game::constants::grid_wall_thickness * 0.5f +
-                  normal * game::constants::grid_wall_thickness * 0.5f,
+      .position =
+        Eigen::Vector3f::Constant(game::constants::grid_wall_thickness * 0.5f) +
+        cell_position + u * game::constants::grid_wall_thickness * 0.5f +
+        v * game::constants::grid_wall_thickness * 0.5f +
+        normal * game::constants::grid_wall_thickness * 0.5f,
     },
     Grid_vertex{
-      .position = cell_position -
-                  u * game::constants::grid_wall_thickness * 0.5f +
-                  v * game::constants::grid_wall_thickness * 0.5f +
-                  normal * game::constants::grid_wall_thickness * 0.5f,
+      .position =
+        Eigen::Vector3f::Constant(game::constants::grid_wall_thickness * 0.5f) +
+        cell_position - u * game::constants::grid_wall_thickness * 0.5f +
+        v * game::constants::grid_wall_thickness * 0.5f +
+        normal * game::constants::grid_wall_thickness * 0.5f,
     },
     Grid_vertex{
-      .position = cell_position -
-                  u * game::constants::grid_wall_thickness * 0.5f -
-                  v * game::constants::grid_wall_thickness * 0.5f +
-                  normal * game::constants::grid_wall_thickness * 0.5f,
+      .position =
+        Eigen::Vector3f::Constant(game::constants::grid_wall_thickness * 0.5f) +
+        cell_position - u * game::constants::grid_wall_thickness * 0.5f -
+        v * game::constants::grid_wall_thickness * 0.5f +
+        normal * game::constants::grid_wall_thickness * 0.5f,
     },
     Grid_vertex{
-      .position = cell_position +
-                  u * game::constants::grid_wall_thickness * 0.5f -
-                  v * game::constants::grid_wall_thickness * 0.5f +
-                  normal * game::constants::grid_wall_thickness * 0.5f,
+      .position =
+        Eigen::Vector3f::Constant(game::constants::grid_wall_thickness * 0.5f) +
+        cell_position + u * game::constants::grid_wall_thickness * 0.5f -
+        v * game::constants::grid_wall_thickness * 0.5f +
+        normal * game::constants::grid_wall_thickness * 0.5f,
     },
   };
   const auto indices = std::array<std::uint32_t, 6>{
