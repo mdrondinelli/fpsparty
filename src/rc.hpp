@@ -85,8 +85,7 @@ public:
           auto allocator =
             std::pmr::polymorphic_allocator{_header->memory_resource};
           allocator.deallocate_bytes(
-            _header, _header->wrapper_size, _header->wrapper_align
-          );
+            _header, _header->wrapper_size, _header->wrapper_align);
         }
       }
     }
@@ -248,8 +247,7 @@ public:
         auto allocator =
           std::pmr::polymorphic_allocator{_header->memory_resource};
         allocator.deallocate_bytes(
-          _header, _header->wrapper_size, _header->wrapper_align
-        );
+          _header, _header->wrapper_size, _header->wrapper_align);
       }
     }
   }
@@ -273,9 +271,8 @@ public:
     if (_header) {
       auto old_count = _header->strong_reference_count.load();
       while (old_count != 0) {
-        if (_header->strong_reference_count.compare_exchange_weak(
-              old_count, old_count + 1
-            )) {
+        if (_header->strong_reference_count
+              .compare_exchange_weak(old_count, old_count + 1)) {
           return detail::construct_strong<T>(_header, _object);
         }
       }
@@ -350,22 +347,19 @@ public:
           std::pmr::pool_options{
             .largest_required_pool_block = sizeof(detail::Wrapper<T>),
           },
-          upstream_memory_resource
-        )} {}
+          upstream_memory_resource)} {}
 
   template <typename... Args> Strong<T> create(Args &&...args) {
     auto allocator = std::pmr::polymorphic_allocator{_memory_resource.get()};
     const auto memory = allocator.allocate_bytes(
-      sizeof(detail::Wrapper<T>), alignof(detail::Wrapper<T>)
-    );
+      sizeof(detail::Wrapper<T>), alignof(detail::Wrapper<T>));
     const auto wrapper = new (memory) detail::Wrapper<T>;
     const auto object = [&]() {
       try {
         return new (&wrapper->storage) T(std::forward<Args>(args)...);
       } catch (...) {
         allocator.deallocate_bytes(
-          wrapper, sizeof(detail::Wrapper<T>), alignof(detail::Wrapper<T>)
-        );
+          wrapper, sizeof(detail::Wrapper<T>), alignof(detail::Wrapper<T>));
         throw;
       }
     }();

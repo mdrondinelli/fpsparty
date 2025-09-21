@@ -39,9 +39,8 @@ vk::UniqueInstance make_vk_instance() {
     .ppEnabledExtensionNames = extensions.data(),
   };
   const auto vkGetInstanceProcAddr =
-    vk::DynamicLoader{}.getProcAddress<PFN_vkGetInstanceProcAddr>(
-      "vkGetInstanceProcAddr"
-    );
+    vk::DynamicLoader{}
+      .getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
   vk::defaultDispatchLoaderDynamic.init(vkGetInstanceProcAddr);
   auto instance = vk::createInstanceUnique(create_info);
   volkLoadInstance(*instance);
@@ -66,10 +65,10 @@ find_vk_physical_device(vk::Instance instance) {
     const auto queue_family_index = [&]() -> std::optional<std::uint32_t> {
       const auto queue_families = physical_device.getQueueFamilyProperties();
       for (auto i = std::uint32_t{}; i != queue_families.size(); ++i) {
-        if ((queue_families[i].queueFlags & vk::QueueFlagBits::eGraphics) &&
-            glfw::get_physical_device_presentation_support(
-              instance, physical_device, i
-            )) {
+        if (
+          (queue_families[i].queueFlags & vk::QueueFlagBits::eGraphics) &&
+          glfw::get_physical_device_presentation_support(
+            instance, physical_device, i)) {
           return i;
         }
       }
@@ -113,8 +112,7 @@ find_vk_physical_device(vk::Instance instance) {
 }
 
 std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
-  vk::PhysicalDevice physical_device, std::uint32_t queue_family_index
-) {
+  vk::PhysicalDevice physical_device, std::uint32_t queue_family_index) {
   const auto queue_priority = 1.0f;
   const auto queue_create_info = vk::DeviceQueueCreateInfo{
     .queueFamilyIndex = queue_family_index,
@@ -148,8 +146,9 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
 }
 
 vma::Unique_allocator make_vma_allocator(
-  vk::Instance instance, vk::PhysicalDevice physical_device, vk::Device device
-) {
+  vk::Instance instance,
+  vk::PhysicalDevice physical_device,
+  vk::Device device) {
   auto create_info = vma::Allocator::Create_info{
     .flags = {},
     .physicalDevice = physical_device,

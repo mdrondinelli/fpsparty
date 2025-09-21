@@ -4,7 +4,7 @@
 
 namespace fpsparty::game {
 Player::Humanoid_remove_listener::Humanoid_remove_listener(
-    Player *player) noexcept
+  Player *player) noexcept
     : _player{player} {}
 
 void Player::Humanoid_remove_listener::on_remove_entity() {
@@ -40,10 +40,11 @@ Player::get_input_sequence_number() const noexcept {
 }
 
 void Player::set_input_state(
-    const net::Input_state &input_state,
-    net::Sequence_number input_sequence_number) noexcept {
-  if (!_input_sequence_number ||
-      input_sequence_number > *_input_sequence_number) {
+  const net::Input_state &input_state,
+  net::Sequence_number input_sequence_number) noexcept {
+  if (
+    !_input_sequence_number ||
+    input_sequence_number > *_input_sequence_number) {
     _input_state = input_state;
     _input_sequence_number = input_sequence_number;
   }
@@ -53,8 +54,8 @@ Entity_type Player_dumper::get_entity_type() const noexcept {
   return Entity_type::player;
 }
 
-void Player_dumper::dump_entity(serial::Writer &writer,
-                                const Entity &entity) const {
+void Player_dumper::dump_entity(
+  serial::Writer &writer, const Entity &entity) const {
   using serial::serialize;
   if (const auto player = dynamic_cast<const Player *>(&entity)) {
     const auto humanoid = player->get_humanoid();
@@ -63,7 +64,7 @@ void Player_dumper::dump_entity(serial::Writer &writer,
     if (humanoid_entity_id) {
       serialize<net::Input_state>(writer, player->get_input_state());
       serialize<std::optional<net::Sequence_number>>(
-          writer, player->get_input_sequence_number());
+        writer, player->get_input_sequence_number());
     }
   }
 }

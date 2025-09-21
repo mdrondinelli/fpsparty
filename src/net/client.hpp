@@ -36,8 +36,7 @@ public:
   void send_player_input_state(
     net::Entity_id player_entity_id,
     net::Sequence_number input_sequence_number,
-    const net::Input_state &input_state
-  );
+    const net::Input_state &input_state);
 
 protected:
   virtual void on_connect();
@@ -51,8 +50,7 @@ protected:
   virtual void on_entity_snapshot(
     net::Sequence_number tick_number,
     serial::Reader &public_state_reader,
-    serial::Reader &player_state_reader
-  );
+    serial::Reader &player_state_reader);
 
 private:
   void handle_event(const enet::Event &e);

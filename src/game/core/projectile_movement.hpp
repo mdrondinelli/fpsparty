@@ -16,7 +16,7 @@ struct Projectile_movement_simulation_result {
 };
 
 Projectile_movement_simulation_result simulate_projectile_movement(
-    const Projectile_movement_simulation_info &info) noexcept;
+  const Projectile_movement_simulation_info &info) noexcept;
 } // namespace fpsparty::game
 
 #endif

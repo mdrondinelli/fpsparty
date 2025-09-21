@@ -13,7 +13,7 @@ const Eigen::Vector3f &Replicated_projectile::get_position() const noexcept {
 }
 
 void Replicated_projectile::set_position(
-    const Eigen::Vector3f &value) noexcept {
+  const Eigen::Vector3f &value) noexcept {
   _position = value;
 }
 
@@ -22,12 +22,12 @@ const Eigen::Vector3f &Replicated_projectile::get_velocity() const noexcept {
 }
 
 void Replicated_projectile::set_velocity(
-    const Eigen::Vector3f &value) noexcept {
+  const Eigen::Vector3f &value) noexcept {
   _velocity = value;
 }
 
 Replicated_projectile_loader::Replicated_projectile_loader(
-    std::pmr::memory_resource *memory_resource) noexcept
+  std::pmr::memory_resource *memory_resource) noexcept
     : _factory{memory_resource} {}
 
 Entity_owner<Entity>
@@ -35,9 +35,8 @@ Replicated_projectile_loader::create_entity(net::Entity_id entity_id) {
   return _factory.create(entity_id);
 }
 
-void Replicated_projectile_loader::load_entity(serial::Reader &reader,
-                                               Entity &entity,
-                                               const Entity_world &) const {
+void Replicated_projectile_loader::load_entity(
+  serial::Reader &reader, Entity &entity, const Entity_world &) const {
   using serial::deserialize;
   const auto projectile = dynamic_cast<Replicated_projectile *>(&entity);
   if (!projectile) {

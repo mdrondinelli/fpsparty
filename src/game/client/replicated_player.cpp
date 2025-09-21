@@ -5,7 +5,7 @@
 
 namespace fpsparty::game {
 Replicated_player::Humanoid_remove_listener::Humanoid_remove_listener(
-    Replicated_player *player) noexcept
+  Replicated_player *player) noexcept
     : _player{player} {}
 
 void Replicated_player::Humanoid_remove_listener::on_remove_entity() {
@@ -42,7 +42,7 @@ const net::Input_state &Replicated_player::get_input_state() const noexcept {
 }
 
 void Replicated_player::set_input_state(
-    const net::Input_state &value) noexcept {
+  const net::Input_state &value) noexcept {
   _input_state = value;
 }
 
@@ -52,12 +52,12 @@ Replicated_player::get_input_sequence_number() const noexcept {
 }
 
 void Replicated_player::set_input_sequence_number(
-    const std::optional<net::Sequence_number> &value) noexcept {
+  const std::optional<net::Sequence_number> &value) noexcept {
   _input_sequence_number = value;
 }
 
 Replicated_player_loader::Replicated_player_loader(
-    std::pmr::memory_resource *memory_resource) noexcept
+  std::pmr::memory_resource *memory_resource) noexcept
     : _factory{memory_resource} {}
 
 Entity_owner<Entity>
@@ -65,9 +65,8 @@ Replicated_player_loader::create_entity(net::Entity_id entity_id) {
   return _factory.create(entity_id);
 }
 
-void Replicated_player_loader::load_entity(serial::Reader &reader,
-                                           Entity &entity,
-                                           const Entity_world &world) const {
+void Replicated_player_loader::load_entity(
+  serial::Reader &reader, Entity &entity, const Entity_world &world) const {
   const auto player = dynamic_cast<Replicated_player *>(&entity);
   if (!player) {
     std::cerr << "Failed to downcast player.\n";
@@ -80,7 +79,7 @@ void Replicated_player_loader::load_entity(serial::Reader &reader,
   }
   if (*humanoid_entity_id) {
     const auto humanoid = dynamic_cast<Replicated_humanoid *>(
-        world.get_entity_by_id(*humanoid_entity_id));
+      world.get_entity_by_id(*humanoid_entity_id));
     if (!humanoid) {
       std::cerr << "Failed to get humanoid by entity id.\n";
       throw Replicated_player_load_error{};
@@ -91,7 +90,7 @@ void Replicated_player_loader::load_entity(serial::Reader &reader,
       throw Replicated_player_load_error{};
     }
     const auto input_sequence_number =
-        deserialize<std::optional<net::Sequence_number>>(reader);
+      deserialize<std::optional<net::Sequence_number>>(reader);
     if (!input_sequence_number) {
       std::cerr << "Failed to get deserialize input sequence number.\n";
       throw Replicated_player_load_error{};

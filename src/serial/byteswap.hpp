@@ -6,8 +6,7 @@
 namespace fpsparty::serial {
 static_assert(
   std::endian::native == std::endian::little ||
-  std::endian::native == std::endian::big
-);
+  std::endian::native == std::endian::big);
 
 template <typename T> constexpr T network_byteswap(T value) {
   return std::endian::native == std::endian::little ? std::byteswap(value)

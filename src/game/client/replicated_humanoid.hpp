@@ -33,13 +33,15 @@ class Replicated_humanoid_load_error : public Entity_world_load_error {};
 class Replicated_humanoid_loader : public Entity_loader {
 public:
   explicit Replicated_humanoid_loader(
-      std::pmr::memory_resource *memory_resource =
-          std::pmr::get_default_resource()) noexcept;
+    std::pmr::memory_resource *memory_resource =
+      std::pmr::get_default_resource()) noexcept;
 
   Entity_owner<Entity> create_entity(net::Entity_id entity_id) override;
 
-  void load_entity(serial::Reader &reader, Entity &entity,
-                   const Entity_world &world) const override;
+  void load_entity(
+    serial::Reader &reader,
+    Entity &entity,
+    const Entity_world &world) const override;
 
   Entity_type get_entity_type() const noexcept override;
 

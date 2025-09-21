@@ -12,7 +12,7 @@ const net::Input_state &Replicated_humanoid::get_input_state() const noexcept {
 }
 
 void Replicated_humanoid::set_input_state(
-    const net::Input_state &value) noexcept {
+  const net::Input_state &value) noexcept {
   _input_state = value;
 }
 
@@ -25,7 +25,7 @@ void Replicated_humanoid::set_position(const Eigen::Vector3f &value) noexcept {
 }
 
 Replicated_humanoid_loader::Replicated_humanoid_loader(
-    std::pmr::memory_resource *memory_resource) noexcept
+  std::pmr::memory_resource *memory_resource) noexcept
     : _factory{memory_resource} {}
 
 Entity_owner<Entity>
@@ -33,9 +33,8 @@ Replicated_humanoid_loader::create_entity(net::Entity_id entity_id) {
   return _factory.create(entity_id);
 }
 
-void Replicated_humanoid_loader::load_entity(serial::Reader &reader,
-                                             Entity &entity,
-                                             const Entity_world &) const {
+void Replicated_humanoid_loader::load_entity(
+  serial::Reader &reader, Entity &entity, const Entity_world &) const {
   const auto humanoid = dynamic_cast<Replicated_humanoid *>(&entity);
   if (!humanoid) {
     throw Replicated_humanoid_load_error{};

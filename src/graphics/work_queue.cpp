@@ -16,8 +16,7 @@ void Work_queue::poll(Work_resource_pool &resource_pool) {
   }
   algorithms::unordered_erase_many_if(
     _pending_works,
-    [&](const rc::Strong<Work> &work) { return work->is_done(); }
-  );
+    [&](const rc::Strong<Work> &work) { return work->is_done(); });
 }
 
 rc::Strong<Work> Work_queue::submit(const Work_queue_submit_info &info) {

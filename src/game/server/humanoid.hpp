@@ -12,8 +12,8 @@ struct Humanoid_create_info {};
 
 class Humanoid : public Entity {
 public:
-  explicit Humanoid(net::Entity_id entity_id,
-                    const Humanoid_create_info &info) noexcept;
+  explicit Humanoid(
+    net::Entity_id entity_id, const Humanoid_create_info &info) noexcept;
 
   void on_remove() override;
 

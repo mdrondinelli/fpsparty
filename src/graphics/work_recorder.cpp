@@ -22,8 +22,7 @@ Work_resource release_work_recorder(Work_recorder recorder) noexcept {
 void Work_recorder::copy_buffer(
   rc::Strong<const Buffer> src,
   rc::Strong<Buffer> dst,
-  const Buffer_copy_info &info
-) {
+  const Buffer_copy_info &info) {
   get_command_buffer().copyBuffer(
     detail::get_buffer_vk_buffer(*src),
     detail::get_buffer_vk_buffer(*dst),
@@ -31,8 +30,7 @@ void Work_recorder::copy_buffer(
       .srcOffset = static_cast<vk::DeviceSize>(info.src_offset),
       .dstOffset = static_cast<vk::DeviceSize>(info.dst_offset),
       .size = static_cast<vk::DeviceSize>(info.size),
-    }
-  );
+    });
   add_reference(std::move(src));
   add_reference(std::move(dst));
 }
@@ -42,8 +40,7 @@ void Work_recorder::transition_image_layout(
   const Synchronization_scope &dst_scope,
   Image_layout old_layout,
   Image_layout new_layout,
-  rc::Strong<Image> image
-) {
+  rc::Strong<Image> image) {
   const auto barrier = vk::ImageMemoryBarrier2{
     .srcStageMask = static_cast<vk::PipelineStageFlags2>(src_scope.stage_mask),
     .srcAccessMask = static_cast<vk::AccessFlags2>(src_scope.access_mask),
@@ -112,15 +109,13 @@ void Work_recorder::end_rendering() { get_command_buffer().endRendering(); }
 void Work_recorder::bind_pipeline(rc::Strong<const Pipeline> pipeline) {
   get_command_buffer().bindPipeline(
     vk::PipelineBindPoint::eGraphics,
-    detail::get_pipeline_vk_pipeline(*pipeline)
-  );
+    detail::get_pipeline_vk_pipeline(*pipeline));
   add_reference(std::move(pipeline));
 }
 
 void Work_recorder::set_cull_mode(Cull_mode cull_mode) {
-  get_command_buffer().setCullMode(
-    static_cast<vk::CullModeFlags>(static_cast<int>(cull_mode))
-  );
+  get_command_buffer()
+    .setCullMode(static_cast<vk::CullModeFlags>(static_cast<int>(cull_mode)));
 }
 
 void Work_recorder::set_front_face(Front_face front_face) {
@@ -135,8 +130,7 @@ void Work_recorder::set_viewport(const Eigen::Vector2i &extent) {
       .height = static_cast<float>(extent.y()),
       .minDepth = 0.0f,
       .maxDepth = 1.0f,
-    }}
-  );
+    }});
 }
 
 void Work_recorder::set_scissor(const Eigen::Vector2i &extent) {
@@ -148,8 +142,7 @@ void Work_recorder::set_scissor(const Eigen::Vector2i &extent) {
           static_cast<std::uint32_t>(extent.x()),
           static_cast<std::uint32_t>(extent.y()),
         },
-    }}
-  );
+    }});
 }
 
 void Work_recorder::set_depth_test_enabled(bool enabled) {
@@ -165,20 +158,17 @@ void Work_recorder::set_depth_compare_op(Compare_op op) {
 }
 
 void Work_recorder::bind_vertex_buffer(rc::Strong<const Vertex_buffer> buffer) {
-  get_command_buffer().bindVertexBuffers(
-    0, {detail::get_buffer_vk_buffer(*buffer)}, {0}
-  );
+  get_command_buffer()
+    .bindVertexBuffers(0, {detail::get_buffer_vk_buffer(*buffer)}, {0});
   add_reference(std::move(buffer));
 }
 
 void Work_recorder::bind_index_buffer(
-  rc::Strong<const Index_buffer> buffer, Index_type index_type
-) {
+  rc::Strong<const Index_buffer> buffer, Index_type index_type) {
   get_command_buffer().bindIndexBuffer(
     detail::get_buffer_vk_buffer(*buffer),
     0,
-    static_cast<vk::IndexType>(index_type)
-  );
+    static_cast<vk::IndexType>(index_type));
   add_reference(std::move(buffer));
 }
 
@@ -188,23 +178,20 @@ void Work_recorder::draw_indexed(const Indexed_draw_info &info) noexcept {
     info.instance_count,
     info.first_index,
     info.vertex_offset,
-    info.first_instance
-  );
+    info.first_instance);
 }
 
 void Work_recorder::push_constants(
   rc::Strong<const Pipeline_layout> pipeline_layout,
   Shader_stage_flags stage_flags,
   std::uint32_t offset,
-  std::span<const std::byte> data
-) noexcept {
+  std::span<const std::byte> data) noexcept {
   get_command_buffer().pushConstants(
     detail::get_pipeline_layout_vk_pipeline_layout(*pipeline_layout),
     static_cast<vk::ShaderStageFlags>(stage_flags),
     offset,
     static_cast<std::uint32_t>(data.size()),
-    data.data()
-  );
+    data.data());
   add_reference(std::move(pipeline_layout));
 }
 
@@ -220,8 +207,7 @@ void Work_recorder::add_reference(rc::Strong<const Image> image) {
 }
 
 void Work_recorder::add_reference(
-  rc::Strong<const Pipeline_layout> pipeline_layout
-) {
+  rc::Strong<const Pipeline_layout> pipeline_layout) {
   _resource.pipeline_layouts.emplace_back(std::move(pipeline_layout));
 }
 

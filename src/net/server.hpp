@@ -32,8 +32,7 @@ public:
 
   std::pmr::vector<enet::Peer> get_peers(
     std::pmr::memory_resource *memory_resource =
-      std::pmr::get_default_resource()
-  ) const;
+      std::pmr::get_default_resource()) const;
 
 protected:
   virtual void on_peer_connect(enet::Peer);
@@ -49,8 +48,7 @@ protected:
     enet::Peer peer,
     Entity_id player_entity_id,
     Sequence_number input_sequence_number,
-    const net::Input_state &input_state
-  );
+    const net::Input_state &input_state);
 
   void send_player_join_response(enet::Peer peer, Entity_id player_entity_id);
 
@@ -60,8 +58,7 @@ protected:
     enet::Peer peer,
     Sequence_number tick_number,
     std::span<const std::byte> public_state,
-    std::span<const std::byte> player_state
-  );
+    std::span<const std::byte> player_state);
 
 private:
   void handle_event(const enet::Event &e);

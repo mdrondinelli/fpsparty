@@ -34,8 +34,9 @@ template <> struct Serializer<bool> {
 
 template <std::integral T> struct Serializer<T> {
   template <std::integral U> void write(Writer &writer, U value) const {
-    if (value < std::numeric_limits<T>::min() ||
-        value > std::numeric_limits<T>::max()) {
+    if (
+      value < std::numeric_limits<T>::min() ||
+      value > std::numeric_limits<T>::max()) {
       throw Serialization_error{};
     }
     const auto casted_value = static_cast<T>(value);

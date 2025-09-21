@@ -13,8 +13,7 @@ Client::Client(const Client_create_info &create_info)
     : _host{enet::make_client_host_unique(
         {.max_channels = constants::max_channels,
          .incoming_bandwidth = create_info.incoming_bandwidth,
-         .outgoing_bandwidth = create_info.outgoing_bandwidth}
-      )} {}
+         .outgoing_bandwidth = create_info.outgoing_bandwidth})} {}
 
 void Client::poll_events() {
   _host->service_each([&](const enet::Event &e) { handle_event(e); });
@@ -44,24 +43,21 @@ void Client::send_player_join_request() {
   auto packet_writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<net::Message_type>(
-    packet_writer, net::Message_type::player_join_request
-  );
+    packet_writer, net::Message_type::player_join_request);
   _server.send(
     constants::player_initialization_channel_id,
     enet::create_packet_unique({
       .data = packet_writer.stream().view().data(),
       .data_length = packet_writer.stream().view().length(),
       .flags = enet::Packet_flag_bits::reliable,
-    })
-  );
+    }));
 }
 
 void Client::send_player_leave_request(net::Entity_id player_entity_id) {
   auto packet_writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<net::Message_type>(
-    packet_writer, net::Message_type::player_leave_request
-  );
+    packet_writer, net::Message_type::player_leave_request);
   serialize<net::Entity_id>(packet_writer, player_entity_id);
   _server.send(
     constants::player_initialization_channel_id,
@@ -69,20 +65,17 @@ void Client::send_player_leave_request(net::Entity_id player_entity_id) {
       .data = packet_writer.stream().view().data(),
       .data_length = packet_writer.stream().view().length(),
       .flags = enet::Packet_flag_bits::reliable,
-    })
-  );
+    }));
 }
 
 void Client::send_player_input_state(
   net::Entity_id player_entity_id,
   net::Sequence_number input_sequence_number,
-  const net::Input_state &input_state
-) {
+  const net::Input_state &input_state) {
   auto packet_writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<net::Message_type>(
-    packet_writer, net::Message_type::player_input_state
-  );
+    packet_writer, net::Message_type::player_input_state);
   serialize<net::Entity_id>(packet_writer, player_entity_id);
   serialize<net::Sequence_number>(packet_writer, input_sequence_number);
   serialize<net::Input_state>(packet_writer, input_state);
@@ -91,8 +84,7 @@ void Client::send_player_input_state(
     enet::create_packet_unique({
       .data = packet_writer.stream().view().data(),
       .data_length = packet_writer.stream().view().length(),
-    })
-  );
+    }));
 }
 
 void Client::handle_event(const enet::Event &e) {
@@ -153,8 +145,7 @@ void Client::handle_event(const enet::Event &e) {
         goto malformed_message;
       }
       on_entity_snapshot(
-        *tick_number, *public_state_reader, *player_state_reader
-      );
+        *tick_number, *public_state_reader, *player_state_reader);
       return;
     }
     default:
@@ -180,7 +171,6 @@ void Client::on_player_join_response(net::Entity_id) {}
 
 void Client::on_grid_snapshot(serial::Reader &) {}
 
-void Client::
-  on_entity_snapshot(net::Sequence_number, serial::Reader &, serial::Reader &) {
-}
+void Client::on_entity_snapshot(
+  net::Sequence_number, serial::Reader &, serial::Reader &) {}
 } // namespace fpsparty::net

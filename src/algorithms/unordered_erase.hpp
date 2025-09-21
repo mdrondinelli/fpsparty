@@ -8,8 +8,7 @@ namespace fpsparty::algorithms {
 template <typename T, typename Allocator, typename U = T>
 void unordered_erase_at(
   std::vector<T, Allocator> &container,
-  typename std::vector<T, Allocator>::iterator iterator
-) {
+  typename std::vector<T, Allocator>::iterator iterator) {
   *iterator = std::move(container.back());
   container.pop_back();
 }
@@ -27,8 +26,7 @@ bool unordered_erase_one(std::vector<T, Allocator> &container, const U &value) {
 
 template <typename T, typename Allocator, typename Predicate>
 bool unordered_erase_one_if(
-  std::vector<T, Allocator> &container, Predicate &&predicate
-) {
+  std::vector<T, Allocator> &container, Predicate &&predicate) {
   const auto it = std::ranges::find_if(container, predicate);
   if (it != container.end()) {
     unordered_erase_at(container, it);
@@ -57,8 +55,7 @@ unordered_erase_many(std::vector<T, Allocator> &container, const U &value) {
 
 template <typename T, typename Allocator, typename Predicate>
 std::size_t unordered_erase_many_if(
-  std::vector<T, Allocator> &container, Predicate predicate
-) {
+  std::vector<T, Allocator> &container, Predicate predicate) {
   auto retval = std::size_t{};
   auto index = std::size_t{};
   while (index != container.size()) {

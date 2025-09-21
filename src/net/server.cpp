@@ -40,8 +40,7 @@ void Server::disconnect() {
 }
 
 void Server::send_player_join_response(
-  enet::Peer peer, net::Entity_id player_entity_id
-) {
+  enet::Peer peer, net::Entity_id player_entity_id) {
   auto writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<Message_type>(writer, Message_type::player_join_response);
@@ -52,13 +51,11 @@ void Server::send_player_join_response(
       .data = writer.stream().view().data(),
       .data_length = writer.stream().view().size(),
       .flags = enet::Packet_flag_bits::reliable,
-    })
-  );
+    }));
 }
 
 void Server::send_grid_snapshot(
-  enet::Peer peer, std::span<const std::byte> state
-) {
+  enet::Peer peer, std::span<const std::byte> state) {
   auto packet = enet::create_packet_unique({
     .data = nullptr,
     .data_length = sizeof(Message_type) + state.size(),
@@ -75,8 +72,7 @@ void Server::send_entity_snapshot(
   enet::Peer peer,
   net::Sequence_number tick_number,
   std::span<const std::byte> public_state,
-  std::span<const std::byte> player_state
-) {
+  std::span<const std::byte> player_state) {
   auto packet = enet::create_packet_unique({
     .data = nullptr,
     .data_length = sizeof(Message_type) + sizeof(net::Sequence_number) +
@@ -111,9 +107,8 @@ void Server::on_player_join_request(enet::Peer) {}
 
 void Server::on_player_leave_request(enet::Peer, net::Entity_id) {}
 
-void Server::
-  on_player_input_state(enet::Peer, net::Entity_id, net::Sequence_number, const net::Input_state &) {
-}
+void Server::on_player_input_state(
+  enet::Peer, net::Entity_id, net::Sequence_number, const net::Input_state &) {}
 
 void Server::handle_event(const enet::Event &e) {
   switch (e.type) {
@@ -168,8 +163,7 @@ void Server::handle_event(const enet::Event &e) {
         return;
       }
       on_player_input_state(
-        e.peer, *player_entity_id, *input_sequence_number, *input_state
-      );
+        e.peer, *player_entity_id, *input_sequence_number, *input_state);
       return;
     }
     default:

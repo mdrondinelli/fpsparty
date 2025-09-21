@@ -30,7 +30,7 @@ public:
   get_input_sequence_number() const noexcept;
 
   void set_input_sequence_number(
-      const std::optional<net::Sequence_number> &value) noexcept;
+    const std::optional<net::Sequence_number> &value) noexcept;
 
 private:
   class Humanoid_remove_listener : public Entity_remove_listener {
@@ -54,13 +54,15 @@ class Replicated_player_load_error : public Entity_world_load_error {};
 class Replicated_player_loader : public Entity_loader {
 public:
   explicit Replicated_player_loader(
-      std::pmr::memory_resource *memory_resource =
-          std::pmr::get_default_resource()) noexcept;
+    std::pmr::memory_resource *memory_resource =
+      std::pmr::get_default_resource()) noexcept;
 
   Entity_owner<Entity> create_entity(net::Entity_id entity_id) override;
 
-  void load_entity(serial::Reader &reader, Entity &entity,
-                   const Entity_world &world) const override;
+  void load_entity(
+    serial::Reader &reader,
+    Entity &entity,
+    const Entity_world &world) const override;
 
   Entity_type get_entity_type() const noexcept override;
 

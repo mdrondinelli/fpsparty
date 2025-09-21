@@ -15,8 +15,8 @@ struct Projectile_create_info {
 
 class Projectile : public Entity {
 public:
-  explicit Projectile(net::Entity_id entity_id,
-                      const Projectile_create_info &info) noexcept;
+  explicit Projectile(
+    net::Entity_id entity_id, const Projectile_create_info &info) noexcept;
 
   void on_remove() override;
 

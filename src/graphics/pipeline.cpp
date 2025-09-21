@@ -44,8 +44,8 @@ Pipeline::Pipeline(const Pipeline_create_info &info) : _layout{info.layout} {
     .pVertexAttributeDescriptions = vk_vertex_attributes.data(),
   };
   const auto vk_input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo{
-    .topology = static_cast<vk::PrimitiveTopology>(
-      info.input_assembly_state.primitive_topology),
+    .topology = static_cast<vk::PrimitiveTopology>(info.input_assembly_state
+                                                     .primitive_topology),
     .primitiveRestartEnable = vk::False,
   };
   const auto vk_viewport_state = vk::PipelineViewportStateCreateInfo{
@@ -65,8 +65,8 @@ Pipeline::Pipeline(const Pipeline_create_info &info) : _layout{info.layout} {
   const auto vk_depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo{};
   auto vk_color_blend_attachment_states =
     std::vector<vk::PipelineColorBlendAttachmentState>{};
-  vk_color_blend_attachment_states.reserve(
-    info.color_state.color_attachment_formats.size());
+  vk_color_blend_attachment_states
+    .reserve(info.color_state.color_attachment_formats.size());
   for (auto i = std::size_t{};
        i != info.color_state.color_attachment_formats.size();
        ++i) {
@@ -106,12 +106,12 @@ Pipeline::Pipeline(const Pipeline_create_info &info) : _layout{info.layout} {
     .pDynamicStates = vk_dynamic_states.data(),
   };
   auto vk_color_attachment_formats = std::vector<vk::Format>{};
-  vk_color_attachment_formats.reserve(
-    info.color_state.color_attachment_formats.size());
+  vk_color_attachment_formats
+    .reserve(info.color_state.color_attachment_formats.size());
   for (const auto &color_attachment_format :
        info.color_state.color_attachment_formats) {
-    vk_color_attachment_formats.emplace_back(
-      static_cast<vk::Format>(color_attachment_format));
+    vk_color_attachment_formats
+      .emplace_back(static_cast<vk::Format>(color_attachment_format));
   }
   const auto vk_rendering_info = vk::PipelineRenderingCreateInfo{
     .colorAttachmentCount =

@@ -53,13 +53,13 @@ template <> struct Serializer<net::Input_state> {
       return std::nullopt;
     }
     return net::Input_state{
-        .move_left = (*flags & (1 << 0)) != 0,
-        .move_right = (*flags & (1 << 1)) != 0,
-        .move_forward = (*flags & (1 << 2)) != 0,
-        .move_backward = (*flags & (1 << 3)) != 0,
-        .use_primary = (*flags & (1 << 4)) != 0,
-        .yaw = *yaw,
-        .pitch = *pitch,
+      .move_left = (*flags & (1 << 0)) != 0,
+      .move_right = (*flags & (1 << 1)) != 0,
+      .move_forward = (*flags & (1 << 2)) != 0,
+      .move_backward = (*flags & (1 << 3)) != 0,
+      .use_primary = (*flags & (1 << 4)) != 0,
+      .yaw = *yaw,
+      .pitch = *pitch,
     };
   }
 };

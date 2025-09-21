@@ -14,13 +14,11 @@ Staging_buffer::Staging_buffer(std::span<const std::byte> data)
         .allocation_info =
           {
             .flags = c_repr(
-              vma::Allocation_create_flag_bits::e_host_access_sequential_write
-            ),
+              vma::Allocation_create_flag_bits::e_host_access_sequential_write),
             .usage = c_repr(vma::Memory_usage::e_auto),
             .requiredFlags = static_cast<VkMemoryPropertyFlags>(
               vk::MemoryPropertyFlagBits::eHostVisible |
-              vk::MemoryPropertyFlagBits::eHostCoherent
-            ),
+              vk::MemoryPropertyFlagBits::eHostCoherent),
             .preferredFlags = {},
             .memoryTypeBits = {},
             .pool = {},

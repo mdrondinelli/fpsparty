@@ -13,9 +13,9 @@ void Entity_world::dump(const Entity_world_dump_info &info) const {
   for (const auto &entity : _entities) {
     const auto entity_type = entity->get_entity_type();
     const auto dumper_it =
-        std::ranges::find_if(info.dumpers, [&](const Entity_dumper *dumper) {
-          return dumper->get_entity_type() == entity_type;
-        });
+      std::ranges::find_if(info.dumpers, [&](const Entity_dumper *dumper) {
+        return dumper->get_entity_type() == entity_type;
+      });
     if (dumper_it != info.dumpers.end()) {
       ++dumpable_entity_count;
     }
@@ -24,9 +24,9 @@ void Entity_world::dump(const Entity_world_dump_info &info) const {
   for (const auto &entity : _entities) {
     const auto entity_type = entity->get_entity_type();
     const auto dumper_it =
-        std::ranges::find_if(info.dumpers, [&](const Entity_dumper *dumper) {
-          return dumper->get_entity_type() == entity_type;
-        });
+      std::ranges::find_if(info.dumpers, [&](const Entity_dumper *dumper) {
+        return dumper->get_entity_type() == entity_type;
+      });
     if (dumper_it != info.dumpers.end()) {
       serialize<Entity_type>(*info.writer, entity_type);
       serialize<net::Entity_id>(*info.writer, entity->get_entity_id());
@@ -53,9 +53,9 @@ void Entity_world::load(const Entity_world_load_info &info) {
         throw Entity_world_load_error{};
       }
       const auto loader_it =
-          std::ranges::find_if(info.loaders, [&](const Entity_loader *loader) {
-            return loader->get_entity_type() == *entity_type;
-          });
+        std::ranges::find_if(info.loaders, [&](const Entity_loader *loader) {
+          return loader->get_entity_type() == *entity_type;
+        });
       if (loader_it == info.loaders.end()) {
         throw Entity_world_load_error{};
       }
@@ -104,9 +104,9 @@ void Entity_world::add(Entity_owner<Entity> entity) {
 
 Entity_owner<Entity> Entity_world::remove(const Entity *entity) noexcept {
   const auto it = std::ranges::find_if(
-      _entities, [&](const Entity_owner<Entity> &owned_entity) {
-        return owned_entity.get() == entity;
-      });
+    _entities, [&](const Entity_owner<Entity> &owned_entity) {
+      return owned_entity.get() == entity;
+    });
   if (it != _entities.end()) {
     auto entity = std::move(*it);
     detail::on_remove_entity(*entity);
@@ -119,9 +119,9 @@ Entity_owner<Entity> Entity_world::remove(const Entity *entity) noexcept {
 
 Entity *Entity_world::get_entity_by_id(net::Entity_id id) const noexcept {
   const auto it =
-      std::ranges::find_if(_entities, [&](const Entity_owner<Entity> &entity) {
-        return entity->get_entity_id() == id;
-      });
+    std::ranges::find_if(_entities, [&](const Entity_owner<Entity> &entity) {
+      return entity->get_entity_id() == id;
+    });
   if (it != _entities.end()) {
     return it->get();
   } else {

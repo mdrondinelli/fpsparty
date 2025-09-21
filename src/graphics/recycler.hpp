@@ -77,11 +77,9 @@ public:
 private:
   void on_change_predicate() {
     algorithms::unordered_erase_many_if(
-      _free_resources,
-      [&](const rc::Strong<Resource> &resource) {
+      _free_resources, [&](const rc::Strong<Resource> &resource) {
         return !_predicate(*resource);
-      }
-    );
+      });
   }
 
   void on_work_done(const Work &work) {
@@ -89,8 +87,7 @@ private:
       _unfree_resources,
       [&](const std::pair<rc::Strong<Resource>, rc::Strong<Work>> &pair) {
         return pair.second.get() == &work;
-      }
-    );
+      });
     if (it != _unfree_resources.end()) {
       if (_predicate(*it->first)) {
         _free_resources.emplace_back(std::move(it->first));

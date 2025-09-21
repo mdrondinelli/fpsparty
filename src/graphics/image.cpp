@@ -40,8 +40,7 @@ Image::Image(const Image_create_info &info) {
         .pool = {},
         .pUserData = {},
         .priority = {},
-      }
-    );
+      });
   _vk_image = vk_image.release();
   _vk_image_view = Global_vulkan_state::get().device().createImageView({
     .image = _vk_image,

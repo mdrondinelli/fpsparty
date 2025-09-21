@@ -644,8 +644,8 @@ inline Window create_window(const Window::Create_info &create_info) {
           dxpos = xpos - user_data->cursor_pos_x;
           dypos = ypos - user_data->cursor_pos_y;
         }
-        user_data->cursor_pos_callback->on_cursor_pos(
-          window, xpos, ypos, dxpos, dypos);
+        user_data->cursor_pos_callback
+          ->on_cursor_pos(window, xpos, ypos, dxpos, dypos);
         user_data->cursor_pos_x = xpos;
         user_data->cursor_pos_y = ypos;
         user_data->cursor_pos_valid = true;
@@ -671,8 +671,8 @@ inline Window create_window(const Window::Create_info &create_info) {
       const auto user_data =
         *static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
       if (user_data.drop_callback) {
-        user_data.drop_callback->on_drop(
-          window, std::span{paths, paths + path_count});
+        user_data.drop_callback
+          ->on_drop(window, std::span{paths, paths + path_count});
       }
     });
   glfwSetWindowUserPointer(window, user_data.release());

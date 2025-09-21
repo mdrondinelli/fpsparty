@@ -10,9 +10,8 @@ class Depth_image_factory {
 public:
   explicit Depth_image_factory(graphics::Graphics *graphics) noexcept;
 
-  rc::Strong<graphics::Image>
-  operator()(const graphics::recycler_predicates::Image_extent &predicate
-  ) const;
+  rc::Strong<graphics::Image> operator()(
+    const graphics::recycler_predicates::Image_extent &predicate) const;
 
 private:
   graphics::Graphics *_graphics;

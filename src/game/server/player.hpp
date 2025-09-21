@@ -14,8 +14,8 @@ struct Player_create_info {};
 
 class Player : public Entity {
 public:
-  explicit Player(net::Entity_id entity_id,
-                  const Player_create_info &info) noexcept;
+  explicit Player(
+    net::Entity_id entity_id, const Player_create_info &info) noexcept;
 
   void on_remove() override;
 
@@ -28,8 +28,9 @@ public:
   std::optional<net::Sequence_number>
   get_input_sequence_number() const noexcept;
 
-  void set_input_state(const net::Input_state &input_state,
-                       net::Sequence_number input_sequence_number) noexcept;
+  void set_input_state(
+    const net::Input_state &input_state,
+    net::Sequence_number input_sequence_number) noexcept;
 
 private:
   class Humanoid_remove_listener : public Entity_remove_listener {

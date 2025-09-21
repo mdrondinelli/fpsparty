@@ -337,8 +337,8 @@ public:
       work_recorder.set_cull_mode(graphics::Cull_mode::back);
       work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
       work_recorder.bind_vertex_buffer(_cube_vertex_buffer);
-      work_recorder.bind_index_buffer(
-        _cube_index_buffer, graphics::Index_type::u16);
+      work_recorder
+        .bind_index_buffer(_cube_index_buffer, graphics::Index_type::u16);
       // draw other players (cubes)
       for (const auto &other_humanoid :
            game->get_entities()

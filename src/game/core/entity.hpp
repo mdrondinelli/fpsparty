@@ -67,8 +67,8 @@ private:
 
   friend bool detail::get_entity_remove_flag(const Entity &entity) noexcept;
 
-  friend void detail::set_entity_remove_flag(Entity &entity,
-                                             bool value) noexcept;
+  friend void
+  detail::set_entity_remove_flag(Entity &entity, bool value) noexcept;
 
   friend void detail::on_remove_entity(Entity &entity) noexcept;
 
@@ -102,7 +102,7 @@ public:
   ~Entity_owner() {
     if (_entity) {
       auto allocator =
-          std::pmr::polymorphic_allocator{_entity->_memory_resource};
+        std::pmr::polymorphic_allocator{_entity->_memory_resource};
       allocator.delete_object(_entity);
     }
   }
@@ -117,7 +117,7 @@ public:
 
   template <std::derived_from<T> U> Entity_owner<U> static_downcast() noexcept {
     return detail::acquire_entity(
-        static_cast<U *>(detail::release_entity(*this)));
+      static_cast<U *>(detail::release_entity(*this)));
   }
 
   template <std::derived_from<T> U>
@@ -150,12 +150,12 @@ public:
       : Entity_factory{std::pmr::get_default_resource()} {}
 
   explicit Entity_factory(
-      std::pmr::memory_resource *upstream_memory_resource) noexcept
+    std::pmr::memory_resource *upstream_memory_resource) noexcept
       : _memory_resource{std::make_unique<std::pmr::synchronized_pool_resource>(
-            std::pmr::pool_options{
-                .largest_required_pool_block = sizeof(T),
-            },
-            upstream_memory_resource)} {}
+          std::pmr::pool_options{
+            .largest_required_pool_block = sizeof(T),
+          },
+          upstream_memory_resource)} {}
 
   template <typename... Args> Entity_owner<T> create(Args &&...args) {
     auto allocator = std::pmr::polymorphic_allocator{_memory_resource.get()};

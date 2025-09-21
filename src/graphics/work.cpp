@@ -8,9 +8,9 @@ namespace detail {
 bool poll_work(Work &work) {
   if (work._done.load()) {
     return true;
-  } else if (Global_vulkan_state::get().device().getFenceStatus(
-               *work._resource.vk_fence
-             ) == vk::Result::eSuccess) {
+  } else if (
+    Global_vulkan_state::get().device().getFenceStatus(
+      *work._resource.vk_fence) == vk::Result::eSuccess) {
     work._done.store(true);
     for (const auto &done_callback : work._resource.done_callbacks) {
       done_callback->on_work_done(work);
@@ -37,11 +37,9 @@ void Work::add_done_callback(Work_done_callback *callback) {
 
 void Work::remove_done_callback(Work_done_callback *callback) {
   algorithms::unordered_erase_one_if(
-    _resource.done_callbacks,
-    [&](Work_done_callback *contained_callback) {
+    _resource.done_callbacks, [&](Work_done_callback *contained_callback) {
       return contained_callback == callback;
-    }
-  );
+    });
 }
 
 bool Work::is_done() const { return _done.load(); }
@@ -51,8 +49,7 @@ void Work::await() const {
     std::ignore = Global_vulkan_state::get().device().waitForFences(
       {*_resource.vk_fence},
       vk::False,
-      std::numeric_limits<std::uint64_t>::max()
-    );
+      std::numeric_limits<std::uint64_t>::max());
   }
 }
 

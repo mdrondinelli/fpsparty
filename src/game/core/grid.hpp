@@ -68,10 +68,10 @@ public:
 };
 
 template <typename T>
-requires std::is_same_v<std::remove_const_t<T>, Chunk>
+  requires std::is_same_v<std::remove_const_t<T>, Chunk>
 class Chunk_span_template {
   template <typename U>
-  requires std::is_same_v<std::remove_const_t<U>, Chunk>
+    requires std::is_same_v<std::remove_const_t<U>, Chunk>
   class Iterator_template {
     friend class Chunk_span_template;
 

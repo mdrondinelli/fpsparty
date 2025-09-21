@@ -54,8 +54,8 @@ public:
 private:
   friend class rc::Factory<Image>;
 
-  friend constexpr vk::Image detail::get_image_vk_image(const Image &image
-  ) noexcept;
+  friend constexpr vk::Image
+  detail::get_image_vk_image(const Image &image) noexcept;
 
   friend constexpr vk::ImageView
   detail::get_image_vk_image_view(const Image &image) noexcept;
@@ -83,8 +83,8 @@ constexpr vk::ImageView get_image_vk_image_view(const Image &image) noexcept {
   return image._vk_image_view;
 }
 
-constexpr vma::Allocation get_image_vma_allocation(const Image &image
-) noexcept {
+constexpr vma::Allocation
+get_image_vma_allocation(const Image &image) noexcept {
   return *image._vma_allocation;
 }
 } // namespace detail

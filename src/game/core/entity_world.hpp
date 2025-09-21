@@ -17,8 +17,8 @@ public:
 
   virtual Entity_type get_entity_type() const noexcept = 0;
 
-  virtual void dump_entity(serial::Writer &writer,
-                           const Entity &entity) const = 0;
+  virtual void
+  dump_entity(serial::Writer &writer, const Entity &entity) const = 0;
 };
 
 class Entity_loader {
@@ -29,8 +29,10 @@ public:
 
   virtual Entity_owner<Entity> create_entity(net::Entity_id entity_id) = 0;
 
-  virtual void load_entity(serial::Reader &reader, Entity &entity,
-                           const Entity_world &world) const = 0;
+  virtual void load_entity(
+    serial::Reader &reader,
+    Entity &entity,
+    const Entity_world &world) const = 0;
 };
 
 struct Entity_world_dump_info {
@@ -63,9 +65,9 @@ public:
   }
 
   template <std::derived_from<Entity> T>
-  std::pmr::vector<T *>
-  get_entities_of_type(std::pmr::memory_resource *memory_resource =
-                           std::pmr::get_default_resource()) const {
+  std::pmr::vector<T *> get_entities_of_type(
+    std::pmr::memory_resource *memory_resource =
+      std::pmr::get_default_resource()) const {
     auto retval = std::pmr::vector<T *>{memory_resource};
     retval.reserve(count_entities_of_type<T>());
     for (const auto &entity : _entities) {

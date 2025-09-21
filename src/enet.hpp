@@ -62,8 +62,7 @@ constexpr Packet_flags
 operator|(Packet_flag_bits lhs, Packet_flag_bits rhs) noexcept {
   return Packet_flags{
     static_cast<Packet_flags::Value>(lhs) |
-    static_cast<Packet_flags::Value>(rhs)
-  };
+    static_cast<Packet_flags::Value>(rhs)};
 }
 
 class Packet {
@@ -92,8 +91,7 @@ private:
 
 inline Packet create_packet(const Packet::Create_info &create_info) {
   const auto value = enet_packet_create(
-    create_info.data, create_info.data_length, create_info.flags
-  );
+    create_info.data, create_info.data_length, create_info.flags);
   if (!value) {
     throw Packet::Construction_error{};
   }
@@ -147,8 +145,8 @@ private:
   Packet _value;
 };
 
-inline Unique_packet create_packet_unique(const Packet::Create_info &create_info
-) {
+inline Unique_packet
+create_packet_unique(const Packet::Create_info &create_info) {
   return Unique_packet{create_packet(create_info)};
 }
 
@@ -276,8 +274,9 @@ public:
   }
 
   Peer connect(
-    const Address &address, std::size_t channel_count, std::uint32_t data
-  ) const {
+    const Address &address,
+    std::size_t channel_count,
+    std::uint32_t data) const {
     const auto peer = enet_host_connect(_value, &address, channel_count, data);
     if (!peer) {
       throw Out_of_peers_error{};
@@ -303,8 +302,7 @@ inline Host create_host(const Host::Create_info &create_info) {
     create_info.max_peer_count,
     create_info.max_channel_count,
     create_info.incoming_bandwidth,
-    create_info.outgoing_bandwidth
-  );
+    create_info.outgoing_bandwidth);
   if (!value) {
     throw Host::Construction_error{};
   }
@@ -368,8 +366,8 @@ inline Host make_server_host(const Server_create_info &create_info) {
   });
 }
 
-inline Unique_host make_server_host_unique(const Server_create_info &create_info
-) {
+inline Unique_host
+make_server_host_unique(const Server_create_info &create_info) {
   return Unique_host{make_server_host(create_info)};
 }
 
@@ -389,8 +387,8 @@ inline Host make_client_host(const Client_create_info &create_info) {
   });
 }
 
-inline Unique_host make_client_host_unique(const Client_create_info &create_info
-) {
+inline Unique_host
+make_client_host_unique(const Client_create_info &create_info) {
   return Unique_host{make_client_host(create_info)};
 }
 } // namespace fpsparty::enet

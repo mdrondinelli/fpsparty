@@ -21,9 +21,9 @@ simulate_humanoid_movement(const Humanoid_movement_simulation_info &info) {
   }
   movement_vector.normalize();
   return {
-      .final_position = info.initial_position + movement_vector *
-                                                    constants::humanoid_speed *
-                                                    info.duration,
+    .final_position = info.initial_position + movement_vector *
+                                                constants::humanoid_speed *
+                                                info.duration,
   };
 }
 } // namespace fpsparty::game

@@ -694,20 +694,20 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
     _edge_draw_infos[0][0].vertex_offset =
       _face_draw_infos[2].vertex_offset + z_face_vertices.size();
     _edge_draw_infos[0][1].vertex_offset =
-      _edge_draw_infos[0][0].vertex_offset +
-      edges_geometry.vertices[0][0].size();
+      _edge_draw_infos[0][0].vertex_offset + edges_geometry.vertices[0][0]
+                                               .size();
     _edge_draw_infos[1][0].vertex_offset =
-      _edge_draw_infos[0][1].vertex_offset +
-      edges_geometry.vertices[0][1].size();
+      _edge_draw_infos[0][1].vertex_offset + edges_geometry.vertices[0][1]
+                                               .size();
     _edge_draw_infos[1][1].vertex_offset =
-      _edge_draw_infos[1][0].vertex_offset +
-      edges_geometry.vertices[1][0].size();
+      _edge_draw_infos[1][0].vertex_offset + edges_geometry.vertices[1][0]
+                                               .size();
     _edge_draw_infos[2][0].vertex_offset =
-      _edge_draw_infos[1][1].vertex_offset +
-      edges_geometry.vertices[1][1].size();
+      _edge_draw_infos[1][1].vertex_offset + edges_geometry.vertices[1][1]
+                                               .size();
     _edge_draw_infos[2][1].vertex_offset =
-      _edge_draw_infos[2][0].vertex_offset +
-      edges_geometry.vertices[2][0].size();
+      _edge_draw_infos[2][0].vertex_offset + edges_geometry.vertices[2][0]
+                                               .size();
   }
 }
 

@@ -63,8 +63,7 @@ constexpr Eigen::Matrix4f axis_aligned_scale_matrix(const Eigen::Vector3f &s) {
 }
 
 constexpr Eigen::Matrix4f perspective_projection_matrix(
-  float zoom_x, float zoom_y, float z_near
-) noexcept {
+  float zoom_x, float zoom_y, float z_near) noexcept {
   auto retval = Eigen::Matrix4f{Eigen::Matrix4f::Zero()};
   retval(0, 0) = -1.0f / zoom_x;
   retval(1, 1) = -1.0f / zoom_y;

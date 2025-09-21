@@ -7,8 +7,7 @@
 namespace fpsparty::graphics {
 enum class Pipeline_stage_flag_bits {
   color_attachment_output = static_cast<std::uint64_t>(
-    vk::PipelineStageFlagBits2::eColorAttachmentOutput
-  ),
+    vk::PipelineStageFlagBits2::eColorAttachmentOutput),
 };
 
 enum class Access_flag_bits {

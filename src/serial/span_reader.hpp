@@ -26,10 +26,11 @@ public:
   }
 
   std::optional<Span_reader> subspan_reader(
-    std::size_t offset, std::size_t count = std::dynamic_extent
-  ) const noexcept {
-    if (offset <= _data.size() &&
-        (count == std::dynamic_extent || count <= _data.size() - offset)) {
+    std::size_t offset,
+    std::size_t count = std::dynamic_extent) const noexcept {
+    if (
+      offset <= _data.size() &&
+      (count == std::dynamic_extent || count <= _data.size() - offset)) {
       return subspan_reader_unchecked(offset, count);
     } else {
       return std::nullopt;
@@ -37,8 +38,8 @@ public:
   }
 
   Span_reader subspan_reader_unchecked(
-    std::size_t offset, std::size_t count = std::dynamic_extent
-  ) const noexcept {
+    std::size_t offset,
+    std::size_t count = std::dynamic_extent) const noexcept {
     return Span_reader{_data.subspan(offset, count)};
   }
 
