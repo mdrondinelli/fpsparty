@@ -16,7 +16,7 @@
 #include "graphics/work_done_callback.hpp"
 #include "math/transformation_matrices.hpp"
 #include "net/core/constants.hpp"
-#include <Eigen/src/Core/Matrix.h>
+#include <Eigen/Dense>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
@@ -25,6 +25,7 @@
 #include <numbers>
 #include <optional>
 #include <span>
+#include <tracy/Tracy.hpp>
 #include <volk.h>
 #include <vulkan/vulkan.hpp>
 
@@ -188,6 +189,7 @@ public:
   }
 
   void render() {
+    ZoneScoped;
     _frame_counter.notify();
     _graphics.poll_works();
     auto [work_recorder, swapchain_image] = _graphics.record_frame_work();
@@ -221,8 +223,8 @@ public:
     const auto player_humanoid = player ? player->get_humanoid() : nullptr;
     if (player_humanoid) {
       const auto view_matrix =
-        (math::x_rotation_matrix(-player_humanoid->get_input_state().pitch) *
-         math::y_rotation_matrix(-player_humanoid->get_input_state().yaw) *
+        (math::x_rotation_matrix(-get_current_input_state().pitch) *
+         math::y_rotation_matrix(-get_current_input_state().yaw) *
          math::translation_matrix(-(
            player_humanoid->get_position() + Eigen::Vector3f::UnitY() * 1.7f)))
           .eval();
@@ -415,25 +417,23 @@ protected:
     if (key == glfw::Key::k_escape && action == glfw::Press_action::press) {
       _glfw_window.set_cursor_input_mode(glfw::Cursor_input_mode::normal);
     } else if (has_game_state()) {
-      if (const auto player = get_player()) {
-        auto input_state = player->get_input_state();
-        switch (key) {
-        case glfw::Key::k_w:
-          input_state.move_forward = action != glfw::Press_action::release;
-          break;
-        case glfw::Key::k_a:
-          input_state.move_left = action != glfw::Press_action::release;
-          break;
-        case glfw::Key::k_s:
-          input_state.move_backward = action != glfw::Press_action::release;
-          break;
-        case glfw::Key::k_d:
-          input_state.move_right = action != glfw::Press_action::release;
-          break;
-        default:
-        }
-        player->set_input_state(input_state);
+      auto input_state = get_current_input_state();
+      switch (key) {
+      case glfw::Key::k_w:
+        input_state.move_forward = action != glfw::Press_action::release;
+        break;
+      case glfw::Key::k_a:
+        input_state.move_left = action != glfw::Press_action::release;
+        break;
+      case glfw::Key::k_s:
+        input_state.move_backward = action != glfw::Press_action::release;
+        break;
+      case glfw::Key::k_d:
+        input_state.move_right = action != glfw::Press_action::release;
+        break;
+      default:
       }
+      set_current_input_state(input_state);
     }
   }
 
@@ -447,33 +447,29 @@ protected:
       action == glfw::Press_state::press) {
       _glfw_window.set_cursor_input_mode(glfw::Cursor_input_mode::disabled);
     } else if (has_game_state()) {
-      if (const auto player = get_player()) {
-        auto input_state = player->get_input_state();
-        if (button == glfw::Mouse_button::mb_left) {
-          input_state.use_primary = action != glfw::Press_state::release;
-        }
-        player->set_input_state(input_state);
+      auto input_state = get_current_input_state();
+      if (button == glfw::Mouse_button::mb_left) {
+        input_state.use_primary = action != glfw::Press_state::release;
       }
+      set_current_input_state(input_state);
     }
   }
 
   void on_cursor_pos(
     glfw::Window, double, double, double dxpos, double dypos) override {
-    if (const auto player = has_game_state() ? get_player() : nullptr) {
-      if (
-        _glfw_window.get_cursor_input_mode() ==
-        glfw::Cursor_input_mode::disabled) {
-        auto input_state = player->get_input_state();
-        input_state.yaw -=
-          static_cast<float>(dxpos * constants::mouselook_sensititvity);
-        input_state.pitch +=
-          static_cast<float>(dypos * constants::mouselook_sensititvity);
-        input_state.pitch = std::clamp(
-          input_state.pitch,
-          -0.5f * std::numbers::pi_v<float>,
-          0.5f * std::numbers::pi_v<float>);
-        player->set_input_state(input_state);
-      }
+    if (
+      has_game_state() && _glfw_window.get_cursor_input_mode() ==
+                            glfw::Cursor_input_mode::disabled) {
+      auto input_state = get_current_input_state();
+      input_state.yaw -=
+        static_cast<float>(dxpos * constants::mouselook_sensititvity);
+      input_state.pitch +=
+        static_cast<float>(dypos * constants::mouselook_sensititvity);
+      input_state.pitch = std::clamp(
+        input_state.pitch,
+        -0.5f * std::numbers::pi_v<float>,
+        0.5f * std::numbers::pi_v<float>);
+      set_current_input_state(input_state);
     }
   }
 
@@ -516,11 +512,13 @@ private:
 
   std::tuple<rc::Strong<graphics::Pipeline>, rc::Strong<graphics::Pipeline>>
   get_graphics_pipelines(graphics::Image_format swapchain_image_format) {
+    ZoneScoped;
     if (
       !_pipelines_color_format ||
       *_pipelines_color_format != swapchain_image_format) {
       _grid_pipeline = make_grid_pipeline(swapchain_image_format);
       _mesh_pipeline = make_mesh_pipeline(swapchain_image_format);
+      _pipelines_color_format = swapchain_image_format;
     }
     return {_grid_pipeline, _mesh_pipeline};
   }
@@ -676,6 +674,7 @@ private:
 } // namespace
 
 int main() {
+  tracy::SetThreadName("Main Thread");
   std::signal(SIGINT, handle_signal);
   std::signal(SIGTERM, handle_signal);
   const auto enet_guard = enet::Initialization_guard{{}};
@@ -691,7 +690,10 @@ int main() {
   const auto vulkan_guard = graphics::Global_vulkan_state_guard{{}};
   const auto vk_surface = make_vk_surface(*glfw_window);
   auto client = Client{{
-    .client_info = {},
+    .client_info =
+      {
+        .tick_duration = constants::tick_duration,
+      },
     .glfw_window = *glfw_window,
     .vk_surface = *vk_surface,
   }};
@@ -716,6 +718,7 @@ int main() {
       break;
     }
     client.render();
+    FrameMark;
     const auto now = Clock::now();
     loop_duration = now - loop_time;
     loop_time = now;
