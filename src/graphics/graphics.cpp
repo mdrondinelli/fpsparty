@@ -15,17 +15,17 @@ std::tuple<vk::Format, vk::Extent2D, vk::UniqueSwapchainKHR> make_swapchain(
   glfw::Window window,
   vk::SurfaceKHR surface,
   vk::PresentModeKHR present_mode) {
-  const auto capabilities =
-    Global_vulkan_state::get().physical_device().getSurfaceCapabilitiesKHR(
-      surface);
+  const auto capabilities = Global_vulkan_state::get()
+                              .physical_device()
+                              .getSurfaceCapabilitiesKHR(surface);
   const auto image_count =
     capabilities.maxImageCount > 0
       ? std::min(capabilities.maxImageCount, capabilities.minImageCount + 1)
       : (capabilities.minImageCount + 1);
   const auto surface_format = [&]() {
-    const auto surface_formats =
-      Global_vulkan_state::get().physical_device().getSurfaceFormatsKHR(
-        surface);
+    const auto surface_formats = Global_vulkan_state::get()
+                                   .physical_device()
+                                   .getSurfaceFormatsKHR(surface);
     for (const auto &surface_format : surface_formats) {
       if (
         surface_format.format == vk::Format::eB8G8R8A8Srgb &&
@@ -119,9 +119,9 @@ vk::UniqueSemaphore make_semaphore(
 Graphics::Graphics(const Graphics_create_info &info)
     : _window{info.window},
       _surface{info.surface},
-      _surface_present_modes{
-        Global_vulkan_state::get().physical_device().getSurfacePresentModesKHR(
-          _surface)},
+      _surface_present_modes{Global_vulkan_state::get()
+                               .physical_device()
+                               .getSurfacePresentModesKHR(_surface)},
       _vsync_preferred{info.vsync_preferred} {
   init_swapchain(select_swapchain_present_mode());
   for (auto i = std::size_t{}; i != info.max_frames_in_flight; ++i) {
