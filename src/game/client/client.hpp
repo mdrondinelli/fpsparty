@@ -4,6 +4,7 @@
 #include "game/client/replicated_game.hpp"
 #include "net/client.hpp"
 #include "net/core/entity_id.hpp"
+#include "net/core/input_state.hpp"
 #include <optional>
 
 namespace fpsparty::game {
@@ -35,6 +36,10 @@ public:
 
   bool is_connected() const noexcept;
 
+  const net::Input_state &get_current_input_state() const noexcept;
+
+  void set_current_input_state(const net::Input_state &value) noexcept;
+
 protected:
   void on_connect() override;
 
@@ -46,9 +51,10 @@ protected:
 
   virtual void on_update_grid();
 
-  void on_entity_snapshot(net::Sequence_number tick_number,
-                          serial::Reader &public_state_reader,
-                          serial::Reader &player_state_reader) override;
+  void on_entity_snapshot(
+    net::Sequence_number tick_number,
+    serial::Reader &public_state_reader,
+    serial::Reader &player_state_reader) override;
 
   Replicated_game *get_game() noexcept;
 
@@ -61,7 +67,8 @@ private:
   std::optional<net::Entity_id> _player_entity_id{};
   net::Sequence_number _input_sequence_number{};
   std::vector<std::pair<net::Input_state, net::Sequence_number>>
-      _in_flight_input_states{};
+    _in_flight_input_states{};
+  net::Input_state _current_input_state{};
   float _tick_duration{};
   float _tick_timer{};
 };

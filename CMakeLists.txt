@@ -2,11 +2,17 @@ cmake_minimum_required(VERSION 3.22.0)
 project(fpsparty VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+add_compile_definitions(TRACY_ENABLE)
+
 # dependencies
 add_subdirectory(extern/glfw-3.4)
 add_subdirectory(extern/volk-1.4.304)
 add_subdirectory(extern/VulkanMemoryAllocator-3.3.0)
 add_subdirectory(extern/magic_enum-0.9.7)
+add_library(
+  tracy
+  extern/tracy-0.12.2/TracyClient.cpp
+)
 
 # libnet
 add_library(
@@ -81,6 +87,12 @@ target_include_directories(
   PUBLIC
   ${CMAKE_SOURCE_DIR}/src
 )
+target_include_directories(
+  game-client
+  SYSTEM
+  PRIVATE
+  ${CMAKE_SOURCE_DIR}/extern/tracy-0.12.2
+)
 target_link_libraries(game-client game-core net)
 
 # server
@@ -142,6 +154,12 @@ target_include_directories(
   PUBLIC
   ${CMAKE_SOURCE_DIR}/src
 )
+target_include_directories(
+  graphics
+  SYSTEM
+  PRIVATE
+  ${CMAKE_SOURCE_DIR}/extern/tracy-0.12.2
+)
 target_link_libraries(graphics glfw volk GPUOpen::VulkanMemoryAllocator)
 
 # client
@@ -158,6 +176,7 @@ target_include_directories(
   PRIVATE
   ${CMAKE_SOURCE_DIR}/extern/enet/include
   ${CMAKE_SOURCE_DIR}/extern/magic_enum-0.9.7/include
+  ${CMAKE_SOURCE_DIR}/extern/tracy-0.12.2
 )
 target_include_directories(
   client
@@ -165,7 +184,7 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/src
 )
 target_link_directories(client PRIVATE ${CMAKE_SOURCE_DIR}/extern/enet/.libs)
-target_link_libraries(client enet net game-client graphics)
+target_link_libraries(client enet tracy net game-client graphics)
 
 # compiler options
 set_property(TARGET net game-core game-server game-client server graphics client PROPERTY CXX_STANDARD 23)
@@ -180,18 +199,24 @@ if (MSVC)
   target_compile_options(graphics PRIVATE /W4 /WX)
   target_compile_options(client PRIVATE /W4 /WX)
 else()
-  target_compile_options(net PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
-  target_compile_options(game-core PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
-  target_compile_options(game-server PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
-  target_compile_options(game-client PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
-  target_compile_options(server PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
-  target_compile_options(graphics PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
-  target_compile_options(client PRIVATE -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
-  target_link_options(net PRIVATE -stdlib=libc++ -lc++abi)
-  target_link_options(game-core PRIVATE -stdlib=libc++ -lc++abi)
-  target_link_options(game-server PRIVATE -stdlib=libc++ -lc++abi)
-  target_link_options(game-client PRIVATE -stdlib=libc++ -lc++abi)
-  target_link_options(server PRIVATE -stdlib=libc++ -lc++abi)
-  target_link_options(graphics PRIVATE -stdlib=libc++ -lc++abi)
-  target_link_options(client PRIVATE -stdlib=libc++ -lc++abi)
+  set(extern_compile_options -stdlib=libc++ -O3)
+  target_compile_options(tracy PRIVATE ${extern_compile_options})
+  set(fpsparty_compile_options -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
+  target_compile_options(net PRIVATE ${fpsparty_compile_options})
+  target_compile_options(game-core PRIVATE ${fpsparty_compile_options})
+  target_compile_options(game-server PRIVATE ${fpsparty_compile_options})
+  target_compile_options(game-client PRIVATE ${fpsparty_compile_options})
+  target_compile_options(server PRIVATE ${fpsparty_compile_options})
+  target_compile_options(graphics PRIVATE ${fpsparty_compile_options})
+  target_compile_options(client PRIVATE ${fpsparty_compile_options})
+  set(extern_link_options -stdlib=libc++ -lc++abi)
+  target_link_options(tracy PRIVATE ${extern_link_options})
+  set(fpsparty_link_options -stdlib=libc++ -lc++abi)
+  target_link_options(net PRIVATE ${fpsparty_link_options})
+  target_link_options(game-core PRIVATE ${fpsparty_link_options})
+  target_link_options(game-server PRIVATE ${fpsparty_link_options})
+  target_link_options(game-client PRIVATE ${fpsparty_link_options})
+  target_link_options(server PRIVATE ${fpsparty_link_options})
+  target_link_options(graphics PRIVATE ${fpsparty_link_options})
+  target_link_options(client PRIVATE ${fpsparty_link_options})
 endif()

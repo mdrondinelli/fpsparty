@@ -6,36 +6,39 @@
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
+#include <tracy/Tracy.hpp>
 #include <vulkan/vulkan.hpp>
 
 namespace fpsparty::graphics {
 namespace {
 std::tuple<vk::Format, vk::Extent2D, vk::UniqueSwapchainKHR> make_swapchain(
-  glfw::Window window, vk::SurfaceKHR surface, vk::PresentModeKHR present_mode
-) {
-  const auto capabilities =
-    Global_vulkan_state::get().physical_device().getSurfaceCapabilitiesKHR(
-      surface
-    );
+  glfw::Window window,
+  vk::SurfaceKHR surface,
+  vk::PresentModeKHR present_mode) {
+  const auto capabilities = Global_vulkan_state::get()
+                              .physical_device()
+                              .getSurfaceCapabilitiesKHR(surface);
   const auto image_count =
     capabilities.maxImageCount > 0
       ? std::min(capabilities.maxImageCount, capabilities.minImageCount + 1)
       : (capabilities.minImageCount + 1);
   const auto surface_format = [&]() {
-    const auto surface_formats =
-      Global_vulkan_state::get().physical_device().getSurfaceFormatsKHR(surface
-      );
+    const auto surface_formats = Global_vulkan_state::get()
+                                   .physical_device()
+                                   .getSurfaceFormatsKHR(surface);
     for (const auto &surface_format : surface_formats) {
-      if (surface_format.format == vk::Format::eB8G8R8A8Srgb &&
-          surface_format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
+      if (
+        surface_format.format == vk::Format::eB8G8R8A8Srgb &&
+        surface_format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
         return surface_format;
       }
     }
     throw std::runtime_error{"No acceptable surface format available"};
   }();
   auto const extent = [&]() {
-    if (capabilities.currentExtent.width !=
-        std::numeric_limits<std::uint32_t>::max()) {
+    if (
+      capabilities.currentExtent.width !=
+      std::numeric_limits<std::uint32_t>::max()) {
       return capabilities.currentExtent;
     } else {
       const auto framebuffer_size = window.get_framebuffer_size();
@@ -43,13 +46,11 @@ std::tuple<vk::Format, vk::Extent2D, vk::UniqueSwapchainKHR> make_swapchain(
         .width = std::clamp(
           static_cast<std::uint32_t>(framebuffer_size[0]),
           capabilities.minImageExtent.width,
-          capabilities.maxImageExtent.width
-        ),
+          capabilities.maxImageExtent.width),
         .height = std::clamp(
           static_cast<std::uint32_t>(framebuffer_size[1]),
           capabilities.minImageExtent.height,
-          capabilities.maxImageExtent.height
-        )
+          capabilities.maxImageExtent.height),
       };
     }
   }();
@@ -74,8 +75,8 @@ std::tuple<vk::Format, vk::Extent2D, vk::UniqueSwapchainKHR> make_swapchain(
 }
 
 std::vector<vk::UniqueImageView> make_swapchain_image_views(
-  std::span<const vk::Image> swapchain_images, vk::Format swapchain_image_format
-) {
+  std::span<const vk::Image> swapchain_images,
+  vk::Format swapchain_image_format) {
   auto retval = std::vector<vk::UniqueImageView>{};
   retval.reserve(swapchain_images.size());
   for (const auto image : swapchain_images) {
@@ -92,15 +93,15 @@ std::vector<vk::UniqueImageView> make_swapchain_image_views(
             .baseArrayLayer = 0,
             .layerCount = 1,
           },
-      })
-    );
+      }));
   }
   return retval;
 }
 
-vk::UniqueSemaphore make_semaphore(const char *
+vk::UniqueSemaphore make_semaphore(
+  const char *
 #ifndef FPSPARTY_VULKAN_NDEBUG
-                                     debug_name
+    debug_name
 #endif
 ) {
   auto retval = Global_vulkan_state::get().device().createSemaphoreUnique({});
@@ -118,11 +119,9 @@ vk::UniqueSemaphore make_semaphore(const char *
 Graphics::Graphics(const Graphics_create_info &info)
     : _window{info.window},
       _surface{info.surface},
-      _surface_present_modes{
-        Global_vulkan_state::get().physical_device().getSurfacePresentModesKHR(
-          _surface
-        )
-      },
+      _surface_present_modes{Global_vulkan_state::get()
+                               .physical_device()
+                               .getSurfacePresentModesKHR(_surface)},
       _vsync_preferred{info.vsync_preferred} {
   init_swapchain(select_swapchain_present_mode());
   for (auto i = std::size_t{}; i != info.max_frames_in_flight; ++i) {
@@ -139,15 +138,18 @@ Graphics::Graphics(const Graphics_create_info &info)
   }
 }
 
-void Graphics::poll_works() { _works.poll(_work_resources); }
+void Graphics::poll_works() {
+  ZoneScoped;
+  _works.poll(_work_resources);
+}
 
 rc::Strong<Pipeline_layout>
 Graphics::create_pipeline_layout(const Pipeline_layout_create_info &info) {
   return _pipeline_layout_factory.create(info);
 }
 
-rc::Strong<Pipeline> Graphics::create_pipeline(const Pipeline_create_info &info
-) {
+rc::Strong<Pipeline>
+Graphics::create_pipeline(const Pipeline_create_info &info) {
   return _pipeline_factory.create(info);
 }
 
@@ -178,6 +180,7 @@ rc::Strong<Work> Graphics::submit_transient_work(Work_recorder recorder) {
 }
 
 std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
+  ZoneScoped;
   auto &frame_resource = _frame_resources[_frame_resource_index];
   frame_resource.swapchain_image_index = [&]() {
     for (;;) {
@@ -186,8 +189,7 @@ std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
           Global_vulkan_state::get().device().acquireNextImageKHR(
             *_swapchain,
             std::numeric_limits<std::uint64_t>::max(),
-            *frame_resource.swapchain_image_acquire_semaphore
-          );
+            *frame_resource.swapchain_image_acquire_semaphore);
         return swapchain_image_index.value;
       } catch (const vk::OutOfDateKHRError &e) {
         deinit_swapchain();
@@ -206,6 +208,7 @@ std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
 }
 
 rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {
+  ZoneScoped;
   auto &frame_resource = _frame_resources[_frame_resource_index];
   auto work_resource = detail::release_work_recorder(std::move(recorder));
   frame_resource.pending_work = _works.submit({
@@ -225,10 +228,11 @@ rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {
       throw vk::OutOfDateKHRError{"Subobtimal queue present result"};
     }
     const auto framebuffer_size = _window.get_framebuffer_size();
-    if (_swapchain_image_extent.width !=
-          static_cast<std::uint32_t>(framebuffer_size[0]) ||
-        _swapchain_image_extent.height !=
-          static_cast<std::uint32_t>(framebuffer_size[1])) {
+    if (
+      _swapchain_image_extent.width !=
+        static_cast<std::uint32_t>(framebuffer_size[0]) ||
+      _swapchain_image_extent.height !=
+        static_cast<std::uint32_t>(framebuffer_size[1])) {
       throw vk::OutOfDateKHRError{"Framebuffer size mismatch"};
     }
     if (const auto selected_swapchain_present_mode =
@@ -261,8 +265,8 @@ void Graphics::init_swapchain(vk::PresentModeKHR present_mode) {
   _vk_swapchain_image_views =
     make_swapchain_image_views(_vk_swapchain_images, _swapchain_image_format);
   for (auto i = std::size_t{}; i != _vk_swapchain_images.size(); ++i) {
-    _swapchain_images.emplace_back(
-      _image_factory.create(detail::External_image_create_info{
+    _swapchain_images.emplace_back(_image_factory.create(
+      detail::External_image_create_info{
         .image = _vk_swapchain_images[i],
         .image_view = *_vk_swapchain_image_views[i],
         .format = static_cast<Image_format>(_swapchain_image_format),
@@ -274,8 +278,7 @@ void Graphics::init_swapchain(vk::PresentModeKHR present_mode) {
           },
         .mip_level_count = 1,
         .array_layer_count = 1,
-      })
-    );
+      }));
   }
 }
 
