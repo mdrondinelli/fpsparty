@@ -145,6 +145,11 @@ void Graphics::poll_works() {
   _works.poll(_work_resources);
 }
 
+rc::Strong<Descriptor_set_layout> Graphics::create_descriptor_set_layout(
+  const Descriptor_set_layout_create_info &info) {
+  return _descriptor_set_layout_factory.create(info);
+}
+
 rc::Strong<Pipeline_layout>
 Graphics::create_pipeline_layout(const Pipeline_layout_create_info &info) {
   return _pipeline_layout_factory.create(info);

@@ -118,6 +118,7 @@ target_link_libraries(server enet game-server net)
 add_library(
   graphics
   src/graphics/buffer.cpp
+  src/graphics/descriptor_set_layout.cpp
   src/graphics/image.cpp
   src/graphics/graphics.cpp
   src/graphics/global_vulkan_state.cpp

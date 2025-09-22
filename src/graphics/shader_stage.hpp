@@ -8,6 +8,7 @@ namespace fpsparty::graphics {
 enum class Shader_stage_flag_bits {
   vertex = static_cast<int>(vk::ShaderStageFlagBits::eVertex),
   fragment = static_cast<int>(vk::ShaderStageFlagBits::eFragment),
+  compute = static_cast<int>(vk::ShaderStageFlagBits::eCompute),
 };
 
 using Shader_stage_flags = Flags<Shader_stage_flag_bits>;

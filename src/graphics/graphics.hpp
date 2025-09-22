@@ -3,6 +3,7 @@
 
 #include "glfw.hpp"
 #include "graphics/buffer.hpp"
+#include "graphics/descriptor_set_layout.hpp"
 #include "graphics/image.hpp"
 #include "graphics/pipeline.hpp"
 #include "graphics/work.hpp"
@@ -29,6 +30,9 @@ public:
   explicit Graphics(const Graphics_create_info &info);
 
   void poll_works();
+
+  rc::Strong<Descriptor_set_layout>
+  create_descriptor_set_layout(const Descriptor_set_layout_create_info &info);
 
   rc::Strong<Pipeline_layout>
   create_pipeline_layout(const Pipeline_layout_create_info &info);
@@ -81,6 +85,7 @@ private:
   vk::SurfaceKHR _surface{};
   std::vector<vk::PresentModeKHR> _surface_present_modes{};
   bool _vsync_preferred{};
+  rc::Factory<Descriptor_set_layout> _descriptor_set_layout_factory{};
   rc::Factory<Pipeline_layout> _pipeline_layout_factory{};
   rc::Factory<Pipeline> _pipeline_factory{};
   rc::Factory<Buffer> _buffer_factory{};

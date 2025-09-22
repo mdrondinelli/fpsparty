@@ -6,6 +6,8 @@
 #include "game/client/client.hpp"
 #include "game/core/constants.hpp"
 #include "glfw.hpp"
+#include "graphics/descriptor_set_layout.hpp"
+#include "graphics/descriptor_type.hpp"
 #include "graphics/global_vulkan_state.hpp"
 #include "graphics/graphics.hpp"
 #include "graphics/pipeline.hpp"
@@ -173,8 +175,19 @@ public:
         _mesh_vertex_shader{
           graphics::load_shader("./assets/shaders/shader.vert.spv")},
         _mesh_fragment_shader{
-          graphics::load_shader("./assets/shaders/shader.frag.spv")} {
-    // _graphics.set_vsync_preferred(false);
+          graphics::load_shader("./assets/shaders/shader.frag.spv")},
+        _grid_culling_descriptor_set_layout{
+          _graphics.create_descriptor_set_layout({
+            .bindings =
+              std::array<graphics::Descriptor_set_layout_binding, 1>{
+                graphics::Descriptor_set_layout_binding{
+                  .binding = 0,
+                  .descriptor_type = graphics::Descriptor_type::storage_buffer,
+                  .descriptor_count = 1,
+                  .stage_flags = graphics::Shader_stage_flag_bits::compute,
+                },
+              },
+          })} {
     _glfw_window.set_key_callback(this);
     _glfw_window.set_mouse_button_callback(this);
     _glfw_window.set_cursor_pos_callback(this);
@@ -352,7 +365,7 @@ public:
           const auto model_view_projection_matrix =
             (view_projection_matrix * model_matrix).eval();
           work_recorder.push_constants(
-            _mesh_pipeline->get_layout(),
+            _mesh_graphics_pipeline->get_layout(),
             graphics::Shader_stage_flag_bits::vertex,
             0,
             std::as_bytes(std::span{&model_view_projection_matrix, 1}));
@@ -376,7 +389,7 @@ public:
         const auto model_view_projection_matrix =
           (view_projection_matrix * model_matrix).eval();
         work_recorder.push_constants(
-          _mesh_pipeline->get_layout(),
+          _mesh_graphics_pipeline->get_layout(),
           graphics::Shader_stage_flag_bits::vertex,
           0,
           std::as_bytes(std::span{&model_view_projection_matrix, 1}));
@@ -521,11 +534,11 @@ private:
     if (
       !_pipelines_color_format ||
       *_pipelines_color_format != swapchain_image_format) {
-      _grid_pipeline = make_grid_pipeline(swapchain_image_format);
-      _mesh_pipeline = make_mesh_pipeline(swapchain_image_format);
+      _grid_graphics_pipeline = make_grid_pipeline(swapchain_image_format);
+      _mesh_graphics_pipeline = make_mesh_pipeline(swapchain_image_format);
       _pipelines_color_format = swapchain_image_format;
     }
-    return {_grid_pipeline, _mesh_pipeline};
+    return {_grid_graphics_pipeline, _mesh_graphics_pipeline};
   }
 
   rc::Strong<graphics::Pipeline>
@@ -543,10 +556,10 @@ private:
       },
     };
     const auto pipeline_layout =
-      _grid_pipeline ? _grid_pipeline->get_layout()
-                     : _graphics.create_pipeline_layout({
-                         .push_constant_ranges = push_constant_ranges,
-                       });
+      _grid_graphics_pipeline ? _grid_graphics_pipeline->get_layout()
+                              : _graphics.create_pipeline_layout({
+                                  .push_constant_ranges = push_constant_ranges,
+                                });
     const auto shader_stages =
       std::vector<graphics::Pipeline_shader_stage_create_info>{
         {
@@ -602,10 +615,11 @@ private:
       .size = 64,
     };
     const auto pipeline_layout =
-      _mesh_pipeline ? _mesh_pipeline->get_layout()
-                     : _graphics.create_pipeline_layout({
-                         .push_constant_ranges = {&push_constant_range, 1},
-                       });
+      _mesh_graphics_pipeline
+        ? _mesh_graphics_pipeline->get_layout()
+        : _graphics.create_pipeline_layout({
+            .push_constant_ranges = {&push_constant_range, 1},
+          });
     const auto shader_stages =
       std::vector<graphics::Pipeline_shader_stage_create_info>{
         {
@@ -668,8 +682,11 @@ private:
   graphics::Shader _grid_fragment_shader;
   graphics::Shader _mesh_vertex_shader;
   graphics::Shader _mesh_fragment_shader;
-  rc::Strong<graphics::Pipeline> _grid_pipeline{};
-  rc::Strong<graphics::Pipeline> _mesh_pipeline{};
+  rc::Strong<graphics::Descriptor_set_layout>
+    _grid_culling_descriptor_set_layout;
+  rc::Strong<graphics::Pipeline> _grid_culling_pipeline{};
+  rc::Strong<graphics::Pipeline> _grid_graphics_pipeline{};
+  rc::Strong<graphics::Pipeline> _mesh_graphics_pipeline{};
   std::optional<graphics::Image_format> _pipelines_color_format{};
   std::unique_ptr<client::Grid_mesh> _grid_mesh;
   rc::Strong<graphics::Buffer> _cube_vertex_buffer{};
