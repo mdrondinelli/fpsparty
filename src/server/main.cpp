@@ -25,7 +25,7 @@ int main() {
         .port = net::constants::port,
         .max_clients = net::constants::max_clients,
       },
-    .game_info = {.grid_info = {.width = 256, .height = 256, .depth = 256}},
+    .game_info = {.grid_info = {.width = 256, .height = 32, .depth = 256}},
     .tick_duration = constants::tick_duration,
   }};
   // green floor
