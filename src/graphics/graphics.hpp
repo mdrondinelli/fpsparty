@@ -35,6 +35,8 @@ public:
 
   rc::Strong<Pipeline> create_pipeline(const Pipeline_create_info &info);
 
+  rc::Strong<Buffer> create_staging_buffer(std::size_t size);
+
   rc::Strong<Buffer> create_staging_buffer(std::span<const std::byte> data);
 
   rc::Strong<Buffer> create_vertex_buffer(std::size_t size);
