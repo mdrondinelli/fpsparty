@@ -690,7 +690,7 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
       staging_buffer,
       _draw_buffer,
       {
-        .src_offset = vertex_buffer_size + index_buffer_size,
+        .src_offset = staging_buffer_draw_buffer_offset,
         .dst_offset = 0,
         .size = draw_buffer_size,
       });
