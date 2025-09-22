@@ -175,19 +175,27 @@ public:
         _mesh_vertex_shader{
           graphics::load_shader("./assets/shaders/shader.vert.spv")},
         _mesh_fragment_shader{
-          graphics::load_shader("./assets/shaders/shader.frag.spv")},
-        _grid_culling_descriptor_set_layout{
-          _graphics.create_descriptor_set_layout({
-            .bindings =
-              std::array<graphics::Descriptor_set_layout_binding, 1>{
-                graphics::Descriptor_set_layout_binding{
-                  .binding = 0,
-                  .descriptor_type = graphics::Descriptor_type::storage_buffer,
-                  .descriptor_count = 1,
-                  .stage_flags = graphics::Shader_stage_flag_bits::compute,
-                },
-              },
-          })} {
+          graphics::load_shader("./assets/shaders/shader.frag.spv")} {
+    const auto grid_culling_descriptor_set_layout_bindings =
+      std::array<graphics::Descriptor_set_layout_binding, 1>{
+        graphics::Descriptor_set_layout_binding{
+          .binding = 0,
+          .descriptor_type = graphics::Descriptor_type::storage_buffer,
+          .descriptor_count = 1,
+          .stage_flags = graphics::Shader_stage_flag_bits::compute,
+        },
+      };
+    _grid_culling_descriptor_set_layout =
+      _graphics.create_descriptor_set_layout({
+        .bindings = grid_culling_descriptor_set_layout_bindings,
+      });
+    const auto grid_culling_pipeline_layout_descriptor_set_layouts =
+      std::array<graphics::Descriptor_set_layout *, 1>{
+        _grid_culling_descriptor_set_layout.get(),
+      };
+    _grid_culling_pipeline_layout = _graphics.create_pipeline_layout({
+      .set_layouts = grid_culling_pipeline_layout_descriptor_set_layouts,
+    });
     _glfw_window.set_key_callback(this);
     _glfw_window.set_mouse_button_callback(this);
     _glfw_window.set_cursor_pos_callback(this);
@@ -684,6 +692,7 @@ private:
   graphics::Shader _mesh_fragment_shader;
   rc::Strong<graphics::Descriptor_set_layout>
     _grid_culling_descriptor_set_layout;
+  rc::Strong<graphics::Pipeline_layout> _grid_culling_pipeline_layout;
   rc::Strong<graphics::Pipeline> _grid_culling_pipeline{};
   rc::Strong<graphics::Pipeline> _grid_graphics_pipeline{};
   rc::Strong<graphics::Pipeline> _mesh_graphics_pipeline{};

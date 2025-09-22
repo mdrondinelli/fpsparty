@@ -1,6 +1,7 @@
 #ifndef FPSPARTY_GRAPHICS_PIPELINE_LAYOUT_HPP
 #define FPSPARTY_GRAPHICS_PIPELINE_LAYOUT_HPP
 
+#include "graphics/descriptor_set_layout.hpp"
 #include "graphics/shader_stage.hpp"
 #include <cstdint>
 #include <span>
@@ -21,7 +22,8 @@ struct Push_constant_range {
 };
 
 struct Pipeline_layout_create_info {
-  std::span<const Push_constant_range> push_constant_ranges;
+  std::span<const Descriptor_set_layout *const> set_layouts{};
+  std::span<const Push_constant_range> push_constant_ranges{};
 };
 
 class Pipeline_layout {
