@@ -7,12 +7,10 @@
 #include "graphics/front_face.hpp"
 #include "graphics/image.hpp"
 #include "graphics/image_layout.hpp"
-#include "graphics/index_buffer.hpp"
 #include "graphics/index_type.hpp"
 #include "graphics/pipeline.hpp"
 #include "graphics/pipeline_layout.hpp"
 #include "graphics/synchronization_scope.hpp"
-#include "graphics/vertex_buffer.hpp"
 #include "graphics/work_resource.hpp"
 #include "rc.hpp"
 #include <vulkan/vulkan.hpp>
@@ -79,10 +77,10 @@ public:
 
   void set_depth_compare_op(Compare_op op);
 
-  void bind_vertex_buffer(rc::Strong<const Vertex_buffer> buffer);
+  void bind_vertex_buffer(rc::Strong<const Buffer> buffer);
 
-  void bind_index_buffer(
-    rc::Strong<const Index_buffer> buffer, Index_type index_type);
+  void
+  bind_index_buffer(rc::Strong<const Buffer> buffer, Index_type index_type);
 
   void draw_indexed(const Indexed_draw_info &info) noexcept;
 

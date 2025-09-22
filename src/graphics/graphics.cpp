@@ -1,9 +1,11 @@
 #include "graphics.hpp"
 #include "glfw.hpp"
+#include "graphics/buffer_usage.hpp"
 #include "graphics/global_vulkan_state.hpp"
 #include "graphics/image.hpp"
 #include "graphics/work_recorder.hpp"
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <tracy/Tracy.hpp>
@@ -153,17 +155,35 @@ Graphics::create_pipeline(const Pipeline_create_info &info) {
   return _pipeline_factory.create(info);
 }
 
-rc::Strong<Staging_buffer>
+rc::Strong<Buffer>
 Graphics::create_staging_buffer(std::span<const std::byte> data) {
-  return _staging_buffer_factory.create(data);
+  auto retval = _buffer_factory.create(
+    Buffer_create_info{
+      .size = data.size(),
+      .usage = Buffer_usage_flag_bits::transfer_src,
+      .mapping_mode = Mapping_mode::write_only,
+    });
+  const auto memory = retval->map();
+  std::memcpy(memory.get().data(), data.data(), data.size());
+  return retval;
 }
 
-rc::Strong<Vertex_buffer> Graphics::create_vertex_buffer(std::size_t size) {
-  return _vertex_buffer_factory.create(size);
+rc::Strong<Buffer> Graphics::create_vertex_buffer(std::size_t size) {
+  return _buffer_factory.create(
+    Buffer_create_info{
+      .size = size,
+      .usage = Buffer_usage_flag_bits::transfer_dst |
+               Buffer_usage_flag_bits::vertex_buffer,
+    });
 }
 
-rc::Strong<Index_buffer> Graphics::create_index_buffer(std::size_t size) {
-  return _index_buffer_factory.create(size);
+rc::Strong<Buffer> Graphics::create_index_buffer(std::size_t size) {
+  return _buffer_factory.create(
+    Buffer_create_info{
+      .size = size,
+      .usage = Buffer_usage_flag_bits::transfer_dst |
+               Buffer_usage_flag_bits::index_buffer,
+    });
 }
 
 rc::Strong<Image> Graphics::create_image(const Image_create_info &info) {

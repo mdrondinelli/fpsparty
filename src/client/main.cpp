@@ -8,11 +8,9 @@
 #include "glfw.hpp"
 #include "graphics/global_vulkan_state.hpp"
 #include "graphics/graphics.hpp"
-#include "graphics/index_buffer.hpp"
 #include "graphics/pipeline.hpp"
 #include "graphics/shader_stage.hpp"
 #include "graphics/synchronization_scope.hpp"
-#include "graphics/vertex_buffer.hpp"
 #include "graphics/work_done_callback.hpp"
 #include "math/transformation_matrices.hpp"
 #include "net/core/constants.hpp"
@@ -474,7 +472,7 @@ protected:
   }
 
 private:
-  rc::Strong<graphics::Vertex_buffer>
+  rc::Strong<graphics::Buffer>
   upload_vertices(std::span<const std::byte> data) {
     const auto staging_buffer = _graphics.create_staging_buffer(data);
     auto vertex_buffer = _graphics.create_vertex_buffer(data.size());
@@ -492,8 +490,7 @@ private:
     return vertex_buffer;
   }
 
-  rc::Strong<graphics::Index_buffer>
-  upload_indices(std::span<const std::byte> data) {
+  rc::Strong<graphics::Buffer> upload_indices(std::span<const std::byte> data) {
     const auto staging_buffer = _graphics.create_staging_buffer(data);
     auto index_buffer = _graphics.create_index_buffer(data.size());
     auto work_recorder = _graphics.record_transient_work();
@@ -667,8 +664,8 @@ private:
   rc::Strong<graphics::Pipeline> _mesh_pipeline{};
   std::optional<graphics::Image_format> _pipelines_color_format{};
   std::unique_ptr<client::Grid_mesh> _grid_mesh;
-  rc::Strong<graphics::Vertex_buffer> _cube_vertex_buffer{};
-  rc::Strong<graphics::Index_buffer> _cube_index_buffer{};
+  rc::Strong<graphics::Buffer> _cube_vertex_buffer{};
+  rc::Strong<graphics::Buffer> _cube_index_buffer{};
 };
 
 } // namespace

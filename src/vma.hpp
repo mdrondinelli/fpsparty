@@ -80,8 +80,6 @@ public:
 
   class Memory_mapping_error : public std::exception {};
 
-  class Memory_unmapping_error : public std::exception {};
-
   constexpr Allocator() noexcept = default;
 
   constexpr Allocator(VmaAllocator value) noexcept : _value{value} {}
@@ -110,7 +108,9 @@ public:
 
   void *map_memory(Allocation allocation) const;
 
-  void unmap_memory(Allocation allocation) const;
+  void unmap_memory(Allocation allocation) const noexcept;
+
+  Allocation_info get_allocation_info(Allocation allocation) const noexcept;
 
 private:
   VmaAllocator _value{};
@@ -299,8 +299,15 @@ inline void *Allocator::map_memory(Allocation allocation) const {
   return retval;
 }
 
-inline void Allocator::unmap_memory(Allocation allocation) const {
+inline void Allocator::unmap_memory(Allocation allocation) const noexcept {
   vmaUnmapMemory(_value, allocation);
+}
+
+inline Allocation_info
+Allocator::get_allocation_info(Allocation allocation) const noexcept {
+  auto retval = VmaAllocationInfo{};
+  vmaGetAllocationInfo(_value, allocation, &retval);
+  return retval;
 }
 
 using Vulkan_functions = VmaVulkanFunctions;
