@@ -643,11 +643,11 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
       serial::Span_writer{staging_buffer_memory.get()};
     staging_buffer_writer.write(std::as_bytes(std::span{vertices}));
     staging_buffer_writer.write(std::as_bytes(std::span{indices}));
-    const auto staging_buffer_draw_buffer_begin =
+    const auto staging_buffer_draw_buffer_offset =
       staging_buffer_writer.offset();
     for (auto axis = 0; axis != 3; ++axis) {
       _indirect_face_draw_infos[axis].offset =
-        staging_buffer_writer.offset() - staging_buffer_draw_buffer_begin;
+        staging_buffer_writer.offset() - staging_buffer_draw_buffer_offset;
       _indirect_face_draw_infos[axis].draw_count = face_draw_infos[axis].size();
       staging_buffer_writer
         .write(std::as_bytes(std::span{face_draw_infos[axis]}));
@@ -655,7 +655,7 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
     for (auto axis = 0; axis != 3; ++axis) {
       for (auto sign = 0; sign != 2; ++sign) {
         _indirect_edge_draw_infos[axis][sign].offset =
-          staging_buffer_writer.offset() - staging_buffer_draw_buffer_begin;
+          staging_buffer_writer.offset() - staging_buffer_draw_buffer_offset;
         _indirect_edge_draw_infos[axis][sign].draw_count =
           edge_draw_infos[axis][sign].size();
         staging_buffer_writer
