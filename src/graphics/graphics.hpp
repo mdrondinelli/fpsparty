@@ -2,11 +2,9 @@
 #define FPSPARTY_GRAPHICS_GRAPHICS_HPP
 
 #include "glfw.hpp"
+#include "graphics/buffer.hpp"
 #include "graphics/image.hpp"
-#include "graphics/index_buffer.hpp"
 #include "graphics/pipeline.hpp"
-#include "graphics/staging_buffer.hpp"
-#include "graphics/vertex_buffer.hpp"
 #include "graphics/work.hpp"
 #include "graphics/work_queue.hpp"
 #include "graphics/work_recorder.hpp"
@@ -37,12 +35,11 @@ public:
 
   rc::Strong<Pipeline> create_pipeline(const Pipeline_create_info &info);
 
-  rc::Strong<Staging_buffer>
-  create_staging_buffer(std::span<const std::byte> data);
+  rc::Strong<Buffer> create_staging_buffer(std::span<const std::byte> data);
 
-  rc::Strong<Vertex_buffer> create_vertex_buffer(std::size_t size);
+  rc::Strong<Buffer> create_vertex_buffer(std::size_t size);
 
-  rc::Strong<Index_buffer> create_index_buffer(std::size_t size);
+  rc::Strong<Buffer> create_index_buffer(std::size_t size);
 
   rc::Strong<Image> create_image(const Image_create_info &info);
 
@@ -78,9 +75,7 @@ private:
   bool _vsync_preferred{};
   rc::Factory<Pipeline_layout> _pipeline_layout_factory{};
   rc::Factory<Pipeline> _pipeline_factory{};
-  rc::Factory<Staging_buffer> _staging_buffer_factory{};
-  rc::Factory<Vertex_buffer> _vertex_buffer_factory{};
-  rc::Factory<Index_buffer> _index_buffer_factory{};
+  rc::Factory<Buffer> _buffer_factory{};
   rc::Factory<Image> _image_factory{};
   vk::Format _swapchain_image_format{};
   vk::Extent2D _swapchain_image_extent{};

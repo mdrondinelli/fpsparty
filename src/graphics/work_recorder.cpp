@@ -1,8 +1,6 @@
 #include "work_recorder.hpp"
 #include "graphics/buffer.hpp"
 #include "graphics/image.hpp"
-#include <vulkan/vulkan_enums.hpp>
-#include <vulkan/vulkan_structs.hpp>
 
 namespace fpsparty::graphics {
 namespace detail {
@@ -157,14 +155,14 @@ void Work_recorder::set_depth_compare_op(Compare_op op) {
   get_command_buffer().setDepthCompareOp(static_cast<vk::CompareOp>(op));
 }
 
-void Work_recorder::bind_vertex_buffer(rc::Strong<const Vertex_buffer> buffer) {
+void Work_recorder::bind_vertex_buffer(rc::Strong<const Buffer> buffer) {
   get_command_buffer()
     .bindVertexBuffers(0, {detail::get_buffer_vk_buffer(*buffer)}, {0});
   add_reference(std::move(buffer));
 }
 
 void Work_recorder::bind_index_buffer(
-  rc::Strong<const Index_buffer> buffer, Index_type index_type) {
+  rc::Strong<const Buffer> buffer, Index_type index_type) {
   get_command_buffer().bindIndexBuffer(
     detail::get_buffer_vk_buffer(*buffer),
     0,

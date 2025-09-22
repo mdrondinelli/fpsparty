@@ -114,19 +114,17 @@ target_include_directories(
 target_link_directories(server PRIVATE ${CMAKE_SOURCE_DIR}/extern/enet/.libs)
 target_link_libraries(server enet game-server net)
 
-# graphics
+# libgraphics
 add_library(
   graphics
   src/graphics/buffer.cpp
   src/graphics/image.cpp
   src/graphics/graphics.cpp
   src/graphics/global_vulkan_state.cpp
-  src/graphics/index_buffer.cpp
+  src/graphics/mapped_memory.cpp
   src/graphics/pipeline_layout.cpp
   src/graphics/pipeline.cpp
   src/graphics/shader.cpp
-  src/graphics/staging_buffer.cpp
-  src/graphics/vertex_buffer.cpp
   src/graphics/work.cpp
   src/graphics/work_queue.cpp
   src/graphics/work_recorder.cpp

@@ -734,12 +734,12 @@ bool Grid_mesh::is_uploaded() const noexcept {
   return _vertex_buffer && _index_buffer && !_upload_work;
 }
 
-const rc::Strong<graphics::Vertex_buffer> &
+const rc::Strong<graphics::Buffer> &
 Grid_mesh::get_vertex_buffer() const noexcept {
   return _vertex_buffer;
 }
 
-const rc::Strong<graphics::Index_buffer> &
+const rc::Strong<graphics::Buffer> &
 Grid_mesh::get_index_buffer() const noexcept {
   return _index_buffer;
 }
