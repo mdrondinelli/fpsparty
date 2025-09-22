@@ -38,35 +38,35 @@ struct Vertex_attribute_description {
   std::uint32_t offset;
 };
 
-struct Pipeline_vertex_input_state_create_info {
+struct Graphics_pipeline_vertex_input_state_create_info {
   std::span<const Vertex_binding_description> bindings;
   std::span<const Vertex_attribute_description> attributes;
 };
 
-struct Pipeline_input_assembly_state_create_info {
+struct Graphics_pipeline_input_assembly_state_create_info {
   Primitive_topology primitive_topology;
 };
 
-struct Pipeline_depth_state_create_info {
+struct Graphics_pipeline_depth_state_create_info {
   bool depth_attachment_enabled;
 };
 
-struct Pipeline_color_state_create_info {
+struct Graphics_pipeline_color_state_create_info {
   std::span<const Image_format> color_attachment_formats;
 };
 
-struct Pipeline_create_info {
+struct Graphics_pipeline_create_info {
   std::span<const Pipeline_shader_stage_create_info> shader_stages;
-  Pipeline_vertex_input_state_create_info vertex_input_state;
-  Pipeline_input_assembly_state_create_info input_assembly_state;
-  Pipeline_depth_state_create_info depth_state;
-  Pipeline_color_state_create_info color_state;
+  Graphics_pipeline_vertex_input_state_create_info vertex_input_state;
+  Graphics_pipeline_input_assembly_state_create_info input_assembly_state;
+  Graphics_pipeline_depth_state_create_info depth_state;
+  Graphics_pipeline_color_state_create_info color_state;
   rc::Strong<Pipeline_layout> layout;
 };
 
 class Pipeline {
 public:
-  explicit Pipeline(const Pipeline_create_info &info);
+  explicit Pipeline(const Graphics_pipeline_create_info &info);
 
   const rc::Strong<Pipeline_layout> &get_layout() const noexcept;
 

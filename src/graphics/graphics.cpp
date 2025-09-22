@@ -151,7 +151,7 @@ Graphics::create_pipeline_layout(const Pipeline_layout_create_info &info) {
 }
 
 rc::Strong<Pipeline>
-Graphics::create_pipeline(const Pipeline_create_info &info) {
+Graphics::create_graphics_pipeline(const Graphics_pipeline_create_info &info) {
   return _pipeline_factory.create(info);
 }
 

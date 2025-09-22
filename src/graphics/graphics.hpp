@@ -33,7 +33,8 @@ public:
   rc::Strong<Pipeline_layout>
   create_pipeline_layout(const Pipeline_layout_create_info &info);
 
-  rc::Strong<Pipeline> create_pipeline(const Pipeline_create_info &info);
+  rc::Strong<Pipeline>
+  create_graphics_pipeline(const Graphics_pipeline_create_info &info);
 
   rc::Strong<Buffer> create_buffer(const Buffer_create_info &info);
 

@@ -5,7 +5,8 @@
 #include <vulkan/vulkan.hpp>
 
 namespace fpsparty::graphics {
-Pipeline::Pipeline(const Pipeline_create_info &info) : _layout{info.layout} {
+Pipeline::Pipeline(const Graphics_pipeline_create_info &info)
+    : _layout{info.layout} {
   auto vk_shader_stages = std::vector<vk::PipelineShaderStageCreateInfo>{};
   vk_shader_stages.reserve(info.shader_stages.size());
   for (const auto &shader_stage : info.shader_stages) {
