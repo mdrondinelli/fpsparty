@@ -635,7 +635,7 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
   const auto index_buffer_size = indices.size() * sizeof(std::uint32_t);
   const auto draw_buffer_size =
     draw_count * sizeof(graphics::Indexed_draw_info);
-  if (vertex_buffer_size > 0 && index_buffer_size > 0) {
+  if (vertex_buffer_size > 0 && index_buffer_size > 0 && draw_buffer_size > 0) {
     const auto staging_buffer = info.graphics->create_staging_buffer(
       vertex_buffer_size + index_buffer_size + draw_buffer_size);
     const auto staging_buffer_memory = staging_buffer->map();
