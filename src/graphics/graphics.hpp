@@ -36,6 +36,9 @@ public:
   rc::Strong<Pipeline>
   create_graphics_pipeline(const Graphics_pipeline_create_info &info);
 
+  rc::Strong<Pipeline>
+  create_compute_pipeline(const Compute_pipeline_create_info &info);
+
   rc::Strong<Buffer> create_buffer(const Buffer_create_info &info);
 
   rc::Strong<Buffer> create_staging_buffer(std::size_t size);

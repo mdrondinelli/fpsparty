@@ -571,7 +571,7 @@ private:
       },
     };
     const auto color_attachment_format = swapchain_image_format;
-    return _graphics.create_pipeline({
+    return _graphics.create_graphics_pipeline({
       .shader_stages = std::span{shader_stages},
       .vertex_input_state =
         {
@@ -636,7 +636,7 @@ private:
           .offset = 12,
         }};
     const auto color_attachment_format = swapchain_image_format;
-    return _graphics.create_pipeline({
+    return _graphics.create_graphics_pipeline({
       .shader_stages = std::span{shader_stages},
       .vertex_input_state =
         {

@@ -64,9 +64,16 @@ struct Graphics_pipeline_create_info {
   rc::Strong<Pipeline_layout> layout;
 };
 
+struct Compute_pipeline_create_info {
+  Pipeline_shader_stage_create_info shader_stage;
+  rc::Strong<Pipeline_layout> layout;
+};
+
 class Pipeline {
 public:
   explicit Pipeline(const Graphics_pipeline_create_info &info);
+
+  explicit Pipeline(const Compute_pipeline_create_info &info);
 
   const rc::Strong<Pipeline_layout> &get_layout() const noexcept;
 

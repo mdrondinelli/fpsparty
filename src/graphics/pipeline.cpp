@@ -145,6 +145,27 @@ Pipeline::Pipeline(const Graphics_pipeline_create_info &info)
       .value[0]);
 }
 
+Pipeline::Pipeline(const Compute_pipeline_create_info &info)
+    : _layout{info.layout} {
+  _vk_pipeline = std::move(
+    Global_vulkan_state::get()
+      .device()
+      .createComputePipelinesUnique(
+        {},
+        {vk::ComputePipelineCreateInfo{
+          .stage =
+            {
+              .stage = vk::ShaderStageFlagBits::eCompute,
+              .module =
+                detail::get_shader_vk_shader_module(*info.shader_stage.shader),
+              .pName = "main",
+            },
+          .layout =
+            detail::get_pipeline_layout_vk_pipeline_layout(*info.layout),
+        }})
+      .value[0]);
+}
+
 const rc::Strong<Pipeline_layout> &Pipeline::get_layout() const noexcept {
   return _layout;
 }

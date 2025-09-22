@@ -155,6 +155,11 @@ Graphics::create_graphics_pipeline(const Graphics_pipeline_create_info &info) {
   return _pipeline_factory.create(info);
 }
 
+rc::Strong<Pipeline>
+Graphics::create_compute_pipeline(const Compute_pipeline_create_info &info) {
+  return _pipeline_factory.create(info);
+}
+
 rc::Strong<Buffer> Graphics::create_buffer(const Buffer_create_info &info) {
   return _buffer_factory.create(info);
 }
