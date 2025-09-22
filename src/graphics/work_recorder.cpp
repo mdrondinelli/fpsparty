@@ -179,6 +179,16 @@ void Work_recorder::draw_indexed(const Indexed_draw_info &info) noexcept {
     info.first_instance);
 }
 
+void Work_recorder::draw_indexed_indirect(
+  const Indirect_indexed_draw_info &info) noexcept {
+  get_command_buffer().drawIndexedIndirect(
+    detail::get_buffer_vk_buffer(*info.buffer),
+    info.offset,
+    info.draw_count,
+    info.stride);
+  add_reference(info.buffer);
+}
+
 void Work_recorder::push_constants(
   rc::Strong<const Pipeline_layout> pipeline_layout,
   Shader_stage_flags stage_flags,

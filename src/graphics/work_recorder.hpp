@@ -37,10 +37,17 @@ struct Rendering_begin_info {
 
 struct Indexed_draw_info {
   std::uint32_t index_count;
-  std::uint32_t instance_count{1};
-  std::uint32_t first_index{0};
-  std::int32_t vertex_offset{0};
-  std::uint32_t first_instance{0};
+  std::uint32_t instance_count;
+  std::uint32_t first_index;
+  std::int32_t vertex_offset;
+  std::uint32_t first_instance;
+};
+
+struct Indirect_indexed_draw_info {
+  rc::Strong<Buffer> buffer;
+  std::uint64_t offset;
+  std::uint32_t draw_count;
+  std::uint32_t stride;
 };
 
 class Work_recorder {
@@ -83,6 +90,8 @@ public:
   bind_index_buffer(rc::Strong<const Buffer> buffer, Index_type index_type);
 
   void draw_indexed(const Indexed_draw_info &info) noexcept;
+
+  void draw_indexed_indirect(const Indirect_indexed_draw_info &info) noexcept;
 
   void push_constants(
     rc::Strong<const Pipeline_layout> pipeline_layout,

@@ -33,14 +33,19 @@ public:
   const rc::Strong<graphics::Buffer> &get_index_buffer() const noexcept;
 
 private:
+  struct Indirect_draw_info {
+    std::uint64_t offset;
+    std::uint32_t draw_count;
+  };
+
   void on_work_done(const graphics::Work &work) override;
 
   rc::Strong<graphics::Buffer> _vertex_buffer{};
   rc::Strong<graphics::Buffer> _index_buffer{};
+  rc::Strong<graphics::Buffer> _draw_buffer{};
   rc::Strong<graphics::Work> _upload_work{};
-  std::array<std::vector<graphics::Indexed_draw_info>, 3> _face_draw_infos;
-  std::array<std::array<std::vector<graphics::Indexed_draw_info>, 2>, 3>
-    _edge_draw_infos;
+  std::array<Indirect_draw_info, 3> _indirect_face_draw_infos;
+  std::array<std::array<Indirect_draw_info, 2>, 3> _indirect_edge_draw_infos;
 };
 } // namespace fpsparty::client
 
