@@ -155,14 +155,18 @@ Graphics::create_pipeline(const Pipeline_create_info &info) {
   return _pipeline_factory.create(info);
 }
 
-rc::Strong<Buffer>
-Graphics::create_staging_buffer(std::span<const std::byte> data) {
-  auto retval = _buffer_factory.create(
+rc::Strong<Buffer> Graphics::create_staging_buffer(std::size_t size) {
+  return _buffer_factory.create(
     Buffer_create_info{
-      .size = data.size(),
+      .size = size,
       .usage = Buffer_usage_flag_bits::transfer_src,
       .mapping_mode = Mapping_mode::write_only,
     });
+}
+
+rc::Strong<Buffer>
+Graphics::create_staging_buffer(std::span<const std::byte> data) {
+  auto retval = create_staging_buffer(data.size());
   const auto memory = retval->map();
   std::memcpy(memory.get().data(), data.data(), data.size());
   return retval;

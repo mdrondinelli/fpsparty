@@ -171,8 +171,8 @@ struct Faces_geometry_generation_result {
   std::array<std::vector<std::uint32_t>, 3> indices;
 };
 
-Faces_geometry_generation_result
-generate_faces_geometry(const game::Grid &grid) {
+Faces_geometry_generation_result generate_faces_geometry(
+  const Eigen::Vector3i &chunk_indices, const game::Chunk &chunk) {
   auto retval = Faces_geometry_generation_result{};
   auto &x_vertices = retval.vertices[0];
   auto &y_vertices = retval.vertices[1];
@@ -181,42 +181,40 @@ generate_faces_geometry(const game::Grid &grid) {
   auto &y_indices = retval.indices[1];
   auto &z_indices = retval.indices[2];
   constexpr auto n = static_cast<int>(game::Chunk::edge_length);
-  for (const auto &[chunk_indices, chunk] : grid.get_chunks()) {
-    for (auto x = 0; x != n; ++x) {
-      for (auto y = 0; y != n; ++y) {
-        for (auto z = 0; z != n; ++z) {
-          const auto cell_indices = Eigen::Vector3i{
-            chunk_indices.x() * n + x,
-            chunk_indices.y() * n + y,
-            chunk_indices.z() * n + z,
-          };
-          if (chunk->is_solid(game::Axis::x, {x, y, z})) {
-            const auto [face_vertices, face_indices] = generate_face_geometry(
-              cell_indices,
-              {0.0f, 1.0f, 0.0f},
-              {0.0f, 0.0f, 1.0f},
-              static_cast<std::uint32_t>(x_vertices.size()));
-            x_vertices.append_range(face_vertices);
-            x_indices.append_range(face_indices);
-          }
-          if (chunk->is_solid(game::Axis::y, {x, y, z})) {
-            const auto [face_vertices, face_indices] = generate_face_geometry(
-              cell_indices,
-              {0.0f, 0.0f, 1.0f},
-              {1.0f, 0.0f, 0.0f},
-              static_cast<std::uint32_t>(y_vertices.size()));
-            y_vertices.append_range(face_vertices);
-            y_indices.append_range(face_indices);
-          }
-          if (chunk->is_solid(game::Axis::z, {x, y, z})) {
-            const auto [face_vertices, face_indices] = generate_face_geometry(
-              cell_indices,
-              {1.0f, 0.0f, 0.0f},
-              {0.0f, 1.0f, 0.0f},
-              static_cast<std::uint32_t>(z_vertices.size()));
-            z_vertices.append_range(face_vertices);
-            z_indices.append_range(face_indices);
-          }
+  for (auto x = 0; x != n; ++x) {
+    for (auto y = 0; y != n; ++y) {
+      for (auto z = 0; z != n; ++z) {
+        const auto cell_indices = Eigen::Vector3i{
+          chunk_indices.x() * n + x,
+          chunk_indices.y() * n + y,
+          chunk_indices.z() * n + z,
+        };
+        if (chunk.is_solid(game::Axis::x, {x, y, z})) {
+          const auto [face_vertices, face_indices] = generate_face_geometry(
+            cell_indices,
+            {0.0f, 1.0f, 0.0f},
+            {0.0f, 0.0f, 1.0f},
+            static_cast<std::uint32_t>(x_vertices.size()));
+          x_vertices.append_range(face_vertices);
+          x_indices.append_range(face_indices);
+        }
+        if (chunk.is_solid(game::Axis::y, {x, y, z})) {
+          const auto [face_vertices, face_indices] = generate_face_geometry(
+            cell_indices,
+            {0.0f, 0.0f, 1.0f},
+            {1.0f, 0.0f, 0.0f},
+            static_cast<std::uint32_t>(y_vertices.size()));
+          y_vertices.append_range(face_vertices);
+          y_indices.append_range(face_indices);
+        }
+        if (chunk.is_solid(game::Axis::z, {x, y, z})) {
+          const auto [face_vertices, face_indices] = generate_face_geometry(
+            cell_indices,
+            {1.0f, 0.0f, 0.0f},
+            {0.0f, 1.0f, 0.0f},
+            static_cast<std::uint32_t>(z_vertices.size()));
+          z_vertices.append_range(face_vertices);
+          z_indices.append_range(face_indices);
         }
       }
     }
@@ -306,275 +304,272 @@ struct Edges_geometry_generation_result {
   std::array<std::array<std::vector<std::uint32_t>, 2>, 3> indices;
 };
 
-Edges_geometry_generation_result
-generate_edges_geometry(const game::Grid &grid) {
+Edges_geometry_generation_result generate_edges_geometry(
+  const Eigen::Vector3i &chunk_indices,
+  const game::Chunk &chunk,
+  const game::Grid &grid) {
   auto retval = Edges_geometry_generation_result{};
   constexpr auto n = static_cast<int>(game::Chunk::edge_length);
-  for (const auto &[chunk_indices, chunk] : grid.get_chunks()) {
-    for (auto x = 0; x != n; ++x) {
-      for (auto y = 0; y != n; ++y) {
-        for (auto z = 0; z != n; ++z) {
-          const auto cell_indices = Eigen::Vector3i{
-            chunk_indices.x() * n + x,
-            chunk_indices.y() * n + y,
-            chunk_indices.z() * n + z,
-          };
-          const auto x_solid = chunk->is_solid(game::Axis::x, {x, y, z});
-          const auto y_solid = chunk->is_solid(game::Axis::y, {x, y, z});
-          const auto z_solid = chunk->is_solid(game::Axis::z, {x, y, z});
-          const auto visibility_matrix = calculate_edge_visibility_matrix(
-            grid, cell_indices, x_solid, y_solid, z_solid);
-          if (visibility_matrix[0][1][0]) {
-            const auto [vertices, indices] = generate_edge_geometry(
+  for (auto x = 0; x != n; ++x) {
+    for (auto y = 0; y != n; ++y) {
+      for (auto z = 0; z != n; ++z) {
+        const auto cell_indices = Eigen::Vector3i{
+          chunk_indices.x() * n + x,
+          chunk_indices.y() * n + y,
+          chunk_indices.z() * n + z,
+        };
+        const auto x_solid = chunk.is_solid(game::Axis::x, {x, y, z});
+        const auto y_solid = chunk.is_solid(game::Axis::y, {x, y, z});
+        const auto z_solid = chunk.is_solid(game::Axis::z, {x, y, z});
+        const auto visibility_matrix = calculate_edge_visibility_matrix(
+          grid, cell_indices, x_solid, y_solid, z_solid);
+        if (visibility_matrix[0][1][0]) {
+          const auto [vertices, indices] = generate_edge_geometry(
+            cell_indices,
+            {1.0f, 0.0f, 0.0f},
+            {0.0f, 0.0f, 1.0f},
+            {0.0f, 1.0f, 0.0f},
+            retval.vertices[1][0].size());
+          retval.vertices[1][0].append_range(vertices);
+          retval.indices[1][0].append_range(indices);
+        }
+        if (visibility_matrix[0][1][1]) {
+          const auto [vertices, indices] = generate_edge_geometry(
+            cell_indices,
+            {1.0f, 0.0f, 0.0f},
+            {0.0f, 0.0f, -1.0f},
+            {0.0f, -1.0f, 0.0f},
+            retval.vertices[1][1].size());
+          retval.vertices[1][1].append_range(vertices);
+          retval.indices[1][1].append_range(indices);
+        }
+        if (visibility_matrix[0][2][0]) {
+          const auto [vertices, indices] = generate_edge_geometry(
+            cell_indices,
+            {1.0f, 0.0f, 0.0f},
+            {0.0f, -1.0f, 0.0f},
+            {0.0f, 0.0f, 1.0f},
+            retval.vertices[2][0].size());
+          retval.vertices[2][0].append_range(vertices);
+          retval.indices[2][0].append_range(indices);
+        }
+        if (visibility_matrix[0][2][1]) {
+          const auto [vertices, indices] = generate_edge_geometry(
+            cell_indices,
+            {1.0f, 0.0f, 0.0f},
+            {0.0f, 1.0f, 0.0f},
+            {0.0f, 0.0f, -1.0f},
+            retval.vertices[2][1].size());
+          retval.vertices[2][1].append_range(vertices);
+          retval.indices[2][1].append_range(indices);
+        }
+        if (visibility_matrix[1][0][0]) {
+          const auto [vertices, indices] = generate_edge_geometry(
+            cell_indices,
+            {0.0f, 1.0f, 0.0f},
+            {0.0f, 0.0f, -1.0f},
+            {1.0f, 0.0f, 0.0f},
+            retval.vertices[0][0].size());
+          retval.vertices[0][0].append_range(vertices);
+          retval.indices[0][0].append_range(indices);
+        }
+        if (visibility_matrix[1][0][1]) {
+          const auto [vertices, indices] = generate_edge_geometry(
+            cell_indices,
+            {0.0f, 1.0f, 0.0f},
+            {0.0f, 0.0f, 1.0f},
+            {-1.0f, 0.0f, 0.0f},
+            retval.vertices[0][1].size());
+          retval.vertices[0][1].append_range(vertices);
+          retval.indices[0][1].append_range(indices);
+        }
+        if (visibility_matrix[1][2][0]) {
+          const auto [vertices, indices] = generate_edge_geometry(
+            cell_indices,
+            {0.0f, 1.0f, 0.0f},
+            {1.0f, 0.0f, 0.0f},
+            {0.0f, 0.0f, 1.0f},
+            retval.vertices[2][0].size());
+          retval.vertices[2][0].append_range(vertices);
+          retval.indices[2][0].append_range(indices);
+        }
+        if (visibility_matrix[1][2][1]) {
+          const auto [vertices, indices] = generate_edge_geometry(
+            cell_indices,
+            {0.0f, 1.0f, 0.0f},
+            {-1.0f, 0.0f, 0.0f},
+            {0.0f, 0.0f, -1.0f},
+            retval.vertices[2][1].size());
+          retval.vertices[2][1].append_range(vertices);
+          retval.indices[2][1].append_range(indices);
+        }
+        if (visibility_matrix[2][0][0]) {
+          const auto [vertices, indices] = generate_edge_geometry(
+            cell_indices,
+            {0.0f, 0.0f, 1.0f},
+            {0.0f, 1.0f, 0.0f},
+            {1.0f, 0.0f, 0.0f},
+            retval.vertices[0][0].size());
+          retval.vertices[0][0].append_range(vertices);
+          retval.indices[0][0].append_range(indices);
+        }
+        if (visibility_matrix[2][0][1]) {
+          const auto [vertices, indices] = generate_edge_geometry(
+            cell_indices,
+            {0.0f, 0.0f, 1.0f},
+            {0.0f, -1.0f, 0.0f},
+            {-1.0f, 0.0f, 0.0f},
+            retval.vertices[0][1].size());
+          retval.vertices[0][1].append_range(vertices);
+          retval.indices[0][1].append_range(indices);
+        }
+        if (visibility_matrix[2][1][0]) {
+          const auto [vertices, indices] = generate_edge_geometry(
+            cell_indices,
+            {0.0f, 0.0f, 1.0f},
+            {-1.0f, 0.0f, 0.0f},
+            {0.0f, 1.0f, 0.0f},
+            retval.vertices[1][0].size());
+          retval.vertices[1][0].append_range(vertices);
+          retval.indices[1][0].append_range(indices);
+        }
+        // z-axis edge, -y normal
+        if (visibility_matrix[2][1][1]) {
+          const auto [vertices, indices] = generate_edge_geometry(
+            cell_indices,
+            {0.0f, 0.0f, 1.0f},
+            {1.0f, 0.0f, 0.0f},
+            {0.0f, -1.0f, 0.0f},
+            retval.vertices[1][1].size());
+          retval.vertices[1][1].append_range(vertices);
+          retval.indices[1][1].append_range(indices);
+        }
+        const auto x_neighbor_indices = cell_indices - Eigen::Vector3i{1, 0, 0};
+        const auto y_neighbor_indices = cell_indices - Eigen::Vector3i{0, 1, 0};
+        const auto z_neighbor_indices = cell_indices - Eigen::Vector3i{0, 0, 1};
+        const auto xy_neighbor_indices =
+          cell_indices - Eigen::Vector3i{1, 1, 0};
+        const auto xz_neighbor_indices =
+          cell_indices - Eigen::Vector3i{1, 0, 1};
+        const auto yz_neighbor_indices =
+          cell_indices - Eigen::Vector3i{0, 1, 1};
+        const auto vertex_solid =
+          x_solid || y_solid || z_solid ||
+          grid.is_solid(game::Axis::y, x_neighbor_indices) ||
+          grid.is_solid(game::Axis::z, x_neighbor_indices) ||
+          grid.is_solid(game::Axis::x, y_neighbor_indices) ||
+          grid.is_solid(game::Axis::z, y_neighbor_indices) ||
+          grid.is_solid(game::Axis::x, z_neighbor_indices) ||
+          grid.is_solid(game::Axis::y, z_neighbor_indices) ||
+          grid.is_solid(game::Axis::z, xy_neighbor_indices) ||
+          grid.is_solid(game::Axis::y, xz_neighbor_indices) ||
+          grid.is_solid(game::Axis::x, yz_neighbor_indices);
+        if (vertex_solid) {
+          const auto x_neighbor_visibility_matrix =
+            calculate_edge_visibility_matrix(
+              grid,
+              x_neighbor_indices,
+              grid.is_solid(game::Axis::x, x_neighbor_indices),
+              grid.is_solid(game::Axis::y, x_neighbor_indices),
+              grid.is_solid(game::Axis::z, x_neighbor_indices));
+          const auto y_neighbor_visibility_matrix =
+            calculate_edge_visibility_matrix(
+              grid,
+              y_neighbor_indices,
+              grid.is_solid(game::Axis::x, y_neighbor_indices),
+              grid.is_solid(game::Axis::y, y_neighbor_indices),
+              grid.is_solid(game::Axis::z, y_neighbor_indices));
+          const auto z_neighbor_visibility_matrix =
+            calculate_edge_visibility_matrix(
+              grid,
+              z_neighbor_indices,
+              grid.is_solid(game::Axis::x, z_neighbor_indices),
+              grid.is_solid(game::Axis::y, z_neighbor_indices),
+              grid.is_solid(game::Axis::z, z_neighbor_indices));
+          const auto predicate = [](bool b) { return b; };
+          // +x normal
+          if (
+            std::ranges::none_of(visibility_matrix[0][1], predicate) &&
+            std::ranges::none_of(visibility_matrix[0][2], predicate)) {
+            const auto [vertices, indices] = generate_vertex_geometry(
               cell_indices,
-              {1.0f, 0.0f, 0.0f},
+              {0.0f, 1.0f, 0.0f},
               {0.0f, 0.0f, 1.0f},
-              {0.0f, 1.0f, 0.0f},
-              retval.vertices[1][0].size());
-            retval.vertices[1][0].append_range(vertices);
-            retval.indices[1][0].append_range(indices);
-          }
-          if (visibility_matrix[0][1][1]) {
-            const auto [vertices, indices] = generate_edge_geometry(
-              cell_indices,
-              {1.0f, 0.0f, 0.0f},
-              {0.0f, 0.0f, -1.0f},
-              {0.0f, -1.0f, 0.0f},
-              retval.vertices[1][1].size());
-            retval.vertices[1][1].append_range(vertices);
-            retval.indices[1][1].append_range(indices);
-          }
-          if (visibility_matrix[0][2][0]) {
-            const auto [vertices, indices] = generate_edge_geometry(
-              cell_indices,
-              {1.0f, 0.0f, 0.0f},
-              {0.0f, -1.0f, 0.0f},
-              {0.0f, 0.0f, 1.0f},
-              retval.vertices[2][0].size());
-            retval.vertices[2][0].append_range(vertices);
-            retval.indices[2][0].append_range(indices);
-          }
-          if (visibility_matrix[0][2][1]) {
-            const auto [vertices, indices] = generate_edge_geometry(
-              cell_indices,
-              {1.0f, 0.0f, 0.0f},
-              {0.0f, 1.0f, 0.0f},
-              {0.0f, 0.0f, -1.0f},
-              retval.vertices[2][1].size());
-            retval.vertices[2][1].append_range(vertices);
-            retval.indices[2][1].append_range(indices);
-          }
-          if (visibility_matrix[1][0][0]) {
-            const auto [vertices, indices] = generate_edge_geometry(
-              cell_indices,
-              {0.0f, 1.0f, 0.0f},
-              {0.0f, 0.0f, -1.0f},
               {1.0f, 0.0f, 0.0f},
               retval.vertices[0][0].size());
             retval.vertices[0][0].append_range(vertices);
             retval.indices[0][0].append_range(indices);
           }
-          if (visibility_matrix[1][0][1]) {
-            const auto [vertices, indices] = generate_edge_geometry(
+          // -x normal
+          if (
+            std::ranges::none_of(
+              x_neighbor_visibility_matrix[0][1], predicate) &&
+            std::ranges::none_of(
+              x_neighbor_visibility_matrix[0][2], predicate)) {
+            const auto [vertices, indices] = generate_vertex_geometry(
               cell_indices,
-              {0.0f, 1.0f, 0.0f},
+              {0.0f, -1.0f, 0.0f},
               {0.0f, 0.0f, 1.0f},
               {-1.0f, 0.0f, 0.0f},
               retval.vertices[0][1].size());
             retval.vertices[0][1].append_range(vertices);
             retval.indices[0][1].append_range(indices);
           }
-          if (visibility_matrix[1][2][0]) {
-            const auto [vertices, indices] = generate_edge_geometry(
+          // +y normal
+          if (
+            std::ranges::none_of(visibility_matrix[1][0], predicate) &&
+            std::ranges::none_of(visibility_matrix[1][2], predicate)) {
+            const auto [vertices, indices] = generate_vertex_geometry(
               cell_indices,
-              {0.0f, 1.0f, 0.0f},
-              {1.0f, 0.0f, 0.0f},
-              {0.0f, 0.0f, 1.0f},
-              retval.vertices[2][0].size());
-            retval.vertices[2][0].append_range(vertices);
-            retval.indices[2][0].append_range(indices);
-          }
-          if (visibility_matrix[1][2][1]) {
-            const auto [vertices, indices] = generate_edge_geometry(
-              cell_indices,
-              {0.0f, 1.0f, 0.0f},
               {-1.0f, 0.0f, 0.0f},
-              {0.0f, 0.0f, -1.0f},
-              retval.vertices[2][1].size());
-            retval.vertices[2][1].append_range(vertices);
-            retval.indices[2][1].append_range(indices);
-          }
-          if (visibility_matrix[2][0][0]) {
-            const auto [vertices, indices] = generate_edge_geometry(
-              cell_indices,
               {0.0f, 0.0f, 1.0f},
-              {0.0f, 1.0f, 0.0f},
-              {1.0f, 0.0f, 0.0f},
-              retval.vertices[0][0].size());
-            retval.vertices[0][0].append_range(vertices);
-            retval.indices[0][0].append_range(indices);
-          }
-          if (visibility_matrix[2][0][1]) {
-            const auto [vertices, indices] = generate_edge_geometry(
-              cell_indices,
-              {0.0f, 0.0f, 1.0f},
-              {0.0f, -1.0f, 0.0f},
-              {-1.0f, 0.0f, 0.0f},
-              retval.vertices[0][1].size());
-            retval.vertices[0][1].append_range(vertices);
-            retval.indices[0][1].append_range(indices);
-          }
-          if (visibility_matrix[2][1][0]) {
-            const auto [vertices, indices] = generate_edge_geometry(
-              cell_indices,
-              {0.0f, 0.0f, 1.0f},
-              {-1.0f, 0.0f, 0.0f},
               {0.0f, 1.0f, 0.0f},
               retval.vertices[1][0].size());
             retval.vertices[1][0].append_range(vertices);
             retval.indices[1][0].append_range(indices);
           }
-          // z-axis edge, -y normal
-          if (visibility_matrix[2][1][1]) {
-            const auto [vertices, indices] = generate_edge_geometry(
+          // -y normal
+          if (
+            std::ranges::none_of(
+              y_neighbor_visibility_matrix[1][0], predicate) &&
+            std::ranges::none_of(
+              y_neighbor_visibility_matrix[1][2], predicate)) {
+            const auto [vertices, indices] = generate_vertex_geometry(
               cell_indices,
-              {0.0f, 0.0f, 1.0f},
               {1.0f, 0.0f, 0.0f},
+              {0.0f, 0.0f, 1.0f},
               {0.0f, -1.0f, 0.0f},
               retval.vertices[1][1].size());
             retval.vertices[1][1].append_range(vertices);
             retval.indices[1][1].append_range(indices);
           }
-          const auto x_neighbor_indices =
-            cell_indices - Eigen::Vector3i{1, 0, 0};
-          const auto y_neighbor_indices =
-            cell_indices - Eigen::Vector3i{0, 1, 0};
-          const auto z_neighbor_indices =
-            cell_indices - Eigen::Vector3i{0, 0, 1};
-          const auto xy_neighbor_indices =
-            cell_indices - Eigen::Vector3i{1, 1, 0};
-          const auto xz_neighbor_indices =
-            cell_indices - Eigen::Vector3i{1, 0, 1};
-          const auto yz_neighbor_indices =
-            cell_indices - Eigen::Vector3i{0, 1, 1};
-          const auto vertex_solid =
-            x_solid || y_solid || z_solid ||
-            grid.is_solid(game::Axis::y, x_neighbor_indices) ||
-            grid.is_solid(game::Axis::z, x_neighbor_indices) ||
-            grid.is_solid(game::Axis::x, y_neighbor_indices) ||
-            grid.is_solid(game::Axis::z, y_neighbor_indices) ||
-            grid.is_solid(game::Axis::x, z_neighbor_indices) ||
-            grid.is_solid(game::Axis::y, z_neighbor_indices) ||
-            grid.is_solid(game::Axis::z, xy_neighbor_indices) ||
-            grid.is_solid(game::Axis::y, xz_neighbor_indices) ||
-            grid.is_solid(game::Axis::x, yz_neighbor_indices);
-          if (vertex_solid) {
-            const auto x_neighbor_visibility_matrix =
-              calculate_edge_visibility_matrix(
-                grid,
-                x_neighbor_indices,
-                grid.is_solid(game::Axis::x, x_neighbor_indices),
-                grid.is_solid(game::Axis::y, x_neighbor_indices),
-                grid.is_solid(game::Axis::z, x_neighbor_indices));
-            const auto y_neighbor_visibility_matrix =
-              calculate_edge_visibility_matrix(
-                grid,
-                y_neighbor_indices,
-                grid.is_solid(game::Axis::x, y_neighbor_indices),
-                grid.is_solid(game::Axis::y, y_neighbor_indices),
-                grid.is_solid(game::Axis::z, y_neighbor_indices));
-            const auto z_neighbor_visibility_matrix =
-              calculate_edge_visibility_matrix(
-                grid,
-                z_neighbor_indices,
-                grid.is_solid(game::Axis::x, z_neighbor_indices),
-                grid.is_solid(game::Axis::y, z_neighbor_indices),
-                grid.is_solid(game::Axis::z, z_neighbor_indices));
-            const auto predicate = [](bool b) { return b; };
-            // +x normal
-            if (
-              std::ranges::none_of(visibility_matrix[0][1], predicate) &&
-              std::ranges::none_of(visibility_matrix[0][2], predicate)) {
-              const auto [vertices, indices] = generate_vertex_geometry(
-                cell_indices,
-                {0.0f, 1.0f, 0.0f},
-                {0.0f, 0.0f, 1.0f},
-                {1.0f, 0.0f, 0.0f},
-                retval.vertices[0][0].size());
-              retval.vertices[0][0].append_range(vertices);
-              retval.indices[0][0].append_range(indices);
-            }
-            // -x normal
-            if (
-              std::ranges::none_of(
-                x_neighbor_visibility_matrix[0][1], predicate) &&
-              std::ranges::none_of(
-                x_neighbor_visibility_matrix[0][2], predicate)) {
-              const auto [vertices, indices] = generate_vertex_geometry(
-                cell_indices,
-                {0.0f, -1.0f, 0.0f},
-                {0.0f, 0.0f, 1.0f},
-                {-1.0f, 0.0f, 0.0f},
-                retval.vertices[0][1].size());
-              retval.vertices[0][1].append_range(vertices);
-              retval.indices[0][1].append_range(indices);
-            }
-            // +y normal
-            if (
-              std::ranges::none_of(visibility_matrix[1][0], predicate) &&
-              std::ranges::none_of(visibility_matrix[1][2], predicate)) {
-              const auto [vertices, indices] = generate_vertex_geometry(
-                cell_indices,
-                {-1.0f, 0.0f, 0.0f},
-                {0.0f, 0.0f, 1.0f},
-                {0.0f, 1.0f, 0.0f},
-                retval.vertices[1][0].size());
-              retval.vertices[1][0].append_range(vertices);
-              retval.indices[1][0].append_range(indices);
-            }
-            // -y normal
-            if (
-              std::ranges::none_of(
-                y_neighbor_visibility_matrix[1][0], predicate) &&
-              std::ranges::none_of(
-                y_neighbor_visibility_matrix[1][2], predicate)) {
-              const auto [vertices, indices] = generate_vertex_geometry(
-                cell_indices,
-                {1.0f, 0.0f, 0.0f},
-                {0.0f, 0.0f, 1.0f},
-                {0.0f, -1.0f, 0.0f},
-                retval.vertices[1][1].size());
-              retval.vertices[1][1].append_range(vertices);
-              retval.indices[1][1].append_range(indices);
-            }
-            // +z normal
-            if (
-              std::ranges::none_of(visibility_matrix[2][0], predicate) &&
-              std::ranges::none_of(visibility_matrix[2][1], predicate)) {
-              const auto [vertices, indices] = generate_vertex_geometry(
-                cell_indices,
-                {0.0f, 1.0f, 0.0f},
-                {-1.0f, 0.0f, 0.0f},
-                {0.0f, 0.0f, 1.0f},
-                retval.vertices[2][0].size());
-              retval.vertices[2][0].append_range(vertices);
-              retval.indices[2][0].append_range(indices);
-            }
-            // -z normal
-            if (
-              std::ranges::none_of(
-                z_neighbor_visibility_matrix[2][0], predicate) &&
-              std::ranges::none_of(
-                z_neighbor_visibility_matrix[2][1], predicate)) {
-              const auto [vertices, indices] = generate_vertex_geometry(
-                cell_indices,
-                {0.0f, -1.0f, 0.0f},
-                {-1.0f, 0.0f, 0.0f},
-                {0.0f, 0.0f, -1.0f},
-                retval.vertices[2][1].size());
-              retval.vertices[2][1].append_range(vertices);
-              retval.indices[2][1].append_range(indices);
-            }
+          // +z normal
+          if (
+            std::ranges::none_of(visibility_matrix[2][0], predicate) &&
+            std::ranges::none_of(visibility_matrix[2][1], predicate)) {
+            const auto [vertices, indices] = generate_vertex_geometry(
+              cell_indices,
+              {0.0f, 1.0f, 0.0f},
+              {-1.0f, 0.0f, 0.0f},
+              {0.0f, 0.0f, 1.0f},
+              retval.vertices[2][0].size());
+            retval.vertices[2][0].append_range(vertices);
+            retval.indices[2][0].append_range(indices);
+          }
+          // -z normal
+          if (
+            std::ranges::none_of(
+              z_neighbor_visibility_matrix[2][0], predicate) &&
+            std::ranges::none_of(
+              z_neighbor_visibility_matrix[2][1], predicate)) {
+            const auto [vertices, indices] = generate_vertex_geometry(
+              cell_indices,
+              {0.0f, -1.0f, 0.0f},
+              {-1.0f, 0.0f, 0.0f},
+              {0.0f, 0.0f, -1.0f},
+              retval.vertices[2][1].size());
+            retval.vertices[2][1].append_range(vertices);
+            retval.indices[2][1].append_range(indices);
           }
         }
       }
@@ -585,62 +580,49 @@ generate_edges_geometry(const game::Grid &grid) {
 } // namespace
 
 Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
-  const auto faces_geometry = generate_faces_geometry(*info.grid);
-  const auto edges_geometry = generate_edges_geometry(*info.grid);
-  auto &x_face_vertices = faces_geometry.vertices[0];
-  auto &y_face_vertices = faces_geometry.vertices[1];
-  auto &z_face_vertices = faces_geometry.vertices[2];
-  auto &x_face_indices = faces_geometry.indices[0];
-  auto &y_face_indices = faces_geometry.indices[1];
-  auto &z_face_indices = faces_geometry.indices[2];
-  auto &pos_x_edge_vertices = edges_geometry.vertices[0][0];
-  auto &neg_x_edge_vertices = edges_geometry.vertices[0][1];
-  auto &pos_y_edge_vertices = edges_geometry.vertices[1][0];
-  auto &neg_y_edge_vertices = edges_geometry.vertices[1][1];
-  auto &pos_z_edge_vertices = edges_geometry.vertices[2][0];
-  auto &neg_z_edge_vertices = edges_geometry.vertices[2][1];
-  auto &pos_x_edge_indices = edges_geometry.indices[0][0];
-  auto &neg_x_edge_indices = edges_geometry.indices[0][1];
-  auto &pos_y_edge_indices = edges_geometry.indices[1][0];
-  auto &neg_y_edge_indices = edges_geometry.indices[1][1];
-  auto &pos_z_edge_indices = edges_geometry.indices[2][0];
-  auto &neg_z_edge_indices = edges_geometry.indices[2][1];
-  const auto vertex_buffer_size =
-    (x_face_vertices.size() + y_face_vertices.size() + z_face_vertices.size() +
-     pos_x_edge_vertices.size() + neg_x_edge_vertices.size() +
-     pos_y_edge_vertices.size() + neg_y_edge_vertices.size() +
-     pos_z_edge_vertices.size() + neg_z_edge_vertices.size()) *
-    sizeof(Grid_vertex);
-  const auto index_buffer_size =
-    (x_face_indices.size() + y_face_indices.size() + z_face_indices.size() +
-     pos_x_edge_indices.size() + neg_x_edge_indices.size() +
-     pos_y_edge_indices.size() + neg_y_edge_indices.size() +
-     pos_z_edge_indices.size() + neg_z_edge_indices.size()) *
-    sizeof(std::uint32_t);
+  auto vertices = std::vector<Grid_vertex>{};
+  auto indices = std::vector<std::uint32_t>{};
+  for (const auto &[chunk_indices, chunk] : info.grid->get_chunks()) {
+    const auto faces_geometry = generate_faces_geometry(chunk_indices, *chunk);
+    const auto edges_geometry =
+      generate_edges_geometry(chunk_indices, *chunk, *info.grid);
+    for (auto axis = 0; axis != 3; ++axis) {
+      const auto face_draw_info = graphics::Indexed_draw_info{
+        .index_count =
+          static_cast<std::uint32_t>(faces_geometry.indices[axis].size()),
+        .first_index = static_cast<std::uint32_t>(indices.size()),
+        .vertex_offset = static_cast<std::int32_t>(vertices.size()),
+      };
+      if (face_draw_info.index_count) {
+        vertices.append_range(faces_geometry.vertices[axis]);
+        indices.append_range(faces_geometry.indices[axis]);
+        _face_draw_infos[axis].emplace_back(face_draw_info);
+      }
+      for (auto sign = 0; sign != 2; ++sign) {
+        const auto edge_draw_info = graphics::Indexed_draw_info{
+          .index_count = static_cast<std::uint32_t>(
+            edges_geometry.indices[axis][sign].size()),
+          .first_index = static_cast<std::uint32_t>(indices.size()),
+          .vertex_offset = static_cast<std::int32_t>(vertices.size()),
+        };
+        if (edge_draw_info.index_count) {
+          vertices.append_range(edges_geometry.vertices[axis][sign]);
+          indices.append_range(edges_geometry.indices[axis][sign]);
+          _edge_draw_infos[axis][sign].emplace_back(edge_draw_info);
+        }
+      }
+    }
+  }
+  const auto vertex_buffer_size = vertices.size() * sizeof(Grid_vertex);
+  const auto index_buffer_size = indices.size() * sizeof(std::uint32_t);
   if (vertex_buffer_size > 0 && index_buffer_size > 0) {
-    auto staging_data = std::vector<std::byte>{};
-    staging_data.resize(vertex_buffer_size + index_buffer_size);
-    auto staging_data_writer = serial::Span_writer{staging_data};
-    staging_data_writer.write(std::as_bytes(std::span{x_face_vertices}));
-    staging_data_writer.write(std::as_bytes(std::span{y_face_vertices}));
-    staging_data_writer.write(std::as_bytes(std::span{z_face_vertices}));
-    staging_data_writer.write(std::as_bytes(std::span{pos_x_edge_vertices}));
-    staging_data_writer.write(std::as_bytes(std::span{neg_x_edge_vertices}));
-    staging_data_writer.write(std::as_bytes(std::span{pos_y_edge_vertices}));
-    staging_data_writer.write(std::as_bytes(std::span{neg_y_edge_vertices}));
-    staging_data_writer.write(std::as_bytes(std::span{pos_z_edge_vertices}));
-    staging_data_writer.write(std::as_bytes(std::span{neg_z_edge_vertices}));
-    staging_data_writer.write(std::as_bytes(std::span{x_face_indices}));
-    staging_data_writer.write(std::as_bytes(std::span{y_face_indices}));
-    staging_data_writer.write(std::as_bytes(std::span{z_face_indices}));
-    staging_data_writer.write(std::as_bytes(std::span{pos_x_edge_indices}));
-    staging_data_writer.write(std::as_bytes(std::span{neg_x_edge_indices}));
-    staging_data_writer.write(std::as_bytes(std::span{pos_y_edge_indices}));
-    staging_data_writer.write(std::as_bytes(std::span{neg_y_edge_indices}));
-    staging_data_writer.write(std::as_bytes(std::span{pos_z_edge_indices}));
-    staging_data_writer.write(std::as_bytes(std::span{neg_z_edge_indices}));
-    const auto staging_buffer =
-      info.graphics->create_staging_buffer(staging_data);
+    const auto staging_buffer = info.graphics->create_staging_buffer(
+      vertex_buffer_size + index_buffer_size);
+    const auto staging_buffer_memory = staging_buffer->map();
+    auto staging_buffer_writer =
+      serial::Span_writer{staging_buffer_memory.get()};
+    staging_buffer_writer.write(std::as_bytes(std::span{vertices}));
+    staging_buffer_writer.write(std::as_bytes(std::span{indices}));
     _vertex_buffer = info.graphics->create_vertex_buffer(vertex_buffer_size);
     _index_buffer = info.graphics->create_index_buffer(index_buffer_size);
     auto recorder = info.graphics->record_transient_work();
@@ -662,52 +644,6 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
       });
     _upload_work = info.graphics->submit_transient_work(std::move(recorder));
     _upload_work->add_done_callback(this);
-    _face_draw_infos[0].index_count = x_face_indices.size();
-    _face_draw_infos[1].index_count = y_face_indices.size();
-    _face_draw_infos[2].index_count = z_face_indices.size();
-    _edge_draw_infos[0][0].index_count = pos_x_edge_indices.size();
-    _edge_draw_infos[0][1].index_count = neg_x_edge_indices.size();
-    _edge_draw_infos[1][0].index_count = pos_y_edge_indices.size();
-    _edge_draw_infos[1][1].index_count = neg_y_edge_indices.size();
-    _edge_draw_infos[2][0].index_count = pos_z_edge_indices.size();
-    _edge_draw_infos[2][1].index_count = neg_z_edge_indices.size();
-    _face_draw_infos[1].first_index =
-      _face_draw_infos[0].first_index + _face_draw_infos[0].index_count;
-    _face_draw_infos[2].first_index =
-      _face_draw_infos[1].first_index + _face_draw_infos[1].index_count;
-    _edge_draw_infos[0][0].first_index =
-      _face_draw_infos[2].first_index + _face_draw_infos[2].index_count;
-    _edge_draw_infos[0][1].first_index =
-      _edge_draw_infos[0][0].first_index + _edge_draw_infos[0][0].index_count;
-    _edge_draw_infos[1][0].first_index =
-      _edge_draw_infos[0][1].first_index + _edge_draw_infos[0][1].index_count;
-    _edge_draw_infos[1][1].first_index =
-      _edge_draw_infos[1][0].first_index + _edge_draw_infos[1][0].index_count;
-    _edge_draw_infos[2][0].first_index =
-      _edge_draw_infos[1][1].first_index + _edge_draw_infos[1][1].index_count;
-    _edge_draw_infos[2][1].first_index =
-      _edge_draw_infos[2][0].first_index + _edge_draw_infos[2][0].index_count;
-    _face_draw_infos[1].vertex_offset =
-      _face_draw_infos[0].vertex_offset + x_face_vertices.size();
-    _face_draw_infos[2].vertex_offset =
-      _face_draw_infos[1].vertex_offset + y_face_vertices.size();
-    _edge_draw_infos[0][0].vertex_offset =
-      _face_draw_infos[2].vertex_offset + z_face_vertices.size();
-    _edge_draw_infos[0][1].vertex_offset =
-      _edge_draw_infos[0][0].vertex_offset + edges_geometry.vertices[0][0]
-                                               .size();
-    _edge_draw_infos[1][0].vertex_offset =
-      _edge_draw_infos[0][1].vertex_offset + edges_geometry.vertices[0][1]
-                                               .size();
-    _edge_draw_infos[1][1].vertex_offset =
-      _edge_draw_infos[1][0].vertex_offset + edges_geometry.vertices[1][0]
-                                               .size();
-    _edge_draw_infos[2][0].vertex_offset =
-      _edge_draw_infos[1][1].vertex_offset + edges_geometry.vertices[1][1]
-                                               .size();
-    _edge_draw_infos[2][1].vertex_offset =
-      _edge_draw_infos[2][0].vertex_offset + edges_geometry.vertices[2][0]
-                                               .size();
   }
 }
 
@@ -717,17 +653,21 @@ Grid_mesh::~Grid_mesh() {
   }
 }
 
-void Grid_mesh::record_face_drawing_command(
+void Grid_mesh::record_face_drawing_commands(
   graphics::Work_recorder &recorder, game::Axis axis) {
   assert(is_uploaded());
-  recorder.draw_indexed(_face_draw_infos[static_cast<int>(axis)]);
+  for (const auto &chunk_draw_info : _face_draw_infos[static_cast<int>(axis)]) {
+    recorder.draw_indexed(chunk_draw_info);
+  }
 }
 
-void Grid_mesh::record_edge_drawing_command(
+void Grid_mesh::record_edge_drawing_commands(
   graphics::Work_recorder &recorder, game::Axis axis, client::Sign sign) {
   assert(is_uploaded());
-  recorder.draw_indexed(
-    _edge_draw_infos[static_cast<int>(axis)][static_cast<int>(sign)]);
+  for (const auto &chunk_draw_info :
+       _edge_draw_infos[static_cast<int>(axis)][static_cast<int>(sign)]) {
+    recorder.draw_indexed(chunk_draw_info);
+  }
 }
 
 bool Grid_mesh::is_uploaded() const noexcept {

@@ -257,22 +257,22 @@ public:
         };
         work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
         record_normal_push_constant({1.0f, 0.0f, 0.0f, 0.0f});
-        _grid_mesh->record_edge_drawing_command(
+        _grid_mesh->record_edge_drawing_commands(
           work_recorder, game::Axis::x, client::Sign::positive);
         record_normal_push_constant({-1.0f, 0.0f, 0.0f, 0.0f});
-        _grid_mesh->record_edge_drawing_command(
+        _grid_mesh->record_edge_drawing_commands(
           work_recorder, game::Axis::x, client::Sign::negative);
         record_normal_push_constant({0.0f, 1.0f, 0.0f, 0.0f});
-        _grid_mesh->record_edge_drawing_command(
+        _grid_mesh->record_edge_drawing_commands(
           work_recorder, game::Axis::y, client::Sign::positive);
         record_normal_push_constant({0.0f, -1.0f, 0.0f, 0.0f});
-        _grid_mesh->record_edge_drawing_command(
+        _grid_mesh->record_edge_drawing_commands(
           work_recorder, game::Axis::y, client::Sign::negative);
         record_normal_push_constant({0.0f, 0.0f, 1.0f, 0.0f});
-        _grid_mesh->record_edge_drawing_command(
+        _grid_mesh->record_edge_drawing_commands(
           work_recorder, game::Axis::z, client::Sign::positive);
         record_normal_push_constant({0.0f, 0.0f, -1.0f, 0.0f});
-        _grid_mesh->record_edge_drawing_command(
+        _grid_mesh->record_edge_drawing_commands(
           work_recorder, game::Axis::z, client::Sign::negative);
         record_normal_push_constant({
           1.0f,
@@ -280,21 +280,21 @@ public:
           0.0f,
           game::constants::grid_wall_thickness * 0.5f,
         });
-        _grid_mesh->record_face_drawing_command(work_recorder, game::Axis::x);
+        _grid_mesh->record_face_drawing_commands(work_recorder, game::Axis::x);
         record_normal_push_constant({
           0.0f,
           1.0f,
           0.0f,
           game::constants::grid_wall_thickness * 0.5f,
         });
-        _grid_mesh->record_face_drawing_command(work_recorder, game::Axis::y);
+        _grid_mesh->record_face_drawing_commands(work_recorder, game::Axis::y);
         record_normal_push_constant({
           0.0f,
           0.0f,
           1.0f,
           game::constants::grid_wall_thickness * 0.5f,
         });
-        _grid_mesh->record_face_drawing_command(work_recorder, game::Axis::z);
+        _grid_mesh->record_face_drawing_commands(work_recorder, game::Axis::z);
         work_recorder.set_front_face(graphics::Front_face::clockwise);
         record_normal_push_constant({
           -1.0f,
@@ -302,21 +302,21 @@ public:
           0.0f,
           game::constants::grid_wall_thickness * 0.5f,
         });
-        _grid_mesh->record_face_drawing_command(work_recorder, game::Axis::x);
+        _grid_mesh->record_face_drawing_commands(work_recorder, game::Axis::x);
         record_normal_push_constant({
           0.0f,
           -1.0f,
           0.0f,
           game::constants::grid_wall_thickness * 0.5f,
         });
-        _grid_mesh->record_face_drawing_command(work_recorder, game::Axis::y);
+        _grid_mesh->record_face_drawing_commands(work_recorder, game::Axis::y);
         record_normal_push_constant({
           0.0f,
           0.0f,
           -1.0f,
           game::constants::grid_wall_thickness * 0.5f,
         });
-        _grid_mesh->record_face_drawing_command(work_recorder, game::Axis::z);
+        _grid_mesh->record_face_drawing_commands(work_recorder, game::Axis::z);
       }
       /*
       // draw floor

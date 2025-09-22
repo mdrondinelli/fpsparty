@@ -20,10 +20,10 @@ public:
 
   ~Grid_mesh();
 
-  void record_face_drawing_command(
+  void record_face_drawing_commands(
     graphics::Work_recorder &recorder, game::Axis normal);
 
-  void record_edge_drawing_command(
+  void record_edge_drawing_commands(
     graphics::Work_recorder &recorder, game::Axis normal, client::Sign sign);
 
   bool is_uploaded() const noexcept;
@@ -38,8 +38,9 @@ private:
   rc::Strong<graphics::Buffer> _vertex_buffer{};
   rc::Strong<graphics::Buffer> _index_buffer{};
   rc::Strong<graphics::Work> _upload_work{};
-  std::array<graphics::Indexed_draw_info, 3> _face_draw_infos;
-  std::array<std::array<graphics::Indexed_draw_info, 2>, 3> _edge_draw_infos;
+  std::array<std::vector<graphics::Indexed_draw_info>, 3> _face_draw_infos;
+  std::array<std::array<std::vector<graphics::Indexed_draw_info>, 2>, 3>
+    _edge_draw_infos;
 };
 } // namespace fpsparty::client
 
