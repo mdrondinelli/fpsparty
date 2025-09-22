@@ -26,6 +26,8 @@ public:
     }
   }
 
+  std::size_t offset() const noexcept { return _offset; }
+
 private:
   std::span<std::byte> _data{};
   std::size_t _offset{};

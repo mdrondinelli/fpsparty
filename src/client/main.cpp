@@ -358,6 +358,10 @@ public:
             std::as_bytes(std::span{&model_view_projection_matrix, 1}));
           work_recorder.draw_indexed({
             .index_count = static_cast<std::uint32_t>(cube_mesh_indices.size()),
+            .instance_count = 1,
+            .first_index = 0,
+            .vertex_offset = 0,
+            .first_instance = 0,
           });
         }
       }
@@ -378,6 +382,10 @@ public:
           std::as_bytes(std::span{&model_view_projection_matrix, 1}));
         work_recorder.draw_indexed({
           .index_count = static_cast<std::uint32_t>(cube_mesh_indices.size()),
+          .instance_count = 1,
+          .first_index = 0,
+          .vertex_offset = 0,
+          .first_instance = 0,
         });
       }
     }

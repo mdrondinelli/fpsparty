@@ -155,6 +155,10 @@ Graphics::create_pipeline(const Pipeline_create_info &info) {
   return _pipeline_factory.create(info);
 }
 
+rc::Strong<Buffer> Graphics::create_buffer(const Buffer_create_info &info) {
+  return _buffer_factory.create(info);
+}
+
 rc::Strong<Buffer> Graphics::create_staging_buffer(std::size_t size) {
   return _buffer_factory.create(
     Buffer_create_info{

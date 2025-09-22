@@ -582,6 +582,10 @@ Edges_geometry_generation_result generate_edges_geometry(
 Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
   auto vertices = std::vector<Grid_vertex>{};
   auto indices = std::vector<std::uint32_t>{};
+  auto face_draw_infos =
+    std::array<std::vector<graphics::Indexed_draw_info>, 3>{};
+  auto edge_draw_infos =
+    std::array<std::array<std::vector<graphics::Indexed_draw_info>, 2>, 3>{};
   for (const auto &[chunk_indices, chunk] : info.grid->get_chunks()) {
     const auto faces_geometry = generate_faces_geometry(chunk_indices, *chunk);
     const auto edges_geometry =
@@ -590,41 +594,81 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
       const auto face_draw_info = graphics::Indexed_draw_info{
         .index_count =
           static_cast<std::uint32_t>(faces_geometry.indices[axis].size()),
+        .instance_count = 1,
         .first_index = static_cast<std::uint32_t>(indices.size()),
         .vertex_offset = static_cast<std::int32_t>(vertices.size()),
+        .first_instance = 0,
       };
       if (face_draw_info.index_count) {
         vertices.append_range(faces_geometry.vertices[axis]);
         indices.append_range(faces_geometry.indices[axis]);
-        _face_draw_infos[axis].emplace_back(face_draw_info);
+        face_draw_infos[axis].emplace_back(face_draw_info);
       }
       for (auto sign = 0; sign != 2; ++sign) {
         const auto edge_draw_info = graphics::Indexed_draw_info{
           .index_count = static_cast<std::uint32_t>(
             edges_geometry.indices[axis][sign].size()),
+          .instance_count = 1,
           .first_index = static_cast<std::uint32_t>(indices.size()),
           .vertex_offset = static_cast<std::int32_t>(vertices.size()),
+          .first_instance = 0,
         };
         if (edge_draw_info.index_count) {
           vertices.append_range(edges_geometry.vertices[axis][sign]);
           indices.append_range(edges_geometry.indices[axis][sign]);
-          _edge_draw_infos[axis][sign].emplace_back(edge_draw_info);
+          edge_draw_infos[axis][sign].emplace_back(edge_draw_info);
         }
       }
     }
   }
+  const auto draw_count = [&]() {
+    auto retval = std::uint64_t{};
+    for (auto axis = 0; axis != 3; ++axis) {
+      retval += face_draw_infos[axis].size();
+      for (auto sign = 0; sign != 2; ++sign) {
+        retval += edge_draw_infos[axis][sign].size();
+      }
+    }
+    return retval;
+  }();
   const auto vertex_buffer_size = vertices.size() * sizeof(Grid_vertex);
   const auto index_buffer_size = indices.size() * sizeof(std::uint32_t);
+  const auto draw_buffer_size =
+    draw_count * sizeof(graphics::Indexed_draw_info);
   if (vertex_buffer_size > 0 && index_buffer_size > 0) {
     const auto staging_buffer = info.graphics->create_staging_buffer(
-      vertex_buffer_size + index_buffer_size);
+      vertex_buffer_size + index_buffer_size + draw_buffer_size);
     const auto staging_buffer_memory = staging_buffer->map();
     auto staging_buffer_writer =
       serial::Span_writer{staging_buffer_memory.get()};
     staging_buffer_writer.write(std::as_bytes(std::span{vertices}));
     staging_buffer_writer.write(std::as_bytes(std::span{indices}));
+    const auto staging_buffer_draw_buffer_begin =
+      staging_buffer_writer.offset();
+    for (auto axis = 0; axis != 3; ++axis) {
+      _indirect_face_draw_infos[axis].offset =
+        staging_buffer_writer.offset() - staging_buffer_draw_buffer_begin;
+      _indirect_face_draw_infos[axis].draw_count = face_draw_infos[axis].size();
+      staging_buffer_writer
+        .write(std::as_bytes(std::span{face_draw_infos[axis]}));
+    }
+    for (auto axis = 0; axis != 3; ++axis) {
+      for (auto sign = 0; sign != 2; ++sign) {
+        _indirect_edge_draw_infos[axis][sign].offset =
+          staging_buffer_writer.offset() - staging_buffer_draw_buffer_begin;
+        _indirect_edge_draw_infos[axis][sign].draw_count =
+          edge_draw_infos[axis][sign].size();
+        staging_buffer_writer
+          .write(std::as_bytes(std::span{edge_draw_infos[axis][sign]}));
+      }
+    }
     _vertex_buffer = info.graphics->create_vertex_buffer(vertex_buffer_size);
     _index_buffer = info.graphics->create_index_buffer(index_buffer_size);
+    _draw_buffer = info.graphics->create_buffer({
+      .size = draw_buffer_size,
+      .usage = graphics::Buffer_usage_flag_bits::transfer_dst |
+               graphics::Buffer_usage_flag_bits::indirect_buffer,
+    });
     auto recorder = info.graphics->record_transient_work();
     recorder.copy_buffer(
       staging_buffer,
@@ -642,6 +686,14 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
         .dst_offset = 0,
         .size = index_buffer_size,
       });
+    recorder.copy_buffer(
+      staging_buffer,
+      _draw_buffer,
+      {
+        .src_offset = vertex_buffer_size + index_buffer_size,
+        .dst_offset = 0,
+        .size = draw_buffer_size,
+      });
     _upload_work = info.graphics->submit_transient_work(std::move(recorder));
     _upload_work->add_done_callback(this);
   }
@@ -656,18 +708,26 @@ Grid_mesh::~Grid_mesh() {
 void Grid_mesh::record_face_drawing_commands(
   graphics::Work_recorder &recorder, game::Axis axis) {
   assert(is_uploaded());
-  for (const auto &chunk_draw_info : _face_draw_infos[static_cast<int>(axis)]) {
-    recorder.draw_indexed(chunk_draw_info);
-  }
+  const auto draw_info = _indirect_face_draw_infos[static_cast<int>(axis)];
+  recorder.draw_indexed_indirect({
+    .buffer = _draw_buffer,
+    .offset = draw_info.offset,
+    .draw_count = draw_info.draw_count,
+    .stride = sizeof(graphics::Indexed_draw_info),
+  });
 }
 
 void Grid_mesh::record_edge_drawing_commands(
   graphics::Work_recorder &recorder, game::Axis axis, client::Sign sign) {
   assert(is_uploaded());
-  for (const auto &chunk_draw_info :
-       _edge_draw_infos[static_cast<int>(axis)][static_cast<int>(sign)]) {
-    recorder.draw_indexed(chunk_draw_info);
-  }
+  const auto draw_info =
+    _indirect_edge_draw_infos[static_cast<int>(axis)][static_cast<int>(sign)];
+  recorder.draw_indexed_indirect({
+    .buffer = _draw_buffer,
+    .offset = draw_info.offset,
+    .draw_count = draw_info.draw_count,
+    .stride = sizeof(graphics::Indexed_draw_info),
+  });
 }
 
 bool Grid_mesh::is_uploaded() const noexcept {

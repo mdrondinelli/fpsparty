@@ -130,6 +130,10 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
   };
   const auto features = vk::PhysicalDeviceFeatures2{
     .pNext = &vulkan_1_3_features,
+    .features =
+      {
+        .multiDrawIndirect = true,
+      },
   };
   auto device = physical_device.createDeviceUnique({
     .pNext = &features,
