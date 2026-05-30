@@ -171,12 +171,6 @@ void Work_recorder::set_depth_compare_op(Compare_op op) {
   get_command_buffer().setDepthCompareOp(static_cast<vk::CompareOp>(op));
 }
 
-void Work_recorder::bind_vertex_buffer(rc::Strong<Buffer const> buffer) {
-  get_command_buffer()
-    .bindVertexBuffers(0, {detail::get_buffer_vk_buffer(*buffer)}, {0});
-  add_reference(std::move(buffer));
-}
-
 void Work_recorder::bind_index_buffer(
   rc::Strong<Buffer const> buffer, Index_type index_type) {
   get_command_buffer().bindIndexBuffer(
@@ -217,6 +211,20 @@ void Work_recorder::push_constants(
     static_cast<std::uint32_t>(data.size()),
     data.data());
   add_reference(std::move(pipeline_layout));
+}
+
+void Work_recorder::push_buffer_device_address(
+  rc::Strong<Pipeline_layout const> pipeline_layout,
+  Shader_stage_flags stage_flags,
+  std::uint32_t offset,
+  rc::Strong<Buffer const> buffer) noexcept {
+  auto const address = buffer->get_device_address();
+  push_constants(
+    std::move(pipeline_layout),
+    stage_flags,
+    offset,
+    std::as_bytes(std::span{&address, 1}));
+  add_reference(std::move(buffer));
 }
 
 Work_recorder::Work_recorder(detail::Work_resource resource) noexcept

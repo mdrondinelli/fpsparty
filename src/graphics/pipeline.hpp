@@ -22,27 +22,6 @@ struct Pipeline_shader_stage_create_info {
   Shader *shader;
 };
 
-struct Vertex_binding_description {
-  std::uint32_t binding;
-  std::uint32_t stride;
-};
-
-enum class Vertex_attribute_format {
-  r32g32b32_sfloat = static_cast<int>(vk::Format::eR32G32B32Sfloat)
-};
-
-struct Vertex_attribute_description {
-  std::uint32_t location;
-  std::uint32_t binding;
-  Vertex_attribute_format format;
-  std::uint32_t offset;
-};
-
-struct Pipeline_vertex_input_state_create_info {
-  std::span<Vertex_binding_description const> bindings;
-  std::span<Vertex_attribute_description const> attributes;
-};
-
 struct Pipeline_input_assembly_state_create_info {
   Primitive_topology primitive_topology;
 };
@@ -57,7 +36,6 @@ struct Pipeline_color_state_create_info {
 
 struct Pipeline_create_info {
   std::span<Pipeline_shader_stage_create_info const> shader_stages;
-  Pipeline_vertex_input_state_create_info vertex_input_state;
   Pipeline_input_assembly_state_create_info input_assembly_state;
   Pipeline_depth_state_create_info depth_state;
   Pipeline_color_state_create_info color_state;

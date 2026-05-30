@@ -266,15 +266,11 @@ public:
           graphics::Shader_stage_flag_bits::vertex,
           0,
           std::as_bytes(std::span{&view_projection_matrix, 1}));
-        auto const &grid_vertex_buffer = _grid_mesh->get_vertex_buffer();
-        auto const grid_vertex_buffer_address =
-          grid_vertex_buffer->get_device_address();
-        work_recorder.push_constants(
+        work_recorder.push_buffer_device_address(
           grid_pipeline->get_layout(),
           graphics::Shader_stage_flag_bits::vertex,
           80,
-          std::as_bytes(std::span{&grid_vertex_buffer_address, 1}));
-        work_recorder.add_reference(grid_vertex_buffer);
+          _grid_mesh->get_vertex_buffer());
         auto record_normal_push_constant = [&](Eigen::Vector4f const &value) {
           work_recorder.push_constants(
             grid_pipeline->get_layout(),
@@ -320,14 +316,11 @@ public:
       work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
       work_recorder
         .bind_index_buffer(_cube_index_buffer, graphics::Index_type::u16);
-      auto const cube_vertex_buffer_address =
-        _cube_vertex_buffer->get_device_address();
-      work_recorder.push_constants(
+      work_recorder.push_buffer_device_address(
         mesh_pipeline->get_layout(),
         graphics::Shader_stage_flag_bits::vertex,
         64,
-        std::as_bytes(std::span{&cube_vertex_buffer_address, 1}));
-      work_recorder.add_reference(_cube_vertex_buffer);
+        _cube_vertex_buffer);
       // draw other players (cubes)
       for (auto const &other_humanoid :
            game->get_entities()
@@ -569,11 +562,6 @@ private:
     auto const color_attachment_format = swapchain_image_format;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
-      .vertex_input_state =
-        {
-          .bindings = {},
-          .attributes = {},
-        },
       .input_assembly_state =
         {
           .primitive_topology = graphics::Primitive_topology::triangle_list,
@@ -616,11 +604,6 @@ private:
     auto const color_attachment_format = swapchain_image_format;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
-      .vertex_input_state =
-        {
-          .bindings = {},
-          .attributes = {},
-        },
       .input_assembly_state =
         {
           .primitive_topology = graphics::Primitive_topology::triangle_list,

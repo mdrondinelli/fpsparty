@@ -15,34 +15,7 @@ Pipeline::Pipeline(Pipeline_create_info const &info) : _layout{info.layout} {
       .pName = "main",
     });
   }
-  auto vk_vertex_bindings = std::vector<vk::VertexInputBindingDescription>{};
-  vk_vertex_bindings.reserve(info.vertex_input_state.bindings.size());
-  for (auto const &vertex_binding : info.vertex_input_state.bindings) {
-    vk_vertex_bindings.push_back({
-      .binding = vertex_binding.binding,
-      .stride = vertex_binding.stride,
-      .inputRate = vk::VertexInputRate::eVertex,
-    });
-  }
-  auto vk_vertex_attributes =
-    std::vector<vk::VertexInputAttributeDescription>{};
-  vk_vertex_attributes.reserve(info.vertex_input_state.attributes.size());
-  for (auto const &vertex_attribute : info.vertex_input_state.attributes) {
-    vk_vertex_attributes.push_back({
-      .location = vertex_attribute.location,
-      .binding = vertex_attribute.binding,
-      .format = static_cast<vk::Format>(vertex_attribute.format),
-      .offset = vertex_attribute.offset,
-    });
-  }
-  auto const vk_vertex_input_state = vk::PipelineVertexInputStateCreateInfo{
-    .vertexBindingDescriptionCount =
-      static_cast<std::uint32_t>(vk_vertex_bindings.size()),
-    .pVertexBindingDescriptions = vk_vertex_bindings.data(),
-    .vertexAttributeDescriptionCount =
-      static_cast<std::uint32_t>(vk_vertex_attributes.size()),
-    .pVertexAttributeDescriptions = vk_vertex_attributes.data(),
-  };
+  auto const vk_vertex_input_state = vk::PipelineVertexInputStateCreateInfo{};
   auto const vk_input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo{
     .topology = static_cast<vk::PrimitiveTopology>(info.input_assembly_state
                                                      .primitive_topology),

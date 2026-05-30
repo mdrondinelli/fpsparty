@@ -42,8 +42,6 @@ public:
 
   rc::Strong<Buffer> create_staging_buffer(std::span<std::byte const> data);
 
-  rc::Strong<Buffer> create_vertex_buffer(std::size_t size);
-
   rc::Strong<Buffer> create_index_buffer(std::size_t size);
 
   rc::Strong<Image> create_image(Image_create_info const &info);

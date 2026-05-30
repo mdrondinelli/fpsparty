@@ -88,8 +88,6 @@ public:
 
   void set_depth_compare_op(Compare_op op);
 
-  void bind_vertex_buffer(rc::Strong<Buffer const> buffer);
-
   void
   bind_index_buffer(rc::Strong<Buffer const> buffer, Index_type index_type);
 
@@ -102,6 +100,12 @@ public:
     Shader_stage_flags stage_flags,
     std::uint32_t offset,
     std::span<std::byte const> data) noexcept;
+
+  void push_buffer_device_address(
+    rc::Strong<Pipeline_layout const> pipeline_layout,
+    Shader_stage_flags stage_flags,
+    std::uint32_t offset,
+    rc::Strong<Buffer const> buffer) noexcept;
 
   void add_reference(rc::Strong<Buffer const> buffer);
 

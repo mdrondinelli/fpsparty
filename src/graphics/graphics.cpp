@@ -172,15 +172,6 @@ Graphics::create_staging_buffer(std::span<std::byte const> data) {
   return retval;
 }
 
-rc::Strong<Buffer> Graphics::create_vertex_buffer(std::size_t size) {
-  return _buffer_factory.create(
-    Buffer_create_info{
-      .size = size,
-      .usage = Buffer_usage_flag_bits::transfer_dst |
-               Buffer_usage_flag_bits::vertex_buffer,
-    });
-}
-
 rc::Strong<Buffer> Graphics::create_index_buffer(std::size_t size) {
   return _buffer_factory.create(
     Buffer_create_info{
