@@ -3,18 +3,18 @@
 #include <fstream>
 
 namespace fpsparty::graphics {
-Shader::Shader(const Shader_create_info &info)
+Shader::Shader(Shader_create_info const &info)
     : _vk_shader_module{
         Global_vulkan_state::get().device().createShaderModuleUnique({
           .codeSize = static_cast<std::uint32_t>(info.code.size_bytes()),
           .pCode = info.code.data(),
         })} {}
 
-Shader load_shader(const char *path) {
+Shader load_shader(char const *path) {
   auto input_stream = std::ifstream{};
   input_stream.exceptions(std::ios::badbit | std::ios::failbit);
   input_stream.open(path, std::ios::binary | std::ios::ate);
-  const auto size = input_stream.tellg();
+  auto const size = input_stream.tellg();
   auto bytecode = std::vector<std::uint32_t>{};
   bytecode.resize(size / sizeof(std::uint32_t));
   input_stream.seekg(0);

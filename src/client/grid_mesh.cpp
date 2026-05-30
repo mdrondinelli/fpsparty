@@ -15,48 +15,46 @@ struct Chunk_geometry {
   std::array<std::array<std::vector<std::uint32_t>, 2>, 3> indices;
 };
 
-constexpr int sign_index(Sign sign) noexcept {
-  return static_cast<int>(sign);
-}
+constexpr int sign_index(Sign sign) noexcept { return static_cast<int>(sign); }
 
 void append_face(
   Chunk_geometry &result,
   game::Axis axis,
   Sign sign,
-  const std::array<Eigen::Vector3f, 4> &positions) {
-  const auto axis_index = static_cast<int>(axis);
-  const auto side_index = sign_index(sign);
+  std::array<Eigen::Vector3f, 4> const &positions) {
+  auto const axis_index = static_cast<int>(axis);
+  auto const side_index = sign_index(sign);
   auto &vertices = result.vertices[axis_index][side_index];
   auto &indices = result.indices[axis_index][side_index];
-  const auto first_index = static_cast<std::uint32_t>(vertices.size());
-  for (const auto &position : positions) {
+  auto const first_index = static_cast<std::uint32_t>(vertices.size());
+  for (auto const &position : positions) {
     vertices.push_back({.position = position});
   }
-  indices.append_range(std::array<std::uint32_t, 6>{
-    first_index + 0,
-    first_index + 1,
-    first_index + 2,
-    first_index + 2,
-    first_index + 3,
-    first_index + 0,
-  });
+  indices.append_range(
+    std::array<std::uint32_t, 6>{
+      first_index + 0,
+      first_index + 1,
+      first_index + 2,
+      first_index + 2,
+      first_index + 3,
+      first_index + 0,
+    });
 }
 
 void append_solid_cell_faces(
   Chunk_geometry &result,
-  const game::Grid &grid,
-  const Eigen::Vector3i &cell_indices) {
-  const auto min =
+  game::Grid const &grid,
+  Eigen::Vector3i const &cell_indices) {
+  auto const min =
     (cell_indices.cast<float>() * game::constants::grid_cell_stride).eval();
-  const auto max =
-    (min + Eigen::Vector3f::Constant(game::constants::grid_cell_stride))
-      .eval();
-  const auto x0 = min.x();
-  const auto y0 = min.y();
-  const auto z0 = min.z();
-  const auto x1 = max.x();
-  const auto y1 = max.y();
-  const auto z1 = max.z();
+  auto const max =
+    (min + Eigen::Vector3f::Constant(game::constants::grid_cell_stride)).eval();
+  auto const x0 = min.x();
+  auto const y0 = min.y();
+  auto const z0 = min.z();
+  auto const x1 = max.x();
+  auto const y1 = max.y();
+  auto const z1 = max.z();
   if (!grid.is_solid(cell_indices + Eigen::Vector3i{1, 0, 0})) {
     append_face(
       result,
@@ -132,9 +130,9 @@ void append_solid_cell_faces(
 }
 
 Chunk_geometry generate_chunk_geometry(
-  const Eigen::Vector3i &chunk_indices,
-  const game::Chunk &chunk,
-  const game::Grid &grid) {
+  Eigen::Vector3i const &chunk_indices,
+  game::Chunk const &chunk,
+  game::Grid const &grid) {
   auto result = Chunk_geometry{};
   constexpr auto n = static_cast<int>(game::Chunk::edge_length);
   for (auto x = 0; x != n; ++x) {
@@ -158,19 +156,19 @@ Chunk_geometry generate_chunk_geometry(
 }
 } // namespace
 
-Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
+Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
   auto vertices = std::vector<Grid_vertex>{};
   auto indices = std::vector<std::uint32_t>{};
   auto draw_infos =
     std::array<std::array<std::vector<graphics::Indexed_draw_info>, 2>, 3>{};
-  for (const auto &[chunk_indices, chunk] : info.grid->get_chunks()) {
-    const auto geometry =
+  for (auto const &[chunk_indices, chunk] : info.grid->get_chunks()) {
+    auto const geometry =
       generate_chunk_geometry(chunk_indices, *chunk, *info.grid);
     for (auto axis = 0; axis != 3; ++axis) {
       for (auto sign = 0; sign != 2; ++sign) {
-        const auto draw_info = graphics::Indexed_draw_info{
-          .index_count = static_cast<std::uint32_t>(
-            geometry.indices[axis][sign].size()),
+        auto const draw_info = graphics::Indexed_draw_info{
+          .index_count =
+            static_cast<std::uint32_t>(geometry.indices[axis][sign].size()),
           .instance_count = 1,
           .first_index = static_cast<std::uint32_t>(indices.size()),
           .vertex_offset = static_cast<std::int32_t>(vertices.size()),
@@ -190,26 +188,25 @@ Grid_mesh::Grid_mesh(const Grid_mesh_create_info &info) {
       draw_count += draw_infos[axis][sign].size();
     }
   }
-  const auto vertex_buffer_size = vertices.size() * sizeof(Grid_vertex);
-  const auto index_buffer_size = indices.size() * sizeof(std::uint32_t);
-  const auto draw_buffer_size =
+  auto const vertex_buffer_size = vertices.size() * sizeof(Grid_vertex);
+  auto const index_buffer_size = indices.size() * sizeof(std::uint32_t);
+  auto const draw_buffer_size =
     draw_count * sizeof(graphics::Indexed_draw_info);
   if (vertex_buffer_size > 0 && index_buffer_size > 0 && draw_buffer_size > 0) {
-    const auto staging_buffer = info.graphics->create_staging_buffer(
+    auto const staging_buffer = info.graphics->create_staging_buffer(
       vertex_buffer_size + index_buffer_size + draw_buffer_size);
-    const auto staging_buffer_memory = staging_buffer->map();
+    auto const staging_buffer_memory = staging_buffer->map();
     auto staging_buffer_writer =
       serial::Span_writer{staging_buffer_memory.get()};
     staging_buffer_writer.write(std::as_bytes(std::span{vertices}));
     staging_buffer_writer.write(std::as_bytes(std::span{indices}));
-    const auto staging_buffer_draw_buffer_offset =
+    auto const staging_buffer_draw_buffer_offset =
       staging_buffer_writer.offset();
     for (auto axis = 0; axis != 3; ++axis) {
       for (auto sign = 0; sign != 2; ++sign) {
         _draw_infos[axis][sign].offset =
           staging_buffer_writer.offset() - staging_buffer_draw_buffer_offset;
-        _draw_infos[axis][sign].draw_count =
-          draw_infos[axis][sign].size();
+        _draw_infos[axis][sign].draw_count = draw_infos[axis][sign].size();
         staging_buffer_writer
           .write(std::as_bytes(std::span{draw_infos[axis][sign]}));
       }
@@ -260,7 +257,7 @@ Grid_mesh::~Grid_mesh() {
 void Grid_mesh::record_draws(
   graphics::Work_recorder &recorder, game::Axis axis, client::Sign sign) {
   assert(is_uploaded());
-  const auto draw_info =
+  auto const draw_info =
     _draw_infos[static_cast<int>(axis)][static_cast<int>(sign)];
   recorder.draw_indexed_indirect({
     .buffer = _draw_buffer,
@@ -274,15 +271,15 @@ bool Grid_mesh::is_uploaded() const noexcept {
   return _vertex_buffer && _index_buffer && !_upload_work;
 }
 
-const rc::Strong<graphics::Buffer> &
+rc::Strong<graphics::Buffer> const &
 Grid_mesh::get_vertex_buffer() const noexcept {
   return _vertex_buffer;
 }
 
-const rc::Strong<graphics::Buffer> &
+rc::Strong<graphics::Buffer> const &
 Grid_mesh::get_index_buffer() const noexcept {
   return _index_buffer;
 }
 
-void Grid_mesh::on_work_done(const graphics::Work &) { _upload_work = nullptr; }
+void Grid_mesh::on_work_done(graphics::Work const &) { _upload_work = nullptr; }
 } // namespace fpsparty::client

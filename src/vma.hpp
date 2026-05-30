@@ -87,23 +87,23 @@ public:
   constexpr operator VmaAllocator() const noexcept { return _value; }
 
   std::tuple<vk::Buffer, vma::Allocation> create_buffer(
-    const vk::BufferCreateInfo &buffer_create_info,
-    const Allocation_create_info &allocation_create_info,
+    vk::BufferCreateInfo const &buffer_create_info,
+    Allocation_create_info const &allocation_create_info,
     Allocation_info *allocation_info = nullptr) const;
 
   std::tuple<vk::UniqueBuffer, vma::Unique_allocation> create_buffer_unique(
-    const vk::BufferCreateInfo &buffer_create_info,
-    const Allocation_create_info &allocation_create_info,
+    vk::BufferCreateInfo const &buffer_create_info,
+    Allocation_create_info const &allocation_create_info,
     Allocation_info *allocation_info = nullptr) const;
 
   std::tuple<vk::Image, vma::Allocation> create_image(
-    const vk::ImageCreateInfo &image_create_info,
-    const Allocation_create_info &allocation_create_info,
+    vk::ImageCreateInfo const &image_create_info,
+    Allocation_create_info const &allocation_create_info,
     Allocation_info *allocation_info = nullptr) const;
 
   std::tuple<vk::UniqueImage, vma::Unique_allocation> create_image_unique(
-    const vk::ImageCreateInfo &image_create_info,
-    const Allocation_create_info &allocation_create_info,
+    vk::ImageCreateInfo const &image_create_info,
+    Allocation_create_info const &allocation_create_info,
     Allocation_info *allocation_info = nullptr) const;
 
   void *map_memory(Allocation allocation) const;
@@ -116,9 +116,9 @@ private:
   VmaAllocator _value{};
 };
 
-inline Allocator create_allocator(const Allocator::Create_info &create_info) {
+inline Allocator create_allocator(Allocator::Create_info const &create_info) {
   auto value = VmaAllocator{};
-  const auto result = vmaCreateAllocator(&create_info, &value);
+  auto const result = vmaCreateAllocator(&create_info, &value);
   if (vk::Result{result} != vk::Result::eSuccess) {
     throw Allocator::Creation_error{};
   }
@@ -151,7 +151,7 @@ public:
 
   constexpr Allocator operator*() const noexcept { return _value; }
 
-  constexpr const Allocator *operator->() const noexcept { return &_value; }
+  constexpr Allocator const *operator->() const noexcept { return &_value; }
 
 private:
   constexpr void swap(Unique_allocator &other) noexcept {
@@ -162,7 +162,7 @@ private:
 };
 
 inline Unique_allocator
-create_allocator_unique(const Allocator::Create_info &create_info) {
+create_allocator_unique(Allocator::Create_info const &create_info) {
   return Unique_allocator{create_allocator(create_info)};
 }
 
@@ -206,7 +206,7 @@ public:
 
   constexpr Allocation operator*() const noexcept { return _value; }
 
-  constexpr const Allocation *operator->() const noexcept { return &_value; }
+  constexpr Allocation const *operator->() const noexcept { return &_value; }
 
 private:
   constexpr void swap(Unique_allocation &other) noexcept {
@@ -219,15 +219,15 @@ private:
 };
 
 inline std::tuple<vk::Buffer, vma::Allocation> Allocator::create_buffer(
-  const vk::BufferCreateInfo &buffer_create_info,
-  const Allocation_create_info &allocation_create_info,
+  vk::BufferCreateInfo const &buffer_create_info,
+  Allocation_create_info const &allocation_create_info,
   Allocation_info *allocation_info) const {
   auto c_buffer_create_info = VkBufferCreateInfo{};
   std::memcpy(
     &c_buffer_create_info, &buffer_create_info, sizeof(VkBufferCreateInfo));
   auto c_buffer = VkBuffer{};
   auto c_allocation = VmaAllocation{};
-  const auto result = vmaCreateBuffer(
+  auto const result = vmaCreateBuffer(
     _value,
     &c_buffer_create_info,
     &allocation_create_info,
@@ -242,12 +242,12 @@ inline std::tuple<vk::Buffer, vma::Allocation> Allocator::create_buffer(
 
 inline std::tuple<vk::UniqueBuffer, vma::Unique_allocation>
 Allocator::create_buffer_unique(
-  const vk::BufferCreateInfo &buffer_create_info,
-  const Allocation_create_info &allocation_create_info,
+  vk::BufferCreateInfo const &buffer_create_info,
+  Allocation_create_info const &allocation_create_info,
   Allocation_info *allocation_info) const {
   auto allocator_info = VmaAllocatorInfo{};
   vmaGetAllocatorInfo(_value, &allocator_info);
-  const auto [buffer, allocation] =
+  auto const [buffer, allocation] =
     create_buffer(buffer_create_info, allocation_create_info, allocation_info);
   return std::tuple{
     vk::UniqueBuffer{buffer, vk::Device{allocator_info.device}},
@@ -255,15 +255,15 @@ Allocator::create_buffer_unique(
 }
 
 inline std::tuple<vk::Image, vma::Allocation> Allocator::create_image(
-  const vk::ImageCreateInfo &image_create_info,
-  const Allocation_create_info &allocation_create_info,
+  vk::ImageCreateInfo const &image_create_info,
+  Allocation_create_info const &allocation_create_info,
   Allocation_info *allocation_info) const {
   auto c_image_create_info = VkImageCreateInfo{};
   std::memcpy(
     &c_image_create_info, &image_create_info, sizeof(VkImageCreateInfo));
   auto c_image = VkImage{};
   auto c_allocation = VmaAllocation{};
-  const auto result = vmaCreateImage(
+  auto const result = vmaCreateImage(
     _value,
     &c_image_create_info,
     &allocation_create_info,
@@ -278,12 +278,12 @@ inline std::tuple<vk::Image, vma::Allocation> Allocator::create_image(
 
 inline std::tuple<vk::UniqueImage, vma::Unique_allocation>
 Allocator::create_image_unique(
-  const vk::ImageCreateInfo &image_create_info,
-  const Allocation_create_info &allocation_create_info,
+  vk::ImageCreateInfo const &image_create_info,
+  Allocation_create_info const &allocation_create_info,
   Allocation_info *allocation_info) const {
   auto allocator_info = VmaAllocatorInfo{};
   vmaGetAllocatorInfo(_value, &allocator_info);
-  const auto [image, allocation] =
+  auto const [image, allocation] =
     create_image(image_create_info, allocation_create_info, allocation_info);
   return std::tuple{
     vk::UniqueImage{image, vk::Device{allocator_info.device}},
@@ -292,7 +292,7 @@ Allocator::create_image_unique(
 
 inline void *Allocator::map_memory(Allocation allocation) const {
   auto retval = (void *)nullptr;
-  const auto result = vmaMapMemory(_value, allocation, &retval);
+  auto const result = vmaMapMemory(_value, allocation, &retval);
   if (vk::Result{result} != vk::Result::eSuccess) {
     throw Memory_mapping_error{};
   }
@@ -315,9 +315,9 @@ using Vulkan_functions = VmaVulkanFunctions;
 class Function_importing_error : public std::exception {};
 
 inline Vulkan_functions
-import_functions_from_volk(const Allocator::Create_info &create_info) {
+import_functions_from_volk(Allocator::Create_info const &create_info) {
   auto vulkan_functions = VmaVulkanFunctions{};
-  const auto result =
+  auto const result =
     vmaImportVulkanFunctionsFromVolk(&create_info, &vulkan_functions);
   if (vk::Result{result} != vk::Result::eSuccess) {
     throw Function_importing_error{};

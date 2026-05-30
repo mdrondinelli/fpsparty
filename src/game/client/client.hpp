@@ -16,11 +16,11 @@ struct Client_create_info {
 
 class Client : net::Client {
 public:
-  explicit Client(const Client_create_info &info);
+  explicit Client(Client_create_info const &info);
 
-  Client(const Client &other) = delete;
+  Client(Client const &other) = delete;
 
-  Client &operator=(const Client &other) = delete;
+  Client &operator=(Client const &other) = delete;
 
   void service_game_state(float duration);
 
@@ -30,15 +30,15 @@ public:
 
   void wait_events(std::uint32_t timeout);
 
-  void connect(const enet::Address &address);
+  void connect(enet::Address const &address);
 
   bool is_connecting() const noexcept;
 
   bool is_connected() const noexcept;
 
-  const net::Input_state &get_current_input_state() const noexcept;
+  net::Input_state const &get_current_input_state() const noexcept;
 
-  void set_current_input_state(const net::Input_state &value) noexcept;
+  void set_current_input_state(net::Input_state const &value) noexcept;
 
 protected:
   void on_connect() override;
@@ -58,7 +58,7 @@ protected:
 
   Replicated_game *get_game() noexcept;
 
-  const Replicated_game *get_game() const noexcept;
+  Replicated_game const *get_game() const noexcept;
 
   Replicated_player *get_player() const noexcept;
 

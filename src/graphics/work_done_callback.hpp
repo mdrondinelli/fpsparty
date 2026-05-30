@@ -8,7 +8,7 @@ class Work_done_callback {
 public:
   virtual ~Work_done_callback() = default;
 
-  virtual void on_work_done(const Work &work) = 0;
+  virtual void on_work_done(Work const &work) = 0;
 };
 } // namespace fpsparty::graphics
 

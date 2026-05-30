@@ -12,7 +12,7 @@ class Span_reader : public Reader {
 public:
   constexpr Span_reader() noexcept = default;
 
-  constexpr explicit Span_reader(std::span<const std::byte> data) noexcept
+  constexpr explicit Span_reader(std::span<std::byte const> data) noexcept
       : _data{data}, _offset{} {}
 
   virtual bool read(std::span<std::byte> data) override {
@@ -43,12 +43,12 @@ public:
     return Span_reader{_data.subspan(offset, count)};
   }
 
-  std::span<const std::byte> data() const noexcept { return _data; }
+  std::span<std::byte const> data() const noexcept { return _data; }
 
   std::size_t offset() const noexcept { return _offset; }
 
 private:
-  std::span<const std::byte> _data{};
+  std::span<std::byte const> _data{};
   std::size_t _offset{};
 };
 } // namespace fpsparty::serial

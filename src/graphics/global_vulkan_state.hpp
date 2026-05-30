@@ -25,9 +25,9 @@ public:
 
   vma::Allocator allocator() const noexcept { return *_allocator; }
 
-  void submit(const vk::SubmitInfo &info, vk::Fence fence);
+  void submit(vk::SubmitInfo const &info, vk::Fence fence);
 
-  vk::Result present(const vk::PresentInfoKHR &info);
+  vk::Result present(vk::PresentInfoKHR const &info);
 
 private:
   friend class Global_vulkan_state_guard;
@@ -57,7 +57,7 @@ public:
 
   constexpr Global_vulkan_state_guard() noexcept = default;
 
-  explicit Global_vulkan_state_guard(const Create_info &info);
+  explicit Global_vulkan_state_guard(Create_info const &info);
 
   ~Global_vulkan_state_guard();
 

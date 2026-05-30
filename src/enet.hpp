@@ -68,7 +68,7 @@ operator|(Packet_flag_bits lhs, Packet_flag_bits rhs) noexcept {
 class Packet {
 public:
   struct Create_info {
-    const void *data;
+    void const *data;
     std::size_t data_length;
     Packet_flags flags{};
   };
@@ -89,8 +89,8 @@ private:
   ENetPacket *_value{};
 };
 
-inline Packet create_packet(const Packet::Create_info &create_info) {
-  const auto value = enet_packet_create(
+inline Packet create_packet(Packet::Create_info const &create_info) {
+  auto const value = enet_packet_create(
     create_info.data, create_info.data_length, create_info.flags);
   if (!value) {
     throw Packet::Construction_error{};
@@ -127,12 +127,12 @@ public:
 
   constexpr Packet operator*() const noexcept { return _value; }
 
-  constexpr const Packet *operator->() const noexcept { return &_value; }
+  constexpr Packet const *operator->() const noexcept { return &_value; }
 
   constexpr Packet get() const noexcept { return _value; }
 
   constexpr Packet release() noexcept {
-    const auto temp = _value;
+    auto const temp = _value;
     _value = nullptr;
     return temp;
   }
@@ -146,7 +146,7 @@ private:
 };
 
 inline Unique_packet
-create_packet_unique(const Packet::Create_info &create_info) {
+create_packet_unique(Packet::Create_info const &create_info) {
   return Unique_packet{create_packet(create_info)};
 }
 
@@ -199,7 +199,7 @@ private:
 
 using Address = ENetAddress;
 
-inline std::optional<std::uint32_t> parse_ip(const char *ip) {
+inline std::optional<std::uint32_t> parse_ip(char const *ip) {
   auto address = Address{};
   if (enet_address_set_host_ip(&address, ip) == 0) {
     return address.host;
@@ -247,7 +247,7 @@ public:
 
   Event service(std::uint32_t timeout) const {
     auto event = ENetEvent{};
-    const auto service_result = enet_host_service(_value, &event, timeout);
+    auto const service_result = enet_host_service(_value, &event, timeout);
     if (service_result < 0) {
       throw Service_error{};
     }
@@ -262,7 +262,7 @@ public:
 
   template <typename F> void service_each(F &&f) const {
     for (;;) {
-      const auto event = service(0);
+      auto const event = service(0);
       switch (event.type) {
       case enet::Event_type::none:
         return;
@@ -274,10 +274,10 @@ public:
   }
 
   Peer connect(
-    const Address &address,
+    Address const &address,
     std::size_t channel_count,
     std::uint32_t data) const {
-    const auto peer = enet_host_connect(_value, &address, channel_count, data);
+    auto const peer = enet_host_connect(_value, &address, channel_count, data);
     if (!peer) {
       throw Out_of_peers_error{};
     }
@@ -296,8 +296,8 @@ private:
   ENetHost *_value{};
 };
 
-inline Host create_host(const Host::Create_info &create_info) {
-  const auto value = enet_host_create(
+inline Host create_host(Host::Create_info const &create_info) {
+  auto const value = enet_host_create(
     create_info.address.has_value() ? &create_info.address.value() : nullptr,
     create_info.max_peer_count,
     create_info.max_channel_count,
@@ -334,7 +334,7 @@ public:
 
   constexpr Host operator*() const noexcept { return _value; }
 
-  constexpr const Host *operator->() const noexcept { return &_value; }
+  constexpr Host const *operator->() const noexcept { return &_value; }
 
 private:
   constexpr void swap(Unique_host &other) noexcept {
@@ -344,7 +344,7 @@ private:
   Host _value{};
 };
 
-inline Unique_host create_host_unique(const Host::Create_info &create_info) {
+inline Unique_host create_host_unique(Host::Create_info const &create_info) {
   return Unique_host{create_host(create_info)};
 }
 
@@ -356,7 +356,7 @@ struct Server_create_info {
   std::uint32_t outgoing_bandwidth{};
 };
 
-inline Host make_server_host(const Server_create_info &create_info) {
+inline Host make_server_host(Server_create_info const &create_info) {
   return create_host({
     .address = Address{.host = ENET_HOST_ANY, .port = create_info.port},
     .max_peer_count = create_info.max_clients,
@@ -367,7 +367,7 @@ inline Host make_server_host(const Server_create_info &create_info) {
 }
 
 inline Unique_host
-make_server_host_unique(const Server_create_info &create_info) {
+make_server_host_unique(Server_create_info const &create_info) {
   return Unique_host{make_server_host(create_info)};
 }
 
@@ -377,7 +377,7 @@ struct Client_create_info {
   std::uint32_t outgoing_bandwidth{};
 };
 
-inline Host make_client_host(const Client_create_info &create_info) {
+inline Host make_client_host(Client_create_info const &create_info) {
   return create_host({
     .address = {},
     .max_peer_count = 1,
@@ -388,7 +388,7 @@ inline Host make_client_host(const Client_create_info &create_info) {
 }
 
 inline Unique_host
-make_client_host_unique(const Client_create_info &create_info) {
+make_client_host_unique(Client_create_info const &create_info) {
   return Unique_host{make_client_host(create_info)};
 }
 } // namespace fpsparty::enet

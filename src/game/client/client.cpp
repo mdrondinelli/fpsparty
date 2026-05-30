@@ -7,7 +7,7 @@
 #include <tracy/Tracy.hpp>
 
 namespace fpsparty::game {
-Client::Client(const Client_create_info &info)
+Client::Client(Client_create_info const &info)
     : net::Client{{
         .incoming_bandwidth = info.incoming_bandwidth,
         .outgoing_bandwidth = info.outgoing_bandwidth,
@@ -18,11 +18,11 @@ void Client::service_game_state(float duration) {
   assert(has_game_state());
   _tick_timer -= duration;
   if (_tick_timer <= 0) {
-    const auto tracy_frame_name = "Tick";
+    auto const tracy_frame_name = "Tick";
     FrameMarkStart(tracy_frame_name);
     try {
       _tick_timer += _tick_duration;
-      if (const auto player = get_player(); player && player->get_humanoid()) {
+      if (auto const player = get_player(); player && player->get_humanoid()) {
         player->set_input_state(_current_input_state);
         net::Client::send_player_input_state(
           *_player_entity_id, _input_sequence_number, _current_input_state);
@@ -50,7 +50,7 @@ void Client::wait_events(std::uint32_t timeout) {
   net::Client::wait_events(timeout);
 }
 
-void Client::connect(const enet::Address &address) {
+void Client::connect(enet::Address const &address) {
   net::Client::connect(address);
 }
 
@@ -62,11 +62,11 @@ bool Client::is_connected() const noexcept {
   return net::Client::is_connected();
 }
 
-const net::Input_state &Client::get_current_input_state() const noexcept {
+net::Input_state const &Client::get_current_input_state() const noexcept {
   return _current_input_state;
 }
 
-void Client::set_current_input_state(const net::Input_state &value) noexcept {
+void Client::set_current_input_state(net::Input_state const &value) noexcept {
   _current_input_state = value;
 }
 
@@ -74,7 +74,7 @@ Replicated_game *Client::get_game() noexcept {
   return _game ? &*_game : nullptr;
 }
 
-const Replicated_game *Client::get_game() const noexcept {
+Replicated_game const *Client::get_game() const noexcept {
   return _game ? &*_game : nullptr;
 }
 
@@ -118,7 +118,7 @@ void Client::on_entity_snapshot(
   serial::Reader &player_state_reader) {
   ZoneScoped;
   auto initial_player_position = std::optional<Eigen::Vector3f>{};
-  if (const auto player = get_player()) {
+  if (auto const player = get_player()) {
     initial_player_position = player->get_humanoid()->get_position();
   }
   _game->load_entities({
@@ -126,8 +126,8 @@ void Client::on_entity_snapshot(
     .public_state_reader = &public_state_reader,
     .player_state_reader = &player_state_reader,
   });
-  if (const auto player = get_player()) {
-    const auto acknowledged_input_sequence_number =
+  if (auto const player = get_player()) {
+    auto const acknowledged_input_sequence_number =
       player->get_input_sequence_number();
     if (acknowledged_input_sequence_number) {
       while (_in_flight_input_states.size() > 0 &&
@@ -136,7 +136,7 @@ void Client::on_entity_snapshot(
         _in_flight_input_states.erase(_in_flight_input_states.begin());
       }
     }
-    for (const auto &[input_state, input_sequence_number] :
+    for (auto const &[input_state, input_sequence_number] :
          _in_flight_input_states) {
       player->set_input_state(input_state);
       player->set_input_sequence_number(input_sequence_number);
@@ -144,11 +144,11 @@ void Client::on_entity_snapshot(
     }
   }
   auto final_player_position = std::optional<Eigen::Vector3f>{};
-  if (const auto player = get_player()) {
+  if (auto const player = get_player()) {
     final_player_position = player->get_humanoid()->get_position();
   }
   if (initial_player_position && final_player_position) {
-    const auto prediction_error =
+    auto const prediction_error =
       (*initial_player_position - *final_player_position).norm();
     if (prediction_error > 0.01f) {
       std::cout << "Local player position mispredicted by " << prediction_error

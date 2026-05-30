@@ -11,13 +11,13 @@
 using namespace fpsparty;
 
 namespace {
-volatile std::sig_atomic_t signal_status{};
+std::sig_atomic_t volatile signal_status{};
 void handle_signal(int signal) { signal_status = signal; }
 
 void fill_blocks(
   game::Server &server,
-  const Eigen::Vector3i &min,
-  const Eigen::Vector3i &max,
+  Eigen::Vector3i const &min,
+  Eigen::Vector3i const &max,
   bool solid = true) {
   server.get_game().get_grid().fill({min, max}, solid);
 }
@@ -26,7 +26,7 @@ void fill_blocks(
 int main() {
   std::signal(SIGINT, handle_signal);
   std::signal(SIGTERM, handle_signal);
-  const auto enet_guard = enet::Initialization_guard{{}};
+  auto const enet_guard = enet::Initialization_guard{{}};
   auto server = game::Server{{
     .net_info =
       {
@@ -67,7 +67,7 @@ int main() {
             .count())) {
       server.broadcast_game_state();
     }
-    const auto now = Clock::now();
+    auto const now = Clock::now();
     loop_duration = now - loop_time;
     loop_time = now;
   }

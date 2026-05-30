@@ -33,7 +33,7 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 namespace {
 constexpr auto server_ip = "127.0.0.1";
 
-volatile std::sig_atomic_t signal_status{};
+std::sig_atomic_t volatile signal_status{};
 void handle_signal(int signal) { signal_status = signal; }
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
@@ -52,16 +52,16 @@ struct Vertex {
   float b;
 };
 
-const auto floor_mesh_vertices = std::vector<Vertex>{
+auto const floor_mesh_vertices = std::vector<Vertex>{
   {.x = 10.0f, .y = 0.0f, .z = 10.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},
   {.x = 10.0f, .y = 0.0f, .z = -10.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},
   {.x = -10.0f, .y = 0.0f, .z = 10.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},
   {.x = -10.0f, .y = 0.0f, .z = -10.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f},
 };
 
-const auto floor_mesh_indices = std::vector<std::uint16_t>{0, 1, 2, 3, 2, 1};
+auto const floor_mesh_indices = std::vector<std::uint16_t>{0, 1, 2, 3, 2, 1};
 
-const auto cube_mesh_vertices = std::vector<Vertex>{
+auto const cube_mesh_vertices = std::vector<Vertex>{
   // +x face
   {.x = 0.5f, .y = 0.5f, .z = 0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},   // 1
   {.x = 0.5f, .y = -0.5f, .z = 0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f},  // 2
@@ -94,7 +94,7 @@ const auto cube_mesh_vertices = std::vector<Vertex>{
   {.x = -0.5f, .y = -0.5f, .z = -0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f}, // 4
 };
 
-const auto cube_mesh_indices = std::vector<std::uint16_t>{
+auto const cube_mesh_indices = std::vector<std::uint16_t>{
   // +x face
   0,
   1,
@@ -150,7 +150,7 @@ public:
     vk::SurfaceKHR vk_surface;
   };
 
-  explicit Client(const Create_info &create_info)
+  explicit Client(Create_info const &create_info)
       : game::Client{create_info.client_info},
         _glfw_window{create_info.glfw_window},
         _vk_surface{create_info.vk_surface},
@@ -196,12 +196,11 @@ public:
       swapchain_image);
     auto [depth_image, depth_image_created] =
       get_depth_image(swapchain_image->get_extent());
-    const auto depth_scope = graphics::Synchronization_scope{
+    auto const depth_scope = graphics::Synchronization_scope{
       .stage_mask = graphics::Pipeline_stage_flag_bits::early_fragment_tests |
                     graphics::Pipeline_stage_flag_bits::late_fragment_tests,
-      .access_mask =
-        graphics::Access_flag_bits::depth_stencil_attachment_read |
-        graphics::Access_flag_bits::depth_stencil_attachment_write,
+      .access_mask = graphics::Access_flag_bits::depth_stencil_attachment_read |
+                     graphics::Access_flag_bits::depth_stencil_attachment_write,
     };
     if (depth_image_created) {
       work_recorder.transition_image_layout(
@@ -225,31 +224,31 @@ public:
       .color_image = swapchain_image,
       .depth_image = depth_image,
     });
-    const auto [grid_pipeline, mesh_pipeline] =
+    auto const [grid_pipeline, mesh_pipeline] =
       get_graphics_pipelines(swapchain_image->get_format());
     work_recorder.set_viewport(swapchain_image->get_extent().head<2>());
     work_recorder.set_scissor(swapchain_image->get_extent().head<2>());
     work_recorder.set_depth_test_enabled(true);
     work_recorder.set_depth_write_enabled(true);
     work_recorder.set_depth_compare_op(graphics::Compare_op::greater);
-    const auto game = get_game();
-    const auto player = game ? get_player() : nullptr;
-    const auto player_humanoid = player ? player->get_humanoid() : nullptr;
+    auto const game = get_game();
+    auto const player = game ? get_player() : nullptr;
+    auto const player_humanoid = player ? player->get_humanoid() : nullptr;
     if (player_humanoid) {
-      const auto view_matrix =
+      auto const view_matrix =
         (math::x_rotation_matrix(-get_current_input_state().pitch) *
          math::y_rotation_matrix(-get_current_input_state().yaw) *
          math::translation_matrix(-(
            player_humanoid->get_position() + Eigen::Vector3f::UnitY() * 1.7f)))
           .eval();
-      const auto aspect_ratio =
+      auto const aspect_ratio =
         static_cast<float>(swapchain_image->get_extent().x()) /
         static_cast<float>(swapchain_image->get_extent().y());
-      const auto projection_matrix = math::perspective_projection_matrix(
+      auto const projection_matrix = math::perspective_projection_matrix(
         aspect_ratio > 1.0f ? 1.0f : aspect_ratio,
         aspect_ratio > 1.0f ? 1.0f / aspect_ratio : 1.0f,
         0.1f);
-      const auto view_projection_matrix =
+      auto const view_projection_matrix =
         (projection_matrix * view_matrix).eval();
       // draw grid
       if (_grid_mesh->is_uploaded()) {
@@ -263,7 +262,7 @@ public:
           graphics::Shader_stage_flag_bits::vertex,
           0,
           std::as_bytes(std::span{&view_projection_matrix, 1}));
-        auto record_normal_push_constant = [&](const Eigen::Vector4f &value) {
+        auto record_normal_push_constant = [&](Eigen::Vector4f const &value) {
           work_recorder.push_constants(
             grid_pipeline->get_layout(),
             graphics::Shader_stage_flag_bits::vertex |
@@ -272,23 +271,23 @@ public:
             std::as_bytes(std::span{&value, 1}));
         };
         record_normal_push_constant({1.0f, 0.0f, 0.0f, 0.0f});
-        _grid_mesh->record_draws(
-          work_recorder, game::Axis::x, client::Sign::positive);
+        _grid_mesh
+          ->record_draws(work_recorder, game::Axis::x, client::Sign::positive);
         record_normal_push_constant({-1.0f, 0.0f, 0.0f, 0.0f});
-        _grid_mesh->record_draws(
-          work_recorder, game::Axis::x, client::Sign::negative);
+        _grid_mesh
+          ->record_draws(work_recorder, game::Axis::x, client::Sign::negative);
         record_normal_push_constant({0.0f, 1.0f, 0.0f, 0.0f});
-        _grid_mesh->record_draws(
-          work_recorder, game::Axis::y, client::Sign::positive);
+        _grid_mesh
+          ->record_draws(work_recorder, game::Axis::y, client::Sign::positive);
         record_normal_push_constant({0.0f, -1.0f, 0.0f, 0.0f});
-        _grid_mesh->record_draws(
-          work_recorder, game::Axis::y, client::Sign::negative);
+        _grid_mesh
+          ->record_draws(work_recorder, game::Axis::y, client::Sign::negative);
         record_normal_push_constant({0.0f, 0.0f, 1.0f, 0.0f});
-        _grid_mesh->record_draws(
-          work_recorder, game::Axis::z, client::Sign::positive);
+        _grid_mesh
+          ->record_draws(work_recorder, game::Axis::z, client::Sign::positive);
         record_normal_push_constant({0.0f, 0.0f, -1.0f, 0.0f});
-        _grid_mesh->record_draws(
-          work_recorder, game::Axis::z, client::Sign::negative);
+        _grid_mesh
+          ->record_draws(work_recorder, game::Axis::z, client::Sign::negative);
       }
       /*
       // draw floor
@@ -310,18 +309,18 @@ public:
       work_recorder
         .bind_index_buffer(_cube_index_buffer, graphics::Index_type::u16);
       // draw other players (cubes)
-      for (const auto &other_humanoid :
+      for (auto const &other_humanoid :
            game->get_entities()
              .get_entities_of_type<game::Replicated_humanoid>()) {
         if (other_humanoid != player_humanoid) {
-          const auto model_matrix =
+          auto const model_matrix =
             (math::translation_matrix(
                other_humanoid->get_position() +
                Eigen::Vector3f::UnitY() * 0.9f) *
              math::y_rotation_matrix(other_humanoid->get_input_state().yaw) *
              math::axis_aligned_scale_matrix({0.7f, 1.8f, 0.7f}))
               .eval();
-          const auto model_view_projection_matrix =
+          auto const model_view_projection_matrix =
             (view_projection_matrix * model_matrix).eval();
           work_recorder.push_constants(
             _mesh_pipeline->get_layout(),
@@ -338,14 +337,14 @@ public:
         }
       }
       // draw projectiles (cubes)
-      for (const auto &projectile :
+      for (auto const &projectile :
            game->get_entities()
              .get_entities_of_type<game::Replicated_projectile>()) {
-        const auto model_matrix =
+        auto const model_matrix =
           (math::translation_matrix(projectile->get_position()) *
            math::uniform_scale_matrix(0.25f))
             .eval();
-        const auto model_view_projection_matrix =
+        auto const model_view_projection_matrix =
           (view_projection_matrix * model_matrix).eval();
         work_recorder.push_constants(
           _mesh_pipeline->get_layout(),
@@ -442,8 +441,9 @@ protected:
 
 private:
   std::pair<rc::Strong<graphics::Image>, bool>
-  get_depth_image(const Eigen::Vector3i &extent) {
-    const auto create_image = !_depth_image || _depth_image->get_extent() != extent;
+  get_depth_image(Eigen::Vector3i const &extent) {
+    auto const create_image =
+      !_depth_image || _depth_image->get_extent() != extent;
     if (create_image) {
       _depth_image = _graphics.create_image({
         .dimensionality = 2,
@@ -458,8 +458,8 @@ private:
   }
 
   rc::Strong<graphics::Buffer>
-  upload_vertices(std::span<const std::byte> data) {
-    const auto staging_buffer = _graphics.create_staging_buffer(data);
+  upload_vertices(std::span<std::byte const> data) {
+    auto const staging_buffer = _graphics.create_staging_buffer(data);
     auto vertex_buffer = _graphics.create_vertex_buffer(data.size());
     auto work_recorder = _graphics.record_transient_work();
     work_recorder.copy_buffer(
@@ -475,8 +475,8 @@ private:
     return vertex_buffer;
   }
 
-  rc::Strong<graphics::Buffer> upload_indices(std::span<const std::byte> data) {
-    const auto staging_buffer = _graphics.create_staging_buffer(data);
+  rc::Strong<graphics::Buffer> upload_indices(std::span<std::byte const> data) {
+    auto const staging_buffer = _graphics.create_staging_buffer(data);
     auto index_buffer = _graphics.create_index_buffer(data.size());
     auto work_recorder = _graphics.record_transient_work();
     work_recorder.copy_buffer(
@@ -507,7 +507,7 @@ private:
 
   rc::Strong<graphics::Pipeline>
   make_grid_pipeline(graphics::Image_format swapchain_image_format) {
-    const auto push_constant_ranges = std::array{
+    auto const push_constant_ranges = std::array{
       graphics::Push_constant_range{
         .stage_flags = graphics::Shader_stage_flag_bits::vertex,
         .offset = 0,
@@ -519,12 +519,12 @@ private:
         .size = 16,
       },
     };
-    const auto pipeline_layout =
+    auto const pipeline_layout =
       _grid_pipeline ? _grid_pipeline->get_layout()
                      : _graphics.create_pipeline_layout({
                          .push_constant_ranges = push_constant_ranges,
                        });
-    const auto shader_stages =
+    auto const shader_stages =
       std::vector<graphics::Pipeline_shader_stage_create_info>{
         {
           .stage = graphics::Shader_stage_flag_bits::vertex,
@@ -535,11 +535,11 @@ private:
           .shader = &_grid_fragment_shader,
         },
       };
-    const auto vertex_binding = graphics::Vertex_binding_description{
+    auto const vertex_binding = graphics::Vertex_binding_description{
       .binding = 0,
       .stride = 12,
     };
-    const auto vertex_attributes = std::array{
+    auto const vertex_attributes = std::array{
       graphics::Vertex_attribute_description{
         .location = 0,
         .binding = 0,
@@ -547,7 +547,7 @@ private:
         .offset = 0,
       },
     };
-    const auto color_attachment_format = swapchain_image_format;
+    auto const color_attachment_format = swapchain_image_format;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .vertex_input_state =
@@ -573,17 +573,17 @@ private:
 
   rc::Strong<graphics::Pipeline>
   make_mesh_pipeline(graphics::Image_format swapchain_image_format) {
-    const auto push_constant_range = graphics::Push_constant_range{
+    auto const push_constant_range = graphics::Push_constant_range{
       .stage_flags = graphics::Shader_stage_flag_bits::vertex,
       .offset = 0,
       .size = 64,
     };
-    const auto pipeline_layout =
+    auto const pipeline_layout =
       _mesh_pipeline ? _mesh_pipeline->get_layout()
                      : _graphics.create_pipeline_layout({
                          .push_constant_ranges = {&push_constant_range, 1},
                        });
-    const auto shader_stages =
+    auto const shader_stages =
       std::vector<graphics::Pipeline_shader_stage_create_info>{
         {
           .stage = graphics::Shader_stage_flag_bits::vertex,
@@ -594,11 +594,11 @@ private:
           .shader = &_mesh_fragment_shader,
         },
       };
-    const auto vertex_binding = graphics::Vertex_binding_description{
+    auto const vertex_binding = graphics::Vertex_binding_description{
       .binding = 0,
       .stride = 24,
     };
-    const auto vertex_attributes =
+    auto const vertex_attributes =
       std::vector<graphics::Vertex_attribute_description>{
         {
           .location = 0,
@@ -612,7 +612,7 @@ private:
           .format = graphics::Vertex_attribute_format::r32g32b32_sfloat,
           .offset = 12,
         }};
-    const auto color_attachment_format = swapchain_image_format;
+    auto const color_attachment_format = swapchain_image_format;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .vertex_input_state =
@@ -659,9 +659,9 @@ int main() {
   tracy::SetThreadName("Main Thread");
   std::signal(SIGINT, handle_signal);
   std::signal(SIGTERM, handle_signal);
-  const auto enet_guard = enet::Initialization_guard{{}};
-  const auto glfw_guard = glfw::Initialization_guard{{}};
-  const auto glfw_window = glfw::create_window_unique({
+  auto const enet_guard = enet::Initialization_guard{{}};
+  auto const glfw_guard = glfw::Initialization_guard{{}};
+  auto const glfw_window = glfw::create_window_unique({
     .width = 1024,
     .height = 768,
     .title = "FPS Party",
@@ -669,8 +669,8 @@ int main() {
     .client_api = glfw::Client_api::no_api,
   });
   std::cout << "Opened window.\n";
-  const auto vulkan_guard = graphics::Global_vulkan_state_guard{{}};
-  const auto vk_surface = make_vk_surface(*glfw_window);
+  auto const vulkan_guard = graphics::Global_vulkan_state_guard{{}};
+  auto const vk_surface = make_vk_surface(*glfw_window);
   auto client = Client{{
     .client_info =
       {
@@ -701,7 +701,7 @@ int main() {
     }
     client.render();
     FrameMark;
-    const auto now = Clock::now();
+    auto const now = Clock::now();
     loop_duration = now - loop_time;
     loop_time = now;
   }

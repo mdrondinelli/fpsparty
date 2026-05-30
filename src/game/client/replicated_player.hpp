@@ -22,15 +22,15 @@ public:
 
   void set_humanoid(Replicated_humanoid *value);
 
-  const net::Input_state &get_input_state() const noexcept;
+  net::Input_state const &get_input_state() const noexcept;
 
-  void set_input_state(const net::Input_state &value) noexcept;
+  void set_input_state(net::Input_state const &value) noexcept;
 
-  const std::optional<net::Sequence_number> &
+  std::optional<net::Sequence_number> const &
   get_input_sequence_number() const noexcept;
 
   void set_input_sequence_number(
-    const std::optional<net::Sequence_number> &value) noexcept;
+    std::optional<net::Sequence_number> const &value) noexcept;
 
 private:
   class Humanoid_remove_listener : public Entity_remove_listener {
@@ -62,7 +62,7 @@ public:
   void load_entity(
     serial::Reader &reader,
     Entity &entity,
-    const Entity_world &world) const override;
+    Entity_world const &world) const override;
 
   Entity_type get_entity_type() const noexcept override;
 

@@ -15,13 +15,13 @@ protected:
   void on_remove() override;
 
 public:
-  const Eigen::Vector3f &get_position() const noexcept;
+  Eigen::Vector3f const &get_position() const noexcept;
 
-  void set_position(const Eigen::Vector3f &value) noexcept;
+  void set_position(Eigen::Vector3f const &value) noexcept;
 
-  const Eigen::Vector3f &get_velocity() const noexcept;
+  Eigen::Vector3f const &get_velocity() const noexcept;
 
-  void set_velocity(const Eigen::Vector3f &value) noexcept;
+  void set_velocity(Eigen::Vector3f const &value) noexcept;
 
 private:
   Eigen::Vector3f _position{};
@@ -41,7 +41,7 @@ public:
   void load_entity(
     serial::Reader &reader,
     Entity &entity,
-    const Entity_world &world) const override;
+    Entity_world const &world) const override;
 
   Entity_type get_entity_type() const noexcept override;
 

@@ -19,7 +19,7 @@ template <typename T> struct Serializer;
 
 template <> struct Serializer<bool> {
   void write(Writer &writer, bool value) const {
-    const auto int_value = value ? std::uint8_t{1} : std::uint8_t{0};
+    auto const int_value = value ? std::uint8_t{1} : std::uint8_t{0};
     writer.write(std::as_bytes(std::span{&int_value, 1}));
   }
 
@@ -39,8 +39,8 @@ template <std::integral T> struct Serializer<T> {
       value > std::numeric_limits<T>::max()) {
       throw Serialization_error{};
     }
-    const auto casted_value = static_cast<T>(value);
-    const auto byteswapped_value = network_byteswap(casted_value);
+    auto const casted_value = static_cast<T>(value);
+    auto const byteswapped_value = network_byteswap(casted_value);
     writer.write(std::as_bytes(std::span{&byteswapped_value, 1}));
   }
 
@@ -57,8 +57,8 @@ template <std::integral T> struct Serializer<T> {
 template <> struct Serializer<float> {
   void write(Writer &writer, float value) const {
     static_assert(sizeof(float) == sizeof(std::uint32_t));
-    const auto casted_value = std::bit_cast<std::uint32_t>(value);
-    const auto byteswapped_value = network_byteswap(casted_value);
+    auto const casted_value = std::bit_cast<std::uint32_t>(value);
+    auto const byteswapped_value = network_byteswap(casted_value);
     writer.write(std::as_bytes(std::span{&byteswapped_value, 1}));
   }
 
@@ -77,8 +77,8 @@ template <typename T>
   requires std::is_enum_v<T>
 struct Serializer<T> {
   void write(Writer &writer, T value) const {
-    const auto casted_value = std::bit_cast<std::underlying_type_t<T>>(value);
-    const auto byteswapped_value = network_byteswap(casted_value);
+    auto const casted_value = std::bit_cast<std::underlying_type_t<T>>(value);
+    auto const byteswapped_value = network_byteswap(casted_value);
     writer.write(std::as_bytes(std::span{&byteswapped_value, 1}));
   }
 
@@ -88,9 +88,9 @@ struct Serializer<T> {
       return std::nullopt;
     }
     network_byteswap(buffer);
-    const auto enum_value = static_cast<T>(buffer);
-    const auto enum_values = magic_enum::enum_values<T>();
-    const auto enum_value_it = std::ranges::find(enum_values, enum_value);
+    auto const enum_value = static_cast<T>(buffer);
+    auto const enum_values = magic_enum::enum_values<T>();
+    auto const enum_value_it = std::ranges::find(enum_values, enum_value);
     if (enum_value_it == enum_values.end()) {
       return std::nullopt;
     }
@@ -99,7 +99,7 @@ struct Serializer<T> {
 };
 
 template <typename T> struct Serializer<std::optional<T>> {
-  void write(Writer &writer, const std::optional<T> &value) const {
+  void write(Writer &writer, std::optional<T> const &value) const {
     Serializer<bool>{}.write(writer, value.has_value());
     if (value) {
       Serializer<T>{}.write(writer, *value);
@@ -107,7 +107,7 @@ template <typename T> struct Serializer<std::optional<T>> {
   }
 
   std::optional<std::optional<T>> read(Reader &reader) const {
-    const auto has_value = Serializer<bool>{}.read(reader);
+    auto const has_value = Serializer<bool>{}.read(reader);
     if (!has_value) {
       return std::nullopt;
     }
@@ -120,7 +120,7 @@ template <typename T> struct Serializer<std::optional<T>> {
 };
 
 template <typename T, typename U>
-void serialize(Writer &writer, const U &value) {
+void serialize(Writer &writer, U const &value) {
   Serializer<T>{}.write(writer, value);
 }
 

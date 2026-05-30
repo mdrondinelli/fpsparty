@@ -4,7 +4,7 @@
 
 namespace fpsparty::game {
 namespace detail {
-bool get_entity_remove_flag(const Entity &entity) noexcept {
+bool get_entity_remove_flag(Entity const &entity) noexcept {
   return entity._remove_flag;
 }
 
@@ -13,7 +13,7 @@ void set_entity_remove_flag(Entity &entity, bool value) noexcept {
 }
 
 void on_remove_entity(Entity &entity) noexcept {
-  for (const auto listener : entity._removal_listeners) {
+  for (auto const listener : entity._removal_listeners) {
     listener->on_remove_entity();
   }
   entity.on_remove();
@@ -28,7 +28,7 @@ Entity_type Entity::get_entity_type() const noexcept { return _entity_type; }
 net::Entity_id Entity::get_entity_id() const noexcept { return _entity_id; }
 
 bool Entity::add_remove_listener(Entity_remove_listener *listener) {
-  const auto it = std::ranges::find(_removal_listeners, listener);
+  auto const it = std::ranges::find(_removal_listeners, listener);
   if (it == _removal_listeners.end()) {
     _removal_listeners.emplace_back(listener);
     return true;
@@ -38,7 +38,7 @@ bool Entity::add_remove_listener(Entity_remove_listener *listener) {
 }
 
 bool Entity::remove_remove_listener(Entity_remove_listener *listener) noexcept {
-  const auto it = std::ranges::find(_removal_listeners, listener);
+  auto const it = std::ranges::find(_removal_listeners, listener);
   if (it != _removal_listeners.end()) {
     _removal_listeners.erase(it);
     return true;

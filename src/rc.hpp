@@ -51,7 +51,7 @@ public:
 
   constexpr Strong(std::nullptr_t) noexcept {}
 
-  Strong(const Strong &other) noexcept
+  Strong(Strong const &other) noexcept
       : _header{other._header}, _object{other._object} {
     if (_header) {
       ++_header->strong_reference_count;
@@ -59,7 +59,7 @@ public:
     }
   }
 
-  Strong &operator=(const Strong &other) noexcept {
+  Strong &operator=(Strong const &other) noexcept {
     auto temp{other};
     swap(temp);
     return *this;
@@ -77,8 +77,8 @@ public:
 
   ~Strong() {
     if (_header) {
-      const auto new_strong_reference_count = --_header->strong_reference_count;
-      const auto new_weak_reference_count = --_header->weak_reference_count;
+      auto const new_strong_reference_count = --_header->strong_reference_count;
+      auto const new_weak_reference_count = --_header->weak_reference_count;
       if (new_strong_reference_count == 0) {
         _object->~T();
         if (new_weak_reference_count == 0) {
@@ -93,20 +93,20 @@ public:
 
   constexpr operator bool() const noexcept { return _header != nullptr; }
 
-  operator Strong<const T>() const noexcept {
+  operator Strong<T const>() const noexcept {
     if (_header) {
       ++_header->strong_reference_count;
       ++_header->weak_reference_count;
     }
-    return detail::construct_strong<const T>(_header, _object);
+    return detail::construct_strong<T const>(_header, _object);
   }
 
-  operator Strong<const T>() && noexcept {
-    const auto temp_header = _header;
-    const auto temp_object = _object;
+  operator Strong<T const>() && noexcept {
+    auto const temp_header = _header;
+    auto const temp_object = _object;
     _header = nullptr;
     _object = nullptr;
-    return detail::construct_strong<const T>(temp_header, temp_object);
+    return detail::construct_strong<T const>(temp_header, temp_object);
   }
 
   template <typename U>
@@ -122,8 +122,8 @@ public:
   template <typename U>
     requires std::derived_from<T, U>
   operator Strong<U>() && noexcept {
-    const auto temp_header = _header;
-    const auto temp_object = _object;
+    auto const temp_header = _header;
+    auto const temp_object = _object;
     _header = nullptr;
     _object = nullptr;
     return detail::construct_strong<U>(temp_header, temp_object);
@@ -131,7 +131,7 @@ public:
 
   template <std::derived_from<T> U> Strong<U> static_downcast() const noexcept {
     if (_header != nullptr) {
-      const auto object = static_cast<U *>(_object);
+      auto const object = static_cast<U *>(_object);
       ++_header->strong_reference_count;
       ++_header->weak_reference_count;
       return detail::construct_strong<U>(_header, object);
@@ -140,9 +140,9 @@ public:
   }
 
   template <std::derived_from<T> U> Strong<U> static_downcast() && noexcept {
-    const auto header = _header;
+    auto const header = _header;
     if (header != nullptr) {
-      const auto object = static_cast<U *>(_object);
+      auto const object = static_cast<U *>(_object);
       _header = nullptr;
       _object = nullptr;
       return detail::construct_strong<U>(header, object);
@@ -153,7 +153,7 @@ public:
   template <std::derived_from<T> U>
   Strong<U> dynamic_downcast() const noexcept {
     if (_header != nullptr) {
-      const auto object = dynamic_cast<U *>(_object);
+      auto const object = dynamic_cast<U *>(_object);
       if (object != nullptr) {
         ++_header->strong_reference_count;
         ++_header->weak_reference_count;
@@ -164,9 +164,9 @@ public:
   }
 
   template <std::derived_from<T> U> Strong<U> dynamic_downcast() && noexcept {
-    const auto header = _header;
+    auto const header = _header;
     if (header != nullptr) {
-      const auto object = dynamic_cast<U *>(_object);
+      auto const object = dynamic_cast<U *>(_object);
       if (object != nullptr) {
         _header = nullptr;
         _object = nullptr;
@@ -182,7 +182,7 @@ public:
 
   constexpr T *get() const noexcept { return _object; };
 
-  friend bool operator==(const Strong &lhs, const Strong &rhs) noexcept {
+  friend bool operator==(Strong const &lhs, Strong const &rhs) noexcept {
     return lhs._header == rhs._header;
   }
 
@@ -211,21 +211,21 @@ public:
 
   constexpr Weak(std::nullptr_t) noexcept {}
 
-  Weak(const Strong<T> &strong)
+  Weak(Strong<T> const &strong)
       : _header{strong._header}, _object{strong._object} {
     if (_header) {
       ++_header->weak_reference_count;
     }
   }
 
-  Weak(const Weak &other) noexcept
+  Weak(Weak const &other) noexcept
       : _header{other._header}, _object{other._object} {
     if (_header) {
       ++_header->weak_reference_count;
     }
   }
 
-  Weak &operator=(const Weak &other) noexcept {
+  Weak &operator=(Weak const &other) noexcept {
     auto temp{other};
     swap(temp);
     return *this;
@@ -252,19 +252,19 @@ public:
     }
   }
 
-  operator Weak<const T>() const noexcept {
+  operator Weak<T const>() const noexcept {
     if (_header) {
       ++_header->weak_reference_count;
     }
-    return detail::construct_weak<const T>(_header, _object);
+    return detail::construct_weak<T const>(_header, _object);
   }
 
-  operator Weak<const T>() && noexcept {
-    const auto temp_header = _header;
-    const auto temp_object = _object;
+  operator Weak<T const>() && noexcept {
+    auto const temp_header = _header;
+    auto const temp_object = _object;
     _header = nullptr;
     _object = nullptr;
-    return detail::construct_weak<const T>(temp_header, temp_object);
+    return detail::construct_weak<T const>(temp_header, temp_object);
   }
 
   Strong<T> lock() const noexcept {
@@ -280,15 +280,15 @@ public:
     return Strong<T>{};
   }
 
-  friend bool operator==(const Weak &lhs, const Weak &rhs) noexcept {
+  friend bool operator==(Weak const &lhs, Weak const &rhs) noexcept {
     return lhs._header == rhs._header;
   }
 
-  friend bool operator==(const Weak &lhs, const Strong<T> &rhs) noexcept {
+  friend bool operator==(Weak const &lhs, Strong<T> const &rhs) noexcept {
     return lhs._header == rhs._header;
   }
 
-  friend bool operator==(const Strong<T> &lhs, const Weak &rhs) noexcept {
+  friend bool operator==(Strong<T> const &lhs, Weak const &rhs) noexcept {
     return lhs._header == rhs._header;
   }
 
@@ -315,10 +315,10 @@ template <typename T> class From_this : virtual detail::From_this_base {
 public:
   friend class Factory<T>;
 
-  rc::Strong<const T> strong_from_this() const {
+  rc::Strong<T const> strong_from_this() const {
     ++header->strong_reference_count;
     ++header->weak_reference_count;
-    return detail::construct_strong<const T>(header, static_cast<T *>(this));
+    return detail::construct_strong<T const>(header, static_cast<T *>(this));
   }
 
   rc::Strong<T> strong_from_this() {
@@ -327,9 +327,9 @@ public:
     return detail::construct_strong<T>(header, static_cast<T *>(this));
   }
 
-  rc::Weak<const T> weak_from_this() const {
+  rc::Weak<T const> weak_from_this() const {
     ++header->weak_reference_count;
-    return detail::construct_weak<const T>(header, static_cast<T *>(this));
+    return detail::construct_weak<T const>(header, static_cast<T *>(this));
   }
 
   rc::Weak<T> weak_from_this() {
@@ -351,10 +351,10 @@ public:
 
   template <typename... Args> Strong<T> create(Args &&...args) {
     auto allocator = std::pmr::polymorphic_allocator{_memory_resource.get()};
-    const auto memory = allocator.allocate_bytes(
+    auto const memory = allocator.allocate_bytes(
       sizeof(detail::Wrapper<T>), alignof(detail::Wrapper<T>));
-    const auto wrapper = new (memory) detail::Wrapper<T>;
-    const auto object = [&]() {
+    auto const wrapper = new (memory) detail::Wrapper<T>;
+    auto const object = [&]() {
       try {
         return new (&wrapper->storage) T(std::forward<Args>(args)...);
       } catch (...) {
@@ -381,7 +381,7 @@ private:
 
 namespace std {
 template <class T> struct hash<fpsparty::rc::Strong<T>> {
-  std::size_t operator()(const fpsparty::rc::Strong<T> &p) const noexcept {
+  std::size_t operator()(fpsparty::rc::Strong<T> const &p) const noexcept {
     return std::hash<T *>{}(p.get());
   }
 };

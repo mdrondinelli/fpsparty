@@ -9,14 +9,14 @@
 #include <iostream>
 
 namespace fpsparty::net {
-Client::Client(const Client_create_info &create_info)
+Client::Client(Client_create_info const &create_info)
     : _host{enet::make_client_host_unique(
         {.max_channels = constants::max_channels,
          .incoming_bandwidth = create_info.incoming_bandwidth,
          .outgoing_bandwidth = create_info.outgoing_bandwidth})} {}
 
 void Client::poll_events() {
-  _host->service_each([&](const enet::Event &e) { handle_event(e); });
+  _host->service_each([&](enet::Event const &e) { handle_event(e); });
 }
 
 void Client::wait_events(std::uint32_t timeout) {
@@ -27,7 +27,7 @@ void Client::wait_events(std::uint32_t timeout) {
   }
 }
 
-void Client::connect(const enet::Address &address) {
+void Client::connect(enet::Address const &address) {
   assert(!is_connecting() && !is_connected());
   _server = _host->connect(address, constants::max_channels, 0);
   _connecting = true;
@@ -71,7 +71,7 @@ void Client::send_player_leave_request(net::Entity_id player_entity_id) {
 void Client::send_player_input_state(
   net::Entity_id player_entity_id,
   net::Sequence_number input_sequence_number,
-  const net::Input_state &input_state) {
+  net::Input_state const &input_state) {
   auto packet_writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<net::Message_type>(
@@ -87,7 +87,7 @@ void Client::send_player_input_state(
     }));
 }
 
-void Client::handle_event(const enet::Event &e) {
+void Client::handle_event(enet::Event const &e) {
   switch (e.type) {
   case enet::Event_type::connect: {
     assert(_server == e.peer);
@@ -104,13 +104,13 @@ void Client::handle_event(const enet::Event &e) {
   case enet::Event_type::receive: {
     using serial::deserialize;
     auto reader = serial::Span_reader{std::as_bytes(e.packet->get_data())};
-    const auto message_type = deserialize<Message_type>(reader);
+    auto const message_type = deserialize<Message_type>(reader);
     if (!message_type) {
       return;
     }
     switch (*message_type) {
     case Message_type::player_join_response: {
-      const auto player_entity_id = deserialize<net::Entity_id>(reader);
+      auto const player_entity_id = deserialize<net::Entity_id>(reader);
       if (!player_entity_id) {
         goto malformed_message;
       }
@@ -122,12 +122,12 @@ void Client::handle_event(const enet::Event &e) {
       return;
     }
     case Message_type::entity_snapshot: {
-      const auto tick_number = deserialize<net::Sequence_number>(reader);
+      auto const tick_number = deserialize<net::Sequence_number>(reader);
       if (!tick_number) {
         std::cerr << "Failed to deserialize tick_number.\n";
         goto malformed_message;
       }
-      const auto public_state_size = deserialize<std::uint16_t>(reader);
+      auto const public_state_size = deserialize<std::uint16_t>(reader);
       if (!public_state_size) {
         std::cerr << "Failed to deserialize public_state_size.\n";
         goto malformed_message;

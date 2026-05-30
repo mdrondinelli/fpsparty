@@ -18,7 +18,7 @@ public:
   virtual Entity_type get_entity_type() const noexcept = 0;
 
   virtual void
-  dump_entity(serial::Writer &writer, const Entity &entity) const = 0;
+  dump_entity(serial::Writer &writer, Entity const &entity) const = 0;
 };
 
 class Entity_loader {
@@ -32,12 +32,12 @@ public:
   virtual void load_entity(
     serial::Reader &reader,
     Entity &entity,
-    const Entity_world &world) const = 0;
+    Entity_world const &world) const = 0;
 };
 
 struct Entity_world_dump_info {
   serial::Writer *writer{};
-  std::span<const Entity_dumper *const> dumpers{};
+  std::span<Entity_dumper const *const> dumpers{};
 };
 
 struct Entity_world_load_info {
@@ -49,19 +49,19 @@ class Entity_world_load_error : public std::exception {};
 
 class Entity_world {
 public:
-  void dump(const Entity_world_dump_info &info) const;
+  void dump(Entity_world_dump_info const &info) const;
 
-  void load(const Entity_world_load_info &info);
+  void load(Entity_world_load_info const &info);
 
   void reset();
 
   void add(Entity_owner<Entity> entity);
 
-  Entity_owner<Entity> remove(const Entity *entity) noexcept;
+  Entity_owner<Entity> remove(Entity const *entity) noexcept;
 
   template <std::derived_from<Entity> T>
-  Entity_owner<T> remove(const T *entity) noexcept {
-    return remove(static_cast<const Entity *>(entity)).static_downcast<T>();
+  Entity_owner<T> remove(T const *entity) noexcept {
+    return remove(static_cast<Entity const *>(entity)).static_downcast<T>();
   }
 
   template <std::derived_from<Entity> T>
@@ -70,7 +70,7 @@ public:
       std::pmr::get_default_resource()) const {
     auto retval = std::pmr::vector<T *>{memory_resource};
     retval.reserve(count_entities_of_type<T>());
-    for (const auto &entity : _entities) {
+    for (auto const &entity : _entities) {
       if (auto typed_entity = dynamic_cast<T *>(entity.get())) {
         retval.emplace_back(std::move(typed_entity));
       }
@@ -81,7 +81,7 @@ public:
   template <std::derived_from<Entity> T>
   std::size_t count_entities_of_type() const noexcept {
     auto retval = std::size_t{};
-    for (const auto &entity : _entities) {
+    for (auto const &entity : _entities) {
       if (dynamic_cast<T *>(entity.get())) {
         ++retval;
       }

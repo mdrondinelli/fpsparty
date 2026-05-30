@@ -36,10 +36,10 @@ class Chunk {
 public:
   static constexpr auto edge_length = std::size_t{4};
 
-  static constexpr auto get_bit_index(const Eigen::Vector3i &offset) noexcept {
-    const auto i = offset.x() % edge_length;
-    const auto j = offset.y() % edge_length;
-    const auto k = offset.z() % edge_length;
+  static constexpr auto get_bit_index(Eigen::Vector3i const &offset) noexcept {
+    auto const i = offset.x() % edge_length;
+    auto const j = offset.y() % edge_length;
+    auto const k = offset.z() % edge_length;
     return k * edge_length * edge_length + j * edge_length + i;
   }
 
@@ -47,14 +47,13 @@ public:
 
   constexpr explicit Chunk(std::uint64_t blocks) noexcept : blocks{blocks} {}
 
-  constexpr bool is_solid(const Eigen::Vector3i &offset) const noexcept {
-    const auto bit_index = get_bit_index(offset);
+  constexpr bool is_solid(Eigen::Vector3i const &offset) const noexcept {
+    auto const bit_index = get_bit_index(offset);
     return blocks & (std::uint64_t{1} << bit_index);
   }
 
-  constexpr void
-  set_block(const Eigen::Vector3i &offset, bool value) noexcept {
-    const auto bit_index = get_bit_index(offset);
+  constexpr void set_block(Eigen::Vector3i const &offset, bool value) noexcept {
+    auto const bit_index = get_bit_index(offset);
     if (value) {
       blocks |= (std::uint64_t{1} << bit_index);
     } else {
@@ -105,15 +104,15 @@ class Chunk_span_template {
     }
 
     friend bool operator==(
-      const Iterator_template &lhs, const Iterator_template &rhs) noexcept {
+      Iterator_template const &lhs, Iterator_template const &rhs) noexcept {
       return lhs._chunk_offset == rhs._chunk_offset;
     }
 
   private:
     constexpr Iterator_template(
       U *data,
-      const std::array<std::size_t, 3> &chunk_counts,
-      const std::array<std::size_t, 3> &chunk_offset) noexcept
+      std::array<std::size_t, 3> const &chunk_counts,
+      std::array<std::size_t, 3> const &chunk_offset) noexcept
         : _data{data},
           _chunk_counts{chunk_counts},
           _chunk_offset{chunk_offset} {}
@@ -125,10 +124,10 @@ class Chunk_span_template {
 
 public:
   using Iterator = Iterator_template<T>;
-  using Const_iterator = Iterator_template<const T>;
+  using Const_iterator = Iterator_template<T const>;
 
   Chunk_span_template(
-    T *data, const std::array<std::size_t, 3> &chunk_counts) noexcept
+    T *data, std::array<std::size_t, 3> const &chunk_counts) noexcept
       : _data{data}, _chunk_counts{chunk_counts} {}
 
   Iterator begin() const noexcept {
@@ -167,32 +166,32 @@ private:
 };
 
 using Chunk_span = Chunk_span_template<Chunk>;
-using Const_chunk_span = Chunk_span_template<const Chunk>;
+using Const_chunk_span = Chunk_span_template<Chunk const>;
 
 class Grid {
 public:
-  explicit Grid(const Grid_create_info &create_info);
+  explicit Grid(Grid_create_info const &create_info);
 
   void load(serial::Reader &reader);
 
   void dump(serial::Writer &writer) const;
 
-  void fill(const Eigen::AlignedBox3i &bounds, bool solid = true);
+  void fill(Eigen::AlignedBox3i const &bounds, bool solid = true);
 
-  bool is_solid(const Eigen::Vector3i &cell_indices) const noexcept;
+  bool is_solid(Eigen::Vector3i const &cell_indices) const noexcept;
 
-  Chunk *get_chunk(const Eigen::Vector3i &chunk_indices) noexcept;
+  Chunk *get_chunk(Eigen::Vector3i const &chunk_indices) noexcept;
 
-  const Chunk *get_chunk(const Eigen::Vector3i &chunk_indices) const noexcept;
+  Chunk const *get_chunk(Eigen::Vector3i const &chunk_indices) const noexcept;
 
-  Chunk *get_chunk_unsafe(const Eigen::Vector3i &chunk_indices) noexcept;
+  Chunk *get_chunk_unsafe(Eigen::Vector3i const &chunk_indices) noexcept;
 
-  const Chunk *
-  get_chunk_unsafe(const Eigen::Vector3i &chunk_indices) const noexcept;
+  Chunk const *
+  get_chunk_unsafe(Eigen::Vector3i const &chunk_indices) const noexcept;
 
-  bool bounds_check_cell(const Eigen::Vector3i &cell_indices) const noexcept;
+  bool bounds_check_cell(Eigen::Vector3i const &cell_indices) const noexcept;
 
-  bool bounds_check_chunk(const Eigen::Vector3i &chunk_indices) const noexcept;
+  bool bounds_check_chunk(Eigen::Vector3i const &chunk_indices) const noexcept;
 
   Chunk_span get_chunks() noexcept;
 

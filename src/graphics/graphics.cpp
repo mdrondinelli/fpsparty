@@ -17,18 +17,18 @@ std::tuple<vk::Format, vk::Extent2D, vk::UniqueSwapchainKHR> make_swapchain(
   glfw::Window window,
   vk::SurfaceKHR surface,
   vk::PresentModeKHR present_mode) {
-  const auto capabilities = Global_vulkan_state::get()
+  auto const capabilities = Global_vulkan_state::get()
                               .physical_device()
                               .getSurfaceCapabilitiesKHR(surface);
-  const auto image_count =
+  auto const image_count =
     capabilities.maxImageCount > 0
       ? std::min(capabilities.maxImageCount, capabilities.minImageCount + 1)
       : (capabilities.minImageCount + 1);
-  const auto surface_format = [&]() {
-    const auto surface_formats = Global_vulkan_state::get()
+  auto const surface_format = [&]() {
+    auto const surface_formats = Global_vulkan_state::get()
                                    .physical_device()
                                    .getSurfaceFormatsKHR(surface);
-    for (const auto &surface_format : surface_formats) {
+    for (auto const &surface_format : surface_formats) {
       if (
         surface_format.format == vk::Format::eB8G8R8A8Srgb &&
         surface_format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
@@ -43,7 +43,7 @@ std::tuple<vk::Format, vk::Extent2D, vk::UniqueSwapchainKHR> make_swapchain(
       std::numeric_limits<std::uint32_t>::max()) {
       return capabilities.currentExtent;
     } else {
-      const auto framebuffer_size = window.get_framebuffer_size();
+      auto const framebuffer_size = window.get_framebuffer_size();
       return vk::Extent2D{
         .width = std::clamp(
           static_cast<std::uint32_t>(framebuffer_size[0]),
@@ -77,11 +77,11 @@ std::tuple<vk::Format, vk::Extent2D, vk::UniqueSwapchainKHR> make_swapchain(
 }
 
 std::vector<vk::UniqueImageView> make_swapchain_image_views(
-  std::span<const vk::Image> swapchain_images,
+  std::span<vk::Image const> swapchain_images,
   vk::Format swapchain_image_format) {
   auto retval = std::vector<vk::UniqueImageView>{};
   retval.reserve(swapchain_images.size());
-  for (const auto image : swapchain_images) {
+  for (auto const image : swapchain_images) {
     retval.emplace_back(
       Global_vulkan_state::get().device().createImageViewUnique({
         .image = image,
@@ -101,7 +101,7 @@ std::vector<vk::UniqueImageView> make_swapchain_image_views(
 }
 
 vk::UniqueSemaphore make_semaphore(
-  const char *
+  char const *
 #ifndef FPSPARTY_VULKAN_NDEBUG
     debug_name
 #endif
@@ -118,7 +118,7 @@ vk::UniqueSemaphore make_semaphore(
 }
 } // namespace
 
-Graphics::Graphics(const Graphics_create_info &info)
+Graphics::Graphics(Graphics_create_info const &info)
     : _window{info.window},
       _surface{info.surface},
       _surface_present_modes{Global_vulkan_state::get()
@@ -127,7 +127,7 @@ Graphics::Graphics(const Graphics_create_info &info)
       _vsync_preferred{info.vsync_preferred} {
   init_swapchain(select_swapchain_present_mode());
   for (auto i = std::size_t{}; i != info.max_frames_in_flight; ++i) {
-    const auto swapchain_image_acquire_semaphore_name =
+    auto const swapchain_image_acquire_semaphore_name =
       "swapchain_image_acquire_semaphores[" + std::to_string(i) + "]";
     _frame_resources.push_back({
       .swapchain_image_acquire_semaphore =
@@ -142,16 +142,16 @@ void Graphics::poll_works() {
 }
 
 rc::Strong<Pipeline_layout>
-Graphics::create_pipeline_layout(const Pipeline_layout_create_info &info) {
+Graphics::create_pipeline_layout(Pipeline_layout_create_info const &info) {
   return _pipeline_layout_factory.create(info);
 }
 
 rc::Strong<Pipeline>
-Graphics::create_pipeline(const Pipeline_create_info &info) {
+Graphics::create_pipeline(Pipeline_create_info const &info) {
   return _pipeline_factory.create(info);
 }
 
-rc::Strong<Buffer> Graphics::create_buffer(const Buffer_create_info &info) {
+rc::Strong<Buffer> Graphics::create_buffer(Buffer_create_info const &info) {
   return _buffer_factory.create(info);
 }
 
@@ -165,9 +165,9 @@ rc::Strong<Buffer> Graphics::create_staging_buffer(std::size_t size) {
 }
 
 rc::Strong<Buffer>
-Graphics::create_staging_buffer(std::span<const std::byte> data) {
+Graphics::create_staging_buffer(std::span<std::byte const> data) {
   auto retval = create_staging_buffer(data.size());
-  const auto memory = retval->map();
+  auto const memory = retval->map();
   std::memcpy(memory.get().data(), data.data(), data.size());
   return retval;
 }
@@ -190,7 +190,7 @@ rc::Strong<Buffer> Graphics::create_index_buffer(std::size_t size) {
     });
 }
 
-rc::Strong<Image> Graphics::create_image(const Image_create_info &info) {
+rc::Strong<Image> Graphics::create_image(Image_create_info const &info) {
   return _image_factory.create(info);
 }
 
@@ -217,13 +217,13 @@ Graphics::try_record_frame_work() {
   frame_resource.swapchain_image_index = [&]() {
     for (;;) {
       try {
-        const auto swapchain_image_index =
+        auto const swapchain_image_index =
           Global_vulkan_state::get().device().acquireNextImageKHR(
             *_swapchain,
             std::numeric_limits<std::uint64_t>::max(),
             *frame_resource.swapchain_image_acquire_semaphore);
         return swapchain_image_index.value;
-      } catch (const vk::OutOfDateKHRError &e) {
+      } catch (vk::OutOfDateKHRError const &e) {
         deinit_swapchain();
         init_swapchain(select_swapchain_present_mode());
       }
@@ -254,8 +254,7 @@ rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {
     _swapchain_image_release_semaphores[frame_resource.swapchain_image_index];
   recorder.transition_image_layout(
     {
-      .stage_mask =
-        Pipeline_stage_flag_bits::color_attachment_output,
+      .stage_mask = Pipeline_stage_flag_bits::color_attachment_output,
       .access_mask = Access_flag_bits::color_attachment_write,
     },
     {},
@@ -269,7 +268,7 @@ rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {
     .signal_semaphore = *swapchain_image_release_semaphore,
   });
   try {
-    const auto present_result = Global_vulkan_state::get().present({
+    auto const present_result = Global_vulkan_state::get().present({
       .waitSemaphoreCount = 1,
       .pWaitSemaphores = &*swapchain_image_release_semaphore,
       .swapchainCount = 1,
@@ -279,7 +278,7 @@ rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {
     if (present_result == vk::Result::eSuboptimalKHR) {
       throw vk::OutOfDateKHRError{"Subobtimal queue present result"};
     }
-    const auto framebuffer_size = _window.get_framebuffer_size();
+    auto const framebuffer_size = _window.get_framebuffer_size();
     if (
       _swapchain_image_extent.width !=
         static_cast<std::uint32_t>(framebuffer_size[0]) ||
@@ -287,12 +286,12 @@ rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {
         static_cast<std::uint32_t>(framebuffer_size[1])) {
       throw vk::OutOfDateKHRError{"Framebuffer size mismatch"};
     }
-    if (const auto selected_swapchain_present_mode =
+    if (auto const selected_swapchain_present_mode =
           select_swapchain_present_mode();
         _swapchain_present_mode != selected_swapchain_present_mode) {
       throw vk::OutOfDateKHRError{"Present mode mismatch"};
     }
-  } catch (const vk::OutOfDateKHRError &e) {
+  } catch (vk::OutOfDateKHRError const &e) {
     deinit_swapchain();
     init_swapchain(select_swapchain_present_mode());
   }
@@ -317,7 +316,7 @@ void Graphics::init_swapchain(vk::PresentModeKHR present_mode) {
   _vk_swapchain_image_views =
     make_swapchain_image_views(_vk_swapchain_images, _swapchain_image_format);
   for (auto i = std::size_t{}; i != _vk_swapchain_images.size(); ++i) {
-    const auto swapchain_image_release_semaphore_name =
+    auto const swapchain_image_release_semaphore_name =
       "swapchain_image_release_semaphores[" + std::to_string(i) + "]";
     _swapchain_image_release_semaphores.emplace_back(
       make_semaphore(swapchain_image_release_semaphore_name.c_str()));
@@ -348,10 +347,10 @@ void Graphics::deinit_swapchain() {
 }
 
 vk::PresentModeKHR Graphics::select_swapchain_present_mode() const noexcept {
-  const auto preferred_present_mode = _vsync_preferred
+  auto const preferred_present_mode = _vsync_preferred
                                         ? vk::PresentModeKHR::eMailbox
                                         : vk::PresentModeKHR::eImmediate;
-  for (const auto present_mode : _surface_present_modes) {
+  for (auto const present_mode : _surface_present_modes) {
     if (present_mode == preferred_present_mode) {
       return present_mode;
     }

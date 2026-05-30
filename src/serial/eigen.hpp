@@ -6,17 +6,17 @@
 
 namespace fpsparty::serial {
 template <> struct Serializer<Eigen::Vector2f> {
-  void write(Writer &writer, const Eigen::Vector2f &value) const {
+  void write(Writer &writer, Eigen::Vector2f const &value) const {
     serialize<float>(writer, value.x());
     serialize<float>(writer, value.y());
   }
 
   std::optional<Eigen::Vector2f> read(Reader &reader) const {
-    const auto x = deserialize<float>(reader);
+    auto const x = deserialize<float>(reader);
     if (!x) {
       return std::nullopt;
     }
-    const auto y = deserialize<float>(reader);
+    auto const y = deserialize<float>(reader);
     if (!y) {
       return std::nullopt;
     }
@@ -25,22 +25,22 @@ template <> struct Serializer<Eigen::Vector2f> {
 };
 
 template <> struct Serializer<Eigen::Vector3f> {
-  void write(Writer &writer, const Eigen::Vector3f &value) const {
+  void write(Writer &writer, Eigen::Vector3f const &value) const {
     serialize<float>(writer, value.x());
     serialize<float>(writer, value.y());
     serialize<float>(writer, value.z());
   }
 
   std::optional<Eigen::Vector3f> read(Reader &reader) const {
-    const auto x = deserialize<float>(reader);
+    auto const x = deserialize<float>(reader);
     if (!x) {
       return std::nullopt;
     }
-    const auto y = deserialize<float>(reader);
+    auto const y = deserialize<float>(reader);
     if (!y) {
       return std::nullopt;
     }
-    const auto z = deserialize<float>(reader);
+    auto const z = deserialize<float>(reader);
     if (!z) {
       return std::nullopt;
     }

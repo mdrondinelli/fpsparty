@@ -15,7 +15,7 @@ template <typename T> class Entity_owner;
 template <typename T> class Entity_factory;
 
 namespace detail {
-bool get_entity_remove_flag(const Entity &entity) noexcept;
+bool get_entity_remove_flag(Entity const &entity) noexcept;
 
 void set_entity_remove_flag(Entity &entity, bool value) noexcept;
 
@@ -26,7 +26,7 @@ template <typename T> Entity_owner<T> acquire_entity(T *entity) noexcept {
 }
 
 template <typename T> T *release_entity(Entity_owner<T> &owner) noexcept {
-  const auto entity = owner.get();
+  auto const entity = owner.get();
   owner._entity = nullptr;
   return entity;
 }
@@ -43,9 +43,9 @@ class Entity {
 public:
   explicit Entity(Entity_type type, net::Entity_id id) noexcept;
 
-  Entity(const Entity &other) = delete;
+  Entity(Entity const &other) = delete;
 
-  Entity &operator=(const Entity &other) = delete;
+  Entity &operator=(Entity const &other) = delete;
 
   virtual ~Entity() = default;
 
@@ -65,7 +65,7 @@ private:
 
   template <typename T> friend class Entity_factory;
 
-  friend bool detail::get_entity_remove_flag(const Entity &entity) noexcept;
+  friend bool detail::get_entity_remove_flag(Entity const &entity) noexcept;
 
   friend void
   detail::set_entity_remove_flag(Entity &entity, bool value) noexcept;
@@ -122,7 +122,7 @@ public:
 
   template <std::derived_from<T> U>
   Entity_owner<U> dynamic_downcast() noexcept {
-    if (const auto result = dynamic_cast<U *>(_entity)) {
+    if (auto const result = dynamic_cast<U *>(_entity)) {
       detail::release_entity(*this);
       return detail::acquire_entity(result);
     } else {
@@ -159,7 +159,7 @@ public:
 
   template <typename... Args> Entity_owner<T> create(Args &&...args) {
     auto allocator = std::pmr::polymorphic_allocator{_memory_resource.get()};
-    const auto entity = allocator.new_object<T>(std::forward<Args>(args)...);
+    auto const entity = allocator.new_object<T>(std::forward<Args>(args)...);
     entity->_memory_resource = _memory_resource.get();
     return detail::acquire_entity(entity);
   }

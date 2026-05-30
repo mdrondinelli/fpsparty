@@ -18,24 +18,24 @@ class Game {
   struct Impl;
 
 public:
-  explicit Game(const Game_create_info &info);
+  explicit Game(Game_create_info const &info);
 
   void tick(float duration);
 
-  Entity_owner<Player> create_player(const Player_create_info &info);
+  Entity_owner<Player> create_player(Player_create_info const &info);
 
-  Entity_owner<Humanoid> create_humanoid(const Humanoid_create_info &info);
+  Entity_owner<Humanoid> create_humanoid(Humanoid_create_info const &info);
 
   Entity_owner<Projectile>
-  create_projectile(const Projectile_create_info &info);
+  create_projectile(Projectile_create_info const &info);
 
   net::Sequence_number get_tick_number() const noexcept;
 
-  const Grid &get_grid() const noexcept;
+  Grid const &get_grid() const noexcept;
 
   Grid &get_grid() noexcept;
 
-  const Entity_world &get_entities() const noexcept;
+  Entity_world const &get_entities() const noexcept;
 
   Entity_world &get_entities() noexcept;
 

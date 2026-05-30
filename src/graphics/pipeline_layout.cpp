@@ -4,10 +4,10 @@
 #include <vulkan/vulkan_structs.hpp>
 
 namespace fpsparty::graphics {
-Pipeline_layout::Pipeline_layout(const Pipeline_layout_create_info &info) {
+Pipeline_layout::Pipeline_layout(Pipeline_layout_create_info const &info) {
   auto vk_push_constant_ranges = std::vector<vk::PushConstantRange>{};
   vk_push_constant_ranges.reserve(info.push_constant_ranges.size());
-  for (const auto &push_constant_range : info.push_constant_ranges) {
+  for (auto const &push_constant_range : info.push_constant_ranges) {
     vk_push_constant_ranges.emplace_back(
       vk::PushConstantRange{
         .stageFlags =

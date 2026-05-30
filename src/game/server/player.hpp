@@ -15,7 +15,7 @@ struct Player_create_info {};
 class Player : public Entity {
 public:
   explicit Player(
-    net::Entity_id entity_id, const Player_create_info &info) noexcept;
+    net::Entity_id entity_id, Player_create_info const &info) noexcept;
 
   void on_remove() override;
 
@@ -23,13 +23,13 @@ public:
 
   void set_humanoid(Humanoid *value) noexcept;
 
-  const net::Input_state &get_input_state() const noexcept;
+  net::Input_state const &get_input_state() const noexcept;
 
   std::optional<net::Sequence_number>
   get_input_sequence_number() const noexcept;
 
   void set_input_state(
-    const net::Input_state &input_state,
+    net::Input_state const &input_state,
     net::Sequence_number input_sequence_number) noexcept;
 
 private:
@@ -53,7 +53,7 @@ class Player_dumper : public Entity_dumper {
 public:
   Entity_type get_entity_type() const noexcept override;
 
-  void dump_entity(serial::Writer &writer, const Entity &entity) const override;
+  void dump_entity(serial::Writer &writer, Entity const &entity) const override;
 };
 } // namespace fpsparty::game
 

@@ -13,23 +13,25 @@
 namespace fpsparty::client {
 struct Grid_mesh_create_info {
   graphics::Graphics *graphics;
-  const game::Grid *grid;
+  game::Grid const *grid;
 };
 
 class Grid_mesh : graphics::Work_done_callback {
 public:
-  explicit Grid_mesh(const Grid_mesh_create_info &info);
+  explicit Grid_mesh(Grid_mesh_create_info const &info);
 
   ~Grid_mesh();
 
   void record_draws(
-    graphics::Work_recorder &recorder, game::Axis normal_axis, client::Sign normal_sign);
+    graphics::Work_recorder &recorder,
+    game::Axis normal_axis,
+    client::Sign normal_sign);
 
   bool is_uploaded() const noexcept;
 
-  const rc::Strong<graphics::Buffer> &get_vertex_buffer() const noexcept;
+  rc::Strong<graphics::Buffer> const &get_vertex_buffer() const noexcept;
 
-  const rc::Strong<graphics::Buffer> &get_index_buffer() const noexcept;
+  rc::Strong<graphics::Buffer> const &get_index_buffer() const noexcept;
 
 private:
   struct Indirect_draw_info {
@@ -37,7 +39,7 @@ private:
     std::uint32_t draw_count;
   };
 
-  void on_work_done(const graphics::Work &work) override;
+  void on_work_done(graphics::Work const &work) override;
 
   rc::Strong<graphics::Buffer> _vertex_buffer{};
   rc::Strong<graphics::Buffer> _index_buffer{};

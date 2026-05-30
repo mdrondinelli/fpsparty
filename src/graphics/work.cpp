@@ -12,7 +12,7 @@ bool poll_work(Work &work) {
     Global_vulkan_state::get().device().getFenceStatus(
       *work._resource.vk_fence) == vk::Result::eSuccess) {
     work._done.store(true);
-    for (const auto &done_callback : work._resource.done_callbacks) {
+    for (auto const &done_callback : work._resource.done_callbacks) {
       done_callback->on_work_done(work);
     }
     work._resource.done_callbacks.clear();

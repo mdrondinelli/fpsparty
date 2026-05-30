@@ -12,7 +12,7 @@
 #include <span>
 
 namespace fpsparty::net {
-Server::Server(const Server_create_info &create_info)
+Server::Server(Server_create_info const &create_info)
     : _host{enet::make_server_host_unique({
         .port = create_info.port,
         .max_clients = create_info.max_clients,
@@ -22,7 +22,7 @@ Server::Server(const Server_create_info &create_info)
       })} {}
 
 void Server::poll_events() {
-  _host->service_each([&](const enet::Event &e) { handle_event(e); });
+  _host->service_each([&](enet::Event const &e) { handle_event(e); });
 }
 
 void Server::wait_events(std::uint32_t timeout) {
@@ -34,7 +34,7 @@ void Server::wait_events(std::uint32_t timeout) {
 }
 
 void Server::disconnect() {
-  for (const auto &peer : _peers) {
+  for (auto const &peer : _peers) {
     peer.disconnect(0);
   }
 }
@@ -55,7 +55,7 @@ void Server::send_player_join_response(
 }
 
 void Server::send_grid_snapshot(
-  enet::Peer peer, std::span<const std::byte> state) {
+  enet::Peer peer, std::span<std::byte const> state) {
   auto packet = enet::create_packet_unique({
     .data = nullptr,
     .data_length = sizeof(Message_type) + state.size(),
@@ -71,8 +71,8 @@ void Server::send_grid_snapshot(
 void Server::send_entity_snapshot(
   enet::Peer peer,
   net::Sequence_number tick_number,
-  std::span<const std::byte> public_state,
-  std::span<const std::byte> player_state) {
+  std::span<std::byte const> public_state,
+  std::span<std::byte const> player_state) {
   auto packet = enet::create_packet_unique({
     .data = nullptr,
     .data_length = sizeof(Message_type) + sizeof(net::Sequence_number) +
@@ -108,9 +108,9 @@ void Server::on_player_join_request(enet::Peer) {}
 void Server::on_player_leave_request(enet::Peer, net::Entity_id) {}
 
 void Server::on_player_input_state(
-  enet::Peer, net::Entity_id, net::Sequence_number, const net::Input_state &) {}
+  enet::Peer, net::Entity_id, net::Sequence_number, net::Input_state const &) {}
 
-void Server::handle_event(const enet::Event &e) {
+void Server::handle_event(enet::Event const &e) {
   switch (e.type) {
   case enet::Event_type::connect: {
     _peers.emplace_back(e.peer);
@@ -119,7 +119,7 @@ void Server::handle_event(const enet::Event &e) {
   }
   case enet::Event_type::disconnect: {
     on_peer_disconnect(e.peer);
-    const auto it = std::ranges::find(_peers, e.peer);
+    auto const it = std::ranges::find(_peers, e.peer);
     assert(it != _peers.end());
     _peers.erase(it);
     return;
@@ -127,7 +127,7 @@ void Server::handle_event(const enet::Event &e) {
   case enet::Event_type::receive: {
     using serial::deserialize;
     auto reader = serial::Span_reader{std::as_bytes(e.packet->get_data())};
-    const auto message_type = deserialize<Message_type>(reader);
+    auto const message_type = deserialize<Message_type>(reader);
     if (!message_type) {
       return;
     }
@@ -137,7 +137,7 @@ void Server::handle_event(const enet::Event &e) {
       return;
     }
     case Message_type::player_leave_request: {
-      const auto player_entity_id = deserialize<net::Entity_id>(reader);
+      auto const player_entity_id = deserialize<net::Entity_id>(reader);
       if (!player_entity_id) {
         std::cerr << "Malformed player leave request packet.\n";
         return;
@@ -146,18 +146,18 @@ void Server::handle_event(const enet::Event &e) {
       return;
     }
     case Message_type::player_input_state: {
-      const auto player_entity_id = deserialize<net::Entity_id>(reader);
+      auto const player_entity_id = deserialize<net::Entity_id>(reader);
       if (!player_entity_id) {
         std::cerr << "Malformed player input state packet.\n";
         return;
       }
-      const auto input_sequence_number =
+      auto const input_sequence_number =
         deserialize<net::Sequence_number>(reader);
       if (!input_sequence_number) {
         std::cerr << "Malformed player input state packet.\n";
         return;
       }
-      const auto input_state = deserialize<net::Input_state>(reader);
+      auto const input_state = deserialize<net::Input_state>(reader);
       if (!input_state) {
         std::cerr << "Malformed player input state packet.\n";
         return;

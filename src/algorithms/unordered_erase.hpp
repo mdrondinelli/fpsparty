@@ -14,8 +14,8 @@ void unordered_erase_at(
 }
 
 template <typename T, typename Allocator, typename U = T>
-bool unordered_erase_one(std::vector<T, Allocator> &container, const U &value) {
-  const auto it = std::ranges::find(container, value);
+bool unordered_erase_one(std::vector<T, Allocator> &container, U const &value) {
+  auto const it = std::ranges::find(container, value);
   if (it != container.end()) {
     unordered_erase_at(container, it);
     return true;
@@ -27,7 +27,7 @@ bool unordered_erase_one(std::vector<T, Allocator> &container, const U &value) {
 template <typename T, typename Allocator, typename Predicate>
 bool unordered_erase_one_if(
   std::vector<T, Allocator> &container, Predicate &&predicate) {
-  const auto it = std::ranges::find_if(container, predicate);
+  auto const it = std::ranges::find_if(container, predicate);
   if (it != container.end()) {
     unordered_erase_at(container, it);
     return true;
@@ -38,11 +38,11 @@ bool unordered_erase_one_if(
 
 template <typename T, typename Allocator, typename U = T>
 std::size_t
-unordered_erase_many(std::vector<T, Allocator> &container, const U &value) {
+unordered_erase_many(std::vector<T, Allocator> &container, U const &value) {
   auto retval = std::size_t{};
   auto index = std::size_t{};
   while (index != container.size()) {
-    const auto it = container.begin() + index;
+    auto const it = container.begin() + index;
     if (*it == value) {
       unordered_erase_at(container, it);
       ++retval;
@@ -59,7 +59,7 @@ std::size_t unordered_erase_many_if(
   auto retval = std::size_t{};
   auto index = std::size_t{};
   while (index != container.size()) {
-    const auto it = container.begin() + index;
+    auto const it = container.begin() + index;
     if (predicate(*it)) {
       unordered_erase_at(container, it);
       ++retval;

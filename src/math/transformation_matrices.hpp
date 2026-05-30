@@ -5,7 +5,7 @@
 #include <cmath>
 
 namespace fpsparty::math {
-constexpr Eigen::Matrix4f translation_matrix(const Eigen::Vector3f &t) {
+constexpr Eigen::Matrix4f translation_matrix(Eigen::Vector3f const &t) {
   auto retval = Eigen::Matrix4f{Eigen::Matrix4f::Identity()};
   retval(0, 3) = t.x();
   retval(1, 3) = t.y();
@@ -14,8 +14,8 @@ constexpr Eigen::Matrix4f translation_matrix(const Eigen::Vector3f &t) {
 }
 
 constexpr Eigen::Matrix4f x_rotation_matrix(float a) {
-  const auto cos_a = std::cos(a);
-  const auto sin_a = std::sin(a);
+  auto const cos_a = std::cos(a);
+  auto const sin_a = std::sin(a);
   auto retval = Eigen::Matrix4f{Eigen::Matrix4f::Identity()};
   retval(1, 1) = cos_a;
   retval(2, 1) = sin_a;
@@ -25,8 +25,8 @@ constexpr Eigen::Matrix4f x_rotation_matrix(float a) {
 }
 
 constexpr Eigen::Matrix4f y_rotation_matrix(float a) {
-  const auto cos_a = std::cos(a);
-  const auto sin_a = std::sin(a);
+  auto const cos_a = std::cos(a);
+  auto const sin_a = std::sin(a);
   auto retval = Eigen::Matrix4f{Eigen::Matrix4f::Identity()};
   retval(0, 0) = cos_a;
   retval(2, 0) = -sin_a;
@@ -36,8 +36,8 @@ constexpr Eigen::Matrix4f y_rotation_matrix(float a) {
 }
 
 constexpr Eigen::Matrix4f z_rotation_matrix(float a) {
-  const auto cos_a = std::cos(a);
-  const auto sin_a = std::sin(a);
+  auto const cos_a = std::cos(a);
+  auto const sin_a = std::sin(a);
   auto retval = Eigen::Matrix4f{Eigen::Matrix4f::Identity()};
   retval(0, 0) = cos_a;
   retval(1, 0) = sin_a;
@@ -54,7 +54,7 @@ constexpr Eigen::Matrix4f uniform_scale_matrix(float s) {
   return retval;
 }
 
-constexpr Eigen::Matrix4f axis_aligned_scale_matrix(const Eigen::Vector3f &s) {
+constexpr Eigen::Matrix4f axis_aligned_scale_matrix(Eigen::Vector3f const &s) {
   auto retval = Eigen::Matrix4f{Eigen::Matrix4f::Identity()};
   retval(0, 0) = s[0];
   retval(1, 1) = s[1];

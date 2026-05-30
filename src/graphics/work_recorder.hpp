@@ -53,34 +53,34 @@ struct Indirect_indexed_draw_info {
 class Work_recorder {
 public:
   void copy_buffer(
-    rc::Strong<const Buffer> src,
+    rc::Strong<Buffer const> src,
     rc::Strong<Buffer> dst,
-    const Buffer_copy_info &info);
+    Buffer_copy_info const &info);
 
   void barrier(
-    const Synchronization_scope &src_scope,
-    const Synchronization_scope &dst_scope);
+    Synchronization_scope const &src_scope,
+    Synchronization_scope const &dst_scope);
 
   void transition_image_layout(
-    const Synchronization_scope &src_scope,
-    const Synchronization_scope &dst_scope,
+    Synchronization_scope const &src_scope,
+    Synchronization_scope const &dst_scope,
     Image_layout old_layout,
     Image_layout new_layout,
     rc::Strong<Image> image);
 
-  void begin_rendering(const Rendering_begin_info &info);
+  void begin_rendering(Rendering_begin_info const &info);
 
   void end_rendering();
 
-  void bind_pipeline(rc::Strong<const Pipeline> pipeline);
+  void bind_pipeline(rc::Strong<Pipeline const> pipeline);
 
   void set_cull_mode(Cull_mode cull_mode);
 
   void set_front_face(Front_face front_face);
 
-  void set_viewport(const Eigen::Vector2i &extent);
+  void set_viewport(Eigen::Vector2i const &extent);
 
-  void set_scissor(const Eigen::Vector2i &extent);
+  void set_scissor(Eigen::Vector2i const &extent);
 
   void set_depth_test_enabled(bool enabled);
 
@@ -88,20 +88,20 @@ public:
 
   void set_depth_compare_op(Compare_op op);
 
-  void bind_vertex_buffer(rc::Strong<const Buffer> buffer);
+  void bind_vertex_buffer(rc::Strong<Buffer const> buffer);
 
   void
-  bind_index_buffer(rc::Strong<const Buffer> buffer, Index_type index_type);
+  bind_index_buffer(rc::Strong<Buffer const> buffer, Index_type index_type);
 
-  void draw_indexed(const Indexed_draw_info &info) noexcept;
+  void draw_indexed(Indexed_draw_info const &info) noexcept;
 
-  void draw_indexed_indirect(const Indirect_indexed_draw_info &info) noexcept;
+  void draw_indexed_indirect(Indirect_indexed_draw_info const &info) noexcept;
 
   void push_constants(
-    rc::Strong<const Pipeline_layout> pipeline_layout,
+    rc::Strong<Pipeline_layout const> pipeline_layout,
     Shader_stage_flags stage_flags,
     std::uint32_t offset,
-    std::span<const std::byte> data) noexcept;
+    std::span<std::byte const> data) noexcept;
 
 private:
   friend Work_recorder
@@ -112,13 +112,13 @@ private:
 
   explicit Work_recorder(detail::Work_resource resource) noexcept;
 
-  void add_reference(rc::Strong<const Buffer> buffer);
+  void add_reference(rc::Strong<Buffer const> buffer);
 
-  void add_reference(rc::Strong<const Image> image);
+  void add_reference(rc::Strong<Image const> image);
 
-  void add_reference(rc::Strong<const Pipeline> pipeline_layout);
+  void add_reference(rc::Strong<Pipeline const> pipeline_layout);
 
-  void add_reference(rc::Strong<const Pipeline_layout> pipeline_layout);
+  void add_reference(rc::Strong<Pipeline_layout const> pipeline_layout);
 
   vk::CommandBuffer get_command_buffer() const noexcept;
 

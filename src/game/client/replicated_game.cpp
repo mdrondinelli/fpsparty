@@ -7,28 +7,28 @@
 #include "game/core/projectile_movement.hpp"
 
 namespace fpsparty::game {
-Replicated_game::Replicated_game(const Replicated_game_create_info &) {}
+Replicated_game::Replicated_game(Replicated_game_create_info const &) {}
 
 void Replicated_game::tick(float duration) {
-  const auto players = _entities.get_entities_of_type<Replicated_player>();
-  for (const auto &player : players) {
-    if (const auto humanoid = player->get_humanoid()) {
+  auto const players = _entities.get_entities_of_type<Replicated_player>();
+  for (auto const &player : players) {
+    if (auto const humanoid = player->get_humanoid()) {
       humanoid->set_input_state(player->get_input_state());
     }
   }
-  const auto humanoids = _entities.get_entities_of_type<Replicated_humanoid>();
-  for (const auto &humanoid : humanoids) {
-    const auto movement_result = simulate_humanoid_movement({
+  auto const humanoids = _entities.get_entities_of_type<Replicated_humanoid>();
+  for (auto const &humanoid : humanoids) {
+    auto const movement_result = simulate_humanoid_movement({
       .initial_position = humanoid->get_position(),
       .input_state = humanoid->get_input_state(),
       .duration = duration,
     });
     humanoid->set_position(movement_result.final_position);
   }
-  const auto projectiles =
+  auto const projectiles =
     _entities.get_entities_of_type<Replicated_projectile>();
-  for (const auto &projectile : projectiles) {
-    const auto movement_result = simulate_projectile_movement({
+  for (auto const &projectile : projectiles) {
+    auto const movement_result = simulate_projectile_movement({
       .initial_position = projectile->get_position(),
       .initial_velocity = projectile->get_velocity(),
       .duration = duration,
@@ -38,19 +38,19 @@ void Replicated_game::tick(float duration) {
   }
 }
 
-void Replicated_game::load_grid(const Replicated_game_grid_load_info &info) {
+void Replicated_game::load_grid(Replicated_game_grid_load_info const &info) {
   _grid.load(*info.reader);
 }
 
 void Replicated_game::load_entities(
-  const Replicated_game_entities_load_info &info) {
+  Replicated_game_entities_load_info const &info) {
   using serial::deserialize;
   _tick_number = info.tick_number;
-  const auto readers = std::array<serial::Reader *, 2>{
+  auto const readers = std::array<serial::Reader *, 2>{
     info.public_state_reader,
     info.player_state_reader,
   };
-  const auto loaders = std::array<Entity_loader *, 3>{
+  auto const loaders = std::array<Entity_loader *, 3>{
     &_humanoid_loader,
     &_projectile_loader,
     &_player_loader,
@@ -66,11 +66,11 @@ void Replicated_game::reset() {
   _tick_number = 0;
 }
 
-const Grid &Replicated_game::get_grid() const noexcept { return _grid; }
+Grid const &Replicated_game::get_grid() const noexcept { return _grid; }
 
 Grid &Replicated_game::get_grid() noexcept { return _grid; }
 
-const Entity_world &Replicated_game::get_entities() const noexcept {
+Entity_world const &Replicated_game::get_entities() const noexcept {
   return _entities;
 }
 

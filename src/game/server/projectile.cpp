@@ -11,7 +11,7 @@ void Projectile::Creator_remove_listener::on_remove_entity() {
 }
 
 Projectile::Projectile(
-  net::Entity_id entity_id, const Projectile_create_info &info) noexcept
+  net::Entity_id entity_id, Projectile_create_info const &info) noexcept
     : Entity{Entity_type::projectile, entity_id},
       _creator{info.creator},
       _creator_remove_listener{this},
@@ -31,19 +31,19 @@ void Projectile::on_remove() {
 
 Humanoid *Projectile::get_creator() const noexcept { return _creator; }
 
-const Eigen::Vector3f &Projectile::get_position() const noexcept {
+Eigen::Vector3f const &Projectile::get_position() const noexcept {
   return _position;
 }
 
-void Projectile::set_position(const Eigen::Vector3f &position) noexcept {
+void Projectile::set_position(Eigen::Vector3f const &position) noexcept {
   _position = position;
 }
 
-const Eigen::Vector3f &Projectile::get_velocity() const noexcept {
+Eigen::Vector3f const &Projectile::get_velocity() const noexcept {
   return _velocity;
 }
 
-void Projectile::set_velocity(const Eigen::Vector3f &velocity) noexcept {
+void Projectile::set_velocity(Eigen::Vector3f const &velocity) noexcept {
   _velocity = velocity;
 }
 
@@ -52,9 +52,9 @@ Entity_type Projectile_dumper::get_entity_type() const noexcept {
 }
 
 void Projectile_dumper::dump_entity(
-  serial::Writer &writer, const Entity &entity) const {
+  serial::Writer &writer, Entity const &entity) const {
   using serial::serialize;
-  if (const auto projectile = dynamic_cast<const Projectile *>(&entity)) {
+  if (auto const projectile = dynamic_cast<Projectile const *>(&entity)) {
     serialize<Eigen::Vector3f>(writer, projectile->get_position());
     serialize<Eigen::Vector3f>(writer, projectile->get_velocity());
   }

@@ -15,13 +15,13 @@ protected:
   void on_remove() override;
 
 public:
-  const net::Input_state &get_input_state() const noexcept;
+  net::Input_state const &get_input_state() const noexcept;
 
-  void set_input_state(const net::Input_state &value) noexcept;
+  void set_input_state(net::Input_state const &value) noexcept;
 
-  const Eigen::Vector3f &get_position() const noexcept;
+  Eigen::Vector3f const &get_position() const noexcept;
 
-  void set_position(const Eigen::Vector3f &value) noexcept;
+  void set_position(Eigen::Vector3f const &value) noexcept;
 
 private:
   net::Input_state _input_state{};
@@ -41,7 +41,7 @@ public:
   void load_entity(
     serial::Reader &reader,
     Entity &entity,
-    const Entity_world &world) const override;
+    Entity_world const &world) const override;
 
   Entity_type get_entity_type() const noexcept override;
 

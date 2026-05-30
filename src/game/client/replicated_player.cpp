@@ -37,22 +37,22 @@ void Replicated_player::set_humanoid(Replicated_humanoid *value) {
   }
 }
 
-const net::Input_state &Replicated_player::get_input_state() const noexcept {
+net::Input_state const &Replicated_player::get_input_state() const noexcept {
   return _input_state;
 }
 
 void Replicated_player::set_input_state(
-  const net::Input_state &value) noexcept {
+  net::Input_state const &value) noexcept {
   _input_state = value;
 }
 
-const std::optional<net::Sequence_number> &
+std::optional<net::Sequence_number> const &
 Replicated_player::get_input_sequence_number() const noexcept {
   return _input_sequence_number;
 }
 
 void Replicated_player::set_input_sequence_number(
-  const std::optional<net::Sequence_number> &value) noexcept {
+  std::optional<net::Sequence_number> const &value) noexcept {
   _input_sequence_number = value;
 }
 
@@ -66,30 +66,30 @@ Replicated_player_loader::create_entity(net::Entity_id entity_id) {
 }
 
 void Replicated_player_loader::load_entity(
-  serial::Reader &reader, Entity &entity, const Entity_world &world) const {
-  const auto player = dynamic_cast<Replicated_player *>(&entity);
+  serial::Reader &reader, Entity &entity, Entity_world const &world) const {
+  auto const player = dynamic_cast<Replicated_player *>(&entity);
   if (!player) {
     std::cerr << "Failed to downcast player.\n";
     throw Replicated_player_load_error{};
   }
-  const auto humanoid_entity_id = deserialize<net::Entity_id>(reader);
+  auto const humanoid_entity_id = deserialize<net::Entity_id>(reader);
   if (!humanoid_entity_id) {
     std::cerr << "Failed to deserialize humanoid entity id.\n";
     throw Replicated_player_load_error{};
   }
   if (*humanoid_entity_id) {
-    const auto humanoid = dynamic_cast<Replicated_humanoid *>(
+    auto const humanoid = dynamic_cast<Replicated_humanoid *>(
       world.get_entity_by_id(*humanoid_entity_id));
     if (!humanoid) {
       std::cerr << "Failed to get humanoid by entity id.\n";
       throw Replicated_player_load_error{};
     }
-    const auto input_state = deserialize<net::Input_state>(reader);
+    auto const input_state = deserialize<net::Input_state>(reader);
     if (!input_state) {
       std::cerr << "Failed to get deserialize input state.\n";
       throw Replicated_player_load_error{};
     }
-    const auto input_sequence_number =
+    auto const input_sequence_number =
       deserialize<std::optional<net::Sequence_number>>(reader);
     if (!input_sequence_number) {
       std::cerr << "Failed to get deserialize input sequence number.\n";

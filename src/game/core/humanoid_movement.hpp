@@ -16,7 +16,7 @@ struct Humanoid_movement_simulation_result {
 };
 
 Humanoid_movement_simulation_result
-simulate_humanoid_movement(const Humanoid_movement_simulation_info &info);
+simulate_humanoid_movement(Humanoid_movement_simulation_info const &info);
 } // namespace fpsparty::game
 
 #endif

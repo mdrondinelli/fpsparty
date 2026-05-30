@@ -20,8 +20,8 @@ public:
   explicit Ostream_writer(Args &&...args)
       : _stream{std::forward<Args>(args)...} {}
 
-  virtual void write(std::span<const std::byte> data) override {
-    _stream.write(reinterpret_cast<const char *>(data.data()), data.size());
+  virtual void write(std::span<std::byte const> data) override {
+    _stream.write(reinterpret_cast<char const *>(data.data()), data.size());
   }
 
   T const &stream() const noexcept { return _stream; }

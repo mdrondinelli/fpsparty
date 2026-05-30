@@ -4,12 +4,12 @@
 #include <cassert>
 
 namespace fpsparty::graphics {
-Image::Image(const Image_create_info &info) {
+Image::Image(Image_create_info const &info) {
   assert(info.dimensionality >= 1 && info.dimensionality <= 3);
   assert(info.extent.x() > 0);
   assert(info.extent.y() > 0);
   assert(info.extent.z() > 0);
-  const auto image_type = info.dimensionality == 1   ? vk::ImageType::e1D
+  auto const image_type = info.dimensionality == 1   ? vk::ImageType::e1D
                           : info.dimensionality == 2 ? vk::ImageType::e2D
                                                      : vk::ImageType::e3D;
   auto [vk_image, vma_allocation] =
@@ -61,7 +61,7 @@ Image::Image(const Image_create_info &info) {
   _array_layer_count = info.array_layer_count;
 }
 
-Image::Image(const detail::External_image_create_info &info)
+Image::Image(detail::External_image_create_info const &info)
     : _vk_image{info.image},
       _vk_image_view{info.image_view},
       _format{static_cast<Image_format>(info.format)},

@@ -11,7 +11,7 @@ class Pipeline_layout;
 
 namespace detail {
 vk::PipelineLayout get_pipeline_layout_vk_pipeline_layout(
-  const Pipeline_layout &pipeline_layout) noexcept;
+  Pipeline_layout const &pipeline_layout) noexcept;
 }
 
 struct Push_constant_range {
@@ -21,23 +21,23 @@ struct Push_constant_range {
 };
 
 struct Pipeline_layout_create_info {
-  std::span<const Push_constant_range> push_constant_ranges;
+  std::span<Push_constant_range const> push_constant_ranges;
 };
 
 class Pipeline_layout {
 public:
-  explicit Pipeline_layout(const Pipeline_layout_create_info &info);
+  explicit Pipeline_layout(Pipeline_layout_create_info const &info);
 
 private:
   friend vk::PipelineLayout detail::get_pipeline_layout_vk_pipeline_layout(
-    const Pipeline_layout &pipeline_layout) noexcept;
+    Pipeline_layout const &pipeline_layout) noexcept;
 
   vk::UniquePipelineLayout _vk_pipeline_layout{};
 };
 
 namespace detail {
 inline vk::PipelineLayout get_pipeline_layout_vk_pipeline_layout(
-  const Pipeline_layout &pipeline_layout) noexcept {
+  Pipeline_layout const &pipeline_layout) noexcept {
   return *pipeline_layout._vk_pipeline_layout;
 }
 } // namespace detail

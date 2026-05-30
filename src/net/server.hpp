@@ -19,7 +19,7 @@ struct Server_create_info {
 
 class Server {
 public:
-  explicit Server(const Server_create_info &create_info);
+  explicit Server(Server_create_info const &create_info);
 
   virtual ~Server() = default;
 
@@ -49,20 +49,20 @@ protected:
     enet::Peer peer,
     Entity_id player_entity_id,
     Sequence_number input_sequence_number,
-    const net::Input_state &input_state);
+    net::Input_state const &input_state);
 
   void send_player_join_response(enet::Peer peer, Entity_id player_entity_id);
 
-  void send_grid_snapshot(enet::Peer peer, std::span<const std::byte> state);
+  void send_grid_snapshot(enet::Peer peer, std::span<std::byte const> state);
 
   void send_entity_snapshot(
     enet::Peer peer,
     Sequence_number tick_number,
-    std::span<const std::byte> public_state,
-    std::span<const std::byte> player_state);
+    std::span<std::byte const> public_state,
+    std::span<std::byte const> player_state);
 
 private:
-  void handle_event(const enet::Event &e);
+  void handle_event(enet::Event const &e);
 
   enet::Unique_host _host;
   std::vector<enet::Peer> _peers;

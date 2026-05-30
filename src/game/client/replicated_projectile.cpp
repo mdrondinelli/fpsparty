@@ -8,21 +8,21 @@ Replicated_projectile::Replicated_projectile(net::Entity_id entity_id) noexcept
 
 void Replicated_projectile::on_remove() {}
 
-const Eigen::Vector3f &Replicated_projectile::get_position() const noexcept {
+Eigen::Vector3f const &Replicated_projectile::get_position() const noexcept {
   return _position;
 }
 
 void Replicated_projectile::set_position(
-  const Eigen::Vector3f &value) noexcept {
+  Eigen::Vector3f const &value) noexcept {
   _position = value;
 }
 
-const Eigen::Vector3f &Replicated_projectile::get_velocity() const noexcept {
+Eigen::Vector3f const &Replicated_projectile::get_velocity() const noexcept {
   return _velocity;
 }
 
 void Replicated_projectile::set_velocity(
-  const Eigen::Vector3f &value) noexcept {
+  Eigen::Vector3f const &value) noexcept {
   _velocity = value;
 }
 
@@ -36,17 +36,17 @@ Replicated_projectile_loader::create_entity(net::Entity_id entity_id) {
 }
 
 void Replicated_projectile_loader::load_entity(
-  serial::Reader &reader, Entity &entity, const Entity_world &) const {
+  serial::Reader &reader, Entity &entity, Entity_world const &) const {
   using serial::deserialize;
-  const auto projectile = dynamic_cast<Replicated_projectile *>(&entity);
+  auto const projectile = dynamic_cast<Replicated_projectile *>(&entity);
   if (!projectile) {
     throw Replicated_projectile_load_error{};
   }
-  const auto position = deserialize<Eigen::Vector3f>(reader);
+  auto const position = deserialize<Eigen::Vector3f>(reader);
   if (!position) {
     throw Replicated_projectile_load_error{};
   }
-  const auto velocity = deserialize<Eigen::Vector3f>(reader);
+  auto const velocity = deserialize<Eigen::Vector3f>(reader);
   if (!velocity) {
     throw Replicated_projectile_load_error{};
   }

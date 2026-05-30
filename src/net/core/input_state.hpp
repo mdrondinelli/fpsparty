@@ -17,7 +17,7 @@ struct Input_state {
 
 namespace fpsparty::serial {
 template <> struct Serializer<net::Input_state> {
-  void write(Writer &writer, const net::Input_state &value) const {
+  void write(Writer &writer, net::Input_state const &value) const {
     auto flags = std::uint8_t{};
     if (value.move_left) {
       flags |= 1 << 0;
@@ -40,15 +40,15 @@ template <> struct Serializer<net::Input_state> {
   }
 
   std::optional<net::Input_state> read(Reader &reader) const {
-    const auto flags = deserialize<std::uint8_t>(reader);
+    auto const flags = deserialize<std::uint8_t>(reader);
     if (!flags) {
       return std::nullopt;
     }
-    const auto yaw = deserialize<float>(reader);
+    auto const yaw = deserialize<float>(reader);
     if (!yaw) {
       return std::nullopt;
     }
-    const auto pitch = deserialize<float>(reader);
+    auto const pitch = deserialize<float>(reader);
     if (!pitch) {
       return std::nullopt;
     }

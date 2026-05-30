@@ -8,10 +8,10 @@ namespace fpsparty::graphics {
 enum class Pipeline_stage_flag_bits {
   color_attachment_output = static_cast<std::uint64_t>(
     vk::PipelineStageFlagBits2::eColorAttachmentOutput),
-  early_fragment_tests = static_cast<std::uint64_t>(
-    vk::PipelineStageFlagBits2::eEarlyFragmentTests),
-  late_fragment_tests = static_cast<std::uint64_t>(
-    vk::PipelineStageFlagBits2::eLateFragmentTests),
+  early_fragment_tests =
+    static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eEarlyFragmentTests),
+  late_fragment_tests =
+    static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eLateFragmentTests),
 };
 
 enum class Access_flag_bits {

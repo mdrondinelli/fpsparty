@@ -11,7 +11,7 @@ Mapped_memory create_mapped_memory(vma::Allocation allocation) {
 }
 } // namespace detail
 
-Mapped_memory::Mapped_memory(const Mapped_memory &other) noexcept
+Mapped_memory::Mapped_memory(Mapped_memory const &other) noexcept
     : _allocation{other._allocation}, _data{other._data} {
   if (_allocation) {
     std::ignore =
@@ -19,7 +19,7 @@ Mapped_memory::Mapped_memory(const Mapped_memory &other) noexcept
   }
 }
 
-Mapped_memory &Mapped_memory::operator=(const Mapped_memory &other) noexcept {
+Mapped_memory &Mapped_memory::operator=(Mapped_memory const &other) noexcept {
   auto temp = other;
   swap(temp);
   return *this;
@@ -48,9 +48,9 @@ std::span<std::byte> Mapped_memory::get() const noexcept { return _data; }
 Mapped_memory::Mapped_memory(vma::Allocation allocation)
     : _allocation{allocation} {
   if (_allocation) {
-    const auto allocator = Global_vulkan_state::get().allocator();
-    const auto data = allocator.map_memory(_allocation);
-    const auto size = allocator.get_allocation_info(_allocation).size;
+    auto const allocator = Global_vulkan_state::get().allocator();
+    auto const data = allocator.map_memory(_allocation);
+    auto const size = allocator.get_allocation_info(_allocation).size;
     _data = {static_cast<std::byte *>(data), size};
   }
 }

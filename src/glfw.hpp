@@ -24,14 +24,14 @@ inline void init_vulkan_loader(PFN_vkGetInstanceProcAddr loader) {
   glfwInitVulkanLoader(loader);
 }
 
-inline std::span<const char *> get_required_instance_extensions() {
+inline std::span<char const *> get_required_instance_extensions() {
   auto extension_count = std::uint32_t{};
-  const auto extensions = glfwGetRequiredInstanceExtensions(&extension_count);
+  auto const extensions = glfwGetRequiredInstanceExtensions(&extension_count);
   return std::span{extensions, extension_count};
 }
 
 inline GLFWvkproc
-get_instance_proc_address(vk::Instance instance, const char *procname) {
+get_instance_proc_address(vk::Instance instance, char const *procname) {
   return glfwGetInstanceProcAddress(instance, procname);
 }
 
@@ -44,7 +44,7 @@ inline int get_physical_device_presentation_support(
 inline vk::SurfaceKHR create_window_surface(
   vk::Instance instance,
   GLFWwindow *window,
-  const vk::AllocationCallbacks *allocator = nullptr) {
+  vk::AllocationCallbacks const *allocator = nullptr) {
   auto native_allocator = VkAllocationCallbacks{};
   if (allocator) {
     std::memcpy(&native_allocator, allocator, sizeof(VkAllocationCallbacks));
@@ -58,7 +58,7 @@ inline vk::SurfaceKHR create_window_surface(
 inline vk::UniqueSurfaceKHR create_window_surface_unique(
   vk::Instance instance,
   GLFWwindow *window,
-  const vk::AllocationCallbacks *allocator = nullptr) {
+  vk::AllocationCallbacks const *allocator = nullptr) {
   return vk::UniqueSurfaceKHR{
     create_window_surface(instance, window, allocator),
     instance,
@@ -68,12 +68,12 @@ inline vk::UniqueSurfaceKHR create_window_surface_unique(
 
 class Error : std::exception {
 public:
-  explicit Error(int error_code, const char *description)
+  explicit Error(int error_code, char const *description)
       : _error_code{error_code}, _description{description} {}
 
   constexpr int get_error_code() const noexcept { return _error_code; }
 
-  constexpr const std::string &get_description() const noexcept {
+  constexpr std::string const &get_description() const noexcept {
     return _description;
   }
 
@@ -89,7 +89,7 @@ public:
   constexpr Initialization_guard() noexcept = default;
 
   explicit Initialization_guard(Create_info) : _owning{true} {
-    glfwSetErrorCallback([](int error_code, const char *description) {
+    glfwSetErrorCallback([](int error_code, char const *description) {
       throw Error{error_code, description};
     });
     glfwInit();
@@ -366,7 +366,7 @@ class Drop_callback {
 public:
   virtual ~Drop_callback() = default;
 
-  virtual void on_drop(Window window, std::span<const char *> paths) = 0;
+  virtual void on_drop(Window window, std::span<char const *> paths) = 0;
 };
 
 class Joystick_callback {
@@ -397,7 +397,7 @@ public:
   struct Create_info {
     int width;
     int height;
-    const char *title;
+    char const *title;
     bool resizable{true};
     bool visible{true};
     bool decorated{true};
@@ -442,11 +442,11 @@ public:
     Opengl_profile opengl_profile{Opengl_profile::any};
     bool win32_keyboard_menu{false};
     bool win32_showdefault{false};
-    const char *cocoa_frame_name{""};
+    char const *cocoa_frame_name{""};
     bool cocoa_graphics_switching{false};
-    const char *wayland_app_id{""};
-    const char *x11_class_name{""};
-    const char *x11_instance_name{""};
+    char const *wayland_app_id{""};
+    char const *x11_class_name{""};
+    char const *x11_instance_name{""};
   };
 
   constexpr Window() noexcept = default;
@@ -522,7 +522,7 @@ public:
   }
 
 private:
-  friend Window create_window(const Window::Create_info &create_info);
+  friend Window create_window(Window::Create_info const &create_info);
 
   constexpr Window(GLFWwindow *value) noexcept : _value{value} {}
 
@@ -533,7 +533,7 @@ private:
   GLFWwindow *_value{};
 };
 
-inline Window create_window(const Window::Create_info &create_info) {
+inline Window create_window(Window::Create_info const &create_info) {
   glfwWindowHint(GLFW_RESIZABLE, create_info.resizable);
   glfwWindowHint(GLFW_VISIBLE, create_info.visible);
   glfwWindowHint(GLFW_DECORATED, create_info.decorated);
@@ -590,12 +590,12 @@ inline Window create_window(const Window::Create_info &create_info) {
   glfwWindowHintString(GLFW_X11_CLASS_NAME, create_info.x11_class_name);
   glfwWindowHintString(GLFW_X11_INSTANCE_NAME, create_info.x11_instance_name);
   auto user_data = std::make_unique<Window::User_data>();
-  const auto window = glfwCreateWindow(
+  auto const window = glfwCreateWindow(
     create_info.width, create_info.height, create_info.title, nullptr, nullptr);
   glfwSetKeyCallback(
     window,
     [](GLFWwindow *window, int key, int scancode, int action, int mods) {
-      const auto user_data =
+      auto const user_data =
         static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
       if (user_data->key_callback) {
         user_data->key_callback->on_key(
@@ -607,7 +607,7 @@ inline Window create_window(const Window::Create_info &create_info) {
       }
     });
   glfwSetCharCallback(window, [](GLFWwindow *window, unsigned int codepoint) {
-    const auto user_data =
+    auto const user_data =
       static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
     if (user_data->char_callback) {
       user_data->char_callback->on_char(window, codepoint);
@@ -615,7 +615,7 @@ inline Window create_window(const Window::Create_info &create_info) {
   });
   glfwSetCharModsCallback(
     window, [](GLFWwindow *window, unsigned int codepoint, int mods) {
-      const auto user_data =
+      auto const user_data =
         static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
       if (user_data->char_mods_callback) {
         user_data->char_mods_callback->on_char_mods(window, codepoint, mods);
@@ -623,7 +623,7 @@ inline Window create_window(const Window::Create_info &create_info) {
     });
   glfwSetMouseButtonCallback(
     window, [](GLFWwindow *window, int button, int action, int mods) {
-      const auto user_data =
+      auto const user_data =
         static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
       if (user_data->mouse_button_callback) {
         user_data->mouse_button_callback->on_mouse_button(
@@ -635,7 +635,7 @@ inline Window create_window(const Window::Create_info &create_info) {
     });
   glfwSetCursorPosCallback(
     window, [](GLFWwindow *window, double xpos, double ypos) {
-      const auto user_data =
+      auto const user_data =
         static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
       if (user_data->cursor_pos_callback) {
         auto dxpos = 0.0;
@@ -652,7 +652,7 @@ inline Window create_window(const Window::Create_info &create_info) {
       }
     });
   glfwSetCursorEnterCallback(window, [](GLFWwindow *window, int entered) {
-    const auto user_data =
+    auto const user_data =
       *static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
     if (user_data.cursor_enter_callback) {
       user_data.cursor_enter_callback->on_cursor_enter(window, entered);
@@ -660,15 +660,15 @@ inline Window create_window(const Window::Create_info &create_info) {
   });
   glfwSetScrollCallback(
     window, [](GLFWwindow *window, double xoffset, double yoffset) {
-      const auto user_data =
+      auto const user_data =
         *static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
       if (user_data.scroll_callback) {
         user_data.scroll_callback->on_scroll(window, xoffset, yoffset);
       }
     });
   glfwSetDropCallback(
-    window, [](GLFWwindow *window, int path_count, const char **paths) {
-      const auto user_data =
+    window, [](GLFWwindow *window, int path_count, char const **paths) {
+      auto const user_data =
         *static_cast<Window::User_data *>(glfwGetWindowUserPointer(window));
       if (user_data.drop_callback) {
         user_data.drop_callback
@@ -704,7 +704,7 @@ public:
 
   constexpr Window operator*() const noexcept { return _value; }
 
-  constexpr const Window *operator->() const noexcept { return &_value; }
+  constexpr Window const *operator->() const noexcept { return &_value; }
 
 private:
   constexpr void swap(Unique_window &other) noexcept {
@@ -715,7 +715,7 @@ private:
 };
 
 inline Unique_window
-create_window_unique(const Window::Create_info &create_info) {
+create_window_unique(Window::Create_info const &create_info) {
   return Unique_window{create_window(create_info)};
 }
 

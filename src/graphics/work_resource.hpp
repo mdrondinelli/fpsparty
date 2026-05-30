@@ -14,10 +14,10 @@ struct Work_resource {
   vk::UniqueFence vk_fence;
   vk::UniqueCommandPool vk_command_pool;
   vk::CommandBuffer vk_command_buffer;
-  std::vector<rc::Strong<const Buffer>> buffers{};
-  std::vector<rc::Strong<const Image>> images{};
-  std::vector<rc::Strong<const Pipeline>> pipelines{};
-  std::vector<rc::Strong<const Pipeline_layout>> pipeline_layouts{};
+  std::vector<rc::Strong<Buffer const>> buffers{};
+  std::vector<rc::Strong<Image const>> images{};
+  std::vector<rc::Strong<Pipeline const>> pipelines{};
+  std::vector<rc::Strong<Pipeline_layout const>> pipeline_layouts{};
   std::vector<Work_done_callback *> done_callbacks{};
 };
 

@@ -5,13 +5,13 @@
 #include <utility>
 
 namespace fpsparty::graphics {
-Buffer::Buffer(const Buffer_create_info &info) {
-  const auto buffer_info = vk::BufferCreateInfo{
+Buffer::Buffer(Buffer_create_info const &info) {
+  auto const buffer_info = vk::BufferCreateInfo{
     .size = info.size,
     .usage = static_cast<vk::BufferUsageFlags>(info.usage),
     .sharingMode = vk::SharingMode::eExclusive,
   };
-  const auto [allocation_flags, memory_flags] =
+  auto const [allocation_flags, memory_flags] =
     [&]() -> std::pair<vma::Allocation_create_flags, vk::MemoryPropertyFlags> {
     switch (info.mapping_mode) {
     case Mapping_mode::write_only:
@@ -30,7 +30,7 @@ Buffer::Buffer(const Buffer_create_info &info) {
       return {{}, {}};
     }
   }();
-  const auto allocation_info = vma::Allocation_create_info{
+  auto const allocation_info = vma::Allocation_create_info{
     .flags = c_repr(allocation_flags),
     .usage = c_repr(vma::Memory_usage::e_auto),
     .requiredFlags = static_cast<VkMemoryPropertyFlags>(memory_flags),

@@ -14,7 +14,7 @@ namespace fpsparty::graphics {
 class Pipeline;
 
 namespace detail {
-vk::Pipeline get_pipeline_vk_pipeline(const Pipeline &pipeline) noexcept;
+vk::Pipeline get_pipeline_vk_pipeline(Pipeline const &pipeline) noexcept;
 }
 
 struct Pipeline_shader_stage_create_info {
@@ -39,8 +39,8 @@ struct Vertex_attribute_description {
 };
 
 struct Pipeline_vertex_input_state_create_info {
-  std::span<const Vertex_binding_description> bindings;
-  std::span<const Vertex_attribute_description> attributes;
+  std::span<Vertex_binding_description const> bindings;
+  std::span<Vertex_attribute_description const> attributes;
 };
 
 struct Pipeline_input_assembly_state_create_info {
@@ -52,11 +52,11 @@ struct Pipeline_depth_state_create_info {
 };
 
 struct Pipeline_color_state_create_info {
-  std::span<const Image_format> color_attachment_formats;
+  std::span<Image_format const> color_attachment_formats;
 };
 
 struct Pipeline_create_info {
-  std::span<const Pipeline_shader_stage_create_info> shader_stages;
+  std::span<Pipeline_shader_stage_create_info const> shader_stages;
   Pipeline_vertex_input_state_create_info vertex_input_state;
   Pipeline_input_assembly_state_create_info input_assembly_state;
   Pipeline_depth_state_create_info depth_state;
@@ -66,13 +66,13 @@ struct Pipeline_create_info {
 
 class Pipeline {
 public:
-  explicit Pipeline(const Pipeline_create_info &info);
+  explicit Pipeline(Pipeline_create_info const &info);
 
-  const rc::Strong<Pipeline_layout> &get_layout() const noexcept;
+  rc::Strong<Pipeline_layout> const &get_layout() const noexcept;
 
 private:
   friend vk::Pipeline
-  detail::get_pipeline_vk_pipeline(const Pipeline &pipeline) noexcept;
+  detail::get_pipeline_vk_pipeline(Pipeline const &pipeline) noexcept;
 
   rc::Strong<Pipeline_layout> _layout;
   vk::UniquePipeline _vk_pipeline;
@@ -80,7 +80,7 @@ private:
 
 namespace detail {
 inline vk::Pipeline
-get_pipeline_vk_pipeline(const Pipeline &pipeline) noexcept {
+get_pipeline_vk_pipeline(Pipeline const &pipeline) noexcept {
   return *pipeline._vk_pipeline;
 }
 } // namespace detail

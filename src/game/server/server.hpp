@@ -13,13 +13,13 @@ struct Server_create_info {
 
 class Server : public net::Server {
 public:
-  explicit Server(const Server_create_info &info);
+  explicit Server(Server_create_info const &info);
 
   bool service_game_state(float duration);
 
   void broadcast_game_state();
 
-  const Game &get_game() const noexcept;
+  Game const &get_game() const noexcept;
 
   Game &get_game() noexcept;
 
@@ -37,7 +37,7 @@ protected:
     enet::Peer peer,
     net::Entity_id player_entity_id,
     net::Sequence_number input_sequence_number,
-    const net::Input_state &input_state) override;
+    net::Input_state const &input_state) override;
 
 private:
   Game _game;

@@ -15,7 +15,7 @@ struct Client_create_info {
 
 class Client {
 public:
-  explicit Client(const Client_create_info &create_info);
+  explicit Client(Client_create_info const &create_info);
 
   virtual ~Client() = default;
 
@@ -23,7 +23,7 @@ public:
 
   void wait_events(std::uint32_t timeout);
 
-  void connect(const enet::Address &address);
+  void connect(enet::Address const &address);
 
   bool is_connecting() const noexcept;
 
@@ -36,7 +36,7 @@ public:
   void send_player_input_state(
     net::Entity_id player_entity_id,
     net::Sequence_number input_sequence_number,
-    const net::Input_state &input_state);
+    net::Input_state const &input_state);
 
 protected:
   virtual void on_connect();
@@ -53,7 +53,7 @@ protected:
     serial::Reader &player_state_reader);
 
 private:
-  void handle_event(const enet::Event &e);
+  void handle_event(enet::Event const &e);
 
   enet::Unique_host _host{};
   enet::Peer _server{};

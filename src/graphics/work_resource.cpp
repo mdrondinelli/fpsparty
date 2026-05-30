@@ -3,12 +3,12 @@
 
 namespace fpsparty::graphics::detail {
 Work_resource create_work_resource() {
-  const auto device = Global_vulkan_state::get().device();
+  auto const device = Global_vulkan_state::get().device();
   auto command_pool = device.createCommandPoolUnique({
     .flags = vk::CommandPoolCreateFlagBits::eTransient,
     .queueFamilyIndex = Global_vulkan_state::get().queue_family_index(),
   });
-  const auto command_buffer = device.allocateCommandBuffers({
+  auto const command_buffer = device.allocateCommandBuffers({
     .commandPool = *command_pool,
     .level = vk::CommandBufferLevel::ePrimary,
     .commandBufferCount = 1,
@@ -21,7 +21,7 @@ Work_resource create_work_resource() {
 }
 
 void reset_work_resource(Work_resource &resource) {
-  const auto device = Global_vulkan_state::get().device();
+  auto const device = Global_vulkan_state::get().device();
   device.resetFences({*resource.vk_fence});
   device.resetCommandPool(*resource.vk_command_pool);
   resource.buffers.clear();

@@ -17,7 +17,7 @@ class Work_queue {
 public:
   void poll(Work_resource_pool &resource_pool);
 
-  rc::Strong<Work> submit(const Work_queue_submit_info &info);
+  rc::Strong<Work> submit(Work_queue_submit_info const &info);
 
 private:
   rc::Factory<Work> _work_factory{};

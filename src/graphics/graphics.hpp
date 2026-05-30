@@ -27,26 +27,26 @@ class Graphics {
 public:
   constexpr Graphics() noexcept = default;
 
-  explicit Graphics(const Graphics_create_info &info);
+  explicit Graphics(Graphics_create_info const &info);
 
   void poll_works();
 
   rc::Strong<Pipeline_layout>
-  create_pipeline_layout(const Pipeline_layout_create_info &info);
+  create_pipeline_layout(Pipeline_layout_create_info const &info);
 
-  rc::Strong<Pipeline> create_pipeline(const Pipeline_create_info &info);
+  rc::Strong<Pipeline> create_pipeline(Pipeline_create_info const &info);
 
-  rc::Strong<Buffer> create_buffer(const Buffer_create_info &info);
+  rc::Strong<Buffer> create_buffer(Buffer_create_info const &info);
 
   rc::Strong<Buffer> create_staging_buffer(std::size_t size);
 
-  rc::Strong<Buffer> create_staging_buffer(std::span<const std::byte> data);
+  rc::Strong<Buffer> create_staging_buffer(std::span<std::byte const> data);
 
   rc::Strong<Buffer> create_vertex_buffer(std::size_t size);
 
   rc::Strong<Buffer> create_index_buffer(std::size_t size);
 
-  rc::Strong<Image> create_image(const Image_create_info &info);
+  rc::Strong<Image> create_image(Image_create_info const &info);
 
   Work_recorder record_transient_work();
 

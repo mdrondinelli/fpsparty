@@ -4,8 +4,8 @@
 
 namespace fpsparty::game {
 Humanoid_movement_simulation_result
-simulate_humanoid_movement(const Humanoid_movement_simulation_info &info) {
-  const auto basis_matrix = math::y_rotation_matrix(info.input_state.yaw);
+simulate_humanoid_movement(Humanoid_movement_simulation_info const &info) {
+  auto const basis_matrix = math::y_rotation_matrix(info.input_state.yaw);
   auto movement_vector = Eigen::Vector3f{0.0f, 0.0f, 0.0f};
   if (info.input_state.move_left) {
     movement_vector += basis_matrix.col(0).head<3>();

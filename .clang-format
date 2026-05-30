@@ -4,3 +4,4 @@ BinPackArguments: false
 BinPackParameters: false
 PackConstructorInitializers: NextLine
 PenaltyBreakBeforeMemberAccess: 10
+QualifierAlignment: Right

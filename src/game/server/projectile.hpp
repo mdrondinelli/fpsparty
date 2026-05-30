@@ -16,19 +16,19 @@ struct Projectile_create_info {
 class Projectile : public Entity {
 public:
   explicit Projectile(
-    net::Entity_id entity_id, const Projectile_create_info &info) noexcept;
+    net::Entity_id entity_id, Projectile_create_info const &info) noexcept;
 
   void on_remove() override;
 
   Humanoid *get_creator() const noexcept;
 
-  const Eigen::Vector3f &get_position() const noexcept;
+  Eigen::Vector3f const &get_position() const noexcept;
 
-  void set_position(const Eigen::Vector3f &position) noexcept;
+  void set_position(Eigen::Vector3f const &position) noexcept;
 
-  const Eigen::Vector3f &get_velocity() const noexcept;
+  Eigen::Vector3f const &get_velocity() const noexcept;
 
-  void set_velocity(const Eigen::Vector3f &velocity) noexcept;
+  void set_velocity(Eigen::Vector3f const &velocity) noexcept;
 
 private:
   struct Creator_remove_listener : Entity_remove_listener {
@@ -49,7 +49,7 @@ class Projectile_dumper : public Entity_dumper {
 public:
   Entity_type get_entity_type() const noexcept override;
 
-  void dump_entity(serial::Writer &writer, const Entity &entity) const override;
+  void dump_entity(serial::Writer &writer, Entity const &entity) const override;
 };
 } // namespace fpsparty::game
 

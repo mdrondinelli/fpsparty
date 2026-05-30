@@ -24,21 +24,21 @@ struct Replicated_game_entities_load_info {
 
 class Replicated_game {
 public:
-  explicit Replicated_game(const Replicated_game_create_info &info);
+  explicit Replicated_game(Replicated_game_create_info const &info);
 
   void tick(float duration);
 
-  void load_grid(const Replicated_game_grid_load_info &info);
+  void load_grid(Replicated_game_grid_load_info const &info);
 
-  void load_entities(const Replicated_game_entities_load_info &info);
+  void load_entities(Replicated_game_entities_load_info const &info);
 
   void reset();
 
-  const Grid &get_grid() const noexcept;
+  Grid const &get_grid() const noexcept;
 
   Grid &get_grid() noexcept;
 
-  const Entity_world &get_entities() const noexcept;
+  Entity_world const &get_entities() const noexcept;
 
   Entity_world &get_entities() noexcept;
 

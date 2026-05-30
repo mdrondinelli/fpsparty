@@ -13,13 +13,13 @@ struct Humanoid_create_info {};
 class Humanoid : public Entity {
 public:
   explicit Humanoid(
-    net::Entity_id entity_id, const Humanoid_create_info &info) noexcept;
+    net::Entity_id entity_id, Humanoid_create_info const &info) noexcept;
 
   void on_remove() override;
 
-  const net::Input_state &get_input_state() const noexcept;
+  net::Input_state const &get_input_state() const noexcept;
 
-  void set_input_state(const net::Input_state &value) noexcept;
+  void set_input_state(net::Input_state const &value) noexcept;
 
   float get_attack_cooldown() const noexcept;
 
@@ -27,13 +27,13 @@ public:
 
   void decrease_attack_cooldown(float amount) noexcept;
 
-  const Eigen::Vector3f &get_position() const noexcept;
+  Eigen::Vector3f const &get_position() const noexcept;
 
-  void set_position(const Eigen::Vector3f &value) noexcept;
+  void set_position(Eigen::Vector3f const &value) noexcept;
 
-  const Eigen::Vector3f &get_velocity() const noexcept;
+  Eigen::Vector3f const &get_velocity() const noexcept;
 
-  void set_velocity(const Eigen::Vector3f &value) noexcept;
+  void set_velocity(Eigen::Vector3f const &value) noexcept;
 
 private:
   net::Input_state _input_state{};
@@ -46,7 +46,7 @@ class Humanoid_dumper : public Entity_dumper {
 public:
   Entity_type get_entity_type() const noexcept override;
 
-  void dump_entity(serial::Writer &writer, const Entity &entity) const override;
+  void dump_entity(serial::Writer &writer, Entity const &entity) const override;
 };
 } // namespace fpsparty::game
 

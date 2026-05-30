@@ -18,9 +18,9 @@ Work_resource release_work_recorder(Work_recorder recorder) noexcept {
 } // namespace detail
 
 void Work_recorder::copy_buffer(
-  rc::Strong<const Buffer> src,
+  rc::Strong<Buffer const> src,
   rc::Strong<Buffer> dst,
-  const Buffer_copy_info &info) {
+  Buffer_copy_info const &info) {
   get_command_buffer().copyBuffer(
     detail::get_buffer_vk_buffer(*src),
     detail::get_buffer_vk_buffer(*dst),
@@ -34,9 +34,9 @@ void Work_recorder::copy_buffer(
 }
 
 void Work_recorder::barrier(
-  const Synchronization_scope &src_scope,
-  const Synchronization_scope &dst_scope) {
-  const auto barrier = vk::MemoryBarrier2{
+  Synchronization_scope const &src_scope,
+  Synchronization_scope const &dst_scope) {
+  auto const barrier = vk::MemoryBarrier2{
     .srcStageMask = static_cast<vk::PipelineStageFlags2>(src_scope.stage_mask),
     .srcAccessMask = static_cast<vk::AccessFlags2>(src_scope.access_mask),
     .dstStageMask = static_cast<vk::PipelineStageFlags2>(dst_scope.stage_mask),
@@ -49,12 +49,12 @@ void Work_recorder::barrier(
 }
 
 void Work_recorder::transition_image_layout(
-  const Synchronization_scope &src_scope,
-  const Synchronization_scope &dst_scope,
+  Synchronization_scope const &src_scope,
+  Synchronization_scope const &dst_scope,
   Image_layout old_layout,
   Image_layout new_layout,
   rc::Strong<Image> image) {
-  const auto barrier = vk::ImageMemoryBarrier2{
+  auto const barrier = vk::ImageMemoryBarrier2{
     .srcStageMask = static_cast<vk::PipelineStageFlags2>(src_scope.stage_mask),
     .srcAccessMask = static_cast<vk::AccessFlags2>(src_scope.access_mask),
     .dstStageMask = static_cast<vk::PipelineStageFlags2>(dst_scope.stage_mask),
@@ -82,15 +82,15 @@ void Work_recorder::transition_image_layout(
   add_reference(std::move(image));
 }
 
-void Work_recorder::begin_rendering(const Rendering_begin_info &info) {
-  const auto color_attachment = vk::RenderingAttachmentInfo{
+void Work_recorder::begin_rendering(Rendering_begin_info const &info) {
+  auto const color_attachment = vk::RenderingAttachmentInfo{
     .imageView = detail::get_image_vk_image_view(*info.color_image),
     .imageLayout = vk::ImageLayout::eGeneral,
     .loadOp = vk::AttachmentLoadOp::eClear,
     .storeOp = vk::AttachmentStoreOp::eStore,
     .clearValue = {{0.4196f, 0.6196f, 0.7451f, 1.0f}},
   };
-  const auto depth_attachment = vk::RenderingAttachmentInfo{
+  auto const depth_attachment = vk::RenderingAttachmentInfo{
     .imageView = info.depth_image
                    ? detail::get_image_vk_image_view(*info.depth_image)
                    : vk::ImageView{},
@@ -120,7 +120,7 @@ void Work_recorder::begin_rendering(const Rendering_begin_info &info) {
 
 void Work_recorder::end_rendering() { get_command_buffer().endRendering(); }
 
-void Work_recorder::bind_pipeline(rc::Strong<const Pipeline> pipeline) {
+void Work_recorder::bind_pipeline(rc::Strong<Pipeline const> pipeline) {
   get_command_buffer().bindPipeline(
     vk::PipelineBindPoint::eGraphics,
     detail::get_pipeline_vk_pipeline(*pipeline));
@@ -136,7 +136,7 @@ void Work_recorder::set_front_face(Front_face front_face) {
   get_command_buffer().setFrontFace(static_cast<vk::FrontFace>(front_face));
 }
 
-void Work_recorder::set_viewport(const Eigen::Vector2i &extent) {
+void Work_recorder::set_viewport(Eigen::Vector2i const &extent) {
   get_command_buffer().setViewport(
     0,
     {{
@@ -147,7 +147,7 @@ void Work_recorder::set_viewport(const Eigen::Vector2i &extent) {
     }});
 }
 
-void Work_recorder::set_scissor(const Eigen::Vector2i &extent) {
+void Work_recorder::set_scissor(Eigen::Vector2i const &extent) {
   get_command_buffer().setScissor(
     0,
     {{
@@ -171,14 +171,14 @@ void Work_recorder::set_depth_compare_op(Compare_op op) {
   get_command_buffer().setDepthCompareOp(static_cast<vk::CompareOp>(op));
 }
 
-void Work_recorder::bind_vertex_buffer(rc::Strong<const Buffer> buffer) {
+void Work_recorder::bind_vertex_buffer(rc::Strong<Buffer const> buffer) {
   get_command_buffer()
     .bindVertexBuffers(0, {detail::get_buffer_vk_buffer(*buffer)}, {0});
   add_reference(std::move(buffer));
 }
 
 void Work_recorder::bind_index_buffer(
-  rc::Strong<const Buffer> buffer, Index_type index_type) {
+  rc::Strong<Buffer const> buffer, Index_type index_type) {
   get_command_buffer().bindIndexBuffer(
     detail::get_buffer_vk_buffer(*buffer),
     0,
@@ -186,7 +186,7 @@ void Work_recorder::bind_index_buffer(
   add_reference(std::move(buffer));
 }
 
-void Work_recorder::draw_indexed(const Indexed_draw_info &info) noexcept {
+void Work_recorder::draw_indexed(Indexed_draw_info const &info) noexcept {
   get_command_buffer().drawIndexed(
     info.index_count,
     info.instance_count,
@@ -196,7 +196,7 @@ void Work_recorder::draw_indexed(const Indexed_draw_info &info) noexcept {
 }
 
 void Work_recorder::draw_indexed_indirect(
-  const Indirect_indexed_draw_info &info) noexcept {
+  Indirect_indexed_draw_info const &info) noexcept {
   get_command_buffer().drawIndexedIndirect(
     detail::get_buffer_vk_buffer(*info.buffer),
     info.offset,
@@ -206,10 +206,10 @@ void Work_recorder::draw_indexed_indirect(
 }
 
 void Work_recorder::push_constants(
-  rc::Strong<const Pipeline_layout> pipeline_layout,
+  rc::Strong<Pipeline_layout const> pipeline_layout,
   Shader_stage_flags stage_flags,
   std::uint32_t offset,
-  std::span<const std::byte> data) noexcept {
+  std::span<std::byte const> data) noexcept {
   get_command_buffer().pushConstants(
     detail::get_pipeline_layout_vk_pipeline_layout(*pipeline_layout),
     static_cast<vk::ShaderStageFlags>(stage_flags),
@@ -222,20 +222,20 @@ void Work_recorder::push_constants(
 Work_recorder::Work_recorder(detail::Work_resource resource) noexcept
     : _resource{std::move(resource)} {}
 
-void Work_recorder::add_reference(rc::Strong<const Buffer> buffer) {
+void Work_recorder::add_reference(rc::Strong<Buffer const> buffer) {
   _resource.buffers.emplace_back(std::move(buffer));
 }
 
-void Work_recorder::add_reference(rc::Strong<const Image> image) {
+void Work_recorder::add_reference(rc::Strong<Image const> image) {
   _resource.images.emplace_back(std::move(image));
 }
 
 void Work_recorder::add_reference(
-  rc::Strong<const Pipeline_layout> pipeline_layout) {
+  rc::Strong<Pipeline_layout const> pipeline_layout) {
   _resource.pipeline_layouts.emplace_back(std::move(pipeline_layout));
 }
 
-void Work_recorder::add_reference(rc::Strong<const Pipeline> pipeline) {
+void Work_recorder::add_reference(rc::Strong<Pipeline const> pipeline) {
   _resource.pipelines.emplace_back(std::move(pipeline));
 }
 

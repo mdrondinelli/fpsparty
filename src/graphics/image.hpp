@@ -21,11 +21,11 @@ struct External_image_create_info {
   int array_layer_count;
 };
 
-constexpr vk::Image get_image_vk_image(const Image &image) noexcept;
+constexpr vk::Image get_image_vk_image(Image const &image) noexcept;
 
-constexpr vk::ImageView get_image_vk_image_view(const Image &image) noexcept;
+constexpr vk::ImageView get_image_vk_image_view(Image const &image) noexcept;
 
-constexpr vma::Allocation get_image_vma_allocation(const Image &image) noexcept;
+constexpr vma::Allocation get_image_vma_allocation(Image const &image) noexcept;
 } // namespace detail
 
 struct Image_create_info {
@@ -39,13 +39,13 @@ struct Image_create_info {
 
 class Image {
 public:
-  explicit Image(const Image_create_info &info);
+  explicit Image(Image_create_info const &info);
 
   ~Image();
 
   Image_format get_format() const noexcept { return _format; }
 
-  const Eigen::Vector3i &get_extent() const noexcept { return _extent; }
+  Eigen::Vector3i const &get_extent() const noexcept { return _extent; }
 
   int get_mip_level_count() const noexcept { return _mip_level_count; }
 
@@ -55,15 +55,15 @@ private:
   friend class rc::Factory<Image>;
 
   friend constexpr vk::Image
-  detail::get_image_vk_image(const Image &image) noexcept;
+  detail::get_image_vk_image(Image const &image) noexcept;
 
   friend constexpr vk::ImageView
-  detail::get_image_vk_image_view(const Image &image) noexcept;
+  detail::get_image_vk_image_view(Image const &image) noexcept;
 
   friend constexpr vma::Allocation
-  detail::get_image_vma_allocation(const Image &image) noexcept;
+  detail::get_image_vma_allocation(Image const &image) noexcept;
 
-  explicit Image(const detail::External_image_create_info &info);
+  explicit Image(detail::External_image_create_info const &info);
 
   vk::Image _vk_image{};
   vk::ImageView _vk_image_view{};
@@ -75,16 +75,16 @@ private:
 };
 
 namespace detail {
-constexpr vk::Image get_image_vk_image(const Image &image) noexcept {
+constexpr vk::Image get_image_vk_image(Image const &image) noexcept {
   return image._vk_image;
 }
 
-constexpr vk::ImageView get_image_vk_image_view(const Image &image) noexcept {
+constexpr vk::ImageView get_image_vk_image_view(Image const &image) noexcept {
   return image._vk_image_view;
 }
 
 constexpr vma::Allocation
-get_image_vma_allocation(const Image &image) noexcept {
+get_image_vma_allocation(Image const &image) noexcept {
   return *image._vma_allocation;
 }
 } // namespace detail

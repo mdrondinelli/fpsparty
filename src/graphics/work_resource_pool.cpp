@@ -15,7 +15,7 @@ Work_resource Work_resource_pool::pop() {
 }
 
 void Work_resource_pool::push(Work_resource resource) {
-  const auto lock = std::scoped_lock{_mutex};
+  auto const lock = std::scoped_lock{_mutex};
   _resources.emplace_back(std::move(resource));
 }
 } // namespace fpsparty::graphics::detail

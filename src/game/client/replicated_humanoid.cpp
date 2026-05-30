@@ -7,20 +7,20 @@ Replicated_humanoid::Replicated_humanoid(net::Entity_id entity_id) noexcept
 
 void Replicated_humanoid::on_remove() {}
 
-const net::Input_state &Replicated_humanoid::get_input_state() const noexcept {
+net::Input_state const &Replicated_humanoid::get_input_state() const noexcept {
   return _input_state;
 }
 
 void Replicated_humanoid::set_input_state(
-  const net::Input_state &value) noexcept {
+  net::Input_state const &value) noexcept {
   _input_state = value;
 }
 
-const Eigen::Vector3f &Replicated_humanoid::get_position() const noexcept {
+Eigen::Vector3f const &Replicated_humanoid::get_position() const noexcept {
   return _position;
 }
 
-void Replicated_humanoid::set_position(const Eigen::Vector3f &value) noexcept {
+void Replicated_humanoid::set_position(Eigen::Vector3f const &value) noexcept {
   _position = value;
 }
 
@@ -34,16 +34,16 @@ Replicated_humanoid_loader::create_entity(net::Entity_id entity_id) {
 }
 
 void Replicated_humanoid_loader::load_entity(
-  serial::Reader &reader, Entity &entity, const Entity_world &) const {
-  const auto humanoid = dynamic_cast<Replicated_humanoid *>(&entity);
+  serial::Reader &reader, Entity &entity, Entity_world const &) const {
+  auto const humanoid = dynamic_cast<Replicated_humanoid *>(&entity);
   if (!humanoid) {
     throw Replicated_humanoid_load_error{};
   }
-  const auto position = deserialize<Eigen::Vector3f>(reader);
+  auto const position = deserialize<Eigen::Vector3f>(reader);
   if (!position) {
     throw Replicated_humanoid_load_error{};
   }
-  const auto input_state = deserialize<net::Input_state>(reader);
+  auto const input_state = deserialize<net::Input_state>(reader);
   if (!input_state) {
     throw Replicated_humanoid_load_error{};
   }
