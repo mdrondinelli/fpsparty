@@ -310,9 +310,15 @@ public:
       work_recorder.bind_pipeline(mesh_pipeline);
       work_recorder.set_cull_mode(graphics::Cull_mode::back);
       work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
-      work_recorder.bind_vertex_buffer(_cube_vertex_buffer);
       work_recorder
         .bind_index_buffer(_cube_index_buffer, graphics::Index_type::u16);
+      auto const cube_vertex_buffer_address =
+        _cube_vertex_buffer->get_device_address();
+      work_recorder.push_constants(
+        mesh_pipeline->get_layout(),
+        graphics::Shader_stage_flag_bits::vertex,
+        64,
+        std::as_bytes(std::span{&cube_vertex_buffer_address, 1}));
       // draw other players (cubes)
       for (auto const &other_humanoid :
            game->get_entities()
@@ -472,7 +478,11 @@ private:
   rc::Strong<graphics::Buffer>
   upload_vertices(std::span<std::byte const> data) {
     auto const staging_buffer = _graphics.create_staging_buffer(data);
-    auto vertex_buffer = _graphics.create_vertex_buffer(data.size());
+    auto vertex_buffer = _graphics.create_buffer({
+      .size = data.size(),
+      .usage = graphics::Buffer_usage_flag_bits::transfer_dst |
+               graphics::Buffer_usage_flag_bits::shader_device_address,
+    });
     auto work_recorder = _graphics.record_transient_work();
     work_recorder.copy_buffer(
       staging_buffer,
@@ -588,7 +598,7 @@ private:
     auto const push_constant_range = graphics::Push_constant_range{
       .stage_flags = graphics::Shader_stage_flag_bits::vertex,
       .offset = 0,
-      .size = 64,
+      .size = 72,
     };
     auto const pipeline_layout =
       _mesh_pipeline ? _mesh_pipeline->get_layout()
@@ -606,31 +616,13 @@ private:
           .shader = &_mesh_fragment_shader,
         },
       };
-    auto const vertex_binding = graphics::Vertex_binding_description{
-      .binding = 0,
-      .stride = 24,
-    };
-    auto const vertex_attributes =
-      std::vector<graphics::Vertex_attribute_description>{
-        {
-          .location = 0,
-          .binding = 0,
-          .format = graphics::Vertex_attribute_format::r32g32b32_sfloat,
-          .offset = 0,
-        },
-        {
-          .location = 1,
-          .binding = 0,
-          .format = graphics::Vertex_attribute_format::r32g32b32_sfloat,
-          .offset = 12,
-        }};
     auto const color_attachment_format = swapchain_image_format;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .vertex_input_state =
         {
-          .bindings = {&vertex_binding, 1},
-          .attributes = vertex_attributes,
+          .bindings = {},
+          .attributes = {},
         },
       .input_assembly_state =
         {
