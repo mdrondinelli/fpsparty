@@ -211,7 +211,11 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
           .write(std::as_bytes(std::span{draw_infos[axis][sign]}));
       }
     }
-    _vertex_buffer = info.graphics->create_vertex_buffer(vertex_buffer_size);
+    _vertex_buffer = info.graphics->create_buffer({
+      .size = vertex_buffer_size,
+      .usage = graphics::Buffer_usage_flag_bits::transfer_dst |
+               graphics::Buffer_usage_flag_bits::shader_device_address,
+    });
     _index_buffer = info.graphics->create_index_buffer(index_buffer_size);
     _draw_buffer = info.graphics->create_buffer({
       .size = draw_buffer_size,

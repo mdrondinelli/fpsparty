@@ -103,6 +103,14 @@ public:
     std::uint32_t offset,
     std::span<std::byte const> data) noexcept;
 
+  void add_reference(rc::Strong<Buffer const> buffer);
+
+  void add_reference(rc::Strong<Image const> image);
+
+  void add_reference(rc::Strong<Pipeline const> pipeline_layout);
+
+  void add_reference(rc::Strong<Pipeline_layout const> pipeline_layout);
+
 private:
   friend Work_recorder
   detail::acquire_work_recorder(detail::Work_resource resource) noexcept;
@@ -111,14 +119,6 @@ private:
   detail::release_work_recorder(Work_recorder recorder) noexcept;
 
   explicit Work_recorder(detail::Work_resource resource) noexcept;
-
-  void add_reference(rc::Strong<Buffer const> buffer);
-
-  void add_reference(rc::Strong<Image const> image);
-
-  void add_reference(rc::Strong<Pipeline const> pipeline_layout);
-
-  void add_reference(rc::Strong<Pipeline_layout const> pipeline_layout);
 
   vk::CommandBuffer get_command_buffer() const noexcept;
 
