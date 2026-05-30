@@ -20,6 +20,23 @@
 #pragma clang diagnostic pop
 
 namespace fpsparty::vma {
+enum class Allocator_create_flag_bits {
+  e_buffer_device_address = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+};
+
+using Allocator_create_flags = Flags<Allocator_create_flag_bits>;
+
+constexpr Allocator_create_flags operator|(
+  Allocator_create_flag_bits lhs, Allocator_create_flag_bits rhs) noexcept {
+  return Allocator_create_flags{
+    static_cast<Allocator_create_flags::Value>(lhs) |
+    static_cast<Allocator_create_flags::Value>(rhs)};
+}
+
+constexpr VmaAllocatorCreateFlags c_repr(Allocator_create_flags flags) {
+  return static_cast<VmaAllocatorCreateFlags>(flags);
+}
+
 enum class Memory_usage : std::underlying_type_t<VmaMemoryUsage> {
   e_gpu_lazily_allocated = VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED,
   e_auto = VMA_MEMORY_USAGE_AUTO,

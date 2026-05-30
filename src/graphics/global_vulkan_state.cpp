@@ -123,8 +123,13 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
     vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT{
       .extendedDynamicState = true,
     };
+  auto buffer_device_address_features =
+    vk::PhysicalDeviceBufferDeviceAddressFeatures{
+      .pNext = &extended_dynamic_state_features,
+      .bufferDeviceAddress = true,
+    };
   auto vulkan_1_3_features = vk::PhysicalDeviceVulkan13Features{
-    .pNext = &extended_dynamic_state_features,
+    .pNext = &buffer_device_address_features,
     .synchronization2 = true,
     .dynamicRendering = true,
   };
@@ -154,7 +159,9 @@ vma::Unique_allocator make_vma_allocator(
   vk::PhysicalDevice physical_device,
   vk::Device device) {
   auto create_info = vma::Allocator::Create_info{
-    .flags = {},
+    .flags = vma::c_repr(vma::Allocator_create_flags{
+      vma::Allocator_create_flag_bits::e_buffer_device_address,
+    }),
     .physicalDevice = physical_device,
     .device = device,
     .preferredLargeHeapBlockSize = 0,

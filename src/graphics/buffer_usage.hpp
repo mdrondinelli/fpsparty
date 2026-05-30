@@ -11,6 +11,8 @@ enum class Buffer_usage_flag_bits {
   index_buffer = static_cast<int>(vk::BufferUsageFlagBits::eIndexBuffer),
   vertex_buffer = static_cast<int>(vk::BufferUsageFlagBits::eVertexBuffer),
   indirect_buffer = static_cast<int>(vk::BufferUsageFlagBits::eIndirectBuffer),
+  shader_device_address =
+    static_cast<int>(vk::BufferUsageFlagBits::eShaderDeviceAddress),
 };
 
 using Buffer_usage_flags = Flags<Buffer_usage_flag_bits>;
