@@ -406,16 +406,6 @@ public:
       }
     }
     work_recorder.end_rendering();
-    work_recorder.transition_image_layout(
-      {
-        .stage_mask =
-          graphics::Pipeline_stage_flag_bits::color_attachment_output,
-        .access_mask = graphics::Access_flag_bits::color_attachment_write,
-      },
-      {},
-      graphics::Image_layout::general,
-      graphics::Image_layout::present_src,
-      swapchain_image);
     _graphics.submit_frame_work(std::move(work_recorder));
   }
 
