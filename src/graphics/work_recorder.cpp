@@ -33,6 +33,21 @@ void Work_recorder::copy_buffer(
   add_reference(std::move(dst));
 }
 
+void Work_recorder::barrier(
+  const Synchronization_scope &src_scope,
+  const Synchronization_scope &dst_scope) {
+  const auto barrier = vk::MemoryBarrier2{
+    .srcStageMask = static_cast<vk::PipelineStageFlags2>(src_scope.stage_mask),
+    .srcAccessMask = static_cast<vk::AccessFlags2>(src_scope.access_mask),
+    .dstStageMask = static_cast<vk::PipelineStageFlags2>(dst_scope.stage_mask),
+    .dstAccessMask = static_cast<vk::AccessFlags2>(dst_scope.access_mask),
+  };
+  get_command_buffer().pipelineBarrier2({
+    .memoryBarrierCount = 1,
+    .pMemoryBarriers = &barrier,
+  });
+}
+
 void Work_recorder::transition_image_layout(
   const Synchronization_scope &src_scope,
   const Synchronization_scope &dst_scope,
@@ -65,21 +80,6 @@ void Work_recorder::transition_image_layout(
     .pImageMemoryBarriers = &barrier,
   });
   add_reference(std::move(image));
-}
-
-void Work_recorder::barrier(
-  const Synchronization_scope &src_scope,
-  const Synchronization_scope &dst_scope) {
-  const auto barrier = vk::MemoryBarrier2{
-    .srcStageMask = static_cast<vk::PipelineStageFlags2>(src_scope.stage_mask),
-    .srcAccessMask = static_cast<vk::AccessFlags2>(src_scope.access_mask),
-    .dstStageMask = static_cast<vk::PipelineStageFlags2>(dst_scope.stage_mask),
-    .dstAccessMask = static_cast<vk::AccessFlags2>(dst_scope.access_mask),
-  };
-  get_command_buffer().pipelineBarrier2({
-    .memoryBarrierCount = 1,
-    .pMemoryBarriers = &barrier,
-  });
 }
 
 void Work_recorder::begin_rendering(const Rendering_begin_info &info) {

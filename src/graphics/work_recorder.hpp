@@ -57,16 +57,16 @@ public:
     rc::Strong<Buffer> dst,
     const Buffer_copy_info &info);
 
+  void barrier(
+    const Synchronization_scope &src_scope,
+    const Synchronization_scope &dst_scope);
+
   void transition_image_layout(
     const Synchronization_scope &src_scope,
     const Synchronization_scope &dst_scope,
     Image_layout old_layout,
     Image_layout new_layout,
     rc::Strong<Image> image);
-
-  void barrier(
-    const Synchronization_scope &src_scope,
-    const Synchronization_scope &dst_scope);
 
   void begin_rendering(const Rendering_begin_info &info);
 
