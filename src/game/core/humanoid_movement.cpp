@@ -19,6 +19,12 @@ simulate_humanoid_movement(Humanoid_movement_simulation_info const &info) {
   if (info.input_state.move_backward) {
     movement_vector -= basis_matrix.col(2).head<3>();
   }
+  if (info.input_state.jump) {
+    movement_vector += Eigen::Vector3f::UnitY();
+  }
+  if (info.input_state.crouch) {
+    movement_vector -= Eigen::Vector3f::UnitY();
+  }
   movement_vector.normalize();
   return {
     .final_position = info.initial_position + movement_vector *

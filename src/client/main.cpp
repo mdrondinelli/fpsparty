@@ -398,6 +398,13 @@ protected:
       case glfw::Key::k_d:
         input_state.move_right = action != glfw::Press_action::release;
         break;
+      case glfw::Key::k_space:
+        input_state.jump = action != glfw::Press_action::release;
+        break;
+      case glfw::Key::k_left_shift:
+      case glfw::Key::k_right_shift:
+        input_state.crouch = action != glfw::Press_action::release;
+        break;
       default:
       }
       set_current_input_state(input_state);
