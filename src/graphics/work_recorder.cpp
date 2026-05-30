@@ -51,7 +51,8 @@ void Work_recorder::transition_image_layout(
     .image = detail::get_image_vk_image(*image),
     .subresourceRange =
       {
-        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .aspectMask =
+          detail::get_image_format_vk_image_aspect_flags(image->get_format()),
         .baseMipLevel = 0,
         .levelCount = static_cast<std::uint32_t>(image->get_mip_level_count()),
         .baseArrayLayer = 0,
@@ -66,6 +67,21 @@ void Work_recorder::transition_image_layout(
   add_reference(std::move(image));
 }
 
+void Work_recorder::barrier(
+  const Synchronization_scope &src_scope,
+  const Synchronization_scope &dst_scope) {
+  const auto barrier = vk::MemoryBarrier2{
+    .srcStageMask = static_cast<vk::PipelineStageFlags2>(src_scope.stage_mask),
+    .srcAccessMask = static_cast<vk::AccessFlags2>(src_scope.access_mask),
+    .dstStageMask = static_cast<vk::PipelineStageFlags2>(dst_scope.stage_mask),
+    .dstAccessMask = static_cast<vk::AccessFlags2>(dst_scope.access_mask),
+  };
+  get_command_buffer().pipelineBarrier2({
+    .memoryBarrierCount = 1,
+    .pMemoryBarriers = &barrier,
+  });
+}
+
 void Work_recorder::begin_rendering(const Rendering_begin_info &info) {
   const auto color_attachment = vk::RenderingAttachmentInfo{
     .imageView = detail::get_image_vk_image_view(*info.color_image),
@@ -78,7 +94,7 @@ void Work_recorder::begin_rendering(const Rendering_begin_info &info) {
     .imageView = info.depth_image
                    ? detail::get_image_vk_image_view(*info.depth_image)
                    : vk::ImageView{},
-    .imageLayout = vk::ImageLayout::eDepthAttachmentOptimal,
+    .imageLayout = vk::ImageLayout::eGeneral,
     .loadOp = vk::AttachmentLoadOp::eClear,
     .storeOp = vk::AttachmentStoreOp::eStore,
     .clearValue = {vk::ClearDepthStencilValue{.depth = 0.0f}},

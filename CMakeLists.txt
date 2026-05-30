@@ -163,7 +163,6 @@ target_link_libraries(graphics glfw volk GPUOpen::VulkanMemoryAllocator)
 # client
 add_executable(
   client
-  src/client/depth_image_recycler.cpp
   src/client/frame_counter.cpp
   src/client/grid_mesh.cpp
   src/client/main.cpp

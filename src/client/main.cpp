@@ -1,4 +1,3 @@
-#include "client/depth_image_recycler.hpp"
 #include "client/frame_counter.hpp"
 #include "client/grid_mesh.hpp"
 #include "constants.hpp"
@@ -160,10 +159,6 @@ public:
           .surface = _vk_surface,
           .vsync_preferred = false,
         }},
-        _depth_images{
-          graphics::recycler_predicates::Image_extent{},
-          client::Depth_image_factory{&_graphics},
-        },
         _grid_vertex_shader{
           graphics::load_shader("./assets/shaders/grid.vert.spv")},
         _grid_fragment_shader{
@@ -199,10 +194,33 @@ public:
       graphics::Image_layout::undefined,
       graphics::Image_layout::general,
       swapchain_image);
-    auto depth_image = _depth_images.pop(
-      graphics::recycler_predicates::Image_extent{
-        swapchain_image->get_extent(),
-      });
+    auto [depth_image, depth_image_created] =
+      get_depth_image(swapchain_image->get_extent());
+    const auto depth_scope = graphics::Synchronization_scope{
+      .stage_mask = graphics::Pipeline_stage_flag_bits::early_fragment_tests |
+                    graphics::Pipeline_stage_flag_bits::late_fragment_tests,
+      .access_mask =
+        graphics::Access_flag_bits::depth_stencil_attachment_read |
+        graphics::Access_flag_bits::depth_stencil_attachment_write,
+    };
+    if (depth_image_created) {
+      work_recorder.transition_image_layout(
+        {},
+        depth_scope,
+        graphics::Image_layout::undefined,
+        graphics::Image_layout::general,
+        depth_image);
+    } else {
+      work_recorder.barrier(
+        {
+          .stage_mask =
+            graphics::Pipeline_stage_flag_bits::early_fragment_tests |
+            graphics::Pipeline_stage_flag_bits::late_fragment_tests,
+          .access_mask =
+            graphics::Access_flag_bits::depth_stencil_attachment_write,
+        },
+        depth_scope);
+    }
     work_recorder.begin_rendering({
       .color_image = swapchain_image,
       .depth_image = depth_image,
@@ -398,8 +416,7 @@ public:
       graphics::Image_layout::general,
       graphics::Image_layout::present_src,
       swapchain_image);
-    auto frame_work = _graphics.submit_frame_work(std::move(work_recorder));
-    _depth_images.push(std::move(depth_image), std::move(frame_work));
+    _graphics.submit_frame_work(std::move(work_recorder));
   }
 
   constexpr glfw::Window get_window() const noexcept { return _glfw_window; }
@@ -478,6 +495,22 @@ protected:
   }
 
 private:
+  std::pair<rc::Strong<graphics::Image>, bool>
+  get_depth_image(const Eigen::Vector3i &extent) {
+    const auto create_image = !_depth_image || _depth_image->get_extent() != extent;
+    if (create_image) {
+      _depth_image = _graphics.create_image({
+        .dimensionality = 2,
+        .format = graphics::Image_format::d32_sfloat,
+        .extent = extent,
+        .mip_level_count = 1,
+        .array_layer_count = 1,
+        .usage = graphics::Image_usage_flag_bits::depth_attachment,
+      });
+    }
+    return {_depth_image, create_image};
+  }
+
   rc::Strong<graphics::Buffer>
   upload_vertices(std::span<const std::byte> data) {
     const auto staging_buffer = _graphics.create_staging_buffer(data);
@@ -661,7 +694,7 @@ private:
   vk::SurfaceKHR _vk_surface{};
   client::Frame_counter _frame_counter{};
   graphics::Graphics _graphics{};
-  client::Depth_image_recycler _depth_images;
+  rc::Strong<graphics::Image> _depth_image{};
   graphics::Shader _grid_vertex_shader;
   graphics::Shader _grid_fragment_shader;
   graphics::Shader _mesh_vertex_shader;
