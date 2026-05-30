@@ -29,9 +29,7 @@
 
 using namespace fpsparty;
 
-namespace vk {
-DispatchLoaderDynamic defaultDispatchLoaderDynamic;
-}
+VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 namespace {
 constexpr auto server_ip = "127.0.0.1";

@@ -7,6 +7,7 @@
 #include "net/core/sequence_number.hpp"
 #include <cstdint>
 #include <memory_resource>
+#include <vector>
 
 namespace fpsparty::net {
 struct Server_create_info {

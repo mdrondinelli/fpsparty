@@ -39,12 +39,12 @@ vk::UniqueInstance make_vk_instance() {
     .ppEnabledExtensionNames = extensions.data(),
   };
   const auto vkGetInstanceProcAddr =
-    vk::DynamicLoader{}
+    vk::detail::DynamicLoader{}
       .getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
-  vk::defaultDispatchLoaderDynamic.init(vkGetInstanceProcAddr);
+  VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
   auto instance = vk::createInstanceUnique(create_info);
   volkLoadInstance(*instance);
-  vk::defaultDispatchLoaderDynamic.init(*instance, vkGetInstanceProcAddr);
+  VULKAN_HPP_DEFAULT_DISPATCHER.init(*instance, vkGetInstanceProcAddr);
   std::cout << "Created VkInstance.\n";
   return instance;
 }

@@ -6,6 +6,7 @@ add_compile_definitions(TRACY_ENABLE)
 
 # dependencies
 add_subdirectory(extern/glfw-3.4)
+add_subdirectory(extern/enet)
 add_subdirectory(extern/volk-1.4.304)
 add_subdirectory(extern/VulkanMemoryAllocator-3.3.0)
 add_subdirectory(extern/magic_enum-0.9.7)
@@ -111,7 +112,6 @@ target_include_directories(
   PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
-target_link_directories(server PRIVATE ${CMAKE_SOURCE_DIR}/extern/enet/.libs)
 target_link_libraries(server enet game-server net)
 
 # libgraphics
@@ -181,7 +181,6 @@ target_include_directories(
   PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
-target_link_directories(client PRIVATE ${CMAKE_SOURCE_DIR}/extern/enet/.libs)
 target_link_libraries(client enet tracy net game-client graphics)
 
 # compiler options
