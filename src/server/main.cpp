@@ -41,9 +41,6 @@ int main() {
   std::cout << "Server running on port " << net::constants::port << ".\n";
   using Clock = std::chrono::high_resolution_clock;
   using Duration = Clock::duration;
-  constexpr auto blink_block_period = 0.5f;
-  auto blink_block_timer = 0.0f;
-  auto blink_block_solid = false;
   auto loop_duration = Duration{};
   auto loop_time = Clock::now();
   while (!signal_status) {
@@ -51,12 +48,6 @@ int main() {
     auto const duration =
       std::chrono::duration_cast<std::chrono::duration<float>>(loop_duration)
         .count();
-    blink_block_timer -= duration;
-    if (blink_block_timer <= 0.0f) {
-      blink_block_timer += blink_block_period;
-      blink_block_solid = !blink_block_solid;
-      fill_blocks(server, {8, 3, 8}, {9, 4, 9}, blink_block_solid);
-    }
     if (server.service_game_state(duration)) {
       server.broadcast_game_state();
     }
