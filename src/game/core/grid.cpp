@@ -2,6 +2,7 @@
 #include "serial/serialize.hpp"
 #include <cassert>
 #include <cstdint>
+#include <limits>
 
 namespace fpsparty::game {
 Grid::Grid(Grid_create_info const &create_info)
@@ -105,6 +106,67 @@ bool Grid::is_solid(Eigen::Vector3i const &cell_indices) const noexcept {
     return get_chunk_unsafe(chunk_indices)->is_solid(cell_offset);
   } else {
     return false;
+  }
+}
+
+std::optional<Grid_raycast_hit> Grid::raycast(
+  Eigen::Vector3i const &origin_cell_indices,
+  Eigen::Vector3f const &origin_cell_offset,
+  Eigen::Vector3f const &ray_direction,
+  float max_t) const noexcept {
+  assert(ray_direction.squaredNorm() > 0.0f);
+  assert((origin_cell_offset.array() >= 0.0f).all());
+  assert((origin_cell_offset.array() < 1.0f).all());
+  if (max_t < 0.0f) {
+    return std::nullopt;
+  }
+  auto cell_indices = origin_cell_indices;
+  if (is_solid(cell_indices)) {
+    return Grid_raycast_hit{
+      .cell_indices = cell_indices,
+      .normal = Eigen::Vector3i::Zero(),
+      .t = 0.0f,
+    };
+  }
+  auto step = Eigen::Vector3i{Eigen::Vector3i::Zero()};
+  auto t_max = Eigen::Vector3f{Eigen::Vector3f::Zero()};
+  auto t_delta = Eigen::Vector3f{Eigen::Vector3f::Zero()};
+  for (auto axis = 0; axis != 3; ++axis) {
+    auto const direction = ray_direction(axis);
+    if (direction > 0.0f) {
+      step(axis) = 1;
+      t_max(axis) = (1.0f - origin_cell_offset(axis)) / direction;
+      t_delta(axis) = 1.0f / direction;
+    } else if (direction < 0.0f) {
+      step(axis) = -1;
+      t_max(axis) = origin_cell_offset(axis) / -direction;
+      t_delta(axis) = 1.0f / -direction;
+    } else {
+      step(axis) = 0;
+      t_max(axis) = std::numeric_limits<float>::infinity();
+      t_delta(axis) = std::numeric_limits<float>::infinity();
+    }
+  }
+  while (true) {
+    auto const next_t = t_max.minCoeff();
+    if (!(next_t <= max_t)) {
+      return std::nullopt;
+    }
+    auto normal = Eigen::Vector3i{Eigen::Vector3i::Zero()};
+    for (auto axis = 0; axis != 3; ++axis) {
+      if (t_max(axis) == next_t) {
+        cell_indices(axis) += step(axis);
+        normal(axis) = -step(axis);
+        t_max(axis) += t_delta(axis);
+      }
+    }
+    if (is_solid(cell_indices)) {
+      return Grid_raycast_hit{
+        .cell_indices = cell_indices,
+        .normal = normal,
+        .t = next_t,
+      };
+    }
   }
 }
 

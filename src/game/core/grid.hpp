@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -28,6 +29,12 @@ struct Grid_create_info {
   std::size_t width{};
   std::size_t height{};
   std::size_t depth{};
+};
+
+struct Grid_raycast_hit {
+  Eigen::Vector3i cell_indices{};
+  Eigen::Vector3i normal{};
+  float t{};
 };
 
 class Grid_loading_error : public std::exception {};
@@ -179,6 +186,12 @@ public:
   void fill(Eigen::AlignedBox3i const &bounds, bool solid = true);
 
   bool is_solid(Eigen::Vector3i const &cell_indices) const noexcept;
+
+  std::optional<Grid_raycast_hit> raycast(
+    Eigen::Vector3i const &origin_cell_indices,
+    Eigen::Vector3f const &origin_cell_offset,
+    Eigen::Vector3f const &ray_direction,
+    float max_t) const noexcept;
 
   Chunk *get_chunk(Eigen::Vector3i const &chunk_indices) noexcept;
 
