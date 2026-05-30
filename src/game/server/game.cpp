@@ -9,6 +9,33 @@
 #include <Eigen/Geometry>
 
 namespace fpsparty::game {
+namespace {
+void handle_use_secondary(Grid &grid, Humanoid &humanoid) {
+  auto const basis =
+    (math::y_rotation_matrix(humanoid.get_input_state().yaw) *
+     math::x_rotation_matrix(humanoid.get_input_state().pitch))
+      .eval();
+  auto const forward = basis.col(2).head<3>().eval();
+  auto const origin =
+    (humanoid.get_position() +
+     Eigen::Vector3f::UnitY() * constants::humanoid_eye_height)
+      .eval();
+  auto const origin_cell =
+    (origin / constants::grid_cell_stride).array().floor().matrix().eval();
+  auto const origin_cell_indices = origin_cell.cast<int>().eval();
+  auto const origin_cell_offset =
+    (origin / constants::grid_cell_stride - origin_cell).eval();
+  auto const hit = grid.raycast(
+    origin_cell_indices,
+    origin_cell_offset,
+    forward,
+    constants::block_interaction_range / constants::grid_cell_stride);
+  if (hit) {
+    grid.set_solid(hit->cell_indices + hit->normal, true);
+  }
+}
+} // namespace
+
 Game::Game(Game_create_info const &info) : _grid{info.grid_info} {}
 
 void Game::tick(float duration) {
@@ -30,6 +57,11 @@ void Game::tick(float duration) {
   }
   auto const humanoids = _entities.get_entities_of_type<Humanoid>();
   for (auto const &humanoid : humanoids) {
+    if (
+      !humanoid->get_prev_input_state().use_secondary &&
+      humanoid->get_input_state().use_secondary) {
+      handle_use_secondary(_grid, *humanoid);
+    }
     humanoid->decrease_attack_cooldown(duration);
     if (
       humanoid->get_input_state().use_primary &&

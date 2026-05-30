@@ -19,6 +19,8 @@ public:
 
   net::Input_state const &get_input_state() const noexcept;
 
+  net::Input_state const &get_prev_input_state() const noexcept;
+
   void set_input_state(net::Input_state const &value) noexcept;
 
   float get_attack_cooldown() const noexcept;
@@ -37,6 +39,7 @@ public:
 
 private:
   net::Input_state _input_state{};
+  net::Input_state _prev_input_state{};
   float _attack_cooldown{};
   Eigen::Vector3f _position{Eigen::Vector3f::Zero()};
   Eigen::Vector3f _velocity{Eigen::Vector3f::Zero()};

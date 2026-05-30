@@ -7,6 +7,7 @@ constexpr auto humanoid_speed = 5.0f;
 constexpr auto humanoid_half_width = 0.35f;
 constexpr auto humanoid_height = 1.8f;
 constexpr auto humanoid_eye_height = 1.7f;
+constexpr auto block_interaction_range = 5.0f;
 constexpr auto attack_cooldown = 0.8f;
 constexpr auto projectile_forward_speed = 15.0f;
 constexpr auto projectile_up_speed = 2.0f;

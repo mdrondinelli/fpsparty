@@ -12,7 +12,12 @@ net::Input_state const &Humanoid::get_input_state() const noexcept {
   return _input_state;
 }
 
+net::Input_state const &Humanoid::get_prev_input_state() const noexcept {
+  return _prev_input_state;
+}
+
 void Humanoid::set_input_state(net::Input_state const &value) noexcept {
+  _prev_input_state = _input_state;
   _input_state = value;
 }
 

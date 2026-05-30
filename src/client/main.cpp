@@ -416,16 +416,19 @@ protected:
     glfw::Mouse_button button,
     glfw::Press_state action,
     int) override {
+    if (has_game_state()) {
+      auto input_state = get_current_input_state();
+      if (button == glfw::Mouse_button::mb_left) {
+        input_state.use_primary = action != glfw::Press_state::release;
+      } else if (button == glfw::Mouse_button::mb_right) {
+        input_state.use_secondary = action != glfw::Press_state::release;
+      }
+      set_current_input_state(input_state);
+    }
     if (
       button == glfw::Mouse_button::mb_right &&
       action == glfw::Press_state::press) {
       _glfw_window.set_cursor_input_mode(glfw::Cursor_input_mode::disabled);
-    } else if (has_game_state()) {
-      auto input_state = get_current_input_state();
-      if (button == glfw::Mouse_button::mb_left) {
-        input_state.use_primary = action != glfw::Press_state::release;
-      }
-      set_current_input_state(input_state);
     }
   }
 

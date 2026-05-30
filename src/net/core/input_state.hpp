@@ -12,6 +12,7 @@ struct Input_state {
   bool jump{};
   bool crouch{};
   bool use_primary{};
+  bool use_secondary{};
   float yaw{};
   float pitch{};
 };
@@ -33,14 +34,17 @@ template <> struct Serializer<net::Input_state> {
     if (value.move_backward) {
       flags |= 1 << 3;
     }
-    if (value.use_primary) {
+    if (value.jump) {
       flags |= 1 << 4;
     }
-    if (value.jump) {
+    if (value.crouch) {
       flags |= 1 << 5;
     }
-    if (value.crouch) {
+    if (value.use_primary) {
       flags |= 1 << 6;
+    }
+    if (value.use_secondary) {
+      flags |= 1 << 7;
     }
     serialize<std::uint8_t>(writer, flags);
     serialize<float>(writer, value.yaw);
@@ -65,9 +69,10 @@ template <> struct Serializer<net::Input_state> {
       .move_right = (*flags & (1 << 1)) != 0,
       .move_forward = (*flags & (1 << 2)) != 0,
       .move_backward = (*flags & (1 << 3)) != 0,
-      .jump = (*flags & (1 << 5)) != 0,
-      .crouch = (*flags & (1 << 6)) != 0,
-      .use_primary = (*flags & (1 << 4)) != 0,
+      .jump = (*flags & (1 << 4)) != 0,
+      .crouch = (*flags & (1 << 5)) != 0,
+      .use_primary = (*flags & (1 << 6)) != 0,
+      .use_secondary = (*flags & (1 << 7)) != 0,
       .yaw = *yaw,
       .pitch = *pitch,
     };
