@@ -257,7 +257,8 @@ public:
       // draw grid
       if (_grid_mesh && _grid_mesh->is_uploaded()) {
         work_recorder.bind_pipeline(grid_pipeline);
-        work_recorder.set_cull_mode(graphics::Cull_mode::none);
+        work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
+        work_recorder.set_cull_mode(graphics::Cull_mode::back);
         work_recorder.bind_vertex_buffer(_grid_mesh->get_vertex_buffer());
         work_recorder.bind_index_buffer(
           _grid_mesh->get_index_buffer(), graphics::Index_type::u32);
