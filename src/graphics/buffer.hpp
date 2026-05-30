@@ -31,6 +31,8 @@ public:
 
   Mapped_memory map();
 
+  std::uint64_t get_device_address() const noexcept;
+
 private:
   friend constexpr vk::Buffer
   detail::get_buffer_vk_buffer(Buffer const &buffer) noexcept;
