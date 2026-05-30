@@ -62,7 +62,6 @@ public:
 private:
   struct Frame_resource {
     vk::UniqueSemaphore swapchain_image_acquire_semaphore{};
-    vk::UniqueSemaphore swapchain_image_release_semaphore{};
     std::uint32_t swapchain_image_index{};
     rc::Strong<Work> pending_work{};
   };
@@ -88,6 +87,7 @@ private:
   std::vector<vk::Image> _vk_swapchain_images{};
   std::vector<vk::UniqueImageView> _vk_swapchain_image_views{};
   std::vector<rc::Strong<Image>> _swapchain_images{};
+  std::vector<vk::UniqueSemaphore> _swapchain_image_release_semaphores{};
   detail::Work_resource_pool _work_resources{};
   detail::Work_queue _works{};
   std::vector<Frame_resource> _frame_resources{};

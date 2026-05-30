@@ -129,13 +129,9 @@ Graphics::Graphics(const Graphics_create_info &info)
   for (auto i = std::size_t{}; i != info.max_frames_in_flight; ++i) {
     const auto swapchain_image_acquire_semaphore_name =
       "swapchain_image_acquire_semaphores[" + std::to_string(i) + "]";
-    const auto swapchain_image_release_semaphore_name =
-      "swapchain_image_release_semaphores[" + std::to_string(i) + "]";
     _frame_resources.push_back({
       .swapchain_image_acquire_semaphore =
         make_semaphore(swapchain_image_acquire_semaphore_name.c_str()),
-      .swapchain_image_release_semaphore =
-        make_semaphore(swapchain_image_release_semaphore_name.c_str()),
     });
   }
 }
@@ -210,6 +206,10 @@ rc::Strong<Work> Graphics::submit_transient_work(Work_recorder recorder) {
 std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
   ZoneScoped;
   auto &frame_resource = _frame_resources[_frame_resource_index];
+  if (frame_resource.pending_work) {
+    frame_resource.pending_work->await();
+    frame_resource.pending_work = nullptr;
+  }
   frame_resource.swapchain_image_index = [&]() {
     for (;;) {
       try {
@@ -225,10 +225,6 @@ std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
       }
     }
   }();
-  if (frame_resource.pending_work) {
-    frame_resource.pending_work->await();
-    frame_resource.pending_work = nullptr;
-  }
   return {
     detail::acquire_work_recorder(_work_resources.pop()),
     _swapchain_images.at(frame_resource.swapchain_image_index),
@@ -238,16 +234,18 @@ std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
 rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {
   ZoneScoped;
   auto &frame_resource = _frame_resources[_frame_resource_index];
+  auto &swapchain_image_release_semaphore =
+    _swapchain_image_release_semaphores.at(frame_resource.swapchain_image_index);
   auto work_resource = detail::release_work_recorder(std::move(recorder));
   frame_resource.pending_work = _works.submit({
     .resource = &work_resource,
     .wait_semaphore = *frame_resource.swapchain_image_acquire_semaphore,
-    .signal_semaphore = *frame_resource.swapchain_image_release_semaphore,
+    .signal_semaphore = *swapchain_image_release_semaphore,
   });
   try {
     const auto present_result = Global_vulkan_state::get().present({
       .waitSemaphoreCount = 1,
-      .pWaitSemaphores = &*frame_resource.swapchain_image_release_semaphore,
+      .pWaitSemaphores = &*swapchain_image_release_semaphore,
       .swapchainCount = 1,
       .pSwapchains = &*_swapchain,
       .pImageIndices = &frame_resource.swapchain_image_index,
@@ -293,6 +291,10 @@ void Graphics::init_swapchain(vk::PresentModeKHR present_mode) {
   _vk_swapchain_image_views =
     make_swapchain_image_views(_vk_swapchain_images, _swapchain_image_format);
   for (auto i = std::size_t{}; i != _vk_swapchain_images.size(); ++i) {
+    const auto swapchain_image_release_semaphore_name =
+      "swapchain_image_release_semaphores[" + std::to_string(i) + "]";
+    _swapchain_image_release_semaphores.emplace_back(
+      make_semaphore(swapchain_image_release_semaphore_name.c_str()));
     _swapchain_images.emplace_back(_image_factory.create(
       detail::External_image_create_info{
         .image = _vk_swapchain_images[i],
@@ -313,6 +315,7 @@ void Graphics::init_swapchain(vk::PresentModeKHR present_mode) {
 void Graphics::deinit_swapchain() {
   Global_vulkan_state::get().device().waitIdle();
   _swapchain_images.clear();
+  _swapchain_image_release_semaphores.clear();
   _vk_swapchain_image_views.clear();
   _vk_swapchain_images.clear();
   _swapchain.reset();
