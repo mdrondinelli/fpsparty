@@ -203,12 +203,16 @@ rc::Strong<Work> Graphics::submit_transient_work(Work_recorder recorder) {
   return _works.submit({.resource = &resource});
 }
 
-std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
+std::optional<std::pair<Work_recorder, rc::Strong<Image>>>
+Graphics::try_record_frame_work() {
   ZoneScoped;
   auto &frame_resource = _frame_resources[_frame_resource_index];
   if (frame_resource.pending_work) {
-    frame_resource.pending_work->await();
-    frame_resource.pending_work = nullptr;
+    if (frame_resource.pending_work->is_done()) {
+      frame_resource.pending_work = nullptr;
+    } else {
+      return std::nullopt;
+    }
   }
   frame_resource.swapchain_image_index = [&]() {
     for (;;) {
@@ -225,10 +229,22 @@ std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
       }
     }
   }();
-  return {
+  return std::pair<Work_recorder, rc::Strong<Image>>{
     detail::acquire_work_recorder(_work_resources.pop()),
     _swapchain_images.at(frame_resource.swapchain_image_index),
   };
+}
+
+std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
+  if (auto work = try_record_frame_work()) {
+    return std::move(*work);
+  }
+  auto &frame_resource = _frame_resources[_frame_resource_index];
+  if (frame_resource.pending_work) {
+    frame_resource.pending_work->await();
+    frame_resource.pending_work = nullptr;
+  }
+  return *try_record_frame_work();
 }
 
 rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {

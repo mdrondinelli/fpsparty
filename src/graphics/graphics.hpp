@@ -11,6 +11,7 @@
 #include "graphics/work_resource_pool.hpp"
 #include "rc.hpp"
 #include <cstddef>
+#include <optional>
 #include <span>
 #include <vulkan/vulkan.hpp>
 
@@ -50,6 +51,9 @@ public:
   Work_recorder record_transient_work();
 
   rc::Strong<Work> submit_transient_work(Work_recorder recorder);
+
+  std::optional<std::pair<Work_recorder, rc::Strong<Image>>>
+  try_record_frame_work();
 
   std::pair<Work_recorder, rc::Strong<Image>> record_frame_work();
 
