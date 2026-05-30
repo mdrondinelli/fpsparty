@@ -10,6 +10,8 @@ add_subdirectory(extern/enet)
 add_subdirectory(extern/volk-1.4.304)
 add_subdirectory(extern/VulkanMemoryAllocator-3.3.0)
 add_subdirectory(extern/magic_enum-0.9.7)
+add_subdirectory(extern/Catch2-3.13.0)
+enable_testing()
 add_library(
   tracy
   extern/tracy-0.12.2/TracyClient.cpp
@@ -57,6 +59,13 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/src
 )
 target_compile_definitions(game-core PUBLIC FPSPARTY_SERIAL_EIGEN)
+
+add_executable(
+  game-core-tests
+  tests/game/core/grid_raycast.cpp
+)
+target_link_libraries(game-core-tests game-core Catch2::Catch2WithMain)
+add_test(NAME game-core-tests COMMAND game-core-tests)
 
 # libgame-server
 add_library(
@@ -183,12 +192,13 @@ target_include_directories(
 target_link_libraries(client enet tracy net game-client graphics)
 
 # compiler options
-set_property(TARGET net game-core game-server game-client server graphics client PROPERTY CXX_STANDARD 23)
-set_property(TARGET net game-core game-server game-client server graphics client PROPERTY CXX_STANDARD_REQUIRED ON)
-set_property(TARGET net game-core game-server game-client server graphics client PROPERTY CXX_EXTENSIONS OFF)
+set_property(TARGET net game-core game-core-tests game-server game-client server graphics client PROPERTY CXX_STANDARD 23)
+set_property(TARGET net game-core game-core-tests game-server game-client server graphics client PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET net game-core game-core-tests game-server game-client server graphics client PROPERTY CXX_EXTENSIONS OFF)
 if (MSVC)
   target_compile_options(net PRIVATE /W4 /WX)
   target_compile_options(game-core PRIVATE /W4 /WX)
+  target_compile_options(game-core-tests PRIVATE /W4 /WX)
   target_compile_options(game-server PRIVATE /W4 /WX)
   target_compile_options(game-client PRIVATE /W4 /WX)
   target_compile_options(server PRIVATE /W4 /WX)
@@ -197,9 +207,12 @@ if (MSVC)
 else()
   set(extern_compile_options -stdlib=libc++ -O3)
   target_compile_options(tracy PRIVATE ${extern_compile_options})
+  target_compile_options(Catch2 PRIVATE ${extern_compile_options})
+  target_compile_options(Catch2WithMain PRIVATE ${extern_compile_options})
   set(fpsparty_compile_options -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
   target_compile_options(net PRIVATE ${fpsparty_compile_options})
   target_compile_options(game-core PRIVATE ${fpsparty_compile_options})
+  target_compile_options(game-core-tests PRIVATE ${fpsparty_compile_options})
   target_compile_options(game-server PRIVATE ${fpsparty_compile_options})
   target_compile_options(game-client PRIVATE ${fpsparty_compile_options})
   target_compile_options(server PRIVATE ${fpsparty_compile_options})
@@ -207,9 +220,12 @@ else()
   target_compile_options(client PRIVATE ${fpsparty_compile_options})
   set(extern_link_options -stdlib=libc++ -lc++abi)
   target_link_options(tracy PRIVATE ${extern_link_options})
+  target_link_options(Catch2 PRIVATE ${extern_link_options})
+  target_link_options(Catch2WithMain PRIVATE ${extern_link_options})
   set(fpsparty_link_options -stdlib=libc++ -lc++abi)
   target_link_options(net PRIVATE ${fpsparty_link_options})
   target_link_options(game-core PRIVATE ${fpsparty_link_options})
+  target_link_options(game-core-tests PRIVATE ${fpsparty_link_options})
   target_link_options(game-server PRIVATE ${fpsparty_link_options})
   target_link_options(game-client PRIVATE ${fpsparty_link_options})
   target_link_options(server PRIVATE ${fpsparty_link_options})

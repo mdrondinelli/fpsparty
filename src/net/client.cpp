@@ -117,35 +117,46 @@ void Client::handle_event(enet::Event const &e) {
       on_player_join_response(*player_entity_id);
       return;
     }
-    case Message_type::grid_snapshot: {
-      on_grid_snapshot(reader);
-      return;
-    }
-    case Message_type::entity_snapshot: {
+    case Message_type::world_snapshot: {
       auto const tick_number = deserialize<net::Sequence_number>(reader);
       if (!tick_number) {
         std::cerr << "Failed to deserialize tick_number.\n";
         goto malformed_message;
       }
-      auto const public_state_size = deserialize<std::uint16_t>(reader);
-      if (!public_state_size) {
-        std::cerr << "Failed to deserialize public_state_size.\n";
+      auto const grid_state_size = deserialize<std::uint32_t>(reader);
+      if (!grid_state_size) {
+        std::cerr << "Failed to deserialize grid_state_size.\n";
         goto malformed_message;
       }
-      auto public_state_reader =
-        reader.subspan_reader(reader.offset(), *public_state_size);
-      if (!public_state_reader) {
-        std::cerr << "Failed to obtain public_state_reader.\n";
+      auto const public_entity_state_size =
+        deserialize<std::uint32_t>(reader);
+      if (!public_entity_state_size) {
+        std::cerr << "Failed to deserialize public_entity_state_size.\n";
         goto malformed_message;
       }
-      auto player_state_reader =
-        reader.subspan_reader(reader.offset() + *public_state_size);
-      if (!player_state_reader) {
-        std::cerr << "Failed to obtain player_state_reader.\n";
+      auto grid_state_reader =
+        reader.subspan_reader(reader.offset(), *grid_state_size);
+      if (!grid_state_reader) {
+        std::cerr << "Failed to obtain grid_state_reader.\n";
         goto malformed_message;
       }
-      on_entity_snapshot(
-        *tick_number, *public_state_reader, *player_state_reader);
+      auto public_entity_state_reader = reader.subspan_reader(
+        reader.offset() + *grid_state_size, *public_entity_state_size);
+      if (!public_entity_state_reader) {
+        std::cerr << "Failed to obtain public_entity_state_reader.\n";
+        goto malformed_message;
+      }
+      auto player_entity_state_reader = reader.subspan_reader(
+        reader.offset() + *grid_state_size + *public_entity_state_size);
+      if (!player_entity_state_reader) {
+        std::cerr << "Failed to obtain player_entity_state_reader.\n";
+        goto malformed_message;
+      }
+      on_world_snapshot(
+        *tick_number,
+        *grid_state_reader,
+        *public_entity_state_reader,
+        *player_entity_state_reader);
       return;
     }
     default:
@@ -169,8 +180,9 @@ void Client::on_disconnect() {}
 
 void Client::on_player_join_response(net::Entity_id) {}
 
-void Client::on_grid_snapshot(serial::Reader &) {}
-
-void Client::on_entity_snapshot(
-  net::Sequence_number, serial::Reader &, serial::Reader &) {}
+void Client::on_world_snapshot(
+  net::Sequence_number,
+  serial::Span_reader &,
+  serial::Span_reader &,
+  serial::Span_reader &) {}
 } // namespace fpsparty::net

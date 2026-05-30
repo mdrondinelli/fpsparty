@@ -53,13 +53,12 @@ protected:
 
   void send_player_join_response(enet::Peer peer, Entity_id player_entity_id);
 
-  void send_grid_snapshot(enet::Peer peer, std::span<std::byte const> state);
-
-  void send_entity_snapshot(
+  void send_world_snapshot(
     enet::Peer peer,
     Sequence_number tick_number,
-    std::span<std::byte const> public_state,
-    std::span<std::byte const> player_state);
+    std::span<std::byte const> grid_state,
+    std::span<std::byte const> public_entity_state,
+    std::span<std::byte const> player_entity_state);
 
 private:
   void handle_event(enet::Event const &e);

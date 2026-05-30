@@ -54,39 +54,29 @@ void Server::send_player_join_response(
     }));
 }
 
-void Server::send_grid_snapshot(
-  enet::Peer peer, std::span<std::byte const> state) {
-  auto packet = enet::create_packet_unique({
-    .data = nullptr,
-    .data_length = sizeof(Message_type) + state.size(),
-    .flags = enet::Packet_flag_bits::reliable,
-  });
-  auto writer = serial::Span_writer{std::as_writable_bytes(packet->get_data())};
-  using serial::serialize;
-  serialize<Message_type>(writer, Message_type::grid_snapshot);
-  writer.write(state);
-  peer.send(constants::grid_snapshot_channel_id, std::move(packet));
-}
-
-void Server::send_entity_snapshot(
+void Server::send_world_snapshot(
   enet::Peer peer,
   net::Sequence_number tick_number,
-  std::span<std::byte const> public_state,
-  std::span<std::byte const> player_state) {
+  std::span<std::byte const> grid_state,
+  std::span<std::byte const> public_entity_state,
+  std::span<std::byte const> player_entity_state) {
   auto packet = enet::create_packet_unique({
     .data = nullptr,
     .data_length = sizeof(Message_type) + sizeof(net::Sequence_number) +
-                   sizeof(std::uint16_t) + sizeof(std::uint8_t) +
-                   public_state.size() + player_state.size(),
+                   sizeof(std::uint32_t) + sizeof(std::uint32_t) +
+                   grid_state.size() + public_entity_state.size() +
+                   player_entity_state.size(),
   });
   auto writer = serial::Span_writer{std::as_writable_bytes(packet->get_data())};
   using serial::serialize;
-  serialize<Message_type>(writer, Message_type::entity_snapshot);
+  serialize<Message_type>(writer, Message_type::world_snapshot);
   serialize<net::Sequence_number>(writer, tick_number);
-  serialize<std::uint16_t>(writer, public_state.size());
-  writer.write(public_state);
-  writer.write(player_state);
-  peer.send(constants::entity_snapshot_channel_id, std::move(packet));
+  serialize<std::uint32_t>(writer, grid_state.size());
+  serialize<std::uint32_t>(writer, public_entity_state.size());
+  writer.write(grid_state);
+  writer.write(public_entity_state);
+  writer.write(player_entity_state);
+  peer.send(constants::world_snapshot_channel_id, std::move(packet));
 }
 
 std::size_t Server::get_peer_count() const noexcept { return _peers.size(); }

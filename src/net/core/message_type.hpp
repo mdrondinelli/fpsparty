@@ -9,8 +9,7 @@ enum class Message_type : std::uint8_t {
   player_join_response,
   player_leave_request,
   player_input_state,
-  grid_snapshot,
-  entity_snapshot
+  world_snapshot
 };
 } // namespace fpsparty::net
 

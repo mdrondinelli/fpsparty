@@ -183,6 +183,9 @@ public:
     ZoneScoped;
     _frame_counter.notify();
     _graphics.poll_works();
+    if (_pending_grid_mesh && _pending_grid_mesh->is_uploaded()) {
+      _grid_mesh = std::move(_pending_grid_mesh);
+    }
     auto [work_recorder, swapchain_image] = _graphics.record_frame_work();
     work_recorder.transition_image_layout(
       {},
@@ -239,7 +242,8 @@ public:
         (math::x_rotation_matrix(-get_current_input_state().pitch) *
          math::y_rotation_matrix(-get_current_input_state().yaw) *
          math::translation_matrix(-(
-           player_humanoid->get_position() + Eigen::Vector3f::UnitY() * 1.7f)))
+           player_humanoid->get_position() +
+           Eigen::Vector3f::UnitY() * game::constants::humanoid_eye_height)))
           .eval();
       auto const aspect_ratio =
         static_cast<float>(swapchain_image->get_extent().x()) /
@@ -251,7 +255,7 @@ public:
       auto const view_projection_matrix =
         (projection_matrix * view_matrix).eval();
       // draw grid
-      if (_grid_mesh->is_uploaded()) {
+      if (_grid_mesh && _grid_mesh->is_uploaded()) {
         work_recorder.bind_pipeline(grid_pipeline);
         work_recorder.set_cull_mode(graphics::Cull_mode::none);
         work_recorder.bind_vertex_buffer(_grid_mesh->get_vertex_buffer());
@@ -368,10 +372,7 @@ public:
 
 protected:
   void on_update_grid() override {
-    std::cout << get_game()->get_grid().get_width() << " width\n";
-    std::cout << get_game()->get_grid().get_height() << " height\n";
-    std::cout << get_game()->get_grid().get_depth() << " depth\n";
-    _grid_mesh =
+    _pending_grid_mesh =
       std::make_unique<client::Grid_mesh>(client::Grid_mesh_create_info{
         .graphics = &_graphics,
         .grid = &get_game()->get_grid(),
@@ -649,6 +650,7 @@ private:
   rc::Strong<graphics::Pipeline> _mesh_pipeline{};
   std::optional<graphics::Image_format> _pipelines_color_format{};
   std::unique_ptr<client::Grid_mesh> _grid_mesh;
+  std::unique_ptr<client::Grid_mesh> _pending_grid_mesh;
   rc::Strong<graphics::Buffer> _cube_vertex_buffer{};
   rc::Strong<graphics::Buffer> _cube_index_buffer{};
 };

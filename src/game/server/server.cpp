@@ -30,6 +30,8 @@ bool Server::service_game_state(float duration) {
 
 void Server::broadcast_game_state() {
   using serial::serialize;
+  auto grid_state_writer = serial::Ostringstream_writer{};
+  _game.get_grid().dump(grid_state_writer);
   auto public_state_writer = serial::Ostringstream_writer{};
   auto const humanoid_dumper = Humanoid_dumper{};
   auto const projectile_dumper = game::Projectile_dumper{};
@@ -52,9 +54,14 @@ void Server::broadcast_game_state() {
       serialize<net::Entity_id>(player_state_writer, player->get_entity_id());
       Player_dumper{}.dump_entity(player_state_writer, *player);
     }
-    net::Server::send_entity_snapshot(
+    net::Server::send_world_snapshot(
       peer,
       _game.get_tick_number(),
+      std::as_bytes(
+        std::span{
+          grid_state_writer.stream().view().data(),
+          grid_state_writer.stream().view().size(),
+        }),
       std::as_bytes(
         std::span{
           public_state_writer.stream().view().data(),
@@ -75,15 +82,6 @@ Game &Server::get_game() noexcept { return _game; }
 void Server::on_peer_connect(enet::Peer peer) {
   std::cout << "Peer connected.\n";
   peer.set_data(new Peer_node);
-  auto writer = serial::Ostringstream_writer{};
-  _game.get_grid().dump(writer);
-  send_grid_snapshot(
-    peer,
-    std::as_bytes(
-      std::span{
-        writer.stream().view().data(),
-        writer.stream().view().size(),
-      }));
 }
 
 void Server::on_peer_disconnect(enet::Peer peer) {

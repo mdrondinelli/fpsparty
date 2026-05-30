@@ -1,6 +1,7 @@
 #include "client.hpp"
 #include "net/client.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <iostream>
 #include <optional>
@@ -94,6 +95,7 @@ void Client::on_connect() {
 void Client::on_disconnect() {
   _tick_timer = 0.0f;
   _in_flight_input_states.clear();
+  _last_grid_state_payload.clear();
   _input_sequence_number = 0;
   _player_entity_id = std::nullopt;
   _game = std::nullopt;
@@ -104,27 +106,31 @@ void Client::on_player_join_response(net::Entity_id player_entity_id) {
   std::cout << "Got player join response. id = " << player_entity_id << ".\n";
 }
 
-void Client::on_grid_snapshot(serial::Reader &reader) {
-  ZoneScoped;
-  _game->load_grid({.reader = &reader});
-  on_update_grid();
-}
-
 void Client::on_update_grid() {}
 
-void Client::on_entity_snapshot(
+void Client::on_world_snapshot(
   net::Sequence_number tick_number,
-  serial::Reader &public_state_reader,
-  serial::Reader &player_state_reader) {
+  serial::Span_reader &grid_state_reader,
+  serial::Span_reader &public_entity_state_reader,
+  serial::Span_reader &player_entity_state_reader) {
   ZoneScoped;
+  auto const grid_state = grid_state_reader.data();
+  auto const grid_state_changed =
+    grid_state.size() != _last_grid_state_payload.size() ||
+    !std::ranges::equal(grid_state, _last_grid_state_payload);
+  if (grid_state_changed) {
+    _game->load_grid({.reader = &grid_state_reader});
+    _last_grid_state_payload.assign(grid_state.begin(), grid_state.end());
+    on_update_grid();
+  }
   auto initial_player_position = std::optional<Eigen::Vector3f>{};
   if (auto const player = get_player()) {
     initial_player_position = player->get_humanoid()->get_position();
   }
   _game->load_entities({
     .tick_number = tick_number,
-    .public_state_reader = &public_state_reader,
-    .player_state_reader = &player_state_reader,
+    .public_state_reader = &public_entity_state_reader,
+    .player_state_reader = &player_entity_state_reader,
   });
   if (auto const player = get_player()) {
     auto const acknowledged_input_sequence_number =

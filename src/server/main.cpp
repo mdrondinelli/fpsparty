@@ -33,38 +33,31 @@ int main() {
         .port = net::constants::port,
         .max_clients = net::constants::max_clients,
       },
-    .game_info = {.grid_info = {.width = 256, .height = 32, .depth = 256}},
+    .game_info = {.grid_info = {.width = 32, .height = 32, .depth = 32}},
     .tick_duration = constants::tick_duration,
   }};
   // green floor
   fill_blocks(server, {0, 0, 0}, {16, 1, 16});
-  // bottom rims
-  fill_blocks(server, {3, 1, 3}, {13, 2, 13});
-  fill_blocks(server, {4, 1, 4}, {12, 2, 12}, false);
-  // top rims
-  fill_blocks(server, {3, 2, 3}, {13, 3, 13});
-  fill_blocks(server, {4, 2, 4}, {12, 3, 12}, false);
-  // red walls
-  fill_blocks(server, {4, 0, 4}, {5, 1, 12});
-  fill_blocks(server, {12, 0, 4}, {13, 1, 12});
-  fill_blocks(server, {4, 2, 4}, {5, 3, 12});
-  fill_blocks(server, {12, 2, 4}, {13, 3, 12});
-  // blue walls
-  fill_blocks(server, {4, 0, 4}, {12, 1, 5});
-  fill_blocks(server, {4, 0, 12}, {12, 1, 13});
-  fill_blocks(server, {4, 2, 4}, {12, 3, 5});
-  fill_blocks(server, {4, 2, 12}, {12, 3, 13});
   std::cout << "Server running on port " << net::constants::port << ".\n";
   using Clock = std::chrono::high_resolution_clock;
   using Duration = Clock::duration;
+  constexpr auto blink_block_period = 0.5f;
+  auto blink_block_timer = 0.0f;
+  auto blink_block_solid = false;
   auto loop_duration = Duration{};
   auto loop_time = Clock::now();
   while (!signal_status) {
     server.poll_events();
-    if (server.service_game_state(
-          std::chrono::duration_cast<std::chrono::duration<float>>(
-            loop_duration)
-            .count())) {
+    auto const duration =
+      std::chrono::duration_cast<std::chrono::duration<float>>(loop_duration)
+        .count();
+    blink_block_timer -= duration;
+    if (blink_block_timer <= 0.0f) {
+      blink_block_timer += blink_block_period;
+      blink_block_solid = !blink_block_solid;
+      fill_blocks(server, {8, 3, 8}, {9, 4, 9}, blink_block_solid);
+    }
+    if (server.service_game_state(duration)) {
       server.broadcast_game_state();
     }
     auto const now = Clock::now();
