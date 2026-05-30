@@ -1,5 +1,6 @@
 #include "grid.hpp"
 #include "serial/serialize.hpp"
+#include <cassert>
 #include <cstdint>
 
 namespace fpsparty::game {
@@ -29,19 +30,11 @@ void Grid::load(serial::Reader &reader) {
   _chunk_counts = {*x_chunk_count, *y_chunk_count, *z_chunk_count};
   _chunks.resize(_chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2]);
   for (auto &chunk : _chunks) {
-    const auto x_bits = deserialize<std::uint64_t>(reader);
-    if (!x_bits) {
+    const auto blocks = deserialize<std::uint64_t>(reader);
+    if (!blocks) {
       throw Grid_loading_error{};
     }
-    const auto y_bits = deserialize<std::uint64_t>(reader);
-    if (!y_bits) {
-      throw Grid_loading_error{};
-    }
-    const auto z_bits = deserialize<std::uint64_t>(reader);
-    if (!z_bits) {
-      throw Grid_loading_error{};
-    }
-    chunk = Chunk{*x_bits, *y_bits, *z_bits};
+    chunk = Chunk{*blocks};
   }
 }
 
@@ -51,9 +44,7 @@ void Grid::dump(serial::Writer &writer) const {
     serialize<std::uint32_t>(writer, _chunk_counts[i]);
   }
   for (const auto &chunk : _chunks) {
-    for (auto i = 0; i != 3; ++i) {
-      serialize<std::uint64_t>(writer, chunk.bits[i]);
-    }
+    serialize<std::uint64_t>(writer, chunk.blocks);
   }
 }
 
@@ -75,103 +66,43 @@ Const_chunk_span Grid::get_const_chunks() const noexcept {
   return {_chunks.data(), _chunk_counts};
 }
 
-void Grid::fill(
-  Axis normal, int layer, const Eigen::AlignedBox2i &bounds, bool solid) {
+void Grid::fill(const Eigen::AlignedBox3i &bounds, bool solid) {
   // TODO: optimize this to take advantage of bitwise ops
-  if (layer < 0) {
+  const auto min = bounds.min().cwiseMax(Eigen::Vector3i::Zero()).eval();
+  const auto max =
+    bounds.max()
+      .cwiseMin(Eigen::Vector3i{
+        static_cast<int>(get_width()),
+        static_cast<int>(get_height()),
+        static_cast<int>(get_depth()),
+      })
+      .eval();
+  if ((min.array() >= max.array()).any()) {
     return;
   }
-  switch (normal) {
-  case Axis::x: {
-    const auto x = layer;
-    const auto i = x / Chunk::edge_length;
-    const auto x_0 = static_cast<int>(i * Chunk::edge_length);
-    if (i >= _chunk_counts[0]) {
-      return;
-    }
-    const auto min_y = std::max(0, bounds.min().x());
-    const auto min_z = std::max(0, bounds.min().y());
-    const auto max_y =
-      std::min(static_cast<int>(get_height()), bounds.max().x());
-    const auto max_z =
-      std::min(static_cast<int>(get_depth()), bounds.max().y());
-    for (auto z = min_z; z != max_z; ++z) {
-      const auto k = z / Chunk::edge_length;
-      const auto z_0 = static_cast<int>(k * Chunk::edge_length);
-      for (auto y = min_y; y != max_y; ++y) {
-        const auto j = y / Chunk::edge_length;
-        const auto y_0 = static_cast<int>(j * Chunk::edge_length);
-        const auto chunk_index =
-          detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
-        auto &chunk = _chunks[chunk_index];
-        chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, solid);
-      }
-    }
-    break;
-  }
-  case Axis::y: {
-    const auto y = layer;
-    const auto j = y / Chunk::edge_length;
-    const auto y_0 = static_cast<int>(j * Chunk::edge_length);
-    if (j >= _chunk_counts[1]) {
-      return;
-    }
-    const auto min_x = std::max(0, bounds.min().x());
-    const auto min_z = std::max(0, bounds.min().y());
-    const auto max_x =
-      std::min(static_cast<int>(get_width()), bounds.max().x());
-    const auto max_z =
-      std::min(static_cast<int>(get_depth()), bounds.max().y());
-    for (auto z = min_z; z != max_z; ++z) {
-      const auto k = z / Chunk::edge_length;
-      const auto z_0 = static_cast<int>(k * Chunk::edge_length);
-      for (auto x = min_x; x != max_x; ++x) {
-        const auto i = x / Chunk::edge_length;
-        const auto x_0 = static_cast<int>(i * Chunk::edge_length);
-        const auto chunk_index =
-          detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
-        auto &chunk = _chunks[chunk_index];
-        chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, solid);
-      }
-    }
-    break;
-  }
-  case Axis::z: {
-    const auto z = layer;
+  for (auto z = min.z(); z != max.z(); ++z) {
     const auto k = z / Chunk::edge_length;
     const auto z_0 = static_cast<int>(k * Chunk::edge_length);
-    if (k >= _chunk_counts[2]) {
-      return;
-    }
-    const auto min_x = std::max(0, bounds.min().x());
-    const auto min_y = std::max(0, bounds.min().y());
-    const auto max_x =
-      std::min(static_cast<int>(get_width()), bounds.max().x());
-    const auto max_y =
-      std::min(static_cast<int>(get_height()), bounds.max().y());
-    for (auto y = min_y; y != max_y; ++y) {
+    for (auto y = min.y(); y != max.y(); ++y) {
       const auto j = y / Chunk::edge_length;
       const auto y_0 = static_cast<int>(j * Chunk::edge_length);
-      for (auto x = min_x; x != max_x; ++x) {
+      for (auto x = min.x(); x != max.x(); ++x) {
         const auto i = x / Chunk::edge_length;
         const auto x_0 = static_cast<int>(i * Chunk::edge_length);
         const auto chunk_index =
           detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
         auto &chunk = _chunks[chunk_index];
-        chunk.set_solid(normal, {x - x_0, y - y_0, z - z_0}, solid);
+        chunk.set_block({x - x_0, y - y_0, z - z_0}, solid);
       }
     }
-    break;
-  }
   }
 }
 
-bool Grid::is_solid(
-  Axis normal, const Eigen::Vector3i &cell_indices) const noexcept {
+bool Grid::is_solid(const Eigen::Vector3i &cell_indices) const noexcept {
   if (bounds_check_cell(cell_indices)) {
     const auto chunk_indices = (cell_indices / Chunk::edge_length).eval();
     const auto cell_offset = cell_indices - chunk_indices * Chunk::edge_length;
-    return get_chunk_unsafe(chunk_indices)->is_solid(normal, cell_offset);
+    return get_chunk_unsafe(chunk_indices)->is_solid(cell_offset);
   } else {
     return false;
   }

@@ -10,6 +10,7 @@
 #include <exception>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace fpsparty::game {
 namespace detail {
@@ -44,27 +45,24 @@ public:
 
   Chunk() noexcept = default;
 
-  constexpr Chunk(
-    std::uint64_t x_bits, std::uint64_t y_bits, std::uint64_t z_bits) noexcept
-      : bits{x_bits, y_bits, z_bits} {}
+  constexpr explicit Chunk(std::uint64_t blocks) noexcept : blocks{blocks} {}
 
-  constexpr bool
-  is_solid(Axis axis, const Eigen::Vector3i &offset) const noexcept {
+  constexpr bool is_solid(const Eigen::Vector3i &offset) const noexcept {
     const auto bit_index = get_bit_index(offset);
-    return bits[static_cast<int>(axis)] & (std::uint64_t{1} << bit_index);
+    return blocks & (std::uint64_t{1} << bit_index);
   }
 
   constexpr void
-  set_solid(Axis axis, const Eigen::Vector3i &offset, bool value) noexcept {
+  set_block(const Eigen::Vector3i &offset, bool value) noexcept {
     const auto bit_index = get_bit_index(offset);
     if (value) {
-      bits[static_cast<int>(axis)] |= (std::uint64_t{1} << bit_index);
+      blocks |= (std::uint64_t{1} << bit_index);
     } else {
-      bits[static_cast<int>(axis)] &= ~(std::uint64_t{1} << bit_index);
+      blocks &= ~(std::uint64_t{1} << bit_index);
     }
   }
 
-  std::array<std::uint64_t, 3> bits;
+  std::uint64_t blocks{};
 };
 
 template <typename T>
@@ -179,14 +177,9 @@ public:
 
   void dump(serial::Writer &writer) const;
 
-  void fill(
-    Axis normal,
-    int layer,
-    const Eigen::AlignedBox2i &bounds,
-    bool solid = true);
+  void fill(const Eigen::AlignedBox3i &bounds, bool solid = true);
 
-  bool
-  is_solid(Axis normal, const Eigen::Vector3i &cell_indices) const noexcept;
+  bool is_solid(const Eigen::Vector3i &cell_indices) const noexcept;
 
   Chunk *get_chunk(const Eigen::Vector3i &chunk_indices) noexcept;
 

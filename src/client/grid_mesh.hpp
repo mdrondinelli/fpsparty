@@ -7,6 +7,8 @@
 #include "graphics/work_done_callback.hpp"
 #include "graphics/work_recorder.hpp"
 #include "rc.hpp"
+#include <array>
+#include <cstdint>
 
 namespace fpsparty::client {
 struct Grid_mesh_create_info {
@@ -20,11 +22,8 @@ public:
 
   ~Grid_mesh();
 
-  void record_face_drawing_commands(
-    graphics::Work_recorder &recorder, game::Axis normal);
-
-  void record_edge_drawing_commands(
-    graphics::Work_recorder &recorder, game::Axis normal, client::Sign sign);
+  void record_draws(
+    graphics::Work_recorder &recorder, game::Axis normal_axis, client::Sign normal_sign);
 
   bool is_uploaded() const noexcept;
 
@@ -44,8 +43,7 @@ private:
   rc::Strong<graphics::Buffer> _index_buffer{};
   rc::Strong<graphics::Buffer> _draw_buffer{};
   rc::Strong<graphics::Work> _upload_work{};
-  std::array<Indirect_draw_info, 3> _indirect_face_draw_infos;
-  std::array<std::array<Indirect_draw_info, 2>, 3> _indirect_edge_draw_infos;
+  std::array<std::array<Indirect_draw_info, 2>, 3> _draw_infos;
 };
 } // namespace fpsparty::client
 

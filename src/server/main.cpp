@@ -13,6 +13,14 @@ using namespace fpsparty;
 namespace {
 volatile std::sig_atomic_t signal_status{};
 void handle_signal(int signal) { signal_status = signal; }
+
+void fill_blocks(
+  game::Server &server,
+  const Eigen::Vector3i &min,
+  const Eigen::Vector3i &max,
+  bool solid = true) {
+  server.get_game().get_grid().fill({min, max}, solid);
+}
 } // namespace
 
 int main() {
@@ -29,103 +37,23 @@ int main() {
     .tick_duration = constants::tick_duration,
   }};
   // green floor
-  server.get_game().get_grid().fill(
-    game::Axis::y,
-    0,
-    {
-      Eigen::Vector2i{0, 0},
-      Eigen::Vector2i{16, 16},
-    });
+  fill_blocks(server, {0, 0, 0}, {16, 1, 16});
   // bottom rims
-  server.get_game().get_grid().fill(
-    game::Axis::y,
-    1,
-    {
-      Eigen::Vector2i{3, 3},
-      Eigen::Vector2i{13, 13},
-    });
-  server.get_game().get_grid().fill(
-    game::Axis::y,
-    1,
-    {
-      Eigen::Vector2i{4, 4},
-      Eigen::Vector2i{12, 12},
-    },
-    false);
+  fill_blocks(server, {3, 1, 3}, {13, 2, 13});
+  fill_blocks(server, {4, 1, 4}, {12, 2, 12}, false);
   // top rims
-  server.get_game().get_grid().fill(
-    game::Axis::y,
-    2,
-    {
-      Eigen::Vector2i{3, 3},
-      Eigen::Vector2i{13, 13},
-    });
-  server.get_game().get_grid().fill(
-    game::Axis::y,
-    2,
-    {
-      Eigen::Vector2i{4, 4},
-      Eigen::Vector2i{12, 12},
-    },
-    false);
+  fill_blocks(server, {3, 2, 3}, {13, 3, 13});
+  fill_blocks(server, {4, 2, 4}, {12, 3, 12}, false);
   // red walls
-  server.get_game().get_grid().fill(
-    game::Axis::x,
-    4,
-    {
-      Eigen::Vector2i{0, 4},
-      Eigen::Vector2i{1, 12},
-    });
-  server.get_game().get_grid().fill(
-    game::Axis::x,
-    12,
-    {
-      Eigen::Vector2i{0, 4},
-      Eigen::Vector2i{1, 12},
-    });
-  server.get_game().get_grid().fill(
-    game::Axis::x,
-    4,
-    {
-      Eigen::Vector2i{2, 4},
-      Eigen::Vector2i{3, 12},
-    });
-  server.get_game().get_grid().fill(
-    game::Axis::x,
-    12,
-    {
-      Eigen::Vector2i{2, 4},
-      Eigen::Vector2i{3, 12},
-    });
+  fill_blocks(server, {4, 0, 4}, {5, 1, 12});
+  fill_blocks(server, {12, 0, 4}, {13, 1, 12});
+  fill_blocks(server, {4, 2, 4}, {5, 3, 12});
+  fill_blocks(server, {12, 2, 4}, {13, 3, 12});
   // blue walls
-  server.get_game().get_grid().fill(
-    game::Axis::z,
-    4,
-    {
-      Eigen::Vector2i{4, 0},
-      Eigen::Vector2i{12, 1},
-    });
-  server.get_game().get_grid().fill(
-    game::Axis::z,
-    12,
-    {
-      Eigen::Vector2i{4, 0},
-      Eigen::Vector2i{12, 1},
-    });
-  server.get_game().get_grid().fill(
-    game::Axis::z,
-    4,
-    {
-      Eigen::Vector2i{4, 2},
-      Eigen::Vector2i{12, 3},
-    });
-  server.get_game().get_grid().fill(
-    game::Axis::z,
-    12,
-    {
-      Eigen::Vector2i{4, 2},
-      Eigen::Vector2i{12, 3},
-    });
+  fill_blocks(server, {4, 0, 4}, {12, 1, 5});
+  fill_blocks(server, {4, 0, 12}, {12, 1, 13});
+  fill_blocks(server, {4, 2, 4}, {12, 3, 5});
+  fill_blocks(server, {4, 2, 12}, {12, 3, 13});
   std::cout << "Server running on port " << net::constants::port << ".\n";
   using Clock = std::chrono::high_resolution_clock;
   using Duration = Clock::duration;
