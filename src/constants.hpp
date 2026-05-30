@@ -4,7 +4,7 @@
 #include <cstddef>
 
 namespace fpsparty::constants {
-constexpr auto tick_rate = 64.0f;
+constexpr auto tick_rate = 32.0f;
 constexpr auto tick_duration = 1.0f / tick_rate;
 constexpr auto mouselook_sensititvity = 1.0f / 512.0f;
 } // namespace fpsparty::constants
