@@ -93,10 +93,20 @@ void Grid::fill(Eigen::AlignedBox3i const &bounds, bool solid) {
         auto const chunk_index =
           detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
         auto &chunk = _chunks[chunk_index];
-        chunk.set_block({x - x_0, y - y_0, z - z_0}, solid);
+        chunk.set_solid({x - x_0, y - y_0, z - z_0}, solid);
       }
     }
   }
+}
+
+void Grid::set_solid(
+  Eigen::Vector3i const &cell_indices, bool solid) noexcept {
+  if (!bounds_check_cell(cell_indices)) {
+    return;
+  }
+  auto const chunk_indices = (cell_indices / Chunk::edge_length).eval();
+  auto const cell_offset = cell_indices - chunk_indices * Chunk::edge_length;
+  get_chunk_unsafe(chunk_indices)->set_solid(cell_offset, solid);
 }
 
 bool Grid::is_solid(Eigen::Vector3i const &cell_indices) const noexcept {

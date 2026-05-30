@@ -59,7 +59,7 @@ public:
     return blocks & (std::uint64_t{1} << bit_index);
   }
 
-  constexpr void set_block(Eigen::Vector3i const &offset, bool value) noexcept {
+  constexpr void set_solid(Eigen::Vector3i const &offset, bool value) noexcept {
     auto const bit_index = get_bit_index(offset);
     if (value) {
       blocks |= (std::uint64_t{1} << bit_index);
@@ -184,6 +184,8 @@ public:
   void dump(serial::Writer &writer) const;
 
   void fill(Eigen::AlignedBox3i const &bounds, bool solid = true);
+
+  void set_solid(Eigen::Vector3i const &cell_indices, bool solid) noexcept;
 
   bool is_solid(Eigen::Vector3i const &cell_indices) const noexcept;
 

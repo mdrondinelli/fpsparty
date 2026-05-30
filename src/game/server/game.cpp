@@ -67,6 +67,18 @@ void Game::tick(float duration) {
       .initial_velocity = projectile->get_velocity(),
       .duration = duration,
     });
+    auto const projectile_cell_indices =
+      (movement_result.final_position / constants::grid_cell_stride)
+        .array()
+        .floor()
+        .matrix()
+        .cast<int>()
+        .eval();
+    if (_grid.is_solid(projectile_cell_indices)) {
+      _grid.set_solid(projectile_cell_indices, false);
+      _entities.remove(projectile);
+      continue;
+    }
     projectile->set_position(movement_result.final_position);
     projectile->set_velocity(movement_result.final_velocity);
   }
