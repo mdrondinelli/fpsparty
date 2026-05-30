@@ -235,7 +235,7 @@ rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {
   ZoneScoped;
   auto &frame_resource = _frame_resources[_frame_resource_index];
   auto &swapchain_image_release_semaphore =
-    _swapchain_image_release_semaphores.at(frame_resource.swapchain_image_index);
+    _swapchain_image_release_semaphores[frame_resource.swapchain_image_index];
   auto work_resource = detail::release_work_recorder(std::move(recorder));
   frame_resource.pending_work = _works.submit({
     .resource = &work_resource,
