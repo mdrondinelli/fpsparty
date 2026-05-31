@@ -60,6 +60,8 @@ protected:
     std::span<std::byte const> public_entity_state,
     std::span<std::byte const> player_entity_state);
 
+  void flush() noexcept;
+
 private:
   void handle_event(enet::Event const &e);
 

@@ -292,6 +292,11 @@ public:
     broadcast(channel_id, packet.release());
   }
 
+  void flush() const noexcept
+  {
+    enet_host_flush(_value);
+  }
+
 private:
   ENetHost *_value{};
 };

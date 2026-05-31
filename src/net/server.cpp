@@ -79,6 +79,8 @@ void Server::send_world_snapshot(
   peer.send(constants::world_snapshot_channel_id, std::move(packet));
 }
 
+void Server::flush() noexcept { _host->flush(); }
+
 std::size_t Server::get_peer_count() const noexcept { return _peers.size(); }
 
 std::pmr::vector<enet::Peer>
