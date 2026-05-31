@@ -7,7 +7,7 @@ add_compile_definitions(TRACY_ENABLE)
 # dependencies
 add_subdirectory(extern/glfw-3.4)
 add_subdirectory(extern/enet)
-add_subdirectory(extern/volk-1.4.304)
+add_subdirectory(extern/volk-1.4.350)
 add_subdirectory(extern/VulkanMemoryAllocator-3.3.0)
 add_subdirectory(extern/magic_enum-0.9.7)
 add_subdirectory(extern/Catch2-3.13.0)
@@ -172,6 +172,7 @@ target_include_directories(
   graphics
   SYSTEM
   PUBLIC
+  ${CMAKE_SOURCE_DIR}/extern/Vulkan-Headers/include
   ${CMAKE_SOURCE_DIR}/extern/eigen-3.4.0
 )
 target_include_directories(
