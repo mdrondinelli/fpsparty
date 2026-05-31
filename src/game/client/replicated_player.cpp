@@ -41,19 +41,16 @@ net::Input_state const &Replicated_player::get_input_state() const noexcept {
   return _input_state;
 }
 
-void Replicated_player::set_input_state(
-  net::Input_state const &value) noexcept {
-  _input_state = value;
-}
-
 std::optional<net::Sequence_number> const &
 Replicated_player::get_input_sequence_number() const noexcept {
   return _input_sequence_number;
 }
 
-void Replicated_player::set_input_sequence_number(
-  std::optional<net::Sequence_number> const &value) noexcept {
-  _input_sequence_number = value;
+void Replicated_player::set_input_state(
+  net::Input_state const &input_state,
+  std::optional<net::Sequence_number> const &input_sequence_number) noexcept {
+  _input_state = input_state;
+  _input_sequence_number = input_sequence_number;
 }
 
 Replicated_player_loader::Replicated_player_loader(
@@ -96,8 +93,7 @@ void Replicated_player_loader::load_entity(
       throw Replicated_player_load_error{};
     }
     player->set_humanoid(humanoid);
-    player->set_input_state(*input_state);
-    player->set_input_sequence_number(*input_sequence_number);
+    player->set_input_state(*input_state, *input_sequence_number);
   }
 }
 

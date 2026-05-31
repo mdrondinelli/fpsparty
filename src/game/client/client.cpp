@@ -24,12 +24,11 @@ void Client::service_game_state(float duration) {
     try {
       _tick_timer += _tick_duration;
       if (auto const player = get_player(); player && player->get_humanoid()) {
-        player->set_input_state(_current_input_state);
         net::Client::send_player_input_state(
           *_player_entity_id, _input_sequence_number, _current_input_state);
         _in_flight_input_states
           .emplace_back(_current_input_state, _input_sequence_number);
-        player->set_input_sequence_number(_input_sequence_number);
+        player->set_input_state(_current_input_state, _input_sequence_number);
         ++_input_sequence_number;
       }
       _game->tick(_tick_duration);
@@ -144,8 +143,7 @@ void Client::on_world_snapshot(
     }
     for (auto const &[input_state, input_sequence_number] :
          _in_flight_input_states) {
-      player->set_input_state(input_state);
-      player->set_input_sequence_number(input_sequence_number);
+      player->set_input_state(input_state, input_sequence_number);
       _game->tick(_tick_duration);
     }
   }

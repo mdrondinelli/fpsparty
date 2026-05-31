@@ -24,13 +24,12 @@ public:
 
   net::Input_state const &get_input_state() const noexcept;
 
-  void set_input_state(net::Input_state const &value) noexcept;
-
   std::optional<net::Sequence_number> const &
   get_input_sequence_number() const noexcept;
 
-  void set_input_sequence_number(
-    std::optional<net::Sequence_number> const &value) noexcept;
+  void set_input_state(
+    net::Input_state const &input_state,
+    std::optional<net::Sequence_number> const &input_sequence_number) noexcept;
 
 private:
   class Humanoid_remove_listener : public Entity_remove_listener {
