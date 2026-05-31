@@ -8,7 +8,12 @@
 
 namespace fpsparty::graphics {
 namespace {
-auto const vk_device_extensions = std::array{vk::KHRSwapchainExtensionName};
+auto const vk_device_extensions =
+  std::array{
+    vk::KHRSwapchainExtensionName,
+    vk::KHRMaintenance5ExtensionName,
+    vk::EXTDescriptorHeapExtensionName,
+  };
 
 vk::UniqueInstance make_vk_instance() {
   volkInitialize();
