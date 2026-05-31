@@ -30,6 +30,15 @@ struct Buffer_copy_info {
   std::size_t size;
 };
 
+struct Buffer_image_copy_info {
+  std::size_t src_offset;
+  std::uint32_t dst_mip_level;
+  std::uint32_t dst_base_array_layer;
+  std::uint32_t dst_array_layer_count;
+  Eigen::Vector3i dst_offset;
+  Eigen::Vector3i dst_extent;
+};
+
 struct Rendering_begin_info {
   rc::Strong<Image> color_image;
   rc::Strong<Image> depth_image{};
@@ -56,6 +65,11 @@ public:
     rc::Strong<Buffer const> src,
     rc::Strong<Buffer> dst,
     Buffer_copy_info const &info);
+
+  void copy_buffer_to_image(
+    rc::Strong<Buffer const> src,
+    rc::Strong<Image> dst,
+    Buffer_image_copy_info const &info);
 
   void barrier(
     Synchronization_scope const &src_scope,

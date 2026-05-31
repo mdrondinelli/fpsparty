@@ -33,6 +33,39 @@ void Work_recorder::copy_buffer(
   add_reference(std::move(dst));
 }
 
+void Work_recorder::copy_buffer_to_image(
+  rc::Strong<Buffer const> src,
+  rc::Strong<Image> dst,
+  Buffer_image_copy_info const &info) {
+  get_command_buffer().copyBufferToImage(
+    detail::get_buffer_vk_buffer(*src),
+    detail::get_image_vk_image(*dst),
+    vk::ImageLayout::eGeneral,
+    vk::BufferImageCopy{
+      .bufferOffset = static_cast<vk::DeviceSize>(info.src_offset),
+      .bufferRowLength = 0,
+      .bufferImageHeight = 0,
+      .imageSubresource =
+        {
+          .aspectMask =
+            detail::get_image_format_vk_image_aspect_flags(dst->get_format()),
+          .mipLevel = info.dst_mip_level,
+          .baseArrayLayer = info.dst_base_array_layer,
+          .layerCount = info.dst_array_layer_count,
+        },
+      .imageOffset =
+        vk::Offset3D{
+          info.dst_offset.x(), info.dst_offset.y(), info.dst_offset.z()},
+      .imageExtent =
+        vk::Extent3D{
+          static_cast<std::uint32_t>(info.dst_extent.x()),
+          static_cast<std::uint32_t>(info.dst_extent.y()),
+          static_cast<std::uint32_t>(info.dst_extent.z())},
+    });
+  add_reference(std::move(src));
+  add_reference(std::move(dst));
+}
+
 void Work_recorder::barrier(
   Synchronization_scope const &src_scope,
   Synchronization_scope const &dst_scope) {
