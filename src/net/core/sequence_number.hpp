@@ -4,7 +4,7 @@
 #include <cstdint>
 
 namespace fpsparty::net {
-using Sequence_number = std::uint64_t;
+using Sequence_number = std::int64_t;
 }
 
 #endif
