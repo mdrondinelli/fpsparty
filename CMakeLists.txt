@@ -67,6 +67,24 @@ add_executable(
 target_link_libraries(game-core-tests game-core Catch2::Catch2WithMain)
 add_test(NAME game-core-tests COMMAND game-core-tests)
 
+# libppm
+add_library(
+  ppm
+  src/ppm/ppm.cpp
+)
+target_include_directories(
+  ppm
+  PUBLIC
+  ${CMAKE_SOURCE_DIR}/src
+)
+
+add_executable(
+  ppm-tests
+  tests/ppm/ppm.cpp
+)
+target_link_libraries(ppm-tests ppm Catch2::Catch2WithMain)
+add_test(NAME ppm-tests COMMAND ppm-tests)
+
 # libgame-server
 add_library(
   game-server
@@ -192,13 +210,15 @@ target_include_directories(
 target_link_libraries(client enet tracy net game-client graphics)
 
 # compiler options
-set_property(TARGET net game-core game-core-tests game-server game-client server graphics client PROPERTY CXX_STANDARD 23)
-set_property(TARGET net game-core game-core-tests game-server game-client server graphics client PROPERTY CXX_STANDARD_REQUIRED ON)
-set_property(TARGET net game-core game-core-tests game-server game-client server graphics client PROPERTY CXX_EXTENSIONS OFF)
+set_property(TARGET net game-core game-core-tests ppm ppm-tests game-server game-client server graphics client PROPERTY CXX_STANDARD 23)
+set_property(TARGET net game-core game-core-tests ppm ppm-tests game-server game-client server graphics client PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET net game-core game-core-tests ppm ppm-tests game-server game-client server graphics client PROPERTY CXX_EXTENSIONS OFF)
 if (MSVC)
   target_compile_options(net PRIVATE /W4 /WX)
   target_compile_options(game-core PRIVATE /W4 /WX)
   target_compile_options(game-core-tests PRIVATE /W4 /WX)
+  target_compile_options(ppm PRIVATE /W4 /WX)
+  target_compile_options(ppm-tests PRIVATE /W4 /WX)
   target_compile_options(game-server PRIVATE /W4 /WX)
   target_compile_options(game-client PRIVATE /W4 /WX)
   target_compile_options(server PRIVATE /W4 /WX)
@@ -213,6 +233,8 @@ else()
   target_compile_options(net PRIVATE ${fpsparty_compile_options})
   target_compile_options(game-core PRIVATE ${fpsparty_compile_options})
   target_compile_options(game-core-tests PRIVATE ${fpsparty_compile_options})
+  target_compile_options(ppm PRIVATE ${fpsparty_compile_options})
+  target_compile_options(ppm-tests PRIVATE ${fpsparty_compile_options})
   target_compile_options(game-server PRIVATE ${fpsparty_compile_options})
   target_compile_options(game-client PRIVATE ${fpsparty_compile_options})
   target_compile_options(server PRIVATE ${fpsparty_compile_options})
@@ -226,6 +248,8 @@ else()
   target_link_options(net PRIVATE ${fpsparty_link_options})
   target_link_options(game-core PRIVATE ${fpsparty_link_options})
   target_link_options(game-core-tests PRIVATE ${fpsparty_link_options})
+  target_link_options(ppm PRIVATE ${fpsparty_link_options})
+  target_link_options(ppm-tests PRIVATE ${fpsparty_link_options})
   target_link_options(game-server PRIVATE ${fpsparty_link_options})
   target_link_options(game-client PRIVATE ${fpsparty_link_options})
   target_link_options(server PRIVATE ${fpsparty_link_options})
