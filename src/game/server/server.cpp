@@ -73,6 +73,7 @@ void Server::broadcast_game_state() {
           player_state_writer.stream().view().size(),
         }));
   }
+  net::Server::flush();
 }
 
 Game const &Server::get_game() const noexcept { return _game; }

@@ -85,6 +85,7 @@ void Client::send_player_input_state(
       .data = packet_writer.stream().view().data(),
       .data_length = packet_writer.stream().view().length(),
     }));
+  _host->flush();
 }
 
 void Client::handle_event(enet::Event const &e) {
