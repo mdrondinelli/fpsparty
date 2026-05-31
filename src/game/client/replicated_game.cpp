@@ -36,6 +36,7 @@ void Replicated_game::tick(float duration) {
     projectile->set_position(movement_result.final_position);
     projectile->set_velocity(movement_result.final_velocity);
   }
+  ++_tick_number;
 }
 
 void Replicated_game::load_grid(Replicated_game_grid_load_info const &info) {
@@ -76,7 +77,7 @@ Entity_world const &Replicated_game::get_entities() const noexcept {
 
 Entity_world &Replicated_game::get_entities() noexcept { return _entities; }
 
-std::uint64_t Replicated_game::get_tick_number() const noexcept {
+net::Sequence_number Replicated_game::get_tick_number() const noexcept {
   return _tick_number;
 }
 } // namespace fpsparty::game
