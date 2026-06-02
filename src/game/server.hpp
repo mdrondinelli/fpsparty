@@ -1,7 +1,7 @@
 #ifndef FPSPARTY_GAME_SERVER_HPP
 #define FPSPARTY_GAME_SERVER_HPP
 
-#include "game/server/game.hpp"
+#include "game/game.hpp"
 #include "net/server.hpp"
 
 namespace fpsparty::game {
@@ -36,7 +36,6 @@ protected:
   void on_player_input_state(
     enet::Peer peer,
     net::Entity_id player_entity_id,
-    net::Sequence_number input_sequence_number,
     net::Input_state const &input_state) override;
 
 private:

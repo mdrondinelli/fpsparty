@@ -1,6 +1,6 @@
 #include "entity_world.hpp"
 #include "algorithms/unordered_erase.hpp"
-#include "game/core/entity.hpp"
+#include "game/entity.hpp"
 #include "serial/serialize.hpp"
 #include <Eigen/Dense>
 #include <algorithm>

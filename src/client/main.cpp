@@ -2,8 +2,8 @@
 #include "client/grid_mesh.hpp"
 #include "constants.hpp"
 #include "enet.hpp"
-#include "game/client/client.hpp"
-#include "game/core/constants.hpp"
+#include "game/constants.hpp"
+#include "client/session.hpp"
 #include "glfw.hpp"
 #include "graphics/global_vulkan_state.hpp"
 #include "graphics/graphics.hpp"
@@ -139,19 +139,19 @@ auto const cube_mesh_indices = std::vector<std::uint16_t>{
   21,
 };
 
-class Client : public game::Client,
+class Client : public client::Session,
                glfw::Key_callback,
                glfw::Mouse_button_callback,
                glfw::Cursor_pos_callback {
 public:
   struct Create_info {
-    game::Client_create_info client_info;
+    client::Session_create_info session_info;
     glfw::Window glfw_window;
     vk::SurfaceKHR vk_surface;
   };
 
   explicit Client(Create_info const &create_info)
-      : game::Client{create_info.client_info},
+      : client::Session{create_info.session_info},
         _glfw_window{create_info.glfw_window},
         _vk_surface{create_info.vk_surface},
         _graphics{{
@@ -234,16 +234,13 @@ public:
     work_recorder.set_depth_test_enabled(true);
     work_recorder.set_depth_write_enabled(true);
     work_recorder.set_depth_compare_op(graphics::Compare_op::greater);
-    auto const game = get_game();
-    auto const player = game ? get_player() : nullptr;
-    auto const player_humanoid = player ? player->get_humanoid() : nullptr;
-    if (player_humanoid) {
+    auto const scene = get_scene();
+    auto const camera = get_camera_snapshot();
+    if (scene && camera) {
       auto const view_matrix =
-        (math::x_rotation_matrix(-get_current_input_state().pitch) *
-         math::y_rotation_matrix(-get_current_input_state().yaw) *
-         math::translation_matrix(-(
-           player_humanoid->get_position() +
-           Eigen::Vector3f::UnitY() * game::constants::humanoid_eye_height)))
+        (math::x_rotation_matrix(-camera->pitch) *
+         math::y_rotation_matrix(-camera->yaw) *
+         math::translation_matrix(-camera->position))
           .eval();
       auto const aspect_ratio =
         static_cast<float>(swapchain_image->get_extent().x()) /
@@ -321,41 +318,14 @@ public:
         graphics::Shader_stage_flag_bits::vertex,
         64,
         _cube_vertex_buffer);
-      // draw other players (cubes)
-      for (auto const &other_humanoid :
-           game->get_entities()
-             .get_entities_of_type<game::Replicated_humanoid>()) {
-        if (other_humanoid != player_humanoid) {
-          auto const model_matrix =
-            (math::translation_matrix(
-               other_humanoid->get_position() +
-               Eigen::Vector3f::UnitY() * 0.9f) *
-             math::y_rotation_matrix(other_humanoid->get_input_state().yaw) *
-             math::axis_aligned_scale_matrix({0.7f, 1.8f, 0.7f}))
-              .eval();
-          auto const model_view_projection_matrix =
-            (view_projection_matrix * model_matrix).eval();
-          work_recorder.push_constants(
-            _mesh_pipeline->get_layout(),
-            graphics::Shader_stage_flag_bits::vertex,
-            0,
-            std::as_bytes(std::span{&model_view_projection_matrix, 1}));
-          work_recorder.draw_indexed({
-            .index_count = static_cast<std::uint32_t>(cube_mesh_indices.size()),
-            .instance_count = 1,
-            .first_index = 0,
-            .vertex_offset = 0,
-            .first_instance = 0,
-          });
-        }
-      }
-      // draw projectiles (cubes)
-      for (auto const &projectile :
-           game->get_entities()
-             .get_entities_of_type<game::Replicated_projectile>()) {
+      for (auto const &instance : scene->get_mesh_instances()) {
+        auto rotation_matrix = Eigen::Matrix4f{Eigen::Matrix4f::Identity()};
+        rotation_matrix.block<3, 3>(0, 0) =
+          instance.orientation.toRotationMatrix();
         auto const model_matrix =
-          (math::translation_matrix(projectile->get_position()) *
-           math::uniform_scale_matrix(0.25f))
+          (math::translation_matrix(instance.position) *
+           rotation_matrix *
+           math::axis_aligned_scale_matrix(instance.scale))
             .eval();
         auto const model_view_projection_matrix =
           (view_projection_matrix * model_matrix).eval();
@@ -384,7 +354,7 @@ protected:
     _pending_grid_mesh =
       std::make_unique<client::Grid_mesh>(client::Grid_mesh_create_info{
         .graphics = &_graphics,
-        .grid = &get_game()->get_grid(),
+        .grid = &get_scene()->get_grid(),
       });
   }
 
@@ -392,7 +362,7 @@ protected:
     glfw::Window, glfw::Key key, int, glfw::Press_action action, int) override {
     if (key == glfw::Key::k_escape && action == glfw::Press_action::press) {
       _glfw_window.set_cursor_input_mode(glfw::Cursor_input_mode::normal);
-    } else if (has_game_state()) {
+    } else if (has_scene()) {
       auto input_state = get_current_input_state();
       switch (key) {
       case glfw::Key::k_w:
@@ -425,7 +395,7 @@ protected:
     glfw::Mouse_button button,
     glfw::Press_state action,
     int) override {
-    if (has_game_state()) {
+    if (has_scene()) {
       auto input_state = get_current_input_state();
       if (button == glfw::Mouse_button::mb_left) {
         input_state.use_primary = action != glfw::Press_state::release;
@@ -444,8 +414,8 @@ protected:
   void on_cursor_pos(
     glfw::Window, double, double, double dxpos, double dypos) override {
     if (
-      has_game_state() && _glfw_window.get_cursor_input_mode() ==
-                            glfw::Cursor_input_mode::disabled) {
+      has_scene() && _glfw_window.get_cursor_input_mode() ==
+                       glfw::Cursor_input_mode::disabled) {
       auto input_state = get_current_input_state();
       input_state.yaw -=
         static_cast<float>(dxpos * constants::mouselook_sensititvity);
@@ -657,7 +627,7 @@ int main() {
   auto const vulkan_guard = graphics::Global_vulkan_state_guard{{}};
   auto const vk_surface = make_vk_surface(*glfw_window);
   auto client = Client{{
-    .client_info =
+    .session_info =
       {
         .tick_duration = constants::tick_duration,
       },
@@ -677,8 +647,8 @@ int main() {
   while (!signal_status && !client.get_window().should_close()) {
     client.poll_events();
     glfw::poll_events();
-    if (client.has_game_state()) {
-      client.service_game_state(
+    if (client.has_scene()) {
+      client.service_input_tick(
         std::chrono::duration_cast<std::chrono::duration<float>>(loop_duration)
           .count());
     } else if (!client.is_connecting() && !client.is_connected()) {

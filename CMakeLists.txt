@@ -37,35 +37,71 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/src
 )
 
-# libgame-core
+# libgame
 add_library(
-  game-core
-  src/game/core/grid.cpp
-  src/game/core/entity.cpp
-  src/game/core/entity_world.cpp
-  src/game/core/humanoid_movement.cpp
-  src/game/core/projectile_movement.cpp
+  game
+  src/game/grid.cpp
+  src/game/entity.cpp
+  src/game/entity_world.cpp
+  src/game/humanoid_movement.cpp
+  src/game/projectile_movement.cpp
+  src/game/game.cpp
+  src/game/humanoid.cpp
+  src/game/player.cpp
+  src/game/projectile.cpp
+  src/game/server.cpp
 )
 target_include_directories(
-  game-core
+  game
   SYSTEM
   PUBLIC
   ${CMAKE_SOURCE_DIR}/extern/eigen-3.4.0
   ${CMAKE_SOURCE_DIR}/extern/magic_enum-0.9.7/include
 )
 target_include_directories(
-  game-core
+  game
   PUBLIC
   ${CMAKE_SOURCE_DIR}/src
 )
-target_compile_definitions(game-core PUBLIC FPSPARTY_SERIAL_EIGEN)
+target_compile_definitions(game PUBLIC FPSPARTY_SERIAL_EIGEN)
+target_link_libraries(game net)
+
+# libscene
+add_library(
+  scene
+  src/scene/scene.cpp
+)
+target_include_directories(
+  scene
+  PUBLIC
+  ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(scene game)
+
+# libclient-session
+add_library(
+  client-session
+  src/client/session.cpp
+)
+target_include_directories(
+  client-session
+  PUBLIC
+  ${CMAKE_SOURCE_DIR}/src
+)
+target_include_directories(
+  client-session
+  SYSTEM
+  PRIVATE
+  ${CMAKE_SOURCE_DIR}/extern/tracy-0.12.2
+)
+target_link_libraries(client-session game scene net)
 
 add_executable(
-  game-core-tests
-  tests/game/core/grid_raycast.cpp
+  game-tests
+  tests/game/grid_raycast.cpp
 )
-target_link_libraries(game-core-tests game-core Catch2::Catch2WithMain)
-add_test(NAME game-core-tests COMMAND game-core-tests)
+target_link_libraries(game-tests game Catch2::Catch2WithMain)
+add_test(NAME game-tests COMMAND game-tests)
 
 # libppm
 add_library(
@@ -85,44 +121,6 @@ add_executable(
 target_link_libraries(ppm-tests ppm Catch2::Catch2WithMain)
 add_test(NAME ppm-tests COMMAND ppm-tests)
 
-# libgame-server
-add_library(
-  game-server
-  src/game/server/game.cpp
-  src/game/server/humanoid.cpp
-  src/game/server/player.cpp
-  src/game/server/projectile.cpp
-  src/game/server/server.cpp
-)
-target_include_directories(
-  game-server
-  PUBLIC
-  ${CMAKE_SOURCE_DIR}/src
-)
-target_link_libraries(game-server game-core net)
-
-# libgame-client
-add_library(
-  game-client
-  src/game/client/client.cpp
-  src/game/client/replicated_game.cpp
-  src/game/client/replicated_player.cpp
-  src/game/client/replicated_humanoid.cpp
-  src/game/client/replicated_projectile.cpp
-)
-target_include_directories(
-  game-client
-  PUBLIC
-  ${CMAKE_SOURCE_DIR}/src
-)
-target_include_directories(
-  game-client
-  SYSTEM
-  PRIVATE
-  ${CMAKE_SOURCE_DIR}/extern/tracy-0.12.2
-)
-target_link_libraries(game-client game-core net)
-
 # server
 add_executable(
   server
@@ -139,7 +137,7 @@ target_include_directories(
   PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
-target_link_libraries(server enet game-server net)
+target_link_libraries(server enet game net)
 
 # libgraphics
 add_library(
@@ -208,20 +206,20 @@ target_include_directories(
   PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
-target_link_libraries(client enet tracy net game-client graphics)
+target_link_libraries(client enet tracy net client-session graphics)
 
 # compiler options
-set_property(TARGET net game-core game-core-tests ppm ppm-tests game-server game-client server graphics client PROPERTY CXX_STANDARD 23)
-set_property(TARGET net game-core game-core-tests ppm ppm-tests game-server game-client server graphics client PROPERTY CXX_STANDARD_REQUIRED ON)
-set_property(TARGET net game-core game-core-tests ppm ppm-tests game-server game-client server graphics client PROPERTY CXX_EXTENSIONS OFF)
+set_property(TARGET net game scene client-session game-tests ppm ppm-tests server graphics client PROPERTY CXX_STANDARD 23)
+set_property(TARGET net game scene client-session game-tests ppm ppm-tests server graphics client PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET net game scene client-session game-tests ppm ppm-tests server graphics client PROPERTY CXX_EXTENSIONS OFF)
 if (MSVC)
   target_compile_options(net PRIVATE /W4 /WX)
-  target_compile_options(game-core PRIVATE /W4 /WX)
-  target_compile_options(game-core-tests PRIVATE /W4 /WX)
+  target_compile_options(game PRIVATE /W4 /WX)
+  target_compile_options(scene PRIVATE /W4 /WX)
+  target_compile_options(client-session PRIVATE /W4 /WX)
+  target_compile_options(game-tests PRIVATE /W4 /WX)
   target_compile_options(ppm PRIVATE /W4 /WX)
   target_compile_options(ppm-tests PRIVATE /W4 /WX)
-  target_compile_options(game-server PRIVATE /W4 /WX)
-  target_compile_options(game-client PRIVATE /W4 /WX)
   target_compile_options(server PRIVATE /W4 /WX)
   target_compile_options(graphics PRIVATE /W4 /WX)
   target_compile_options(client PRIVATE /W4 /WX)
@@ -232,12 +230,12 @@ else()
   target_compile_options(Catch2WithMain PRIVATE ${extern_compile_options})
   set(fpsparty_compile_options -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
   target_compile_options(net PRIVATE ${fpsparty_compile_options})
-  target_compile_options(game-core PRIVATE ${fpsparty_compile_options})
-  target_compile_options(game-core-tests PRIVATE ${fpsparty_compile_options})
+  target_compile_options(game PRIVATE ${fpsparty_compile_options})
+  target_compile_options(scene PRIVATE ${fpsparty_compile_options})
+  target_compile_options(client-session PRIVATE ${fpsparty_compile_options})
+  target_compile_options(game-tests PRIVATE ${fpsparty_compile_options})
   target_compile_options(ppm PRIVATE ${fpsparty_compile_options})
   target_compile_options(ppm-tests PRIVATE ${fpsparty_compile_options})
-  target_compile_options(game-server PRIVATE ${fpsparty_compile_options})
-  target_compile_options(game-client PRIVATE ${fpsparty_compile_options})
   target_compile_options(server PRIVATE ${fpsparty_compile_options})
   target_compile_options(graphics PRIVATE ${fpsparty_compile_options})
   target_compile_options(client PRIVATE ${fpsparty_compile_options})
@@ -247,12 +245,12 @@ else()
   target_link_options(Catch2WithMain PRIVATE ${extern_link_options})
   set(fpsparty_link_options -stdlib=libc++ -lc++abi)
   target_link_options(net PRIVATE ${fpsparty_link_options})
-  target_link_options(game-core PRIVATE ${fpsparty_link_options})
-  target_link_options(game-core-tests PRIVATE ${fpsparty_link_options})
+  target_link_options(game PRIVATE ${fpsparty_link_options})
+  target_link_options(scene PRIVATE ${fpsparty_link_options})
+  target_link_options(client-session PRIVATE ${fpsparty_link_options})
+  target_link_options(game-tests PRIVATE ${fpsparty_link_options})
   target_link_options(ppm PRIVATE ${fpsparty_link_options})
   target_link_options(ppm-tests PRIVATE ${fpsparty_link_options})
-  target_link_options(game-server PRIVATE ${fpsparty_link_options})
-  target_link_options(game-client PRIVATE ${fpsparty_link_options})
   target_link_options(server PRIVATE ${fpsparty_link_options})
   target_link_options(graphics PRIVATE ${fpsparty_link_options})
   target_link_options(client PRIVATE ${fpsparty_link_options})

@@ -4,7 +4,6 @@
 #include "enet.hpp"
 #include "net/core/entity_id.hpp"
 #include "net/core/input_state.hpp"
-#include "net/core/sequence_number.hpp"
 #include "serial/span_reader.hpp"
 
 namespace fpsparty::net {
@@ -35,7 +34,6 @@ public:
 
   void send_player_input_state(
     net::Entity_id player_entity_id,
-    net::Sequence_number input_sequence_number,
     net::Input_state const &input_state);
 
 protected:
@@ -46,7 +44,6 @@ protected:
   virtual void on_player_join_response(net::Entity_id player_entity_id);
 
   virtual void on_world_snapshot(
-    net::Sequence_number tick_number,
     serial::Span_reader &grid_state_reader,
     serial::Span_reader &public_entity_state_reader,
     serial::Span_reader &player_entity_state_reader);

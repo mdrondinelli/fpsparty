@@ -1,13 +1,12 @@
-#ifndef FPSPARTY_GAME_SERVER_GAME_HPP
-#define FPSPARTY_GAME_SERVER_GAME_HPP
+#ifndef FPSPARTY_GAME_GAME_HPP
+#define FPSPARTY_GAME_GAME_HPP
 
-#include "game/core/entity_world.hpp"
-#include "game/core/grid.hpp"
-#include "game/server/humanoid.hpp"
-#include "game/server/player.hpp"
-#include "game/server/projectile.hpp"
+#include "game/entity_world.hpp"
+#include "game/grid.hpp"
+#include "game/humanoid.hpp"
+#include "game/player.hpp"
+#include "game/projectile.hpp"
 #include "net/core/entity_id.hpp"
-#include "net/core/sequence_number.hpp"
 
 namespace fpsparty::game {
 struct Game_create_info {
@@ -29,8 +28,6 @@ public:
   Entity_owner<Projectile>
   create_projectile(Projectile_create_info const &info);
 
-  net::Sequence_number get_tick_number() const noexcept;
-
   Grid const &get_grid() const noexcept;
 
   Grid &get_grid() noexcept;
@@ -46,7 +43,6 @@ private:
   Grid _grid;
   Entity_world _entities{};
   net::Entity_id _next_entity_id{1};
-  net::Sequence_number _tick_number{};
 };
 } // namespace fpsparty::game
 

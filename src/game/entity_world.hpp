@@ -1,7 +1,7 @@
 #ifndef FPSPARTY_GAME_ENTITY_WORLD_HPP
 #define FPSPARTY_GAME_ENTITY_WORLD_HPP
 
-#include "game/core/entity.hpp"
+#include "game/entity.hpp"
 #include "serial/reader.hpp"
 #include "serial/writer.hpp"
 #include <concepts>

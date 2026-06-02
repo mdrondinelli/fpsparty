@@ -4,7 +4,6 @@
 #include "enet.hpp"
 #include "net/core/entity_id.hpp"
 #include "net/core/input_state.hpp"
-#include "net/core/sequence_number.hpp"
 #include <cstdint>
 #include <memory_resource>
 #include <vector>
@@ -48,14 +47,12 @@ protected:
   virtual void on_player_input_state(
     enet::Peer peer,
     Entity_id player_entity_id,
-    Sequence_number input_sequence_number,
     net::Input_state const &input_state);
 
   void send_player_join_response(enet::Peer peer, Entity_id player_entity_id);
 
   void send_world_snapshot(
     enet::Peer peer,
-    Sequence_number tick_number,
     std::span<std::byte const> grid_state,
     std::span<std::byte const> public_entity_state,
     std::span<std::byte const> player_entity_state);

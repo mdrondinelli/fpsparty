@@ -1,7 +1,7 @@
 #include "server.hpp"
-#include "game/server/humanoid.hpp"
-#include "game/server/player.hpp"
-#include "game/server/projectile.hpp"
+#include "game/humanoid.hpp"
+#include "game/player.hpp"
+#include "game/projectile.hpp"
 #include "serial/ostream_writer.hpp"
 #include <iostream>
 
@@ -56,7 +56,6 @@ void Server::broadcast_game_state() {
     }
     net::Server::send_world_snapshot(
       peer,
-      _game.get_tick_number(),
       std::as_bytes(
         std::span{
           grid_state_writer.stream().view().data(),
@@ -124,12 +123,11 @@ void Server::on_player_leave_request(
 void Server::on_player_input_state(
   enet::Peer peer,
   net::Entity_id player_entity_id,
-  net::Sequence_number input_sequence_number,
   net::Input_state const &input_state) {
   auto const peer_node = static_cast<Peer_node *>(peer.get_data());
   for (auto const &player : peer_node->players) {
     if (player->get_entity_id() == player_entity_id) {
-      player->set_input_state(input_state, input_sequence_number);
+      player->set_input_state(input_state);
     }
   }
 }

@@ -1,10 +1,9 @@
 #include "game.hpp"
-#include "game/core/constants.hpp"
-#include "game/core/humanoid_movement.hpp"
-#include "game/core/projectile_movement.hpp"
-#include "game/server/player.hpp"
+#include "game/constants.hpp"
+#include "game/humanoid_movement.hpp"
+#include "game/projectile_movement.hpp"
+#include "game/player.hpp"
 #include "math/transformation_matrices.hpp"
-#include "net/core/sequence_number.hpp"
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
@@ -153,7 +152,6 @@ void Game::tick(float duration) {
       _entities.remove(projectile);
     }
   }
-  ++_tick_number;
 }
 
 Entity_owner<Player> Game::create_player(Player_create_info const &info) {
@@ -167,10 +165,6 @@ Entity_owner<Humanoid> Game::create_humanoid(Humanoid_create_info const &info) {
 Entity_owner<Projectile>
 Game::create_projectile(Projectile_create_info const &info) {
   return _projectile_factory.create(_next_entity_id++, info);
-}
-
-net::Sequence_number Game::get_tick_number() const noexcept {
-  return _tick_number;
 }
 
 Grid const &Game::get_grid() const noexcept { return _grid; }

@@ -1,5 +1,5 @@
 #include "humanoid_movement.hpp"
-#include "game/core/constants.hpp"
+#include "game/constants.hpp"
 #include "math/transformation_matrices.hpp"
 
 namespace fpsparty::game {

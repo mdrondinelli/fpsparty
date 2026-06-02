@@ -1,8 +1,8 @@
 #ifndef FPSPARTY_GAME_PROJECTILE_HPP
 #define FPSPARTY_GAME_PROJECTILE_HPP
 
-#include "game/core/entity.hpp"
-#include "game/server/humanoid.hpp"
+#include "game/entity.hpp"
+#include "game/humanoid.hpp"
 #include "net/core/entity_id.hpp"
 #include <Eigen/Dense>
 

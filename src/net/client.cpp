@@ -70,14 +70,12 @@ void Client::send_player_leave_request(net::Entity_id player_entity_id) {
 
 void Client::send_player_input_state(
   net::Entity_id player_entity_id,
-  net::Sequence_number input_sequence_number,
   net::Input_state const &input_state) {
   auto packet_writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<net::Message_type>(
     packet_writer, net::Message_type::player_input_state);
   serialize<net::Entity_id>(packet_writer, player_entity_id);
-  serialize<net::Sequence_number>(packet_writer, input_sequence_number);
   serialize<net::Input_state>(packet_writer, input_state);
   _server.send(
     constants::player_input_state_channel_id,
@@ -119,11 +117,6 @@ void Client::handle_event(enet::Event const &e) {
       return;
     }
     case Message_type::world_snapshot: {
-      auto const tick_number = deserialize<net::Sequence_number>(reader);
-      if (!tick_number) {
-        std::cerr << "Failed to deserialize tick_number.\n";
-        goto malformed_message;
-      }
       auto const grid_state_size = deserialize<std::uint32_t>(reader);
       if (!grid_state_size) {
         std::cerr << "Failed to deserialize grid_state_size.\n";
@@ -133,6 +126,12 @@ void Client::handle_event(enet::Event const &e) {
         deserialize<std::uint32_t>(reader);
       if (!public_entity_state_size) {
         std::cerr << "Failed to deserialize public_entity_state_size.\n";
+        goto malformed_message;
+      }
+      auto const player_entity_state_size =
+        deserialize<std::uint32_t>(reader);
+      if (!player_entity_state_size) {
+        std::cerr << "Failed to deserialize player_entity_state_size.\n";
         goto malformed_message;
       }
       auto grid_state_reader =
@@ -148,13 +147,13 @@ void Client::handle_event(enet::Event const &e) {
         goto malformed_message;
       }
       auto player_entity_state_reader = reader.subspan_reader(
-        reader.offset() + *grid_state_size + *public_entity_state_size);
+        reader.offset() + *grid_state_size + *public_entity_state_size,
+        *player_entity_state_size);
       if (!player_entity_state_reader) {
         std::cerr << "Failed to obtain player_entity_state_reader.\n";
         goto malformed_message;
       }
       on_world_snapshot(
-        *tick_number,
         *grid_state_reader,
         *public_entity_state_reader,
         *player_entity_state_reader);
@@ -182,7 +181,6 @@ void Client::on_disconnect() {}
 void Client::on_player_join_response(net::Entity_id) {}
 
 void Client::on_world_snapshot(
-  net::Sequence_number,
   serial::Span_reader &,
   serial::Span_reader &,
   serial::Span_reader &) {}

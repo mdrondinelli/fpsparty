@@ -1,8 +1,8 @@
 #ifndef FPSPARTY_GAME_HUMANOID_HPP
 #define FPSPARTY_GAME_HUMANOID_HPP
 
-#include "game/core/entity.hpp"
-#include "game/core/entity_world.hpp"
+#include "game/entity.hpp"
+#include "game/entity_world.hpp"
 #include "net/core/entity_id.hpp"
 #include "net/core/input_state.hpp"
 #include <Eigen/Dense>

@@ -1,6 +1,5 @@
 #include "player.hpp"
 #include "net/core/entity_id.hpp"
-#include "net/core/sequence_number.hpp"
 
 namespace fpsparty::game {
 Player::Humanoid_remove_listener::Humanoid_remove_listener(
@@ -24,7 +23,6 @@ void Player::set_humanoid(Humanoid *value) noexcept {
   }
   _humanoid = value;
   _input_state = {};
-  _input_sequence_number = std::nullopt;
   if (_humanoid) {
     _humanoid->add_remove_listener(&_humanoid_remove_listener);
   }
@@ -34,20 +32,8 @@ net::Input_state const &Player::get_input_state() const noexcept {
   return _input_state;
 }
 
-std::optional<net::Sequence_number>
-Player::get_input_sequence_number() const noexcept {
-  return _input_sequence_number;
-}
-
-void Player::set_input_state(
-  net::Input_state const &input_state,
-  net::Sequence_number input_sequence_number) noexcept {
-  if (
-    !_input_sequence_number ||
-    input_sequence_number > *_input_sequence_number) {
-    _input_state = input_state;
-    _input_sequence_number = input_sequence_number;
-  }
+void Player::set_input_state(net::Input_state const &input_state) noexcept {
+  _input_state = input_state;
 }
 
 Entity_type Player_dumper::get_entity_type() const noexcept {
@@ -61,11 +47,6 @@ void Player_dumper::dump_entity(
     auto const humanoid = player->get_humanoid();
     auto const humanoid_entity_id = humanoid ? humanoid->get_entity_id() : 0;
     serialize<net::Entity_id>(writer, humanoid_entity_id);
-    if (humanoid_entity_id) {
-      serialize<net::Input_state>(writer, player->get_input_state());
-      serialize<std::optional<net::Sequence_number>>(
-        writer, player->get_input_sequence_number());
-    }
   }
 }
 } // namespace fpsparty::game

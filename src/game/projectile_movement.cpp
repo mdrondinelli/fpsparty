@@ -1,5 +1,5 @@
 #include "projectile_movement.hpp"
-#include "game/core/constants.hpp"
+#include "game/constants.hpp"
 
 namespace fpsparty::game {
 Projectile_movement_simulation_result simulate_projectile_movement(

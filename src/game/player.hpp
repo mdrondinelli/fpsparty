@@ -1,13 +1,11 @@
 #ifndef FPSPARTY_GAME_PLAYER_HPP
 #define FPSPARTY_GAME_PLAYER_HPP
 
-#include "game/core/entity.hpp"
-#include "game/core/entity_world.hpp"
-#include "game/server/humanoid.hpp"
+#include "game/entity.hpp"
+#include "game/entity_world.hpp"
+#include "game/humanoid.hpp"
 #include "net/core/entity_id.hpp"
 #include "net/core/input_state.hpp"
-#include "net/core/sequence_number.hpp"
-#include <optional>
 
 namespace fpsparty::game {
 struct Player_create_info {};
@@ -25,12 +23,7 @@ public:
 
   net::Input_state const &get_input_state() const noexcept;
 
-  std::optional<net::Sequence_number>
-  get_input_sequence_number() const noexcept;
-
-  void set_input_state(
-    net::Input_state const &input_state,
-    net::Sequence_number input_sequence_number) noexcept;
+  void set_input_state(net::Input_state const &input_state) noexcept;
 
 private:
   class Humanoid_remove_listener : public Entity_remove_listener {
@@ -46,7 +39,6 @@ private:
   Humanoid *_humanoid{};
   Humanoid_remove_listener _humanoid_remove_listener;
   net::Input_state _input_state{};
-  std::optional<net::Sequence_number> _input_sequence_number{};
 };
 
 class Player_dumper : public Entity_dumper {

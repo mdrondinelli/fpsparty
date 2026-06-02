@@ -1,32 +1,39 @@
-#ifndef FPSPARTY_GAME_CLIENT_CLIENT_HPP
-#define FPSPARTY_GAME_CLIENT_CLIENT_HPP
+#ifndef FPSPARTY_CLIENT_SESSION_HPP
+#define FPSPARTY_CLIENT_SESSION_HPP
 
-#include "game/client/replicated_game.hpp"
 #include "net/client.hpp"
 #include "net/core/entity_id.hpp"
 #include "net/core/input_state.hpp"
+#include "scene/scene.hpp"
+#include <Eigen/Dense>
 #include <cstddef>
 #include <optional>
 #include <vector>
 
-namespace fpsparty::game {
-struct Client_create_info {
+namespace fpsparty::client {
+struct Session_create_info {
   std::uint32_t incoming_bandwidth{};
   std::uint32_t outgoing_bandwidth{};
   float tick_duration;
 };
 
-class Client : net::Client {
+struct Camera_snapshot {
+  Eigen::Vector3f position{};
+  float yaw{};
+  float pitch{};
+};
+
+class Session : net::Client {
 public:
-  explicit Client(Client_create_info const &info);
+  explicit Session(Session_create_info const &info);
 
-  Client(Client const &other) = delete;
+  Session(Session const &other) = delete;
 
-  Client &operator=(Client const &other) = delete;
+  Session &operator=(Session const &other) = delete;
 
-  void service_game_state(float duration);
+  void service_input_tick(float duration);
 
-  bool has_game_state() const noexcept;
+  bool has_scene() const noexcept;
 
   void poll_events();
 
@@ -42,6 +49,12 @@ public:
 
   void set_current_input_state(net::Input_state const &value) noexcept;
 
+  scene::Scene *get_scene() noexcept;
+
+  scene::Scene const *get_scene() const noexcept;
+
+  std::optional<Camera_snapshot> const &get_camera_snapshot() const noexcept;
+
 protected:
   void on_connect() override;
 
@@ -52,28 +65,24 @@ protected:
   virtual void on_update_grid();
 
   void on_world_snapshot(
-    net::Sequence_number tick_number,
     serial::Span_reader &grid_state_reader,
     serial::Span_reader &public_entity_state_reader,
     serial::Span_reader &player_entity_state_reader) override;
 
-  Replicated_game *get_game() noexcept;
-
-  Replicated_game const *get_game() const noexcept;
-
-  Replicated_player *get_player() const noexcept;
-
 private:
-  std::optional<Replicated_game> _game{};
+  void load_player_entity_state(serial::Reader &reader);
+
+  void load_public_entity_state(serial::Reader &reader);
+
+  std::optional<scene::Scene> _scene{};
   std::optional<net::Entity_id> _player_entity_id{};
-  net::Sequence_number _input_sequence_number{};
-  std::vector<std::pair<net::Input_state, net::Sequence_number>>
-    _in_flight_input_states{};
+  std::optional<net::Entity_id> _local_humanoid_entity_id{};
+  std::optional<Camera_snapshot> _camera_snapshot{};
   std::vector<std::byte> _last_grid_state_payload{};
   net::Input_state _current_input_state{};
   float _tick_duration{};
   float _tick_timer{};
 };
-} // namespace fpsparty::game
+} // namespace fpsparty::client
 
 #endif

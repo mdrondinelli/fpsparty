@@ -1,7 +1,7 @@
 #ifndef FPSPARTY_GAME_ENTITY_HPP
 #define FPSPARTY_GAME_ENTITY_HPP
 
-#include "game/core/entity_type.hpp"
+#include "game/entity_type.hpp"
 #include "net/core/entity_id.hpp"
 #include <concepts>
 #include <cstddef>

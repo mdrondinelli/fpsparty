@@ -1,4 +1,4 @@
-#include "game/core/grid.hpp"
+#include "game/grid.hpp"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 

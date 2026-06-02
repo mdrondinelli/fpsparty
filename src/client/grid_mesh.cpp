@@ -1,7 +1,7 @@
 #include "grid_mesh.hpp"
 #include "client/grid_vertex.hpp"
-#include "game/core/constants.hpp"
-#include "game/core/grid.hpp"
+#include "game/constants.hpp"
+#include "game/grid.hpp"
 #include "serial/span_writer.hpp"
 #include <array>
 #include <cassert>
