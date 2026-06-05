@@ -4,7 +4,10 @@
 #include <cstdint>
 
 namespace fpsparty::net {
+
+// 0 is reserved to represent no entity.
 using Entity_id = std::uint32_t;
+
 }
 
 #endif
