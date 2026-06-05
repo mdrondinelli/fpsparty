@@ -9,6 +9,7 @@
 #include <iostream>
 
 namespace fpsparty::net {
+
 Client::Client(Client_create_info const &create_info)
     : _host{enet::make_client_host_unique(
         {.max_channels = constants::max_channels,
@@ -174,14 +175,4 @@ void Client::handle_event(enet::Event const &e) {
   }
 }
 
-void Client::on_connect() {}
-
-void Client::on_disconnect() {}
-
-void Client::on_player_join_response(net::Entity_id) {}
-
-void Client::on_world_snapshot(
-  serial::Span_reader &,
-  serial::Span_reader &,
-  serial::Span_reader &) {}
 } // namespace fpsparty::net

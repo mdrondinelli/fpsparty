@@ -37,16 +37,16 @@ public:
     net::Input_state const &input_state);
 
 protected:
-  virtual void on_connect();
+  virtual void on_connect() = 0;
 
-  virtual void on_disconnect();
+  virtual void on_disconnect() = 0;
 
-  virtual void on_player_join_response(net::Entity_id player_entity_id);
+  virtual void on_player_join_response(net::Entity_id player_entity_id) = 0;
 
   virtual void on_world_snapshot(
     serial::Span_reader &grid_state_reader,
     serial::Span_reader &public_entity_state_reader,
-    serial::Span_reader &player_entity_state_reader);
+    serial::Span_reader &player_entity_state_reader) = 0;
 
 private:
   void handle_event(enet::Event const &e);
