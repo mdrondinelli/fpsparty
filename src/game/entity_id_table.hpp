@@ -30,6 +30,10 @@ public:
       constexpr bool empty() const noexcept {
         return key == 0;
       }
+
+      constexpr void reset() noexcept {
+        key = 0;
+      }
     };
 
     constexpr Hash_table() noexcept = default;
@@ -98,6 +102,36 @@ public:
           ++d;
         }
       }
+    }
+
+    void erase(std::uint32_t key) {
+      assert(key != 0);
+      auto const mask = _bucket_count - 1;
+      auto const bits = std::countr_one(mask);
+      auto i = hash(key, bits);
+      for (;;) {
+        auto &bucket = _buckets[i];
+        // contract: key must be in table
+        assert(!bucket.empty());
+        if (bucket.key == key) {
+          for (;;) {
+            auto const j = (i + 1) & mask;
+            auto &bucket_j = _buckets[j];
+            if (bucket_j.empty() || hash(bucket_j.key, bits) == j) {
+              _buckets[i].reset();
+              return;
+            }
+            _buckets[i] = _buckets[j];
+            i = j;
+          }
+        } else {
+          i = (i + 1) & mask;
+        }
+      }
+    }
+
+    std::span<const Entry> buckets() const noexcept {
+      return std::span{_buckets.get(), _bucket_count};
     }
 
   private:
