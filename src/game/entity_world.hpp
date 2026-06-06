@@ -42,8 +42,6 @@ public:
       constexpr void reset() noexcept { key = 0; }
     };
 
-    constexpr Hash_table() noexcept = default;
-
     explicit Hash_table(std::uint32_t bucket_count)
         : _buckets(std::make_unique<Entry[]>(bucket_count)),
           _bucket_count{bucket_count} {
