@@ -94,7 +94,7 @@ public:
           bucket = entry;
           return;
         }
-        assert(bucket.key != entry.key);
+        assert(bucket.key != entry.key && "double inserts not allowed");
         auto const bucket_hash = hash(bucket.key, bits);
         auto const bucket_distance = (i - bucket_hash) & mask;
         if (bucket_distance < distance) {
@@ -103,7 +103,7 @@ public:
         }
         i = (i + 1) & mask;
         ++distance;
-        assert(distance < _bucket_count);
+        assert(distance < _bucket_count && "must not insert into a full table");
       }
     }
 
