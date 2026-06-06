@@ -99,8 +99,7 @@ void Grid::fill(Eigen::AlignedBox3i const &bounds, bool solid) {
   }
 }
 
-void Grid::set_solid(
-  Eigen::Vector3i const &cell_indices, bool solid) noexcept {
+void Grid::set_solid(Eigen::Vector3i const &cell_indices, bool solid) noexcept {
   if (!bounds_check_cell(cell_indices)) {
     return;
   }

@@ -15,15 +15,13 @@
 namespace fpsparty::game {
 namespace {
 void handle_use_secondary(Grid &grid, Humanoid &humanoid) {
-  auto const basis =
-    (math::y_rotation_matrix(humanoid.curr_input_state.yaw) *
-     math::x_rotation_matrix(humanoid.curr_input_state.pitch))
-      .eval();
+  auto const basis = (math::y_rotation_matrix(humanoid.curr_input_state.yaw) *
+                      math::x_rotation_matrix(humanoid.curr_input_state.pitch))
+                       .eval();
   auto const forward = basis.col(2).head<3>().eval();
-  auto const origin =
-    (humanoid.position +
-     Eigen::Vector3f::UnitY() * constants::humanoid_eye_height)
-      .eval();
+  auto const origin = (humanoid.position + Eigen::Vector3f::UnitY() *
+                                             constants::humanoid_eye_height)
+                        .eval();
   auto const origin_cell =
     (origin / constants::grid_cell_stride).array().floor().matrix().eval();
   auto const origin_cell_indices = origin_cell.cast<int>().eval();
@@ -66,8 +64,9 @@ void Game::tick(float duration) {
     if (player.humanoid && !humanoid) {
       player.humanoid = {};
     }
-    if (!player.humanoid &&
-        _entities.get_entities_of_type<Humanoid>().size() < 2) {
+    if (
+      !player.humanoid &&
+      _entities.get_entities_of_type<Humanoid>().size() < 2) {
       player.humanoid = create_humanoid();
       humanoid = _entities.get_entity(player.humanoid);
     }
@@ -97,11 +96,10 @@ void Game::tick(float duration) {
       auto const forward = basis.col(2).template head<3>().eval();
       create_projectile({
         .creator = humanoid_handle,
-        .position =
-          humanoid.position + Eigen::Vector3f::UnitY() * 1.5f,
-        .velocity =
-          humanoid.velocity + constants::projectile_forward_speed * forward +
-          constants::projectile_up_speed * up,
+        .position = humanoid.position + Eigen::Vector3f::UnitY() * 1.5f,
+        .velocity = humanoid.velocity +
+                    constants::projectile_forward_speed * forward +
+                    constants::projectile_up_speed * up,
       });
       humanoid.attack_cooldown = constants::attack_cooldown;
     }
@@ -121,9 +119,7 @@ void Game::tick(float duration) {
   auto projectile_removals = std::vector<Entity_handle<Projectile>>{};
   for (auto [projectile, projectile_handle] :
        _entities.get_entities_with_handles<Projectile>()) {
-    if (
-      projectile.creator &&
-      !_entities.get_entity(projectile.creator)) {
+    if (projectile.creator && !_entities.get_entity(projectile.creator)) {
       projectile.creator = {};
     }
 
@@ -166,13 +162,12 @@ void Game::tick(float duration) {
           constants::humanoid_half_width,
         },
     };
-    for (auto &projectile :
-         _entities.get_entities_of_type<Projectile>()) {
+    for (auto &projectile : _entities.get_entities_of_type<Projectile>()) {
       if (projectile.creator == humanoid_handle) {
         continue;
       }
-      auto const projectile_half_extents = Eigen::Vector3f::Constant(
-        constants::projectile_half_extent);
+      auto const projectile_half_extents =
+        Eigen::Vector3f::Constant(constants::projectile_half_extent);
       auto const projectile_bounds = Eigen::AlignedBox3f{
         projectile.position - projectile_half_extents,
         projectile.position + projectile_half_extents,

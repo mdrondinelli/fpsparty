@@ -138,8 +138,7 @@ public:
       }
     }
 
-    std::uint32_t
-    exchange(std::uint32_t key, std::uint32_t value) noexcept {
+    std::uint32_t exchange(std::uint32_t key, std::uint32_t value) noexcept {
       assert(key != 0);
       assert(_bucket_count != 0);
 
@@ -257,7 +256,9 @@ public:
   emplace_entity(Args &&...args) {
     auto &entity_array = ensure_entity_array<EntityType>();
     auto const required_entry_count = entity_array.entities.size() + 1;
-    if (required_entry_count >= entity_array.index_lookup_table.buckets().size()) {
+    if (
+      required_entry_count >= entity_array.index_lookup_table.buckets()
+                                .size()) {
       auto const current_bucket_count =
         entity_array.index_lookup_table.buckets().size();
       assert(current_bucket_count <= (std::uint32_t{1} << 30));
@@ -268,8 +269,8 @@ public:
     assert(entity_array.next_entity_id != 0);
     auto const id = entity_array.next_entity_id++;
     entity_array.entity_ids.push_back(id);
-    entity_array.index_lookup_table.push(
-      id, static_cast<std::uint32_t>(entity_array.entities.size() - 1));
+    entity_array.index_lookup_table
+      .push(id, static_cast<std::uint32_t>(entity_array.entities.size() - 1));
     return {std::ref(entity), Entity_handle<EntityType>{id}};
   }
 
@@ -309,8 +310,8 @@ public:
 
   template <typename EntityType>
   EntityType *get_entity(Entity_handle<EntityType> handle) noexcept {
-    return const_cast<EntityType *>(
-      std::as_const(*this).get_entity<EntityType>(handle));
+    return const_cast<EntityType *>(std::as_const(*this)
+                                      .get_entity<EntityType>(handle));
   }
 
   template <typename EntityType>

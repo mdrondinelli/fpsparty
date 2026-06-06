@@ -20,8 +20,7 @@ struct Humanoid {
   float attack_cooldown{};
 };
 
-template <>
-struct Entity_traits<Humanoid> {
+template <> struct Entity_traits<Humanoid> {
   static constexpr Entity_type type = Entity_type::humanoid;
 
   static void dump(serial::Writer &writer, Humanoid const &entity);

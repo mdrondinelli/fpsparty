@@ -17,8 +17,7 @@ struct Player {
   net::Input_state input_state{};
 };
 
-template <>
-struct Entity_traits<Player> {
+template <> struct Entity_traits<Player> {
   static constexpr Entity_type type = Entity_type::player;
 
   static void dump(serial::Writer &writer, Player const &entity);

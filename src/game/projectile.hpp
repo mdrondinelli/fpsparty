@@ -19,8 +19,7 @@ struct Projectile {
   Eigen::Vector3f velocity{Eigen::Vector3f::Zero()};
 };
 
-template <>
-struct Entity_traits<Projectile> {
+template <> struct Entity_traits<Projectile> {
   static constexpr Entity_type type = Entity_type::projectile;
 
   static void dump(serial::Writer &writer, Projectile const &entity);

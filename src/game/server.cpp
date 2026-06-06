@@ -89,18 +89,21 @@ void Server::broadcast_game_state() {
 
     net::Server::send_world_snapshot(
       peer,
-      std::as_bytes(std::span{
-        grid_state_writer.stream().view().data(),
-        grid_state_writer.stream().view().size(),
-      }),
-      std::as_bytes(std::span{
-        public_state_writer.stream().view().data(),
-        public_state_writer.stream().view().size(),
-      }),
-      std::as_bytes(std::span{
-        player_state_writer.stream().view().data(),
-        player_state_writer.stream().view().size(),
-      }));
+      std::as_bytes(
+        std::span{
+          grid_state_writer.stream().view().data(),
+          grid_state_writer.stream().view().size(),
+        }),
+      std::as_bytes(
+        std::span{
+          public_state_writer.stream().view().data(),
+          public_state_writer.stream().view().size(),
+        }),
+      std::as_bytes(
+        std::span{
+          player_state_writer.stream().view().data(),
+          player_state_writer.stream().view().size(),
+        }));
   }
   net::Server::flush();
 }
