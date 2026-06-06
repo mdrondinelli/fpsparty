@@ -177,8 +177,10 @@ public:
     std::uint32_t _bucket_count{};
   };
 
-  template <typename EntityType>
-  using Entry = std::pair<EntityType *, Entity_handle<EntityType>>;
+  template <typename EntityType> struct Entry {
+    EntityType &entity;
+    Entity_handle<EntityType> handle;
+  };
 
   template <typename EntityType> class Entity_range {
   public:
@@ -190,8 +192,8 @@ public:
 
       constexpr value_type operator*() const noexcept {
         return {
-          &_entities[_index],
-          {_entity_ids[_index]},
+          _entities[_index],
+          Entity_handle<EntityType>{_entity_ids[_index]},
         };
       }
 
@@ -250,9 +252,8 @@ public:
   };
 
   template <typename EntityType, typename... Args>
-  std::pair<EntityType *, Entity_handle<EntityType>>
-  emplace_entity(Args &&...args) {
-    auto const entity_array = get_entity_array<EntityType>();
+  Entry<EntityType> emplace_entity(Args &&...args) {
+    auto const entity_array = find_entity_array<EntityType>();
     assert(entity_array && "entity type must be registered");
     auto const current_bucket_count =
       entity_array->index_lookup_table.buckets().size();
@@ -269,7 +270,7 @@ public:
     entity_array->entity_ids.push_back(id);
     entity_array->index_lookup_table
       .push(id, static_cast<std::uint32_t>(entity_array->entities.size() - 1));
-    return {std::ref(entity), Entity_handle<EntityType>{id}};
+    return {entity, Entity_handle<EntityType>{id}};
   }
 
   template <typename EntityType>
@@ -278,12 +279,12 @@ public:
     if (!handle) {
       return;
     }
-    auto const entity_array = get_entity_array<EntityType>();
+    auto const entity_array = find_entity_array<EntityType>();
     assert(entity_array && "entity type must be registered");
     auto const index = entity_array->index_lookup_table.pop(handle.id);
     auto const last_index = entity_array->entities.size() - 1;
     if (index != last_index) {
-      entity_array->entities[index] = std::move(entity_array.entities.back());
+      entity_array->entities[index] = std::move(entity_array->entities.back());
       auto const moved_entity_id = entity_array->entity_ids.back();
       entity_array->entity_ids[index] = moved_entity_id;
       entity_array->index_lookup_table.exchange(moved_entity_id, index);
@@ -305,8 +306,10 @@ public:
   }
 
   template <typename EntityType>
+    requires(!std::is_const_v<EntityType>)
   EntityType *get_entity(Entity_handle<EntityType> handle) noexcept {
-    return const_cast<EntityType *>(Entity_handle<EntityType const>{handle});
+    return const_cast<EntityType *>(
+      get_entity(Entity_handle<EntityType const>{handle}));
   }
 
   template <typename EntityType>
@@ -316,8 +319,7 @@ public:
     return entity_array->entities;
   }
 
-  template <typename EntityType>
-  std::span<EntityType> get_entities() noexcept {
+  template <typename EntityType> std::span<EntityType> get_entities() noexcept {
     auto const entity_array = find_entity_array<EntityType>();
     assert(entity_array && "entity type must be registered");
     return entity_array->entities;
@@ -326,16 +328,15 @@ public:
   template <typename EntityType>
   Entity_range<EntityType const> get_entities_with_handles() const noexcept {
     auto const *entity_array = find_entity_array<EntityType>();
-    if (!entity_array) {
-      return {{}, {}};
-    }
+    assert(entity_array && "entity type must be registered");
     return {entity_array->entities, entity_array->entity_ids};
   }
 
   template <typename EntityType>
   Entity_range<EntityType> get_entities_with_handles() noexcept {
-    auto &entity_array = ensure_entity_array<EntityType>();
-    return {entity_array.entities, entity_array.entity_ids};
+    auto *entity_array = find_entity_array<EntityType>();
+    assert(entity_array && "entity type must be registered");
+    return {entity_array->entities, entity_array->entity_ids};
   }
 
   template <typename EntityType>
@@ -368,6 +369,9 @@ private:
   Entity_array_impl<EntityType> const *find_entity_array() const noexcept {
     auto const type_index =
       static_cast<std::size_t>(Entity_traits<EntityType>::type);
+    if (type_index >= _entity_arrays.size()) {
+      return nullptr;
+    }
     return static_cast<Entity_array_impl<EntityType> *>(
       _entity_arrays[type_index].get());
   }
@@ -376,7 +380,7 @@ private:
     requires(!std::is_const_v<EntityType>)
   Entity_array_impl<EntityType> *find_entity_array() noexcept {
     return const_cast<Entity_array_impl<EntityType> *>(
-      const_cast<Entity_world *>(this)->find_entity_array<EntityType>());
+      std::as_const(*this).find_entity_array<EntityType>());
   }
 
   std::vector<std::unique_ptr<Entity_array>> _entity_arrays;

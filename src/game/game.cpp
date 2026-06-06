@@ -52,21 +52,25 @@ void erase_unique(
 }
 } // namespace
 
-Game::Game(Game_create_info const &info) : _grid{info.grid_info} {}
+Game::Game(Game_create_info const &info) : _grid{info.grid_info} {
+  _entities.register_entity_type<Player>();
+  _entities.register_entity_type<Humanoid>();
+  _entities.register_entity_type<Projectile>();
+}
 
 void Game::tick(float duration) {
-  for (auto &humanoid : _entities.get_entities_of_type<Humanoid>()) {
+  for (auto &humanoid : _entities.get_entities<Humanoid>()) {
     humanoid.prev_input_state = humanoid.curr_input_state;
   }
 
-  for (auto &player : _entities.get_entities_of_type<Player>()) {
+  for (auto &player : _entities.get_entities<Player>()) {
     auto *humanoid = _entities.get_entity(player.humanoid);
     if (player.humanoid && !humanoid) {
       player.humanoid = {};
     }
     if (
       !player.humanoid &&
-      _entities.get_entities_of_type<Humanoid>().size() < 2) {
+      _entities.get_entities<Humanoid>().size() < 2) {
       player.humanoid = create_humanoid();
       humanoid = _entities.get_entity(player.humanoid);
     }
@@ -162,7 +166,7 @@ void Game::tick(float duration) {
           constants::humanoid_half_width,
         },
     };
-    for (auto &projectile : _entities.get_entities_of_type<Projectile>()) {
+    for (auto &projectile : _entities.get_entities<Projectile>()) {
       if (projectile.creator == humanoid_handle) {
         continue;
       }
@@ -190,15 +194,15 @@ void Game::tick(float duration) {
 }
 
 Entity_handle<Player> Game::create_player(Player player) {
-  return _entities.emplace_entity<Player>(std::move(player)).second;
+  return _entities.emplace_entity<Player>(std::move(player)).handle;
 }
 
 Entity_handle<Humanoid> Game::create_humanoid(Humanoid humanoid) {
-  return _entities.emplace_entity<Humanoid>(std::move(humanoid)).second;
+  return _entities.emplace_entity<Humanoid>(std::move(humanoid)).handle;
 }
 
 Entity_handle<Projectile> Game::create_projectile(Projectile projectile) {
-  return _entities.emplace_entity<Projectile>(std::move(projectile)).second;
+  return _entities.emplace_entity<Projectile>(std::move(projectile)).handle;
 }
 
 Grid const &Game::get_grid() const noexcept { return _grid; }
