@@ -6,9 +6,12 @@
 namespace fpsparty::game {
 
 template <typename EntityType> struct Entity_handle {
-  net::Entity_id id;
+  net::Entity_id id{};
 
   constexpr operator bool() const noexcept { return id != 0; }
+
+  friend constexpr bool
+  operator==(Entity_handle const &, Entity_handle const &) noexcept = default;
 };
 
 } // namespace fpsparty::game

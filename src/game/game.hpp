@@ -6,8 +6,6 @@
 #include "game/humanoid.hpp"
 #include "game/player.hpp"
 #include "game/projectile.hpp"
-#include "net/core/entity_id.hpp"
-
 namespace fpsparty::game {
 struct Game_create_info {
   Grid_create_info grid_info{};
@@ -21,12 +19,11 @@ public:
 
   void tick(float duration);
 
-  Entity_owner<Player> create_player(Player_create_info const &info);
+  Entity_handle<Player> create_player(Player player = {});
 
-  Entity_owner<Humanoid> create_humanoid(Humanoid_create_info const &info);
+  Entity_handle<Humanoid> create_humanoid(Humanoid humanoid = {});
 
-  Entity_owner<Projectile>
-  create_projectile(Projectile_create_info const &info);
+  Entity_handle<Projectile> create_projectile(Projectile projectile = {});
 
   Grid const &get_grid() const noexcept;
 
@@ -37,12 +34,8 @@ public:
   Entity_world &get_entities() noexcept;
 
 private:
-  Entity_factory<Player> _player_factory{};
-  Entity_factory<Humanoid> _humanoid_factory{};
-  Entity_factory<Projectile> _projectile_factory{};
   Grid _grid;
   Entity_world _entities{};
-  net::Entity_id _next_entity_id{1};
 };
 } // namespace fpsparty::game
 

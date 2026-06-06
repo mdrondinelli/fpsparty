@@ -41,8 +41,6 @@ target_include_directories(
 add_library(
   game
   src/game/grid.cpp
-  src/game/entity.cpp
-  src/game/entity_world.cpp
   src/game/humanoid_movement.cpp
   src/game/projectile_movement.cpp
   src/game/game.cpp
@@ -98,6 +96,7 @@ target_link_libraries(client-session game scene net)
 
 add_executable(
   game-tests
+  tests/game/entity_world.cpp
   tests/game/grid_raycast.cpp
 )
 target_link_libraries(game-tests game Catch2::Catch2WithMain)

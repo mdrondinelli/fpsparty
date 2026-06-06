@@ -1,5 +1,7 @@
 #include "humanoid.hpp"
 
+#include "serial/serialize.hpp"
+
 namespace fpsparty::game {
 
 void Entity_traits<Humanoid>::dump(

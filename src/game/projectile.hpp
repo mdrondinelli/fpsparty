@@ -3,16 +3,18 @@
 
 #include <Eigen/Dense>
 
-#include <net/core/entity_id.hpp>
 #include <serial/writer.hpp>
 
+#include "entity_handle.hpp"
 #include "entity_traits.hpp"
 #include "entity_type.hpp"
 
 namespace fpsparty::game {
 
+struct Humanoid;
+
 struct Projectile {
-  net::Entity_id creator{};
+  Entity_handle<Humanoid> creator{};
   Eigen::Vector3f position{Eigen::Vector3f::Zero()};
   Eigen::Vector3f velocity{Eigen::Vector3f::Zero()};
 };
