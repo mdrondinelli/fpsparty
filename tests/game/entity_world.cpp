@@ -82,8 +82,8 @@ TEST_CASE("Entity world exposes registered empty typed storage") {
   world.register_entity_type<Player>();
   world.register_entity_type<Humanoid>();
 
-  CHECK(world.get_entities<Player>().empty());
-  CHECK(world.get_entities_with_handles<Humanoid>().size() == 0);
+  CHECK(world.get_entities<Player>().size() == 0);
+  CHECK(world.get_entities<Humanoid>().size() == 0);
   CHECK(world.get_entity(Entity_handle<Player>{}) == nullptr);
 }
 
@@ -109,7 +109,7 @@ TEST_CASE("Entity world traversal exposes entities with typed handles") {
 
   auto expected_id = std::uint32_t{1};
   for (auto [player, handle] :
-       world.get_entities_with_handles<Player>()) {
+       world.get_entities<Player>()) {
     player.input_state.yaw = static_cast<float>(handle.id);
     CHECK(handle.id == expected_id++);
   }
@@ -123,7 +123,7 @@ TEST_CASE("Entity world range supports indexed access") {
   world.register_entity_type<Player>();
   auto const first = world.emplace_entity<Player>().handle;
   auto const second = world.emplace_entity<Player>().handle;
-  auto const range = world.get_entities_with_handles<Player>();
+  auto const range = world.get_entities<Player>();
 
   CHECK(range[0].handle == first);
   CHECK(range[1].handle == second);
@@ -135,7 +135,7 @@ TEST_CASE("Entity world ranges survive entity vector reallocation") {
   auto world = Entity_world{};
   world.register_entity_type<Player>();
   auto const first = world.emplace_entity<Player>().handle;
-  auto const range = world.get_entities_with_handles<Player>();
+  auto const range = world.get_entities<Player>();
   auto const first_iterator = range.begin();
 
   for (auto i = 0; i != 100; ++i) {
@@ -152,7 +152,7 @@ TEST_CASE("Entity world const ranges expose const entries") {
   world.register_entity_type<Player>();
   world.emplace_entity<Player>();
   auto const &const_world = world;
-  auto const range = const_world.get_entities_with_handles<Player>();
+  auto const range = const_world.get_entities<Player>();
 
   static_assert(std::is_const_v<
                 std::remove_reference_t<decltype(range[0].entity)>>);
@@ -220,5 +220,6 @@ TEST_CASE("Game defers dense removals until traversal completes") {
 
   game.tick(0.01f);
 
-  CHECK(game.get_entities().get_entities<Projectile>().empty());
+  CHECK(
+    game.get_entities().get_entities<Projectile>().size() == 0);
 }

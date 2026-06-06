@@ -52,8 +52,8 @@ void Server::broadcast_game_state() {
 
   auto public_state_writer = serial::Ostringstream_writer{};
   auto &world = _game.get_entities();
-  auto const humanoids = world.get_entities_with_handles<Humanoid>();
-  auto const projectiles = world.get_entities_with_handles<Projectile>();
+  auto const humanoids = world.get_entities<Humanoid>();
+  auto const projectiles = world.get_entities<Projectile>();
   serialize<std::uint32_t>(
     public_state_writer,
     static_cast<std::uint32_t>(humanoids.size() + projectiles.size()));

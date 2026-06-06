@@ -9,6 +9,7 @@
 #include <Eigen/Geometry>
 
 #include <algorithm>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -59,11 +60,15 @@ Game::Game(Game_create_info const &info) : _grid{info.grid_info} {
 }
 
 void Game::tick(float duration) {
-  for (auto &humanoid : _entities.get_entities<Humanoid>()) {
+  for (auto [humanoid, humanoid_handle] :
+       _entities.get_entities<Humanoid>()) {
+    std::ignore = humanoid_handle;
     humanoid.prev_input_state = humanoid.curr_input_state;
   }
 
-  for (auto &player : _entities.get_entities<Player>()) {
+  for (auto [player, player_handle] :
+       _entities.get_entities<Player>()) {
+    std::ignore = player_handle;
     auto *humanoid = _entities.get_entity(player.humanoid);
     if (player.humanoid && !humanoid) {
       player.humanoid = {};
@@ -80,7 +85,7 @@ void Game::tick(float duration) {
   }
 
   for (auto [humanoid, humanoid_handle] :
-       _entities.get_entities_with_handles<Humanoid>()) {
+       _entities.get_entities<Humanoid>()) {
     if (
       !humanoid.prev_input_state.use_secondary &&
       humanoid.curr_input_state.use_secondary) {
@@ -122,7 +127,7 @@ void Game::tick(float duration) {
 
   auto projectile_removals = std::vector<Entity_handle<Projectile>>{};
   for (auto [projectile, projectile_handle] :
-       _entities.get_entities_with_handles<Projectile>()) {
+       _entities.get_entities<Projectile>()) {
     if (projectile.creator && !_entities.get_entity(projectile.creator)) {
       projectile.creator = {};
     }
@@ -151,7 +156,7 @@ void Game::tick(float duration) {
 
   auto humanoid_removals = std::vector<Entity_handle<Humanoid>>{};
   for (auto [humanoid, humanoid_handle] :
-       _entities.get_entities_with_handles<Humanoid>()) {
+       _entities.get_entities<Humanoid>()) {
     auto const humanoid_bounds = Eigen::AlignedBox3f{
       humanoid.position -
         Eigen::Vector3f{
@@ -166,7 +171,9 @@ void Game::tick(float duration) {
           constants::humanoid_half_width,
         },
     };
-    for (auto &projectile : _entities.get_entities<Projectile>()) {
+    for (auto [projectile, projectile_handle] :
+         _entities.get_entities<Projectile>()) {
+      std::ignore = projectile_handle;
       if (projectile.creator == humanoid_handle) {
         continue;
       }
@@ -185,7 +192,7 @@ void Game::tick(float duration) {
   erase_unique(_entities, humanoid_removals);
 
   for (auto [projectile, projectile_handle] :
-       _entities.get_entities_with_handles<Projectile>()) {
+       _entities.get_entities<Projectile>()) {
     if (projectile.position.y() < 0.0f) {
       projectile_removals.push_back(projectile_handle);
     }

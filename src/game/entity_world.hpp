@@ -338,27 +338,14 @@ public:
   }
 
   template <typename EntityType>
-  std::span<EntityType const> get_entities() const noexcept {
-    auto const entity_array = find_entity_array<EntityType>();
-    assert(entity_array && "entity type must be registered");
-    return entity_array->entities;
-  }
-
-  template <typename EntityType> std::span<EntityType> get_entities() noexcept {
-    auto const entity_array = find_entity_array<EntityType>();
-    assert(entity_array && "entity type must be registered");
-    return entity_array->entities;
-  }
-
-  template <typename EntityType>
-  Entity_range<EntityType const> get_entities_with_handles() const noexcept {
+  Entity_range<EntityType const> get_entities() const noexcept {
     auto const entity_array = find_entity_array<EntityType>();
     assert(entity_array && "entity type must be registered");
     return Entity_range<EntityType const>{entity_array};
   }
 
   template <typename EntityType>
-  Entity_range<EntityType> get_entities_with_handles() noexcept {
+  Entity_range<EntityType> get_entities() noexcept {
     auto const entity_array = find_entity_array<EntityType>();
     assert(entity_array && "entity type must be registered");
     return Entity_range<EntityType>{entity_array};
