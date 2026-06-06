@@ -8,6 +8,10 @@ namespace fpsparty::game {
 template <typename EntityType> struct Entity_handle {
   net::Entity_id id{};
 
+  constexpr operator Entity_handle<const EntityType>() const noexcept {
+    return {id};
+  }
+
   constexpr operator bool() const noexcept { return id != 0; }
 
   friend constexpr bool
