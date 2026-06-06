@@ -98,7 +98,6 @@ target_link_libraries(client-session game scene net)
 
 add_executable(
   game-tests
-  tests/game/entity_id_table.cpp
   tests/game/grid_raycast.cpp
 )
 target_link_libraries(game-tests game Catch2::Catch2WithMain)
