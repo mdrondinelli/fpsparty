@@ -5,7 +5,6 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -188,7 +187,8 @@ public:
     public:
       using difference_type = std::ptrdiff_t;
       using value_type = Entry<EntityType>;
-      using iterator_category = std::random_access_iterator_tag;
+      using iterator_category = std::input_iterator_tag;
+      using iterator_concept = std::input_iterator_tag;
 
       constexpr value_type operator*() const noexcept {
         return {
@@ -327,14 +327,14 @@ public:
 
   template <typename EntityType>
   Entity_range<EntityType const> get_entities_with_handles() const noexcept {
-    auto const *entity_array = find_entity_array<EntityType>();
+    auto const entity_array = find_entity_array<EntityType>();
     assert(entity_array && "entity type must be registered");
     return {entity_array->entities, entity_array->entity_ids};
   }
 
   template <typename EntityType>
   Entity_range<EntityType> get_entities_with_handles() noexcept {
-    auto *entity_array = find_entity_array<EntityType>();
+    auto const entity_array = find_entity_array<EntityType>();
     assert(entity_array && "entity type must be registered");
     return {entity_array->entities, entity_array->entity_ids};
   }
