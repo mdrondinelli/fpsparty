@@ -7,6 +7,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -114,6 +116,49 @@ TEST_CASE("Entity world traversal exposes entities with typed handles") {
 
   CHECK(world.get_entity(first)->input_state.yaw == 1.0f);
   CHECK(world.get_entity(second)->input_state.yaw == 2.0f);
+}
+
+TEST_CASE("Entity world range supports indexed access") {
+  auto world = Entity_world{};
+  world.register_entity_type<Player>();
+  auto const first = world.emplace_entity<Player>().handle;
+  auto const second = world.emplace_entity<Player>().handle;
+  auto const range = world.get_entities_with_handles<Player>();
+
+  CHECK(range[0].handle == first);
+  CHECK(range[1].handle == second);
+  range[1].entity.input_state.yaw = 2.0f;
+  CHECK(world.get_entity(second)->input_state.yaw == 2.0f);
+}
+
+TEST_CASE("Entity world ranges survive entity vector reallocation") {
+  auto world = Entity_world{};
+  world.register_entity_type<Player>();
+  auto const first = world.emplace_entity<Player>().handle;
+  auto const range = world.get_entities_with_handles<Player>();
+  auto const first_iterator = range.begin();
+
+  for (auto i = 0; i != 100; ++i) {
+    world.emplace_entity<Player>();
+  }
+
+  CHECK(range.size() == 101);
+  CHECK(range[0].handle == first);
+  CHECK((*first_iterator).handle == first);
+}
+
+TEST_CASE("Entity world const ranges expose const entries") {
+  auto world = Entity_world{};
+  world.register_entity_type<Player>();
+  world.emplace_entity<Player>();
+  auto const &const_world = world;
+  auto const range = const_world.get_entities_with_handles<Player>();
+
+  static_assert(std::is_const_v<
+                std::remove_reference_t<decltype(range[0].entity)>>);
+  static_assert(std::is_same_v<
+                decltype(range[0].handle), Entity_handle<Player const>>);
+  CHECK(range.size() == 1);
 }
 
 TEST_CASE("Entity world repairs lookup after swap-back erasure") {

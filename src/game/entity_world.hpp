@@ -176,13 +176,32 @@ public:
     std::uint32_t _bucket_count{};
   };
 
+private:
+  struct Entity_array {
+    virtual ~Entity_array() = default;
+  };
+
+  template <typename EntityType>
+  struct Entity_array_impl : public Entity_array {
+    std::vector<EntityType> entities;
+    std::vector<net::Entity_id> entity_ids;
+    Hash_table index_lookup_table{8};
+    net::Entity_id next_entity_id{1};
+  };
+
   template <typename EntityType> struct Entry {
     EntityType &entity;
     Entity_handle<EntityType> handle;
   };
+public:
 
   template <typename EntityType> class Entity_range {
   public:
+    using Base_entity_type = std::remove_const_t<EntityType>;
+    using Array_type = Entity_array_impl<Base_entity_type>;
+    using Array_pointer = std::conditional_t<
+      std::is_const_v<EntityType>, Array_type const *, Array_type *>;
+
     class Iterator {
     public:
       using difference_type = std::ptrdiff_t;
@@ -192,8 +211,8 @@ public:
 
       constexpr value_type operator*() const noexcept {
         return {
-          _entities[_index],
-          Entity_handle<EntityType>{_entity_ids[_index]},
+          _entity_array->entities[_index],
+          Entity_handle<EntityType>{_entity_array->entity_ids[_index]},
         };
       }
 
@@ -217,38 +236,44 @@ public:
       friend class Entity_range;
 
       constexpr Iterator(
-        std::span<EntityType> entities,
-        std::span<net::Entity_id const> entity_ids,
+        Array_pointer entity_array,
         std::size_t index) noexcept
-          : _entities{entities}, _entity_ids{entity_ids}, _index{index} {}
+          : _entity_array{entity_array}, _index{index} {}
 
-      std::span<EntityType> _entities;
-      std::span<net::Entity_id const> _entity_ids;
+      Array_pointer _entity_array{};
       std::size_t _index{};
     };
 
     constexpr Iterator begin() const noexcept {
-      return {_entities, _entity_ids, 0};
+      return {_entity_array, 0};
     }
 
     constexpr Iterator end() const noexcept {
-      return {_entities, _entity_ids, _entities.size()};
+      return {_entity_array, _entity_array->entities.size()};
     }
 
-    constexpr std::size_t size() const noexcept { return _entities.size(); }
+    constexpr Entry<EntityType> operator[](std::size_t index) const noexcept {
+      return {
+        _entity_array->entities[index],
+        Entity_handle<EntityType>{_entity_array->entity_ids[index]},
+      };
+    }
+
+    constexpr std::size_t size() const noexcept {
+      return _entity_array->entities.size();
+    }
 
   private:
     friend class Entity_world;
 
-    constexpr Entity_range(
-      std::span<EntityType> entities,
-      std::span<net::Entity_id const> entity_ids) noexcept
-        : _entities{entities}, _entity_ids{entity_ids} {
-      assert(_entities.size() == _entity_ids.size());
+    explicit constexpr Entity_range(Array_pointer entity_array) noexcept
+        : _entity_array{entity_array} {
+      assert(
+        _entity_array->entities.size() ==
+        _entity_array->entity_ids.size());
     }
 
-    std::span<EntityType> _entities;
-    std::span<net::Entity_id const> _entity_ids;
+    Array_pointer _entity_array;
   };
 
   template <typename EntityType, typename... Args>
@@ -329,14 +354,14 @@ public:
   Entity_range<EntityType const> get_entities_with_handles() const noexcept {
     auto const entity_array = find_entity_array<EntityType>();
     assert(entity_array && "entity type must be registered");
-    return {entity_array->entities, entity_array->entity_ids};
+    return Entity_range<EntityType const>{entity_array};
   }
 
   template <typename EntityType>
   Entity_range<EntityType> get_entities_with_handles() noexcept {
     auto const entity_array = find_entity_array<EntityType>();
     assert(entity_array && "entity type must be registered");
-    return {entity_array->entities, entity_array->entity_ids};
+    return Entity_range<EntityType>{entity_array};
   }
 
   template <typename EntityType>
@@ -352,18 +377,6 @@ public:
   }
 
 private:
-  struct Entity_array {
-    virtual ~Entity_array() = default;
-  };
-
-  template <typename EntityType>
-  struct Entity_array_impl : public Entity_array {
-    std::vector<EntityType> entities;
-    std::vector<net::Entity_id> entity_ids;
-    Hash_table index_lookup_table{8};
-    net::Entity_id next_entity_id{1};
-  };
-
   template <typename EntityType>
     requires(!std::is_const_v<EntityType>)
   Entity_array_impl<EntityType> const *find_entity_array() const noexcept {
