@@ -365,19 +365,19 @@ protected:
     } else if (has_scene()) {
       auto input_state = get_current_input_state();
       switch (key) {
-      case glfw::Key::k_w:
+      case glfw::Key::k_e:
         input_state.move_forward = action != glfw::Press_action::release;
         break;
-      case glfw::Key::k_a:
+      case glfw::Key::k_s:
         input_state.move_left = action != glfw::Press_action::release;
         break;
-      case glfw::Key::k_s:
+      case glfw::Key::k_d:
         input_state.move_backward = action != glfw::Press_action::release;
         break;
-      case glfw::Key::k_d:
+      case glfw::Key::k_f:
         input_state.move_right = action != glfw::Press_action::release;
         break;
-      case glfw::Key::k_space:
+      case glfw::Key::k_backspace:
         input_state.jump = action != glfw::Press_action::release;
         break;
       case glfw::Key::k_left_shift:
