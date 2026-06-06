@@ -66,9 +66,7 @@ public:
 
     std::optional<std::uint32_t> get(std::uint32_t key) const noexcept {
       assert(key != 0);
-      if (_bucket_count == 0) {
-        return std::nullopt;
-      }
+      assert(_bucket_count != 0);
       auto const mask = _bucket_count - 1;
       auto const bits = std::countr_one(mask);
       auto i = hash(key, bits);
