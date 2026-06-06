@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <vector>
 
 namespace {
 using fpsparty::game::Entity_handle;
@@ -39,15 +40,14 @@ TEST_CASE("Entity world hash table supports lookup update and removal") {
   CHECK(*table.get(17) == 170);
 }
 
-TEST_CASE("Entity world hash table grows and preserves entries") {
-  auto table = Entity_world::Hash_table{};
+TEST_CASE("Entity world hash table rehash preserves entries") {
+  auto table = Entity_world::Hash_table{128};
 
   for (auto key = std::uint32_t{1}; key != 101; ++key) {
     table.push(key, key * 10);
   }
 
-  CHECK(table.size() == 100);
-  CHECK(table.buckets().size() > 100);
+  CHECK(table.buckets().size() == 128);
   for (auto key = std::uint32_t{1}; key != 101; ++key) {
     REQUIRE(table.get(key));
     CHECK(*table.get(key) == key * 10);
@@ -58,6 +58,19 @@ TEST_CASE("Entity world hash table grows and preserves entries") {
   for (auto key = std::uint32_t{1}; key != 101; ++key) {
     REQUIRE(table.get(key));
     CHECK(*table.get(key) == key * 10);
+  }
+}
+
+TEST_CASE("Entity world grows its entity index table") {
+  auto world = Entity_world{};
+  auto handles = std::vector<Entity_handle<Player>>{};
+
+  for (auto i = 0; i != 100; ++i) {
+    handles.push_back(world.emplace_entity<Player>().second);
+  }
+
+  for (auto const handle : handles) {
+    CHECK(world.get_entity(handle) != nullptr);
   }
 }
 

@@ -33,6 +33,7 @@ public:
 
       constexpr Entry(std::uint32_t key, std::uint32_t value)
           : key{key}, value{value} {
+        // if you're trying to construct the empty key, use the default ctor
         assert(key != 0);
       }
 
@@ -46,19 +47,20 @@ public:
     explicit Hash_table(std::uint32_t bucket_count)
         : _buckets(std::make_unique<Entry[]>(bucket_count)),
           _bucket_count{bucket_count} {
-      assert(bucket_count >= 2);
+      assert(bucket_count >= min_bucket_count);
       assert(std::has_single_bit(bucket_count));
     }
 
     void rehash(std::uint32_t new_bucket_count) {
-      assert(new_bucket_count >= 2);
+      assert(new_bucket_count >= min_bucket_count);
       assert(std::has_single_bit(new_bucket_count));
-      assert(new_bucket_count > _size);
-
       auto replacement = Hash_table{new_bucket_count};
+      auto live_entry_count = std::uint32_t{};
       for (auto const &bucket : buckets()) {
         if (!bucket.empty()) {
-          replacement.push_without_growing(bucket);
+          ++live_entry_count;
+          assert(new_bucket_count > live_entry_count);
+          replacement.push(bucket);
         }
       }
       swap(replacement);
@@ -69,7 +71,6 @@ public:
       if (_bucket_count == 0) {
         return std::nullopt;
       }
-
       auto const mask = _bucket_count - 1;
       auto const bits = std::countr_one(mask);
       auto i = hash(key, bits);
@@ -85,13 +86,32 @@ public:
       }
     }
 
-    void push(Entry entry) {
+    void push(Entry entry) noexcept {
       assert(!entry.empty());
-      ensure_insert_capacity();
-      push_without_growing(entry);
+      auto const mask = _bucket_count - 1;
+      auto const bits = std::countr_one(mask);
+      auto i = hash(entry.key, bits);
+      auto distance = std::uint32_t{};
+      for (;;) {
+        auto &bucket = _buckets[i];
+        if (bucket.empty()) {
+          bucket = entry;
+          return;
+        }
+        assert(bucket.key != entry.key);
+        auto const bucket_hash = hash(bucket.key, bits);
+        auto const bucket_distance = (i - bucket_hash) & mask;
+        if (bucket_distance < distance) {
+          std::swap(bucket, entry);
+          distance = bucket_distance;
+        }
+        i = (i + 1) & mask;
+        ++distance;
+        assert(distance < _bucket_count);
+      }
     }
 
-    void push(std::uint32_t key, std::uint32_t value) {
+    void push(std::uint32_t key, std::uint32_t value) noexcept {
       push(Entry{key, value});
     }
 
@@ -112,7 +132,6 @@ public:
             auto &next_bucket = _buckets[j];
             if (next_bucket.empty() || hash(next_bucket.key, bits) == j) {
               _buckets[i].reset();
-              --_size;
               return result;
             }
             _buckets[i] = next_bucket;
@@ -147,59 +166,20 @@ public:
       return {_buckets.get(), _bucket_count};
     }
 
-    std::size_t size() const noexcept { return _size; }
+    static constexpr std::uint32_t min_bucket_count = 2;
 
   private:
     static constexpr std::uint32_t hash(std::uint32_t key, int bits) noexcept {
       return (key * 2654435769u) >> (32 - bits);
     }
 
-    void ensure_insert_capacity() {
-      if (_bucket_count == 0) {
-        rehash(8);
-      } else if (
-        (static_cast<std::uint64_t>(_size) + 1) * 10 >=
-        static_cast<std::uint64_t>(_bucket_count) * 7) {
-        assert(_bucket_count <= (std::uint32_t{1} << 30));
-        rehash(_bucket_count * 2);
-      }
-    }
-
-    void push_without_growing(Entry entry) noexcept {
-      auto const mask = _bucket_count - 1;
-      auto const bits = std::countr_one(mask);
-      auto i = hash(entry.key, bits);
-      auto distance = std::uint32_t{};
-      for (;;) {
-        auto &bucket = _buckets[i];
-        if (bucket.empty()) {
-          bucket = entry;
-          ++_size;
-          return;
-        }
-
-        assert(bucket.key != entry.key);
-        auto const bucket_hash = hash(bucket.key, bits);
-        auto const bucket_distance = (i - bucket_hash) & mask;
-        if (bucket_distance < distance) {
-          std::swap(bucket, entry);
-          distance = bucket_distance;
-        }
-        i = (i + 1) & mask;
-        ++distance;
-        assert(distance < _bucket_count);
-      }
-    }
-
     void swap(Hash_table &other) noexcept {
       _buckets.swap(other._buckets);
       std::swap(_bucket_count, other._bucket_count);
-      std::swap(_size, other._size);
     }
 
     std::unique_ptr<Entry[]> _buckets{};
     std::uint32_t _bucket_count{};
-    std::uint32_t _size{};
   };
 
   template <typename EntityType> struct Entity_entry {
@@ -280,6 +260,13 @@ public:
   std::pair<std::reference_wrapper<EntityType>, Entity_handle<EntityType>>
   emplace_entity(Args &&...args) {
     auto &entity_array = ensure_entity_array<EntityType>();
+    auto const required_entry_count = entity_array.entities.size() + 1;
+    if (required_entry_count >= entity_array.index_lookup_table.buckets().size()) {
+      auto const current_bucket_count =
+        entity_array.index_lookup_table.buckets().size();
+      assert(current_bucket_count <= (std::uint32_t{1} << 30));
+      entity_array.index_lookup_table.rehash(current_bucket_count * 2);
+    }
     auto &entity =
       entity_array.entities.emplace_back(std::forward<Args>(args)...);
     assert(entity_array.next_entity_id != 0);
