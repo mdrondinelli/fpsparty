@@ -1,17 +1,18 @@
 #include "game.hpp"
 
-#include "game/constants.hpp"
-#include "game/humanoid_movement.hpp"
-#include "game/projectile_movement.hpp"
-#include "math/transformation_matrices.hpp"
+#include <algorithm>
 
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
-#include <algorithm>
-#include <tuple>
-#include <utility>
-#include <vector>
+#include "game/constants.hpp"
+#include "game/humanoid.hpp"
+#include "game/humanoid_movement.hpp"
+#include "game/player.hpp"
+#include "game/projectile.hpp"
+#include "game/projectile_movement.hpp"
+#include "math/transformation_matrices.hpp"
+
 
 namespace fpsparty::game {
 namespace {
@@ -38,19 +39,6 @@ void handle_use_secondary(Grid &grid, Humanoid &humanoid) {
   }
 }
 
-template <typename EntityType>
-void erase_unique(
-  Entity_world &world, std::vector<Entity_handle<EntityType>> &handles) {
-  std::ranges::sort(handles, {}, &Entity_handle<EntityType>::id);
-  auto const duplicate_begin = std::ranges::unique(handles).begin();
-  handles.erase(duplicate_begin, handles.end());
-  for (auto const handle : handles) {
-    if (world.get_entity(handle)) {
-      world.erase_entity(handle);
-    }
-  }
-  handles.clear();
-}
 } // namespace
 
 Game::Game(Game_create_info const &info) : _grid{info.grid_info} {
@@ -60,38 +48,32 @@ Game::Game(Game_create_info const &info) : _grid{info.grid_info} {
 }
 
 void Game::tick(float duration) {
-  for (auto [humanoid, humanoid_handle] :
-       _entities.get_entities<Humanoid>()) {
-    std::ignore = humanoid_handle;
+  // copy humanoid curr input state -> prev input state
+  for (auto [humanoid, _] : _entities.get_all<Humanoid>()) {
     humanoid.prev_input_state = humanoid.curr_input_state;
   }
-
-  for (auto [player, player_handle] :
-       _entities.get_entities<Player>()) {
-    std::ignore = player_handle;
-    auto *humanoid = _entities.get_entity(player.humanoid);
+  // copy player input state -> humanoid curr input state, spawn humanoids
+  auto const should_spawn = _entities.get_all<Humanoid>().size() < 2;
+  for (auto [player, _] : _entities.get_all<Player>()) {
+    auto humanoid = _entities.get(player.humanoid);
     if (player.humanoid && !humanoid) {
       player.humanoid = {};
     }
-    if (
-      !player.humanoid &&
-      _entities.get_entities<Humanoid>().size() < 2) {
-      player.humanoid = create_humanoid();
-      humanoid = _entities.get_entity(player.humanoid);
+    if (!player.humanoid && should_spawn) {
+      player.humanoid = _entities.emplace<Humanoid>().handle;
+      humanoid = _entities.get(player.humanoid);
     }
     if (humanoid) {
       humanoid->curr_input_state = player.input_state;
     }
   }
-
-  for (auto [humanoid, humanoid_handle] :
-       _entities.get_entities<Humanoid>()) {
+  // humnanoid movement and primary/secondary
+  for (auto [humanoid, humanoid_handle] : _entities.get_all<Humanoid>()) {
     if (
       !humanoid.prev_input_state.use_secondary &&
       humanoid.curr_input_state.use_secondary) {
       handle_use_secondary(_grid, humanoid);
     }
-
     humanoid.attack_cooldown =
       std::max(0.0f, humanoid.attack_cooldown - duration);
     if (
@@ -103,7 +85,7 @@ void Game::tick(float duration) {
           .eval();
       auto const up = basis.col(1).template head<3>().eval();
       auto const forward = basis.col(2).template head<3>().eval();
-      create_projectile({
+      _entities.insert<Projectile>({
         .creator = humanoid_handle,
         .position = humanoid.position + Eigen::Vector3f::UnitY() * 1.5f,
         .velocity = humanoid.velocity +
@@ -112,7 +94,6 @@ void Game::tick(float duration) {
       });
       humanoid.attack_cooldown = constants::attack_cooldown;
     }
-
     auto const movement_info = Humanoid_movement_simulation_info{
       .initial_position = humanoid.position,
       .input_state = humanoid.curr_input_state,
@@ -124,19 +105,19 @@ void Game::tick(float duration) {
       duration;
     humanoid.position = movement_result.final_position;
   }
-
-  auto projectile_removals = std::vector<Entity_handle<Projectile>>{};
-  for (auto [projectile, projectile_handle] :
-       _entities.get_entities<Projectile>()) {
-    if (projectile.creator && !_entities.get_entity(projectile.creator)) {
-      projectile.creator = {};
-    }
-
+  // projectile movement, collision with grid, y < 0
+  auto projectiles = _entities.get_all<Projectile>();
+  for (auto it = projectiles.begin(); it != projectiles.end();) {
+    auto &projectile = it.entity();
     auto const movement_result = simulate_projectile_movement({
       .initial_position = projectile.position,
       .initial_velocity = projectile.velocity,
       .duration = duration,
     });
+    if (movement_result.final_position.y() < 0.0f) {
+      it = projectiles.erase(it);
+      continue;
+    }
     auto const projectile_cell_indices =
       (movement_result.final_position / constants::grid_cell_stride)
         .array()
@@ -146,17 +127,18 @@ void Game::tick(float duration) {
         .eval();
     if (_grid.is_solid(projectile_cell_indices)) {
       _grid.set_solid(projectile_cell_indices, false);
-      projectile_removals.push_back(projectile_handle);
+      it = projectiles.erase(it);
       continue;
     }
     projectile.position = movement_result.final_position;
     projectile.velocity = movement_result.final_velocity;
+    ++it;
   }
-  erase_unique(_entities, projectile_removals);
-
-  auto humanoid_removals = std::vector<Entity_handle<Humanoid>>{};
-  for (auto [humanoid, humanoid_handle] :
-       _entities.get_entities<Humanoid>()) {
+  // humanoid-projectile collision
+  auto humanoids = _entities.get_all<Humanoid>();
+  for (auto it = humanoids.begin(); it != humanoids.end();) {
+    auto [humanoid, humanoid_handle] = *it;
+    auto erased = false;
     auto const humanoid_bounds = Eigen::AlignedBox3f{
       humanoid.position -
         Eigen::Vector3f{
@@ -171,9 +153,7 @@ void Game::tick(float duration) {
           constants::humanoid_half_width,
         },
     };
-    for (auto [projectile, projectile_handle] :
-         _entities.get_entities<Projectile>()) {
-      std::ignore = projectile_handle;
+    for (auto [projectile, _] : _entities.get_all<Projectile>()) {
       if (projectile.creator == humanoid_handle) {
         continue;
       }
@@ -184,32 +164,15 @@ void Game::tick(float duration) {
         projectile.position + projectile_half_extents,
       };
       if (projectile_bounds.intersects(humanoid_bounds)) {
-        humanoid_removals.push_back(humanoid_handle);
+        it = humanoids.erase(it);
+        erased = true;
         break;
       }
     }
-  }
-  erase_unique(_entities, humanoid_removals);
-
-  for (auto [projectile, projectile_handle] :
-       _entities.get_entities<Projectile>()) {
-    if (projectile.position.y() < 0.0f) {
-      projectile_removals.push_back(projectile_handle);
+    if (!erased) {
+      ++it;
     }
   }
-  erase_unique(_entities, projectile_removals);
-}
-
-Entity_handle<Player> Game::create_player(Player player) {
-  return _entities.emplace_entity<Player>(std::move(player)).handle;
-}
-
-Entity_handle<Humanoid> Game::create_humanoid(Humanoid humanoid) {
-  return _entities.emplace_entity<Humanoid>(std::move(humanoid)).handle;
-}
-
-Entity_handle<Projectile> Game::create_projectile(Projectile projectile) {
-  return _entities.emplace_entity<Projectile>(std::move(projectile)).handle;
 }
 
 Grid const &Game::get_grid() const noexcept { return _grid; }

@@ -11,7 +11,7 @@ namespace fpsparty::game {
 template <typename EntityType> struct Entity_handle {
   constexpr Entity_handle() noexcept = default;
 
-  explicit constexpr Entity_handle(net::Entity_id id) noexcept : id{id} {}
+  constexpr explicit Entity_handle(net::Entity_id id) noexcept : id{id} {}
 
   template <typename OtherEntityType>
     requires(

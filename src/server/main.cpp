@@ -48,7 +48,7 @@ int main() {
     auto const duration =
       std::chrono::duration_cast<std::chrono::duration<float>>(loop_duration)
         .count();
-    if (server.service_game_state(duration)) {
+    if (server.tick(duration)) {
       server.broadcast_game_state();
     }
     auto const now = Clock::now();

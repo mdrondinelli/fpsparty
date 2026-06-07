@@ -3,9 +3,7 @@
 
 #include "game/entity_world.hpp"
 #include "game/grid.hpp"
-#include "game/humanoid.hpp"
-#include "game/player.hpp"
-#include "game/projectile.hpp"
+
 namespace fpsparty::game {
 struct Game_create_info {
   Grid_create_info grid_info{};
@@ -18,12 +16,6 @@ public:
   explicit Game(Game_create_info const &info);
 
   void tick(float duration);
-
-  Entity_handle<Player> create_player(Player player = {});
-
-  Entity_handle<Humanoid> create_humanoid(Humanoid humanoid = {});
-
-  Entity_handle<Projectile> create_projectile(Projectile projectile = {});
 
   Grid const &get_grid() const noexcept;
 
