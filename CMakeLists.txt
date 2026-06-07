@@ -47,7 +47,6 @@ add_library(
   src/game/humanoid.cpp
   src/game/player.cpp
   src/game/projectile.cpp
-  src/game/server.cpp
 )
 target_include_directories(
   game
@@ -124,6 +123,7 @@ add_test(NAME ppm-tests COMMAND ppm-tests)
 add_executable(
   server
   src/server/main.cpp
+  src/server/server.cpp
 )
 target_include_directories(
   server

@@ -11,20 +11,22 @@
 #include <span>
 #include <vector>
 
-namespace fpsparty::game {
+namespace fpsparty::server {
 namespace {
 struct Peer_node {
-  std::vector<Entity_handle<Player>> players;
+  std::vector<game::Entity_handle<game::Player>> players;
 };
 
-void erase_player(Entity_world &world, Entity_handle<Player> player_handle) {
-  auto const players = world.get_all<Player>();
+void erase_player(
+  game::Entity_world &world,
+  game::Entity_handle<game::Player> player_handle) {
+  auto const players = world.get_all<game::Player>();
   auto const player_it = players.find(player_handle);
   if (player_it == players.end()) {
     return;
   }
   auto &player = (*player_it).entity;
-  auto const humanoids = world.get_all<Humanoid>();
+  auto const humanoids = world.get_all<game::Humanoid>();
   auto const humanoid_it = humanoids.find(player.humanoid);
   if (humanoid_it != humanoids.end()) {
     humanoids.erase(humanoid_it);
@@ -54,22 +56,25 @@ void Server::broadcast_game_state() {
   _game.get_grid().dump(grid_state_writer);
   auto public_state_writer = serial::Ostringstream_writer{};
   auto &world = _game.get_entities();
-  auto const humanoids = world.get_all<Humanoid>();
-  auto const projectiles = world.get_all<Projectile>();
+  auto const humanoids = world.get_all<game::Humanoid>();
+  auto const projectiles = world.get_all<game::Projectile>();
   serialize<std::uint32_t>(
     public_state_writer,
     static_cast<std::uint32_t>(humanoids.size() + projectiles.size()));
   for (auto [humanoid, handle] : humanoids) {
-    serialize<Entity_type>(public_state_writer, Entity_type::humanoid);
+    serialize<game::Entity_type>(
+      public_state_writer, game::Entity_type::humanoid);
     serialize<net::Entity_id>(public_state_writer, handle.id);
-    Entity_traits<Humanoid>::dump(public_state_writer, humanoid);
+    game::Entity_traits<game::Humanoid>::dump(public_state_writer, humanoid);
   }
   for (auto [projectile, handle] : projectiles) {
-    serialize<Entity_type>(public_state_writer, Entity_type::projectile);
+    serialize<game::Entity_type>(
+      public_state_writer, game::Entity_type::projectile);
     serialize<net::Entity_id>(public_state_writer, handle.id);
-    Entity_traits<Projectile>::dump(public_state_writer, projectile);
+    game::Entity_traits<game::Projectile>::dump(
+      public_state_writer, projectile);
   }
-  auto const players = world.get_all<Player>();
+  auto const players = world.get_all<game::Player>();
   for (auto const &peer : get_peers()) {
     auto player_state_writer = serial::Ostringstream_writer{};
     auto const peer_node = static_cast<Peer_node *>(peer.get_data());
@@ -84,9 +89,10 @@ void Server::broadcast_game_state() {
       if (player.humanoid && !world.get(player.humanoid)) {
         player.humanoid = {};
       }
-      serialize<Entity_type>(player_state_writer, Entity_type::player);
+      serialize<game::Entity_type>(
+        player_state_writer, game::Entity_type::player);
       serialize<net::Entity_id>(player_state_writer, player_handle.id);
-      Entity_traits<Player>::dump(player_state_writer, player);
+      game::Entity_traits<game::Player>::dump(player_state_writer, player);
     }
     net::Server::send_world_snapshot(
       peer,
@@ -108,9 +114,9 @@ void Server::broadcast_game_state() {
   }
 }
 
-Game const &Server::get_game() const noexcept { return _game; }
+game::Game const &Server::get_game() const noexcept { return _game; }
 
-Game &Server::get_game() noexcept { return _game; }
+game::Game &Server::get_game() noexcept { return _game; }
 
 void Server::on_peer_connect(enet::Peer peer) {
   std::cout << "Peer connected.\n";
@@ -128,7 +134,8 @@ void Server::on_peer_disconnect(enet::Peer peer) {
 
 void Server::on_player_join_request(enet::Peer peer) {
   auto const peer_node = static_cast<Peer_node *>(peer.get_data());
-  auto const player_handle = _game.get_entities().emplace<Player>().handle;
+  auto const player_handle =
+    _game.get_entities().emplace<game::Player>().handle;
   peer_node->players.push_back(player_handle);
   send_player_join_response(peer, player_handle.id);
 }
@@ -137,7 +144,9 @@ void Server::on_player_leave_request(
   enet::Peer peer, net::Entity_id player_entity_id) {
   auto const peer_node = static_cast<Peer_node *>(peer.get_data());
   auto const it = std::ranges::find(
-    peer_node->players, player_entity_id, &Entity_handle<Player>::id);
+    peer_node->players,
+    player_entity_id,
+    &game::Entity_handle<game::Player>::id);
   if (it == peer_node->players.end()) {
     return;
   }
@@ -164,4 +173,4 @@ void Server::on_player_input_state(
   }
 }
 
-} // namespace fpsparty::game
+} // namespace fpsparty::server

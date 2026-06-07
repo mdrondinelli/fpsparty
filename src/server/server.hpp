@@ -1,13 +1,13 @@
-#ifndef FPSPARTY_GAME_SERVER_HPP
-#define FPSPARTY_GAME_SERVER_HPP
+#ifndef FPSPARTY_SERVER_SERVER_HPP
+#define FPSPARTY_SERVER_SERVER_HPP
 
 #include "game/game.hpp"
 #include "net/server.hpp"
 
-namespace fpsparty::game {
+namespace fpsparty::server {
 struct Server_create_info {
   net::Server_create_info net_info;
-  Game_create_info game_info;
+  game::Game_create_info game_info;
   float tick_duration;
 };
 
@@ -19,9 +19,9 @@ public:
 
   void broadcast_game_state();
 
-  Game const &get_game() const noexcept;
+  game::Game const &get_game() const noexcept;
 
-  Game &get_game() noexcept;
+  game::Game &get_game() noexcept;
 
 protected:
   void on_peer_connect(enet::Peer peer) override;
@@ -39,10 +39,10 @@ protected:
     net::Input_state const &input_state) override;
 
 private:
-  Game _game;
+  game::Game _game;
   float _tick_duration{};
   float _tick_timer{};
 };
-} // namespace fpsparty::game
+} // namespace fpsparty::server
 
 #endif

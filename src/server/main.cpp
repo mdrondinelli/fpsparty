@@ -1,7 +1,7 @@
 #include "constants.hpp"
 #include "enet.hpp"
-#include "game/server.hpp"
 #include "net/core/constants.hpp"
+#include "server/server.hpp"
 #include <cassert>
 #include <chrono>
 #include <csignal>
@@ -15,7 +15,7 @@ std::sig_atomic_t volatile signal_status{};
 void handle_signal(int signal) { signal_status = signal; }
 
 void fill_blocks(
-  game::Server &server,
+  server::Server &server,
   Eigen::Vector3i const &min,
   Eigen::Vector3i const &max,
   bool solid = true) {
@@ -27,7 +27,7 @@ int main() {
   std::signal(SIGINT, handle_signal);
   std::signal(SIGTERM, handle_signal);
   auto const enet_guard = enet::Initialization_guard{{}};
-  auto server = game::Server{{
+  auto server = server::Server{{
     .net_info =
       {
         .port = net::constants::port,
