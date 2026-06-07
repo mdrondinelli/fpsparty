@@ -36,6 +36,7 @@ target_include_directories(
   PUBLIC
   ${CMAKE_SOURCE_DIR}/src
 )
+target_link_libraries(net PUBLIC enet)
 
 # libgame
 add_library(
@@ -63,35 +64,34 @@ target_include_directories(
 target_compile_definitions(game PUBLIC FPSPARTY_SERIAL_EIGEN)
 target_link_libraries(game net)
 
-# libscene
+# libclient
 add_library(
-  scene
-  src/scene/scene.cpp
+  libclient
+  src/client/application.cpp
+  src/client/client.cpp
+  src/client/frame_counter.cpp
+  src/client/grid_mesh.cpp
+  src/client/scene.cpp
 )
 target_include_directories(
-  scene
-  PUBLIC
-  ${CMAKE_SOURCE_DIR}/src
-)
-target_link_libraries(scene game)
-
-# libclient-session
-add_library(
-  client-session
-  src/client/session.cpp
-)
-target_include_directories(
-  client-session
+  libclient
   PUBLIC
   ${CMAKE_SOURCE_DIR}/src
 )
 target_include_directories(
-  client-session
+  libclient
   SYSTEM
   PRIVATE
   ${CMAKE_SOURCE_DIR}/extern/tracy-0.12.2
 )
-target_link_libraries(client-session game scene net)
+target_link_libraries(libclient PUBLIC game graphics net PRIVATE tracy)
+
+add_executable(
+  client-tests
+  tests/client/scene.cpp
+)
+target_link_libraries(client-tests libclient Catch2::Catch2WithMain)
+add_test(NAME client-tests COMMAND client-tests)
 
 add_executable(
   game-tests
@@ -188,8 +188,6 @@ target_link_libraries(graphics glfw volk GPUOpen::VulkanMemoryAllocator)
 # client
 add_executable(
   client
-  src/client/frame_counter.cpp
-  src/client/grid_mesh.cpp
   src/client/main.cpp
 )
 target_include_directories(
@@ -205,17 +203,17 @@ target_include_directories(
   PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
-target_link_libraries(client enet tracy net client-session graphics)
+target_link_libraries(client enet tracy libclient)
 
 # compiler options
-set_property(TARGET net game scene client-session game-tests ppm ppm-tests server graphics client PROPERTY CXX_STANDARD 23)
-set_property(TARGET net game scene client-session game-tests ppm ppm-tests server graphics client PROPERTY CXX_STANDARD_REQUIRED ON)
-set_property(TARGET net game scene client-session game-tests ppm ppm-tests server graphics client PROPERTY CXX_EXTENSIONS OFF)
+set_property(TARGET net game libclient client-tests game-tests ppm ppm-tests server graphics client PROPERTY CXX_STANDARD 23)
+set_property(TARGET net game libclient client-tests game-tests ppm ppm-tests server graphics client PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET net game libclient client-tests game-tests ppm ppm-tests server graphics client PROPERTY CXX_EXTENSIONS OFF)
 if (MSVC)
   target_compile_options(net PRIVATE /W4 /WX)
   target_compile_options(game PRIVATE /W4 /WX)
-  target_compile_options(scene PRIVATE /W4 /WX)
-  target_compile_options(client-session PRIVATE /W4 /WX)
+  target_compile_options(libclient PRIVATE /W4 /WX)
+  target_compile_options(client-tests PRIVATE /W4 /WX)
   target_compile_options(game-tests PRIVATE /W4 /WX)
   target_compile_options(ppm PRIVATE /W4 /WX)
   target_compile_options(ppm-tests PRIVATE /W4 /WX)
@@ -230,8 +228,8 @@ else()
   set(fpsparty_compile_options -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
   target_compile_options(net PRIVATE ${fpsparty_compile_options})
   target_compile_options(game PRIVATE ${fpsparty_compile_options})
-  target_compile_options(scene PRIVATE ${fpsparty_compile_options})
-  target_compile_options(client-session PRIVATE ${fpsparty_compile_options})
+  target_compile_options(libclient PRIVATE ${fpsparty_compile_options})
+  target_compile_options(client-tests PRIVATE ${fpsparty_compile_options})
   target_compile_options(game-tests PRIVATE ${fpsparty_compile_options})
   target_compile_options(ppm PRIVATE ${fpsparty_compile_options})
   target_compile_options(ppm-tests PRIVATE ${fpsparty_compile_options})
@@ -245,8 +243,8 @@ else()
   set(fpsparty_link_options -stdlib=libc++ -lc++abi)
   target_link_options(net PRIVATE ${fpsparty_link_options})
   target_link_options(game PRIVATE ${fpsparty_link_options})
-  target_link_options(scene PRIVATE ${fpsparty_link_options})
-  target_link_options(client-session PRIVATE ${fpsparty_link_options})
+  target_link_options(libclient PRIVATE ${fpsparty_link_options})
+  target_link_options(client-tests PRIVATE ${fpsparty_link_options})
   target_link_options(game-tests PRIVATE ${fpsparty_link_options})
   target_link_options(ppm PRIVATE ${fpsparty_link_options})
   target_link_options(ppm-tests PRIVATE ${fpsparty_link_options})
