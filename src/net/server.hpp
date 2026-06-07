@@ -4,7 +4,7 @@
 #include "enet.hpp"
 #include "net/core/entity_id.hpp"
 #include "net/core/input_state.hpp"
-#include "net/core/sequence_number.hpp"
+#include "net/core/player_join_request_id.hpp"
 #include <cstdint>
 #include <memory_resource>
 #include <vector>
@@ -36,31 +36,31 @@ public:
       std::pmr::get_default_resource()) const;
 
 protected:
-  virtual void on_peer_connect(enet::Peer);
+  virtual void on_peer_connect(enet::Peer) = 0;
 
-  virtual void on_peer_disconnect(enet::Peer);
+  virtual void on_peer_disconnect(enet::Peer) = 0;
 
-  virtual void on_player_join_request(enet::Peer);
+  virtual void on_player_join_request(
+    enet::Peer, Player_join_request_id request_id) = 0;
 
   virtual void
-  on_player_leave_request(enet::Peer peer, Entity_id player_entity_id);
+  on_player_leave_request(enet::Peer peer, Entity_id player_entity_id) = 0;
 
   virtual void on_player_input_state(
     enet::Peer peer,
     Entity_id player_entity_id,
-    Sequence_number input_sequence_number,
-    net::Input_state const &input_state);
+    net::Input_state const &input_state) = 0;
 
-  void send_player_join_response(enet::Peer peer, Entity_id player_entity_id);
+  void send_player_join_response(
+    enet::Peer peer,
+    Player_join_request_id request_id,
+    Entity_id player_entity_id);
 
   void send_world_snapshot(
     enet::Peer peer,
-    Sequence_number tick_number,
     std::span<std::byte const> grid_state,
     std::span<std::byte const> public_entity_state,
     std::span<std::byte const> player_entity_state);
-
-  void flush() noexcept;
 
 private:
   void handle_event(enet::Event const &e);

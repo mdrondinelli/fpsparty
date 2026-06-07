@@ -2,7 +2,7 @@
 #define FPSPARTY_CLIENT_GRID_MESH_HPP
 
 #include "client/sign.hpp"
-#include "game/core/grid.hpp"
+#include "game/grid.hpp"
 #include "graphics/graphics.hpp"
 #include "graphics/work_done_callback.hpp"
 #include "graphics/work_recorder.hpp"
