@@ -69,7 +69,6 @@ add_library(
   libclient
   src/client/application.cpp
   src/client/client.cpp
-  src/client/frame_counter.cpp
   src/client/grid_mesh.cpp
   src/client/scene.cpp
 )
