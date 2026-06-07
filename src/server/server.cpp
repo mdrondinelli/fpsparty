@@ -132,12 +132,13 @@ void Server::on_peer_disconnect(enet::Peer peer) {
   }
 }
 
-void Server::on_player_join_request(enet::Peer peer) {
+void Server::on_player_join_request(
+  enet::Peer peer, net::Player_join_request_id request_id) {
   auto const peer_node = static_cast<Peer_node *>(peer.get_data());
   auto const player_handle =
     _game.get_entities().emplace<game::Player>().handle;
   peer_node->players.push_back(player_handle);
-  send_player_join_response(peer, player_handle.id);
+  send_player_join_response(peer, request_id, player_handle.id);
 }
 
 void Server::on_player_leave_request(

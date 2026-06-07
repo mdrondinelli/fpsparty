@@ -39,10 +39,14 @@ void Server::disconnect() {
 }
 
 void Server::send_player_join_response(
-  enet::Peer peer, net::Entity_id player_entity_id) {
+  enet::Peer peer,
+  Player_join_request_id request_id,
+  net::Entity_id player_entity_id) {
+  assert(request_id != 0);
   auto writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<Message_type>(writer, Message_type::player_join_response);
+  serialize<Player_join_request_id>(writer, request_id);
   serialize<net::Entity_id>(writer, player_entity_id);
   peer.send(
     constants::player_initialization_channel_id,
@@ -91,7 +95,7 @@ void Server::on_peer_connect(enet::Peer) {}
 
 void Server::on_peer_disconnect(enet::Peer) {}
 
-void Server::on_player_join_request(enet::Peer) {}
+void Server::on_player_join_request(enet::Peer, Player_join_request_id) {}
 
 void Server::on_player_leave_request(enet::Peer, net::Entity_id) {}
 
@@ -121,7 +125,12 @@ void Server::handle_event(enet::Event const &e) {
     }
     switch (*message_type) {
     case Message_type::player_join_request: {
-      on_player_join_request(e.peer);
+      auto const request_id = deserialize<Player_join_request_id>(reader);
+      if (!request_id || *request_id == 0) {
+        std::cerr << "Malformed player join request packet.\n";
+        return;
+      }
+      on_player_join_request(e.peer, *request_id);
       return;
     }
     case Message_type::player_leave_request: {

@@ -82,6 +82,7 @@ add_library(
   src/client/application.cpp
   src/client/client.cpp
   src/client/grid_mesh.cpp
+  src/client/local_player.cpp
 )
 target_include_directories(
   libclient
@@ -95,6 +96,13 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/extern/tracy-0.12.2
 )
 target_link_libraries(libclient PUBLIC game graphics libscene net PRIVATE tracy)
+
+add_executable(
+  client-tests
+  tests/client/local_player.cpp
+)
+target_link_libraries(client-tests libclient Catch2::Catch2WithMain)
+add_test(NAME client-tests COMMAND client-tests)
 
 add_executable(
   scene-tests
@@ -216,14 +224,15 @@ target_include_directories(
 target_link_libraries(client enet tracy libclient)
 
 # compiler options
-set_property(TARGET net game libscene libclient scene-tests game-tests ppm ppm-tests server graphics client PROPERTY CXX_STANDARD 23)
-set_property(TARGET net game libscene libclient scene-tests game-tests ppm ppm-tests server graphics client PROPERTY CXX_STANDARD_REQUIRED ON)
-set_property(TARGET net game libscene libclient scene-tests game-tests ppm ppm-tests server graphics client PROPERTY CXX_EXTENSIONS OFF)
+set_property(TARGET net game libscene libclient client-tests scene-tests game-tests ppm ppm-tests server graphics client PROPERTY CXX_STANDARD 23)
+set_property(TARGET net game libscene libclient client-tests scene-tests game-tests ppm ppm-tests server graphics client PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET net game libscene libclient client-tests scene-tests game-tests ppm ppm-tests server graphics client PROPERTY CXX_EXTENSIONS OFF)
 if (MSVC)
   target_compile_options(net PRIVATE /W4 /WX)
   target_compile_options(game PRIVATE /W4 /WX)
   target_compile_options(libscene PRIVATE /W4 /WX)
   target_compile_options(libclient PRIVATE /W4 /WX)
+  target_compile_options(client-tests PRIVATE /W4 /WX)
   target_compile_options(scene-tests PRIVATE /W4 /WX)
   target_compile_options(game-tests PRIVATE /W4 /WX)
   target_compile_options(ppm PRIVATE /W4 /WX)
@@ -241,6 +250,7 @@ else()
   target_compile_options(game PRIVATE ${fpsparty_compile_options})
   target_compile_options(libscene PRIVATE ${fpsparty_compile_options})
   target_compile_options(libclient PRIVATE ${fpsparty_compile_options})
+  target_compile_options(client-tests PRIVATE ${fpsparty_compile_options})
   target_compile_options(scene-tests PRIVATE ${fpsparty_compile_options})
   target_compile_options(game-tests PRIVATE ${fpsparty_compile_options})
   target_compile_options(ppm PRIVATE ${fpsparty_compile_options})
@@ -257,6 +267,7 @@ else()
   target_link_options(game PRIVATE ${fpsparty_link_options})
   target_link_options(libscene PRIVATE ${fpsparty_link_options})
   target_link_options(libclient PRIVATE ${fpsparty_link_options})
+  target_link_options(client-tests PRIVATE ${fpsparty_link_options})
   target_link_options(scene-tests PRIVATE ${fpsparty_link_options})
   target_link_options(game-tests PRIVATE ${fpsparty_link_options})
   target_link_options(ppm PRIVATE ${fpsparty_link_options})

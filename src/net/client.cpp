@@ -40,11 +40,13 @@ bool Client::is_connected() const noexcept {
   return _server != nullptr && !_connecting;
 }
 
-void Client::send_player_join_request() {
+void Client::send_player_join_request(Player_join_request_id request_id) {
+  assert(request_id != 0);
   auto packet_writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<net::Message_type>(
     packet_writer, net::Message_type::player_join_request);
+  serialize<Player_join_request_id>(packet_writer, request_id);
   _server.send(
     constants::player_initialization_channel_id,
     enet::create_packet_unique({
@@ -110,11 +112,16 @@ void Client::handle_event(enet::Event const &e) {
     }
     switch (*message_type) {
     case Message_type::player_join_response: {
-      auto const player_entity_id = deserialize<net::Entity_id>(reader);
-      if (!player_entity_id) {
+      auto const request_id =
+        deserialize<net::Player_join_request_id>(reader);
+      if (!request_id || *request_id == 0) {
         goto malformed_message;
       }
-      on_player_join_response(*player_entity_id);
+      auto const player_entity_id = deserialize<net::Entity_id>(reader);
+      if (!player_entity_id || *player_entity_id == 0) {
+        goto malformed_message;
+      }
+      on_player_join_response(*request_id, *player_entity_id);
       return;
     }
     case Message_type::world_snapshot: {

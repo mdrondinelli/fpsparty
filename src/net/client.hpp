@@ -4,6 +4,7 @@
 #include "enet.hpp"
 #include "net/core/entity_id.hpp"
 #include "net/core/input_state.hpp"
+#include "net/core/player_join_request_id.hpp"
 #include "serial/span_reader.hpp"
 
 namespace fpsparty::net {
@@ -28,7 +29,7 @@ public:
 
   bool is_connected() const noexcept;
 
-  void send_player_join_request();
+  void send_player_join_request(Player_join_request_id request_id);
 
   void send_player_leave_request(net::Entity_id player_entity_id);
 
@@ -41,7 +42,8 @@ protected:
 
   virtual void on_disconnect() = 0;
 
-  virtual void on_player_join_response(net::Entity_id player_entity_id) = 0;
+  virtual void on_player_join_response(
+    Player_join_request_id request_id, net::Entity_id player_entity_id) = 0;
 
   virtual void on_world_snapshot(
     serial::Span_reader &grid_state_reader,

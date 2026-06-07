@@ -4,6 +4,7 @@
 #include "enet.hpp"
 #include "net/core/entity_id.hpp"
 #include "net/core/input_state.hpp"
+#include "net/core/player_join_request_id.hpp"
 #include <cstdint>
 #include <memory_resource>
 #include <vector>
@@ -39,7 +40,8 @@ protected:
 
   virtual void on_peer_disconnect(enet::Peer) = 0;
 
-  virtual void on_player_join_request(enet::Peer) = 0;
+  virtual void on_player_join_request(
+    enet::Peer, Player_join_request_id request_id) = 0;
 
   virtual void
   on_player_leave_request(enet::Peer peer, Entity_id player_entity_id) = 0;
@@ -49,7 +51,10 @@ protected:
     Entity_id player_entity_id,
     net::Input_state const &input_state) = 0;
 
-  void send_player_join_response(enet::Peer peer, Entity_id player_entity_id);
+  void send_player_join_response(
+    enet::Peer peer,
+    Player_join_request_id request_id,
+    Entity_id player_entity_id);
 
   void send_world_snapshot(
     enet::Peer peer,

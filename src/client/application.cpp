@@ -187,6 +187,7 @@ public:
     if (_state == State::connecting) {
       if (_client.is_connected()) {
         _state = State::connected;
+        _local_player = &_client.join_player();
       } else if (!_client.is_connecting()) {
         _state = State::stopped;
         return false;
@@ -267,7 +268,9 @@ private:
     work_recorder.set_depth_write_enabled(true);
     work_recorder.set_depth_compare_op(graphics::Compare_op::greater);
     auto const scene = _client.get_scene();
-    auto const camera = _client.get_camera_snapshot();
+    auto const camera =
+      _local_player ? _local_player->get_camera_snapshot()
+                    : std::optional<Camera_snapshot>{};
     if (scene && camera) {
       auto const view_matrix = (math::x_rotation_matrix(-camera->pitch) *
                                 math::y_rotation_matrix(-camera->yaw) *
@@ -363,8 +366,8 @@ private:
     glfw::Window, glfw::Key key, int, glfw::Press_action action, int) override {
     if (key == glfw::Key::k_escape && action == glfw::Press_action::press) {
       _glfw_window->set_cursor_input_mode(glfw::Cursor_input_mode::normal);
-    } else if (_client.has_scene()) {
-      auto input_state = _client.get_current_input_state();
+    } else if (_local_player) {
+      auto input_state = _local_player->get_input_state();
       switch (key) {
       case glfw::Key::k_e:
         input_state.move_forward = action != glfw::Press_action::release;
@@ -387,7 +390,7 @@ private:
         break;
       default:
       }
-      _client.set_current_input_state(input_state);
+      _local_player->set_input_state(input_state);
     }
   }
 
@@ -396,14 +399,14 @@ private:
     glfw::Mouse_button button,
     glfw::Press_state action,
     int) override {
-    if (_client.has_scene()) {
-      auto input_state = _client.get_current_input_state();
+    if (_local_player) {
+      auto input_state = _local_player->get_input_state();
       if (button == glfw::Mouse_button::mb_left) {
         input_state.use_primary = action != glfw::Press_state::release;
       } else if (button == glfw::Mouse_button::mb_right) {
         input_state.use_secondary = action != glfw::Press_state::release;
       }
-      _client.set_current_input_state(input_state);
+      _local_player->set_input_state(input_state);
     }
     if (
       button == glfw::Mouse_button::mb_right &&
@@ -415,9 +418,9 @@ private:
   void on_cursor_pos(
     glfw::Window, double, double, double dxpos, double dypos) override {
     if (
-      _client.has_scene() && _glfw_window->get_cursor_input_mode() ==
-                               glfw::Cursor_input_mode::disabled) {
-      auto input_state = _client.get_current_input_state();
+      _local_player && _glfw_window->get_cursor_input_mode() ==
+                         glfw::Cursor_input_mode::disabled) {
+      auto input_state = _local_player->get_input_state();
       input_state.yaw -=
         static_cast<float>(dxpos * constants::mouselook_sensititvity);
       input_state.pitch +=
@@ -426,7 +429,7 @@ private:
         input_state.pitch,
         -0.5f * std::numbers::pi_v<float>,
         0.5f * std::numbers::pi_v<float>);
-      _client.set_current_input_state(input_state);
+      _local_player->set_input_state(input_state);
     }
   }
 
@@ -609,6 +612,7 @@ private:
 
   State _state{State::initial};
   Client _client;
+  Local_player *_local_player{};
   enet::Address _server_address;
   glfw::Unique_window _glfw_window{};
   vk::UniqueSurfaceKHR _vk_surface{};

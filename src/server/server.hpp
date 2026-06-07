@@ -28,7 +28,8 @@ protected:
 
   void on_peer_disconnect(enet::Peer peer) override;
 
-  void on_player_join_request(enet::Peer peer) override;
+  void on_player_join_request(
+    enet::Peer peer, net::Player_join_request_id request_id) override;
 
   void on_player_leave_request(
     enet::Peer peer, net::Entity_id player_entity_id) override;
