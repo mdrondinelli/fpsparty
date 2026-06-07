@@ -1,6 +1,6 @@
 #include "scene.hpp"
 
-namespace fpsparty::client {
+namespace fpsparty::scene {
 game::Grid const &Scene::get_grid() const noexcept { return _grid; }
 
 game::Grid &Scene::get_grid() noexcept { return _grid; }
@@ -21,4 +21,4 @@ bool Scene::get_grid_remesh_flag() const noexcept {
 void Scene::set_grid_remesh_flag() noexcept { _grid_remesh_flag = true; }
 
 void Scene::clear_grid_remesh_flag() noexcept { _grid_remesh_flag = false; }
-} // namespace fpsparty::client
+} // namespace fpsparty::scene

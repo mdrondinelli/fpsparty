@@ -50,11 +50,11 @@ void Client::set_current_input_state(net::Input_state const &value) noexcept {
   _current_input_state = value;
 }
 
-Scene *Client::get_scene() noexcept {
+scene::Scene *Client::get_scene() noexcept {
   return _scene ? &*_scene : nullptr;
 }
 
-Scene const *Client::get_scene() const noexcept {
+scene::Scene const *Client::get_scene() const noexcept {
   return _scene ? &*_scene : nullptr;
 }
 
@@ -64,7 +64,7 @@ Client::get_camera_snapshot() const noexcept {
 }
 
 void Client::on_connect() {
-  _scene = Scene{};
+  _scene = scene::Scene{};
   send_player_join_request();
 }
 
@@ -151,21 +151,21 @@ void Client::load_public_entity_state(serial::Reader &reader) {
         return;
       }
       if (
-        _local_humanoid_entity_id &&
-        *entity_id == *_local_humanoid_entity_id) {
+        _local_humanoid_entity_id && *entity_id == *_local_humanoid_entity_id) {
         _camera_snapshot = Camera_snapshot{
-          .position =
-            *position + Eigen::Vector3f::UnitY() * game::constants::humanoid_eye_height,
+          .position = *position + Eigen::Vector3f::UnitY() *
+                                    game::constants::humanoid_eye_height,
           .yaw = input_state->yaw,
           .pitch = input_state->pitch,
         };
       } else {
-        mesh_instances.emplace_back(Mesh_instance{
-          .mesh = Mesh::cube,
-          .position = *position + Eigen::Vector3f::UnitY() * 0.9f,
-          .orientation = yaw_orientation(input_state->yaw),
-          .scale = {0.7f, 1.8f, 0.7f},
-        });
+        mesh_instances.emplace_back(
+          scene::Mesh_instance{
+            .mesh = scene::Mesh::cube,
+            .position = *position + Eigen::Vector3f::UnitY() * 0.9f,
+            .orientation = yaw_orientation(input_state->yaw),
+            .scale = {0.7f, 1.8f, 0.7f},
+          });
       }
       break;
     }
@@ -176,12 +176,13 @@ void Client::load_public_entity_state(serial::Reader &reader) {
         std::cerr << "Malformed projectile state.\n";
         return;
       }
-      mesh_instances.emplace_back(Mesh_instance{
-        .mesh = Mesh::cube,
-        .position = *position,
-        .orientation = Eigen::Quaternionf::Identity(),
-        .scale = Eigen::Vector3f::Constant(0.25f),
-      });
+      mesh_instances.emplace_back(
+        scene::Mesh_instance{
+          .mesh = scene::Mesh::cube,
+          .position = *position,
+          .orientation = Eigen::Quaternionf::Identity(),
+          .scale = Eigen::Vector3f::Constant(0.25f),
+        });
       break;
     }
     case game::Entity_type::player:

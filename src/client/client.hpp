@@ -1,10 +1,10 @@
 #ifndef FPSPARTY_CLIENT_CLIENT_HPP
 #define FPSPARTY_CLIENT_CLIENT_HPP
 
-#include "client/scene.hpp"
 #include "net/client.hpp"
 #include "net/core/entity_id.hpp"
 #include "net/core/input_state.hpp"
+#include "scene/scene.hpp"
 #include <Eigen/Dense>
 #include <cstddef>
 #include <optional>
@@ -38,9 +38,9 @@ public:
 
   void set_current_input_state(net::Input_state const &value) noexcept;
 
-  Scene *get_scene() noexcept;
+  scene::Scene *get_scene() noexcept;
 
-  Scene const *get_scene() const noexcept;
+  scene::Scene const *get_scene() const noexcept;
 
   std::optional<Camera_snapshot> const &get_camera_snapshot() const noexcept;
 
@@ -61,7 +61,7 @@ private:
 
   void load_public_entity_state(serial::Reader &reader);
 
-  std::optional<Scene> _scene{};
+  std::optional<scene::Scene> _scene{};
   std::optional<net::Entity_id> _player_entity_id{};
   std::optional<net::Entity_id> _local_humanoid_entity_id{};
   std::optional<Camera_snapshot> _camera_snapshot{};

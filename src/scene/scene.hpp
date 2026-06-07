@@ -1,12 +1,12 @@
-#ifndef FPSPARTY_CLIENT_SCENE_HPP
-#define FPSPARTY_CLIENT_SCENE_HPP
+#ifndef FPSPARTY_SCENE_SCENE_HPP
+#define FPSPARTY_SCENE_SCENE_HPP
 
 #include "game/grid.hpp"
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 #include <vector>
 
-namespace fpsparty::client {
+namespace fpsparty::scene {
 enum class Mesh {
   cube,
 };
@@ -39,6 +39,6 @@ private:
   std::vector<Mesh_instance> _mesh_instances{};
   bool _grid_remesh_flag{};
 };
-} // namespace fpsparty::client
+} // namespace fpsparty::scene
 
 #endif

@@ -269,11 +269,10 @@ private:
     auto const scene = _client.get_scene();
     auto const camera = _client.get_camera_snapshot();
     if (scene && camera) {
-      auto const view_matrix =
-        (math::x_rotation_matrix(-camera->pitch) *
-         math::y_rotation_matrix(-camera->yaw) *
-         math::translation_matrix(-camera->position))
-          .eval();
+      auto const view_matrix = (math::x_rotation_matrix(-camera->pitch) *
+                                math::y_rotation_matrix(-camera->yaw) *
+                                math::translation_matrix(-camera->position))
+                                 .eval();
       auto const aspect_ratio =
         static_cast<float>(swapchain_image->get_extent().x()) /
         static_cast<float>(swapchain_image->get_extent().y());
@@ -309,23 +308,17 @@ private:
             std::as_bytes(std::span{&value, 1}));
         };
         record_normal_push_constant({1.0f, 0.0f, 0.0f, 0.0f});
-        _grid_mesh
-          ->record_draws(work_recorder, game::Axis::x, Sign::positive);
+        _grid_mesh->record_draws(work_recorder, game::Axis::x, Sign::positive);
         record_normal_push_constant({-1.0f, 0.0f, 0.0f, 0.0f});
-        _grid_mesh
-          ->record_draws(work_recorder, game::Axis::x, Sign::negative);
+        _grid_mesh->record_draws(work_recorder, game::Axis::x, Sign::negative);
         record_normal_push_constant({0.0f, 1.0f, 0.0f, 0.0f});
-        _grid_mesh
-          ->record_draws(work_recorder, game::Axis::y, Sign::positive);
+        _grid_mesh->record_draws(work_recorder, game::Axis::y, Sign::positive);
         record_normal_push_constant({0.0f, -1.0f, 0.0f, 0.0f});
-        _grid_mesh
-          ->record_draws(work_recorder, game::Axis::y, Sign::negative);
+        _grid_mesh->record_draws(work_recorder, game::Axis::y, Sign::negative);
         record_normal_push_constant({0.0f, 0.0f, 1.0f, 0.0f});
-        _grid_mesh
-          ->record_draws(work_recorder, game::Axis::z, Sign::positive);
+        _grid_mesh->record_draws(work_recorder, game::Axis::z, Sign::positive);
         record_normal_push_constant({0.0f, 0.0f, -1.0f, 0.0f});
-        _grid_mesh
-          ->record_draws(work_recorder, game::Axis::z, Sign::negative);
+        _grid_mesh->record_draws(work_recorder, game::Axis::z, Sign::negative);
       }
       // draw cubes
       work_recorder.bind_pipeline(mesh_pipeline);
@@ -343,8 +336,7 @@ private:
         rotation_matrix.block<3, 3>(0, 0) =
           instance.orientation.toRotationMatrix();
         auto const model_matrix =
-          (math::translation_matrix(instance.position) *
-           rotation_matrix *
+          (math::translation_matrix(instance.position) * rotation_matrix *
            math::axis_aligned_scale_matrix(instance.scale))
             .eval();
         auto const model_view_projection_matrix =
@@ -424,7 +416,7 @@ private:
     glfw::Window, double, double, double dxpos, double dypos) override {
     if (
       _client.has_scene() && _glfw_window->get_cursor_input_mode() ==
-                       glfw::Cursor_input_mode::disabled) {
+                               glfw::Cursor_input_mode::disabled) {
       auto input_state = _client.get_current_input_state();
       input_state.yaw -=
         static_cast<float>(dxpos * constants::mouselook_sensititvity);
@@ -448,11 +440,10 @@ private:
     if (!scene->get_grid_remesh_flag()) {
       return;
     }
-    _pending_grid_mesh =
-      std::make_unique<Grid_mesh>(Grid_mesh_create_info{
-        .graphics = &_graphics,
-        .grid = &scene->get_grid(),
-      });
+    _pending_grid_mesh = std::make_unique<Grid_mesh>(Grid_mesh_create_info{
+      .graphics = &_graphics,
+      .grid = &scene->get_grid(),
+    });
     scene->clear_grid_remesh_flag();
   }
 
