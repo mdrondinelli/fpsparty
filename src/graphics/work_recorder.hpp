@@ -69,7 +69,7 @@ public:
 
 private:
   std::uint32_t
-  alloc_descriptor(std::size_t size, std::size_t alignment);
+  alloc_descriptor(std::size_t size);
 
 public:
   void copy_buffer(

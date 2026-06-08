@@ -64,7 +64,7 @@ Work_resource release_work_recorder(Work_recorder recorder) noexcept {
 std::uint32_t
 Work_recorder::upload_sampled_image_descriptor(rc::Strong<Image const> image) {
   auto const descriptor = image->get_sampled_image_descriptor();
-  auto const offset = alloc_descriptor(descriptor.size(), descriptor.size());
+  auto const offset = alloc_descriptor(descriptor.size());
   std::memcpy(
     _descriptor_heap_memory.get().data() + offset,
     descriptor.data(),
@@ -76,7 +76,7 @@ Work_recorder::upload_sampled_image_descriptor(rc::Strong<Image const> image) {
 std::uint32_t
 Work_recorder::upload_storage_image_descriptor(rc::Strong<Image> image) {
   auto const descriptor = image->get_storage_image_descriptor();
-  auto const offset = alloc_descriptor(descriptor.size(), descriptor.size());
+  auto const offset = alloc_descriptor(descriptor.size());
   std::memcpy(
     _descriptor_heap_memory.get().data() + offset,
     descriptor.data(),
@@ -86,10 +86,10 @@ Work_recorder::upload_storage_image_descriptor(rc::Strong<Image> image) {
 }
 
 std::uint32_t
-Work_recorder::alloc_descriptor(std::size_t size, std::size_t alignment) {
-  auto const remainder = _descriptor_heap_offset % alignment;
+Work_recorder::alloc_descriptor(std::size_t size) {
+  auto const remainder = _descriptor_heap_offset & (size - 1);
   if (remainder != 0) {
-    _descriptor_heap_offset += alignment - remainder;
+    _descriptor_heap_offset += size - remainder;
   }
   auto const offset = _descriptor_heap_offset;
   if (offset + size > _descriptor_heap_capacity) {
