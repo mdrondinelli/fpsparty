@@ -26,6 +26,7 @@ struct Graphics_create_info {
   vk::SurfaceKHR surface;
   bool vsync_preferred{true};
   unsigned max_frames_in_flight{2};
+  std::uint32_t descriptor_heap_size{1024 * 1024};
 };
 
 class Graphics {

@@ -71,8 +71,7 @@ public:
   std::uint32_t upload_storage_image_descriptor(rc::Strong<Image> image);
 
 private:
-  std::uint32_t
-  alloc_descriptor(std::size_t size);
+  std::uint32_t alloc_descriptor(std::size_t size);
 
 public:
   void copy_buffer(
@@ -123,8 +122,8 @@ public:
 
   void draw_indexed_indirect(Indirect_indexed_draw_info const &info) noexcept;
 
-  void push_data(
-    std::uint32_t offset, std::span<std::byte const> data) noexcept;
+  void
+  push_data(std::uint32_t offset, std::span<std::byte const> data) noexcept;
 
   void push_buffer_device_address(
     std::uint32_t offset, rc::Strong<Buffer> buffer) noexcept;
@@ -136,8 +135,7 @@ public:
   void add_reference(rc::Strong<Pipeline const> pipeline);
 
 private:
-  friend Work_recorder
-  detail::acquire_transient_work_recorder(
+  friend Work_recorder detail::acquire_transient_work_recorder(
     detail::Work_resource resource) noexcept;
 
   friend Work_recorder detail::acquire_frame_work_recorder(

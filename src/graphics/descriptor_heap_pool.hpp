@@ -10,6 +10,7 @@
 namespace fpsparty::graphics::detail {
 struct Descriptor_heap_pool_create_info {
   rc::Factory<Buffer> *buffer_factory;
+  std::uint64_t descriptor_heap_size{};
 };
 
 class Descriptor_heap_pool {
@@ -24,6 +25,7 @@ public:
 
 private:
   rc::Factory<Buffer> *_buffer_factory{};
+  std::uint64_t _descriptor_heap_size{};
   std::vector<rc::Strong<Buffer>> _buffers;
   std::mutex _mutex;
 };

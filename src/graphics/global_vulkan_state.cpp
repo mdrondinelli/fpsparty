@@ -126,10 +126,11 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
   auto descriptor_heap_features = vk::PhysicalDeviceDescriptorHeapFeaturesEXT{
     .descriptorHeap = true,
   };
-  auto shader_untyped_pointers_features = vk::PhysicalDeviceShaderUntypedPointersFeaturesKHR{
-    .pNext = &descriptor_heap_features,
-    .shaderUntypedPointers = true,
-  };
+  auto shader_untyped_pointers_features =
+    vk::PhysicalDeviceShaderUntypedPointersFeaturesKHR{
+      .pNext = &descriptor_heap_features,
+      .shaderUntypedPointers = true,
+    };
   auto buffer_device_address_features =
     vk::PhysicalDeviceBufferDeviceAddressFeatures{
       .pNext = &shader_untyped_pointers_features,

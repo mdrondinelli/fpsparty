@@ -142,7 +142,9 @@ Graphics::Graphics(Graphics_create_info const &info)
                            .descriptor_heap_properties()
                            .samplerHeapAlignment,
       })},
-      _descriptor_heaps{{.buffer_factory = &_buffer_factory}} {
+      _descriptor_heaps{
+        {.buffer_factory = &_buffer_factory,
+         .descriptor_heap_size = info.descriptor_heap_size}} {
   init_swapchain(select_swapchain_present_mode());
   for (auto i = std::size_t{}; i != info.max_frames_in_flight; ++i) {
     auto const swapchain_image_acquire_semaphore_name =

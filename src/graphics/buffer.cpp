@@ -41,10 +41,8 @@ Buffer::Buffer(Buffer_create_info const &info) {
     .priority = {},
   };
   std::tie(_vk_buffer, _vma_allocation) =
-    Global_vulkan_state::get()
-      .allocator()
-      .create_buffer_unique_with_alignment(
-        buffer_info, allocation_info, info.min_alignment);
+    Global_vulkan_state::get().allocator().create_buffer_unique_with_alignment(
+      buffer_info, allocation_info, info.min_alignment);
   _size = info.size;
 }
 

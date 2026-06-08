@@ -18,8 +18,7 @@ enum class Pipeline_stage_flag_bits : std::uint64_t {
     static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eLateFragmentTests),
   color_attachment_output = static_cast<std::uint64_t>(
     vk::PipelineStageFlagBits2::eColorAttachmentOutput),
-  transfer =
-    static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eTransfer),
+  transfer = static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eTransfer),
   index_input =
     static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eIndexInput),
 };
@@ -27,8 +26,7 @@ enum class Pipeline_stage_flag_bits : std::uint64_t {
 enum class Access_flag_bits : std::uint64_t {
   indirect_command_read =
     static_cast<std::uint64_t>(vk::AccessFlagBits2::eIndirectCommandRead),
-  index_read =
-    static_cast<std::uint64_t>(vk::AccessFlagBits2::eIndexRead),
+  index_read = static_cast<std::uint64_t>(vk::AccessFlagBits2::eIndexRead),
   color_attachment_write =
     static_cast<std::uint64_t>(vk::AccessFlagBits2::eColorAttachmentWrite),
   depth_stencil_attachment_read = static_cast<std::uint64_t>(

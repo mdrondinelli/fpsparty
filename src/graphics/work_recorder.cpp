@@ -33,10 +33,9 @@ Work_recorder acquire_frame_work_recorder(
         .size = sampler_heap->get_size(),
       },
     .reservedRangeOffset =
-      sampler_heap->get_size() -
-      Global_vulkan_state::get()
-        .descriptor_heap_properties()
-        .minSamplerHeapReservedRange,
+      sampler_heap->get_size() - Global_vulkan_state::get()
+                                   .descriptor_heap_properties()
+                                   .minSamplerHeapReservedRange,
     .reservedRangeSize = Global_vulkan_state::get()
                            .descriptor_heap_properties()
                            .minSamplerHeapReservedRange,
@@ -48,10 +47,9 @@ Work_recorder acquire_frame_work_recorder(
         .size = descriptor_heap->get_size(),
       },
     .reservedRangeOffset =
-      descriptor_heap->get_size() -
-      Global_vulkan_state::get()
-        .descriptor_heap_properties()
-        .minResourceHeapReservedRange,
+      descriptor_heap->get_size() - Global_vulkan_state::get()
+                                      .descriptor_heap_properties()
+                                      .minResourceHeapReservedRange,
     .reservedRangeSize = Global_vulkan_state::get()
                            .descriptor_heap_properties()
                            .minResourceHeapReservedRange,
@@ -94,8 +92,7 @@ Work_recorder::upload_storage_image_descriptor(rc::Strong<Image> image) {
   return offset / descriptor.size();
 }
 
-std::uint32_t
-Work_recorder::alloc_descriptor(std::size_t size) {
+std::uint32_t Work_recorder::alloc_descriptor(std::size_t size) {
   assert(_descriptor_heap_memory);
   auto const remainder = _descriptor_heap_offset & (size - 1);
   if (remainder != 0) {
@@ -350,12 +347,11 @@ Work_recorder::Work_recorder(detail::Work_resource resource) noexcept
           ? std::optional{_resource.descriptor_heap->map()}
           : std::nullopt},
       _descriptor_heap_capacity{
-        _resource.descriptor_heap
-          ? _resource.descriptor_heap->get_size() -
-              Global_vulkan_state::get()
-                .descriptor_heap_properties()
-                .minResourceHeapReservedRange
-          : 0} {}
+        _resource.descriptor_heap ? _resource.descriptor_heap->get_size() -
+                                      Global_vulkan_state::get()
+                                        .descriptor_heap_properties()
+                                        .minResourceHeapReservedRange
+                                  : 0} {}
 
 void Work_recorder::add_reference(rc::Strong<Buffer const> buffer) {
   _resource.buffers.emplace_back(std::move(buffer));

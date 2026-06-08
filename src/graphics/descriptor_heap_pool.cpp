@@ -6,10 +6,8 @@ namespace fpsparty::graphics::detail {
 
 namespace {
 
-constexpr auto descriptor_heap_size = std::uint64_t{1024 * 1024};
-
-constexpr std::uint64_t align_up(
-  std::uint64_t value, std::uint64_t alignment) noexcept {
+constexpr std::uint64_t
+align_up(std::uint64_t value, std::uint64_t alignment) noexcept {
   return (value + alignment - 1) / alignment * alignment;
 }
 
@@ -17,7 +15,10 @@ constexpr std::uint64_t align_up(
 
 Descriptor_heap_pool::Descriptor_heap_pool(
   Descriptor_heap_pool_create_info const &info)
-    : _buffer_factory{info.buffer_factory}, _buffers{} {}
+    : _buffer_factory{info.buffer_factory},
+      _descriptor_heap_size{info.descriptor_heap_size} {
+  assert(info.descriptor_heap_size);
+}
 
 rc::Strong<Buffer> Descriptor_heap_pool::pop() {
   auto lock = std::unique_lock{_mutex};
@@ -33,11 +34,10 @@ rc::Strong<Buffer> Descriptor_heap_pool::pop() {
       properties.imageDescriptorAlignment,
       properties.bufferDescriptorAlignment);
     auto const reserved_range_offset =
-      align_up(descriptor_heap_size, descriptor_alignment);
+      align_up(_descriptor_heap_size, descriptor_alignment);
     return _buffer_factory->create(
       Buffer_create_info{
-        .size =
-          reserved_range_offset + properties.minResourceHeapReservedRange,
+        .size = reserved_range_offset + properties.minResourceHeapReservedRange,
         .usage = Buffer_usage_flag_bits::shader_device_address |
                  Buffer_usage_flag_bits::descriptor_heap,
         .mapping_mode = Mapping_mode::write_only,
