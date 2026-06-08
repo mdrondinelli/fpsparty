@@ -17,6 +17,16 @@ public:
     return _physical_device;
   }
 
+  vk::PhysicalDeviceProperties2 const &
+  physical_device_properties() const noexcept {
+    return _physical_device_properties;
+  };
+
+  vk::PhysicalDeviceDescriptorHeapPropertiesEXT const &
+  descriptor_heap_properties() const noexcept {
+    return _descriptor_heap_properties;
+  }
+
   std::uint32_t queue_family_index() const noexcept {
     return _queue_family_index;
   }
@@ -49,6 +59,8 @@ private:
   vk::Queue _queue{};
   std::mutex _queue_mutex{};
   vma::Unique_allocator _allocator{};
+  vk::PhysicalDeviceProperties2 _physical_device_properties{};
+  vk::PhysicalDeviceDescriptorHeapPropertiesEXT _descriptor_heap_properties{};
 };
 
 class Global_vulkan_state_guard {

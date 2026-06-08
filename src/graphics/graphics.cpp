@@ -116,6 +116,8 @@ vk::UniqueSemaphore make_semaphore(
 #endif
   return retval;
 }
+
+constexpr auto sampler_descriptor_count = 2;
 } // namespace
 
 Graphics::Graphics(Graphics_create_info const &info)
@@ -124,7 +126,16 @@ Graphics::Graphics(Graphics_create_info const &info)
       _surface_present_modes{Global_vulkan_state::get()
                                .physical_device()
                                .getSurfacePresentModesKHR(_surface)},
-      _vsync_preferred{info.vsync_preferred} {
+      _vsync_preferred{info.vsync_preferred},
+      _sampler_heap{create_buffer({
+        .size = sampler_descriptor_count * Global_vulkan_state::get()
+                                             .descriptor_heap_properties()
+                                             .samplerDescriptorSize,
+        .usage = Buffer_usage_flag_bits::shader_device_address |
+                 Buffer_usage_flag_bits::descriptor_heap,
+        .mapping_mode = Mapping_mode::write_only,
+      })},
+      _descriptor_heaps{{.buffer_factory = &_buffer_factory}} {
   init_swapchain(select_swapchain_present_mode());
   for (auto i = std::size_t{}; i != info.max_frames_in_flight; ++i) {
     auto const swapchain_image_acquire_semaphore_name =
@@ -134,6 +145,30 @@ Graphics::Graphics(Graphics_create_info const &info)
         make_semaphore(swapchain_image_acquire_semaphore_name.c_str()),
     });
   }
+  auto const sampler_descriptor_size = Global_vulkan_state::get()
+                                         .descriptor_heap_properties()
+                                         .samplerDescriptorSize;
+  auto const sampler_heap_memory = _sampler_heap->map();
+  auto const nearest_sampler_create_info = vk::SamplerCreateInfo{};
+  auto const linear_sampler_create_info = vk::SamplerCreateInfo{
+    .magFilter = vk::Filter::eLinear,
+    .minFilter = vk::Filter::eLinear,
+  };
+  Global_vulkan_state::get().device().writeSamplerDescriptorsEXT(
+    {
+      nearest_sampler_create_info,
+      linear_sampler_create_info,
+    },
+    {
+      {
+        sampler_heap_memory.get().data() + 0 * sampler_descriptor_size,
+        sampler_descriptor_size,
+      },
+      {
+        sampler_heap_memory.get().data() + 1 * sampler_descriptor_size,
+        sampler_descriptor_size,
+      },
+    });
 }
 
 void Graphics::poll_works() {
@@ -186,7 +221,8 @@ rc::Strong<Image> Graphics::create_image(Image_create_info const &info) {
 }
 
 Work_recorder Graphics::record_transient_work() {
-  return detail::acquire_work_recorder(_work_resources.pop());
+  return detail::acquire_work_recorder(
+    _work_resources.pop(), _descriptor_heaps.pop());
 }
 
 rc::Strong<Work> Graphics::submit_transient_work(Work_recorder recorder) {
@@ -221,7 +257,8 @@ Graphics::try_record_frame_work() {
     }
   }();
   return std::pair<Work_recorder, rc::Strong<Image>>{
-    detail::acquire_work_recorder(_work_resources.pop()),
+    detail::acquire_work_recorder(
+      _work_resources.pop(), _descriptor_heaps.pop()),
     _swapchain_images.at(frame_resource.swapchain_image_index),
   };
 }

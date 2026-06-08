@@ -1,21 +1,26 @@
 #ifndef FPSPARTY_GRAPHICS_GRAPHICS_HPP
 #define FPSPARTY_GRAPHICS_GRAPHICS_HPP
 
-#include "glfw.hpp"
-#include "graphics/buffer.hpp"
-#include "graphics/image.hpp"
-#include "graphics/pipeline.hpp"
-#include "graphics/work.hpp"
-#include "graphics/work_queue.hpp"
-#include "graphics/work_recorder.hpp"
-#include "graphics/work_resource_pool.hpp"
-#include "rc.hpp"
 #include <cstddef>
 #include <optional>
 #include <span>
+
 #include <vulkan/vulkan.hpp>
 
+#include <glfw.hpp>
+#include <rc.hpp>
+
+#include "buffer.hpp"
+#include "descriptor_heap_pool.hpp"
+#include "image.hpp"
+#include "pipeline.hpp"
+#include "work.hpp"
+#include "work_queue.hpp"
+#include "work_recorder.hpp"
+#include "work_resource_pool.hpp"
+
 namespace fpsparty::graphics {
+
 struct Graphics_create_info {
   glfw::Window window;
   vk::SurfaceKHR surface;
@@ -26,6 +31,10 @@ struct Graphics_create_info {
 class Graphics {
 public:
   constexpr Graphics() noexcept = default;
+
+  Graphics(Graphics const &) = delete;
+
+  Graphics &operator=(Graphics const &) = delete;
 
   explicit Graphics(Graphics_create_info const &info);
 
@@ -90,11 +99,14 @@ private:
   std::vector<vk::UniqueImageView> _vk_swapchain_image_views{};
   std::vector<rc::Strong<Image>> _swapchain_images{};
   std::vector<vk::UniqueSemaphore> _swapchain_image_release_semaphores{};
+  rc::Strong<Buffer> _sampler_heap{};
+  detail::Descriptor_heap_pool _descriptor_heaps{};
   detail::Work_resource_pool _work_resources{};
   detail::Work_queue _works{};
   std::vector<Frame_resource> _frame_resources{};
   unsigned _frame_resource_index{};
 };
+
 } // namespace fpsparty::graphics
 
 #endif

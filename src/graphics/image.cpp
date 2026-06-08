@@ -41,9 +41,9 @@ Image::Image(Image_create_info const &info) {
         .pUserData = {},
         .priority = {},
       });
-  _vk_image = vk_image.release();
-  _vk_image_view = Global_vulkan_state::get().device().createImageView({
-    .image = _vk_image,
+  _vma_allocation = std::move(vma_allocation);
+  auto const image_view_create_info = vk::ImageViewCreateInfo{
+    .image = *vk_image,
     .viewType = static_cast<vk::ImageViewType>(image_type),
     .format = static_cast<vk::Format>(info.format),
     .subresourceRange =
@@ -53,8 +53,54 @@ Image::Image(Image_create_info const &info) {
         .levelCount = static_cast<std::uint32_t>(info.mip_level_count),
         .layerCount = static_cast<std::uint32_t>(info.array_layer_count),
       },
-  });
-  _vma_allocation = std::move(vma_allocation);
+  };
+  auto vk_image_view = Global_vulkan_state::get()
+                         .device()
+                         .createImageViewUnique(image_view_create_info);
+  auto const descriptor_info = vk::ImageDescriptorInfoEXT{
+    .pView = &image_view_create_info,
+    .layout = vk::ImageLayout::eGeneral,
+  };
+  if (info.usage & Image_usage_flag_bits::sampled) {
+    _sampled_image_descriptor.resize(
+      Global_vulkan_state::get()
+        .descriptor_heap_properties()
+        .imageDescriptorSize);
+    Global_vulkan_state::get().device().writeResourceDescriptorsEXT(
+      {
+        vk::ResourceDescriptorInfoEXT{
+          .type = vk::DescriptorType::eSampledImage,
+          .data = &descriptor_info,
+        },
+      },
+      {
+        vk::HostAddressRangeEXT{
+          .address = _sampled_image_descriptor.data(),
+          .size = _sampled_image_descriptor.size(),
+        },
+      });
+  }
+  if (info.usage & Image_usage_flag_bits::storage) {
+    _storage_image_descriptor.resize(
+      Global_vulkan_state::get()
+        .descriptor_heap_properties()
+        .imageDescriptorSize);
+    Global_vulkan_state::get().device().writeResourceDescriptorsEXT(
+      {
+        vk::ResourceDescriptorInfoEXT{
+          .type = vk::DescriptorType::eStorageImage,
+          .data = &descriptor_info,
+        },
+      },
+      {
+        vk::HostAddressRangeEXT{
+          .address = _sampled_image_descriptor.data(),
+          .size = _sampled_image_descriptor.size(),
+        },
+      });
+  }
+  _vk_image = vk_image.release();
+  _vk_image_view = vk_image_view.release();
   _format = info.format;
   _extent = info.extent;
   _mip_level_count = info.mip_level_count;

@@ -1,13 +1,22 @@
 #include "work_recorder.hpp"
-#include "graphics/buffer.hpp"
-#include "graphics/image.hpp"
+
+#include <cassert>
+
+#include "buffer.hpp"
+#include "global_vulkan_state.hpp"
+#include "image.hpp"
 
 namespace fpsparty::graphics {
+
 namespace detail {
-Work_recorder acquire_work_recorder(Work_resource resource) noexcept {
+
+Work_recorder acquire_work_recorder(
+  Work_resource resource, rc::Strong<Buffer> descriptor_heap) noexcept {
+  assert(descriptor_heap);
   resource.vk_command_buffer.begin({
     .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
   });
+  resource.descriptor_heap = std::move(descriptor_heap);
   return Work_recorder{std::move(resource)};
 }
 
@@ -15,7 +24,46 @@ Work_resource release_work_recorder(Work_recorder recorder) noexcept {
   recorder._resource.vk_command_buffer.end();
   return std::move(recorder._resource);
 }
+
 } // namespace detail
+
+std::uint32_t
+Work_recorder::upload_sampled_image_descriptor(rc::Strong<Image const> image) {
+  auto const descriptor = image->get_sampled_image_descriptor();
+  auto const offset = alloc_descriptor(descriptor.size());
+  auto const shift = std::countr_zero(descriptor.size());
+  std::memcpy(
+    _descriptor_heap_memory.get().data() + offset,
+    descriptor.data(),
+    descriptor.size());
+  return offset >> shift;
+}
+
+std::uint32_t
+Work_recorder::upload_storage_image_descriptor(rc::Strong<Image> image) {
+  auto const descriptor = image->get_storage_image_descriptor();
+  auto const offset = alloc_descriptor(descriptor.size());
+  auto const shift = std::countr_zero(descriptor.size());
+  std::memcpy(
+    _descriptor_heap_memory.get().data() + offset,
+    descriptor.data(),
+    descriptor.size());
+  return offset >> shift;
+}
+
+std::uint32_t Work_recorder::alloc_descriptor(std::size_t size) {
+  auto const mask = size - 1;
+  auto const remainder = _descriptor_heap_offset & mask;
+  if (remainder != 0) {
+    _descriptor_heap_offset += size - remainder;
+  }
+  auto const offset = _descriptor_heap_offset;
+  if (offset + size > _descriptor_heap_memory.get().size()) {
+    throw std::runtime_error{"Descriptor heap is too small"};
+  }
+  _descriptor_heap_offset += size;
+  return offset;
+}
 
 void Work_recorder::copy_buffer(
   rc::Strong<Buffer const> src,
@@ -250,7 +298,7 @@ void Work_recorder::push_buffer_device_address(
   rc::Strong<Pipeline_layout const> pipeline_layout,
   Shader_stage_flags stage_flags,
   std::uint32_t offset,
-  rc::Strong<Buffer const> buffer) noexcept {
+  rc::Strong<Buffer> buffer) noexcept {
   auto const address = buffer->get_device_address();
   push_constants(
     std::move(pipeline_layout),
@@ -261,7 +309,8 @@ void Work_recorder::push_buffer_device_address(
 }
 
 Work_recorder::Work_recorder(detail::Work_resource resource) noexcept
-    : _resource{std::move(resource)} {}
+    : _resource{std::move(resource)},
+      _descriptor_heap_memory{_resource.descriptor_heap->map()} {}
 
 void Work_recorder::add_reference(rc::Strong<Buffer const> buffer) {
   _resource.buffers.emplace_back(std::move(buffer));
@@ -283,4 +332,5 @@ void Work_recorder::add_reference(rc::Strong<Pipeline const> pipeline) {
 vk::CommandBuffer Work_recorder::get_command_buffer() const noexcept {
   return _resource.vk_command_buffer;
 }
+
 } // namespace fpsparty::graphics

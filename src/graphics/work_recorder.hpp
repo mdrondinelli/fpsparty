@@ -19,7 +19,8 @@ namespace fpsparty::graphics {
 class Work_recorder;
 
 namespace detail {
-Work_recorder acquire_work_recorder(Work_resource resource) noexcept;
+Work_recorder acquire_work_recorder(
+  Work_resource resource, rc::Strong<Buffer> descriptor_heap) noexcept;
 
 Work_resource release_work_recorder(Work_recorder recorder) noexcept;
 } // namespace detail
@@ -60,6 +61,14 @@ struct Indirect_indexed_draw_info {
 };
 
 class Work_recorder {
+public:
+  std::uint32_t upload_sampled_image_descriptor(rc::Strong<Image const> image);
+
+  std::uint32_t upload_storage_image_descriptor(rc::Strong<Image> image);
+
+private:
+  std::uint32_t alloc_descriptor(std::size_t size);
+
 public:
   void copy_buffer(
     rc::Strong<Buffer const> src,
@@ -119,7 +128,7 @@ public:
     rc::Strong<Pipeline_layout const> pipeline_layout,
     Shader_stage_flags stage_flags,
     std::uint32_t offset,
-    rc::Strong<Buffer const> buffer) noexcept;
+    rc::Strong<Buffer> buffer) noexcept;
 
   void add_reference(rc::Strong<Buffer const> buffer);
 
@@ -130,8 +139,9 @@ public:
   void add_reference(rc::Strong<Pipeline_layout const> pipeline_layout);
 
 private:
-  friend Work_recorder
-  detail::acquire_work_recorder(detail::Work_resource resource) noexcept;
+  friend Work_recorder detail::acquire_work_recorder(
+    detail::Work_resource resource,
+    rc::Strong<Buffer> descriptor_heap) noexcept;
 
   friend detail::Work_resource
   detail::release_work_recorder(Work_recorder recorder) noexcept;
@@ -141,6 +151,8 @@ private:
   vk::CommandBuffer get_command_buffer() const noexcept;
 
   detail::Work_resource _resource;
+  Mapped_memory _descriptor_heap_memory;
+  std::uint32_t _descriptor_heap_offset{};
 };
 } // namespace fpsparty::graphics
 

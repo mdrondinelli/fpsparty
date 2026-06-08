@@ -1,7 +1,7 @@
 #ifndef FPSPARTY_GRAPHICS_WORK_RESOURCE_POOL_HPP
 #define FPSPARTY_GRAPHICS_WORK_RESOURCE_POOL_HPP
 
-#include "graphics/work_resource.hpp"
+#include "work_resource.hpp"
 
 namespace fpsparty::graphics::detail {
 class Work_resource_pool {

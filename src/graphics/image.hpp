@@ -43,6 +43,14 @@ public:
 
   ~Image();
 
+  std::span<std::byte const> get_sampled_image_descriptor() const noexcept {
+    return _sampled_image_descriptor;
+  }
+
+  std::span<std::byte const> get_storage_image_descriptor() noexcept {
+    return _storage_image_descriptor;
+  }
+
   Image_format get_format() const noexcept { return _format; }
 
   Eigen::Vector3i const &get_extent() const noexcept { return _extent; }
@@ -65,9 +73,11 @@ private:
 
   explicit Image(detail::External_image_create_info const &info);
 
+  vma::Unique_allocation _vma_allocation{};
   vk::Image _vk_image{};
   vk::ImageView _vk_image_view{};
-  vma::Unique_allocation _vma_allocation{};
+  std::vector<std::byte> _sampled_image_descriptor{};
+  std::vector<std::byte> _storage_image_descriptor{};
   Image_format _format{};
   Eigen::Vector3i _extent{};
   int _mip_level_count{};

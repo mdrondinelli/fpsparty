@@ -27,11 +27,13 @@ class Buffer {
 public:
   explicit Buffer(Buffer_create_info const &info);
 
-  virtual ~Buffer() = default;
+  Buffer(Buffer const &other) = delete;
+
+  Buffer &operator=(Buffer const &other) = delete;
 
   Mapped_memory map();
 
-  std::uint64_t get_device_address() const noexcept;
+  std::uint64_t get_device_address() noexcept;
 
 private:
   friend constexpr vk::Buffer
@@ -40,8 +42,8 @@ private:
   friend constexpr vma::Allocation
   detail::get_buffer_vma_allocation(Buffer const &buffer) noexcept;
 
-  vk::UniqueBuffer _vk_buffer{};
   vma::Unique_allocation _vma_allocation{};
+  vk::UniqueBuffer _vk_buffer{};
 };
 
 namespace detail {

@@ -18,6 +18,14 @@ public:
 
   constexpr operator Value() const noexcept { return _value; }
 
+  friend constexpr Flags operator&(Flags lhs, Flags rhs) noexcept {
+    return Flags{lhs._value & rhs._value};
+  }
+
+  friend constexpr Flags &operator&=(Flags &lhs, Flags rhs) noexcept {
+    return lhs = lhs & rhs;
+  }
+
   friend constexpr Flags operator|(Flags lhs, Flags rhs) noexcept {
     return Flags{lhs._value | rhs._value};
   }

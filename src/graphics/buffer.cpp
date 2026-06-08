@@ -49,7 +49,7 @@ Mapped_memory Buffer::map() {
   return detail::create_mapped_memory(*_vma_allocation);
 }
 
-std::uint64_t Buffer::get_device_address() const noexcept {
+std::uint64_t Buffer::get_device_address() noexcept {
   return static_cast<std::uint64_t>(
     Global_vulkan_state::get().device().getBufferAddress(
       vk::BufferDeviceAddressInfo{.buffer = *_vk_buffer}));

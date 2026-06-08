@@ -268,9 +268,8 @@ private:
     work_recorder.set_depth_write_enabled(true);
     work_recorder.set_depth_compare_op(graphics::Compare_op::greater);
     auto const scene = _client.get_scene();
-    auto const camera =
-      _local_player ? _local_player->get_camera_snapshot()
-                    : std::optional<Camera_snapshot>{};
+    auto const camera = _local_player ? _local_player->get_camera_snapshot()
+                                      : std::optional<Camera_snapshot>{};
     if (scene && camera) {
       auto const view_matrix = (math::x_rotation_matrix(-camera->pitch) *
                                 math::y_rotation_matrix(-camera->yaw) *
@@ -523,14 +522,10 @@ private:
   make_grid_pipeline(graphics::Image_format swapchain_image_format) {
     auto const push_constant_ranges = std::array{
       graphics::Push_constant_range{
-        .stage_flags = graphics::Shader_stage_flag_bits::vertex,
+        .stage_flags = graphics::Shader_stage_flag_bits::vertex |
+                       graphics::Shader_stage_flag_bits::fragment,
         .offset = 0,
-        .size = 88,
-      },
-      graphics::Push_constant_range{
-        .stage_flags = graphics::Shader_stage_flag_bits::fragment,
-        .offset = 64,
-        .size = 16,
+        .size = 92,
       },
     };
     auto const pipeline_layout =

@@ -8,19 +8,17 @@
 
 namespace fpsparty::graphics {
 namespace {
-auto const vk_device_extensions =
-  std::array{
-    vk::KHRSwapchainExtensionName,
-    vk::KHRMaintenance5ExtensionName,
-    vk::EXTDescriptorHeapExtensionName,
-  };
+auto const vk_device_extensions = std::array{
+  vk::KHRSwapchainExtensionName,
+  vk::EXTDescriptorHeapExtensionName,
+};
 
 vk::UniqueInstance make_vk_instance() {
   volkInitialize();
   auto const app_info = vk::ApplicationInfo{
     .pApplicationName = "FPS Party",
     .pEngineName = "FPS Party",
-    .apiVersion = vk::ApiVersion13,
+    .apiVersion = vk::ApiVersion14,
   };
 #ifndef FPSPARTY_VULKAN_NDEBUG
   std::cout << "Enabling Vulkan validation layers.\n";
@@ -164,9 +162,10 @@ vma::Unique_allocator make_vma_allocator(
   vk::PhysicalDevice physical_device,
   vk::Device device) {
   auto create_info = vma::Allocator::Create_info{
-    .flags = vma::c_repr(vma::Allocator_create_flags{
-      vma::Allocator_create_flag_bits::e_buffer_device_address,
-    }),
+    .flags = vma::c_repr(
+      vma::Allocator_create_flags{
+        vma::Allocator_create_flag_bits::e_buffer_device_address,
+      }),
     .physicalDevice = physical_device,
     .device = device,
     .preferredLargeHeapBlockSize = 0,
@@ -229,6 +228,8 @@ Global_vulkan_state::Global_vulkan_state() {
   std::tie(_device, _queue) =
     make_vk_device(_physical_device, _queue_family_index);
   _allocator = make_vma_allocator(*_instance, _physical_device, *_device);
+  _physical_device_properties.pNext = &_descriptor_heap_properties;
+  _physical_device.getProperties2(&_physical_device_properties);
 }
 
 Global_vulkan_state_guard::Global_vulkan_state_guard(Create_info const &)

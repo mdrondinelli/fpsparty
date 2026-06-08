@@ -7,6 +7,7 @@
 namespace fpsparty::graphics {
 enum class Image_usage_flag_bits {
   sampled = static_cast<int>(vk::ImageUsageFlagBits::eSampled),
+  storage = static_cast<int>(vk::ImageUsageFlagBits::eStorage),
   color_attachment = static_cast<int>(vk::ImageUsageFlagBits::eColorAttachment),
   depth_attachment =
     static_cast<int>(vk::ImageUsageFlagBits::eDepthStencilAttachment),

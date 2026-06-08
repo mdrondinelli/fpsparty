@@ -1,0 +1,14 @@
+#ifndef FPSPARTY_DESCRIPTORS_GLSL
+#define FPSPARTY_DESCRIPTORS_GLSL
+
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_nonuniform_qualifier : require
+
+layout(descriptor_heap) uniform sampler samplers[];
+
+#define FPSPARTY_SAMPLER_NEAREST samplers[0]
+#define FPSPARTY_SAMPLER_LINEAR samplers[1]
+
+layout(descriptor_heap) uniform texture2D sampled_images[];
+
+#endif

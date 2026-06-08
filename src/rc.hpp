@@ -6,6 +6,7 @@
 #include <cassert>
 #include <concepts>
 #include <cstddef>
+#include <memory>
 #include <memory_resource>
 #include <type_traits>
 
