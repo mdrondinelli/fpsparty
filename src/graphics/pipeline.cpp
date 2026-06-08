@@ -1,11 +1,10 @@
 #include "pipeline.hpp"
 #include "global_vulkan_state.hpp"
-#include "graphics/pipeline_layout.hpp"
 #include <vector>
 #include <vulkan/vulkan.hpp>
 
 namespace fpsparty::graphics {
-Pipeline::Pipeline(Pipeline_create_info const &info) : _layout{info.layout} {
+Pipeline::Pipeline(Pipeline_create_info const &info) {
   auto vk_shader_stages = std::vector<vk::PipelineShaderStageCreateInfo>{};
   vk_shader_stages.reserve(info.shader_stages.size());
   for (auto const &shader_stage : info.shader_stages) {
@@ -96,9 +95,7 @@ Pipeline::Pipeline(Pipeline_create_info const &info) : _layout{info.layout} {
   };
   auto const vk_flags_info = vk::PipelineCreateFlags2CreateInfo{
     .pNext = &vk_rendering_info,
-    .flags = info.descriptor_heap_enabled
-               ? vk::PipelineCreateFlagBits2::eDescriptorHeapEXT
-               : vk::PipelineCreateFlags2{},
+    .flags = vk::PipelineCreateFlagBits2::eDescriptorHeapEXT,
   };
   _vk_pipeline = std::move(
     Global_vulkan_state::get()
@@ -117,15 +114,8 @@ Pipeline::Pipeline(Pipeline_create_info const &info) : _layout{info.layout} {
           .pDepthStencilState = &vk_depth_stencil_state,
           .pColorBlendState = &vk_color_blend_state,
           .pDynamicState = &vk_dynamic_state,
-          .layout = info.descriptor_heap_enabled
-                      ? vk::PipelineLayout{}
-                      : detail::get_pipeline_layout_vk_pipeline_layout(
-                          *info.layout),
+          .layout = {},
         }})
       .value[0]);
-}
-
-rc::Strong<Pipeline_layout> const &Pipeline::get_layout() const noexcept {
-  return _layout;
 }
 } // namespace fpsparty::graphics

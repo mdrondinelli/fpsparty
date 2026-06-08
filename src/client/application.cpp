@@ -319,7 +319,7 @@ private:
         work_recorder.push_data(
           0,
           std::as_bytes(std::span{&view_projection_matrix, 1}));
-        work_recorder.push_buffer_device_address_data(
+        work_recorder.push_buffer_device_address(
           80, _grid_mesh->get_vertex_buffer());
         work_recorder.push_data(
           88,
@@ -349,10 +349,7 @@ private:
       work_recorder
         .bind_index_buffer(_cube_index_buffer, graphics::Index_type::u16);
       work_recorder.push_buffer_device_address(
-        mesh_pipeline->get_layout(),
-        graphics::Shader_stage_flag_bits::vertex,
-        64,
-        _cube_vertex_buffer);
+        64, _cube_vertex_buffer);
       for (auto const &instance : scene->get_mesh_instances()) {
         auto rotation_matrix = Eigen::Matrix4f{Eigen::Matrix4f::Identity()};
         rotation_matrix.block<3, 3>(0, 0) =
@@ -363,9 +360,7 @@ private:
             .eval();
         auto const model_view_projection_matrix =
           (view_projection_matrix * model_matrix).eval();
-        work_recorder.push_constants(
-          _mesh_pipeline->get_layout(),
-          graphics::Shader_stage_flag_bits::vertex,
+        work_recorder.push_data(
           0,
           std::as_bytes(std::span{&model_view_projection_matrix, 1}));
         work_recorder.draw_indexed({
@@ -626,23 +621,11 @@ private:
         {
           .color_attachment_formats = {&color_attachment_format, 1},
         },
-      .layout = {},
-      .descriptor_heap_enabled = true,
     });
   }
 
   rc::Strong<graphics::Pipeline>
   make_mesh_pipeline(graphics::Image_format swapchain_image_format) {
-    auto const push_constant_range = graphics::Push_constant_range{
-      .stage_flags = graphics::Shader_stage_flag_bits::vertex,
-      .offset = 0,
-      .size = 72,
-    };
-    auto const pipeline_layout =
-      _mesh_pipeline ? _mesh_pipeline->get_layout()
-                     : _graphics.create_pipeline_layout({
-                         .push_constant_ranges = {&push_constant_range, 1},
-                       });
     auto const shader_stages =
       std::vector<graphics::Pipeline_shader_stage_create_info>{
         {
@@ -669,7 +652,6 @@ private:
         {
           .color_attachment_formats = {&color_attachment_format, 1},
         },
-      .layout = pipeline_layout,
     });
   }
 

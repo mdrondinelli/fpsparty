@@ -40,9 +40,6 @@ public:
 
   void poll_works();
 
-  rc::Strong<Pipeline_layout>
-  create_pipeline_layout(Pipeline_layout_create_info const &info);
-
   rc::Strong<Pipeline> create_pipeline(Pipeline_create_info const &info);
 
   rc::Strong<Buffer> create_buffer(Buffer_create_info const &info);
@@ -87,7 +84,6 @@ private:
   vk::SurfaceKHR _surface{};
   std::vector<vk::PresentModeKHR> _surface_present_modes{};
   bool _vsync_preferred{};
-  rc::Factory<Pipeline_layout> _pipeline_layout_factory{};
   rc::Factory<Pipeline> _pipeline_factory{};
   rc::Factory<Buffer> _buffer_factory{};
   rc::Factory<Image> _image_factory{};

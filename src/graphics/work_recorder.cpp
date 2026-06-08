@@ -314,20 +314,6 @@ void Work_recorder::draw_indexed_indirect(
   add_reference(info.buffer);
 }
 
-void Work_recorder::push_constants(
-  rc::Strong<Pipeline_layout const> pipeline_layout,
-  Shader_stage_flags stage_flags,
-  std::uint32_t offset,
-  std::span<std::byte const> data) noexcept {
-  get_command_buffer().pushConstants(
-    detail::get_pipeline_layout_vk_pipeline_layout(*pipeline_layout),
-    static_cast<vk::ShaderStageFlags>(stage_flags),
-    offset,
-    static_cast<std::uint32_t>(data.size()),
-    data.data());
-  add_reference(std::move(pipeline_layout));
-}
-
 void Work_recorder::push_data(
   std::uint32_t offset, std::span<std::byte const> data) noexcept {
   get_command_buffer().pushDataEXT({
@@ -341,20 +327,6 @@ void Work_recorder::push_data(
 }
 
 void Work_recorder::push_buffer_device_address(
-  rc::Strong<Pipeline_layout const> pipeline_layout,
-  Shader_stage_flags stage_flags,
-  std::uint32_t offset,
-  rc::Strong<Buffer> buffer) noexcept {
-  auto const address = buffer->get_device_address();
-  push_constants(
-    std::move(pipeline_layout),
-    stage_flags,
-    offset,
-    std::as_bytes(std::span{&address, 1}));
-  add_reference(std::move(buffer));
-}
-
-void Work_recorder::push_buffer_device_address_data(
   std::uint32_t offset, rc::Strong<Buffer> buffer) noexcept {
   auto const address = buffer->get_device_address();
   push_data(offset, std::as_bytes(std::span{&address, 1}));
@@ -376,11 +348,6 @@ void Work_recorder::add_reference(rc::Strong<Buffer const> buffer) {
 
 void Work_recorder::add_reference(rc::Strong<Image const> image) {
   _resource.images.emplace_back(std::move(image));
-}
-
-void Work_recorder::add_reference(
-  rc::Strong<Pipeline_layout const> pipeline_layout) {
-  _resource.pipeline_layouts.emplace_back(std::move(pipeline_layout));
 }
 
 void Work_recorder::add_reference(rc::Strong<Pipeline const> pipeline) {

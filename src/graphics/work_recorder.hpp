@@ -9,7 +9,6 @@
 #include "graphics/image_layout.hpp"
 #include "graphics/index_type.hpp"
 #include "graphics/pipeline.hpp"
-#include "graphics/pipeline_layout.hpp"
 #include "graphics/synchronization_scope.hpp"
 #include "graphics/work_resource.hpp"
 #include "rc.hpp"
@@ -121,31 +120,17 @@ public:
 
   void draw_indexed_indirect(Indirect_indexed_draw_info const &info) noexcept;
 
-  void push_constants(
-    rc::Strong<Pipeline_layout const> pipeline_layout,
-    Shader_stage_flags stage_flags,
-    std::uint32_t offset,
-    std::span<std::byte const> data) noexcept;
-
   void push_data(
     std::uint32_t offset, std::span<std::byte const> data) noexcept;
 
   void push_buffer_device_address(
-    rc::Strong<Pipeline_layout const> pipeline_layout,
-    Shader_stage_flags stage_flags,
-    std::uint32_t offset,
-    rc::Strong<Buffer> buffer) noexcept;
-
-  void push_buffer_device_address_data(
     std::uint32_t offset, rc::Strong<Buffer> buffer) noexcept;
 
   void add_reference(rc::Strong<Buffer const> buffer);
 
   void add_reference(rc::Strong<Image const> image);
 
-  void add_reference(rc::Strong<Pipeline const> pipeline_layout);
-
-  void add_reference(rc::Strong<Pipeline_layout const> pipeline_layout);
+  void add_reference(rc::Strong<Pipeline const> pipeline);
 
 private:
   friend Work_recorder detail::acquire_work_recorder(

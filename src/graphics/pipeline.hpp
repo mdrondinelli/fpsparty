@@ -2,7 +2,6 @@
 #define FPSPARTY_GRAPHICS_PIPELINE_HPP
 
 #include "graphics/image_format.hpp"
-#include "graphics/pipeline_layout.hpp"
 #include "graphics/primitive_topology.hpp"
 #include "graphics/shader.hpp"
 #include "graphics/shader_stage.hpp"
@@ -39,21 +38,16 @@ struct Pipeline_create_info {
   Pipeline_input_assembly_state_create_info input_assembly_state;
   Pipeline_depth_state_create_info depth_state;
   Pipeline_color_state_create_info color_state;
-  rc::Strong<Pipeline_layout> layout;
-  bool descriptor_heap_enabled{};
 };
 
 class Pipeline {
 public:
   explicit Pipeline(Pipeline_create_info const &info);
 
-  rc::Strong<Pipeline_layout> const &get_layout() const noexcept;
-
 private:
   friend vk::Pipeline
   detail::get_pipeline_vk_pipeline(Pipeline const &pipeline) noexcept;
 
-  rc::Strong<Pipeline_layout> _layout;
   vk::UniquePipeline _vk_pipeline;
 };
 

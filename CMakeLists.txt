@@ -169,7 +169,6 @@ add_library(
   src/graphics/graphics.cpp
   src/graphics/global_vulkan_state.cpp
   src/graphics/mapped_memory.cpp
-  src/graphics/pipeline_layout.cpp
   src/graphics/pipeline.cpp
   src/graphics/shader.cpp
   src/graphics/work.cpp

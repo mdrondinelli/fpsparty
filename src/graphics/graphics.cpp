@@ -192,11 +192,6 @@ void Graphics::poll_works() {
   _works.poll(_work_resources, _descriptor_heaps);
 }
 
-rc::Strong<Pipeline_layout>
-Graphics::create_pipeline_layout(Pipeline_layout_create_info const &info) {
-  return _pipeline_layout_factory.create(info);
-}
-
 rc::Strong<Pipeline>
 Graphics::create_pipeline(Pipeline_create_info const &info) {
   return _pipeline_factory.create(info);
