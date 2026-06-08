@@ -119,10 +119,6 @@ vk::UniqueSemaphore make_semaphore(
 
 constexpr auto sampler_descriptor_count = 2;
 
-constexpr std::uint64_t align_up(
-  std::uint64_t value, std::uint64_t alignment) noexcept {
-  return (value + alignment - 1) / alignment * alignment;
-}
 } // namespace
 
 Graphics::Graphics(Graphics_create_info const &info)
@@ -133,17 +129,12 @@ Graphics::Graphics(Graphics_create_info const &info)
                                .getSurfacePresentModesKHR(_surface)},
       _vsync_preferred{info.vsync_preferred},
       _sampler_heap{create_buffer({
-        .size =
-          align_up(
-            sampler_descriptor_count * Global_vulkan_state::get()
-                                         .descriptor_heap_properties()
-                                         .samplerDescriptorSize,
-            Global_vulkan_state::get()
-              .descriptor_heap_properties()
-              .samplerDescriptorAlignment) +
-          Global_vulkan_state::get()
-            .descriptor_heap_properties()
-            .minSamplerHeapReservedRange,
+        .size = sampler_descriptor_count * Global_vulkan_state::get()
+                                             .descriptor_heap_properties()
+                                             .samplerDescriptorSize +
+                Global_vulkan_state::get()
+                  .descriptor_heap_properties()
+                  .minSamplerHeapReservedRange,
         .usage = Buffer_usage_flag_bits::shader_device_address |
                  Buffer_usage_flag_bits::descriptor_heap,
         .mapping_mode = Mapping_mode::write_only,
