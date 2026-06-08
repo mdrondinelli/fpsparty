@@ -12,7 +12,9 @@ void Work_queue::poll(
   for (auto const &work : _pending_works) {
     if (detail::poll_work(*work)) {
       auto resource = detail::release_work(*work);
-      descriptor_heap_pool.push(std::move(resource.descriptor_heap));
+      if (resource.descriptor_heap) {
+        descriptor_heap_pool.push(std::move(resource.descriptor_heap));
+      }
       detail::reset_work_resource(resource);
       resource_pool.push(std::move(resource));
     }

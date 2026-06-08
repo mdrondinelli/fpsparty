@@ -223,8 +223,7 @@ rc::Strong<Image> Graphics::create_image(Image_create_info const &info) {
 }
 
 Work_recorder Graphics::record_transient_work() {
-  return detail::acquire_work_recorder(
-    _work_resources.pop(), _sampler_heap, _descriptor_heaps.pop());
+  return detail::acquire_transient_work_recorder(_work_resources.pop());
 }
 
 rc::Strong<Work> Graphics::submit_transient_work(Work_recorder recorder) {
@@ -259,7 +258,7 @@ Graphics::try_record_frame_work() {
     }
   }();
   return std::pair<Work_recorder, rc::Strong<Image>>{
-    detail::acquire_work_recorder(
+    detail::acquire_frame_work_recorder(
       _work_resources.pop(), _sampler_heap, _descriptor_heaps.pop()),
     _swapchain_images.at(frame_resource.swapchain_image_index),
   };

@@ -10,7 +10,14 @@ namespace fpsparty::graphics {
 
 namespace detail {
 
-Work_recorder acquire_work_recorder(
+Work_recorder acquire_transient_work_recorder(Work_resource resource) noexcept {
+  resource.vk_command_buffer.begin({
+    .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+  });
+  return Work_recorder{std::move(resource)};
+}
+
+Work_recorder acquire_frame_work_recorder(
   Work_resource resource,
   rc::Strong<Buffer> sampler_heap,
   rc::Strong<Buffer> descriptor_heap) noexcept {
@@ -63,10 +70,11 @@ Work_resource release_work_recorder(Work_recorder recorder) noexcept {
 
 std::uint32_t
 Work_recorder::upload_sampled_image_descriptor(rc::Strong<Image const> image) {
+  assert(_descriptor_heap_memory);
   auto const descriptor = image->get_sampled_image_descriptor();
   auto const offset = alloc_descriptor(descriptor.size());
   std::memcpy(
-    _descriptor_heap_memory.get().data() + offset,
+    _descriptor_heap_memory->get().data() + offset,
     descriptor.data(),
     descriptor.size());
   add_reference(std::move(image));
@@ -75,10 +83,11 @@ Work_recorder::upload_sampled_image_descriptor(rc::Strong<Image const> image) {
 
 std::uint32_t
 Work_recorder::upload_storage_image_descriptor(rc::Strong<Image> image) {
+  assert(_descriptor_heap_memory);
   auto const descriptor = image->get_storage_image_descriptor();
   auto const offset = alloc_descriptor(descriptor.size());
   std::memcpy(
-    _descriptor_heap_memory.get().data() + offset,
+    _descriptor_heap_memory->get().data() + offset,
     descriptor.data(),
     descriptor.size());
   add_reference(std::move(image));
@@ -87,6 +96,7 @@ Work_recorder::upload_storage_image_descriptor(rc::Strong<Image> image) {
 
 std::uint32_t
 Work_recorder::alloc_descriptor(std::size_t size) {
+  assert(_descriptor_heap_memory);
   auto const remainder = _descriptor_heap_offset & (size - 1);
   if (remainder != 0) {
     _descriptor_heap_offset += size - remainder;
@@ -335,12 +345,17 @@ void Work_recorder::push_buffer_device_address(
 
 Work_recorder::Work_recorder(detail::Work_resource resource) noexcept
     : _resource{std::move(resource)},
-      _descriptor_heap_memory{_resource.descriptor_heap->map()},
+      _descriptor_heap_memory{
+        _resource.descriptor_heap
+          ? std::optional{_resource.descriptor_heap->map()}
+          : std::nullopt},
       _descriptor_heap_capacity{
-        _resource.descriptor_heap->get_size() -
-        Global_vulkan_state::get()
-          .descriptor_heap_properties()
-          .minResourceHeapReservedRange} {}
+        _resource.descriptor_heap
+          ? _resource.descriptor_heap->get_size() -
+              Global_vulkan_state::get()
+                .descriptor_heap_properties()
+                .minResourceHeapReservedRange
+          : 0} {}
 
 void Work_recorder::add_reference(rc::Strong<Buffer const> buffer) {
   _resource.buffers.emplace_back(std::move(buffer));
