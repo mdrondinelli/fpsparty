@@ -95,7 +95,11 @@ target_include_directories(
   PRIVATE
   ${CMAKE_SOURCE_DIR}/extern/tracy-0.12.2
 )
-target_link_libraries(libclient PUBLIC game graphics libscene net PRIVATE tracy)
+target_link_libraries(
+  libclient
+  PUBLIC game graphics libscene net ppm
+  PRIVATE tracy
+)
 
 add_executable(
   client-tests

@@ -21,6 +21,7 @@ struct Buffer_create_info {
   std::uint64_t size;
   Buffer_usage_flags usage;
   Mapping_mode mapping_mode{Mapping_mode::none};
+  std::uint64_t min_alignment{1};
 };
 
 class Buffer {
@@ -35,6 +36,8 @@ public:
 
   std::uint64_t get_device_address() noexcept;
 
+  std::uint64_t get_size() const noexcept { return _size; }
+
 private:
   friend constexpr vk::Buffer
   detail::get_buffer_vk_buffer(Buffer const &buffer) noexcept;
@@ -44,6 +47,7 @@ private:
 
   vma::Unique_allocation _vma_allocation{};
   vk::UniqueBuffer _vk_buffer{};
+  std::uint64_t _size{};
 };
 
 namespace detail {

@@ -5,11 +5,14 @@
 #include <mutex>
 
 namespace fpsparty::graphics::detail {
-void Work_queue::poll(Work_resource_pool &resource_pool) {
+void Work_queue::poll(
+  Work_resource_pool &resource_pool,
+  Descriptor_heap_pool &descriptor_heap_pool) {
   auto const pending_works_lock = std::scoped_lock{_pending_works_mutex};
   for (auto const &work : _pending_works) {
     if (detail::poll_work(*work)) {
       auto resource = detail::release_work(*work);
+      descriptor_heap_pool.push(std::move(resource.descriptor_heap));
       detail::reset_work_resource(resource);
       resource_pool.push(std::move(resource));
     }

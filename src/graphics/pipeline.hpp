@@ -40,6 +40,7 @@ struct Pipeline_create_info {
   Pipeline_depth_state_create_info depth_state;
   Pipeline_color_state_create_info color_state;
   rc::Strong<Pipeline_layout> layout;
+  bool descriptor_heap_enabled{};
 };
 
 class Pipeline {

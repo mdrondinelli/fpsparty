@@ -10,15 +10,18 @@
 #include "graphics/synchronization_scope.hpp"
 #include "graphics/work_done_callback.hpp"
 #include "math/transformation_matrices.hpp"
+#include "ppm/ppm.hpp"
 #include <Eigen/Dense>
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <numbers>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <tracy/Tracy.hpp>
 #include <tuple>
 #include <vector>
@@ -131,6 +134,23 @@ vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   return retval;
 }
 
+std::vector<std::byte> load_file(char const *path) {
+  auto file = std::ifstream{path, std::ios::binary | std::ios::ate};
+  if (!file) {
+    throw std::runtime_error{std::string{"Failed to open file: "} + path};
+  }
+  auto const size = file.tellg();
+  if (size < 0) {
+    throw std::runtime_error{std::string{"Failed to size file: "} + path};
+  }
+  auto data = std::vector<std::byte>(static_cast<std::size_t>(size));
+  file.seekg(0);
+  if (!file.read(reinterpret_cast<char *>(data.data()), size)) {
+    throw std::runtime_error{std::string{"Failed to read file: "} + path};
+  }
+  return data;
+}
+
 } // namespace
 
 class Application::Impl : public glfw::Key_callback,
@@ -166,6 +186,9 @@ public:
     _cube_index_buffer =
       upload_indices(std::as_bytes(std::span{cube_mesh_indices}));
     std::cout << "Uploaded cube index buffer.\n";
+    _placeholder_texture =
+      upload_texture("./assets/textures/placeholder.ppm");
+    std::cout << "Uploaded placeholder texture.\n";
   }
 
   ~Impl() {
@@ -286,26 +309,23 @@ private:
         (projection_matrix * view_matrix).eval();
       // draw grid
       if (_grid_mesh && _grid_mesh->is_uploaded()) {
+        auto const texture_index =
+          work_recorder.upload_sampled_image_descriptor(_placeholder_texture);
         work_recorder.bind_pipeline(grid_pipeline);
         work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
         work_recorder.set_cull_mode(graphics::Cull_mode::back);
         work_recorder.bind_index_buffer(
           _grid_mesh->get_index_buffer(), graphics::Index_type::u32);
-        work_recorder.push_constants(
-          grid_pipeline->get_layout(),
-          graphics::Shader_stage_flag_bits::vertex,
+        work_recorder.push_data(
           0,
           std::as_bytes(std::span{&view_projection_matrix, 1}));
-        work_recorder.push_buffer_device_address(
-          grid_pipeline->get_layout(),
-          graphics::Shader_stage_flag_bits::vertex,
-          80,
-          _grid_mesh->get_vertex_buffer());
+        work_recorder.push_buffer_device_address_data(
+          80, _grid_mesh->get_vertex_buffer());
+        work_recorder.push_data(
+          88,
+          std::as_bytes(std::span{&texture_index, 1}));
         auto record_normal_push_constant = [&](Eigen::Vector4f const &value) {
-          work_recorder.push_constants(
-            grid_pipeline->get_layout(),
-            graphics::Shader_stage_flag_bits::vertex |
-              graphics::Shader_stage_flag_bits::fragment,
+          work_recorder.push_data(
             64,
             std::as_bytes(std::span{&value, 1}));
         };
@@ -505,6 +525,66 @@ private:
     return index_buffer;
   }
 
+  rc::Strong<graphics::Image> upload_texture(char const *path) {
+    auto const file = load_file(path);
+    auto const ppm_image = ppm::load_ppm(file);
+    auto pixels = std::vector<std::byte>(
+      static_cast<std::size_t>(ppm_image.width) *
+      static_cast<std::size_t>(ppm_image.height) * 4);
+    for (auto i = std::size_t{};
+         i != static_cast<std::size_t>(ppm_image.width) *
+                static_cast<std::size_t>(ppm_image.height);
+         ++i) {
+      pixels[i * 4 + 0] = ppm_image.data[i * 3 + 2];
+      pixels[i * 4 + 1] = ppm_image.data[i * 3 + 1];
+      pixels[i * 4 + 2] = ppm_image.data[i * 3 + 0];
+      pixels[i * 4 + 3] = static_cast<std::byte>(0xff);
+    }
+    auto image = _graphics.create_image({
+      .dimensionality = 2,
+      .format = graphics::Image_format::b8g8r8a8_srgb,
+      .extent = {ppm_image.width, ppm_image.height, 1},
+      .mip_level_count = 1,
+      .array_layer_count = 1,
+      .usage = graphics::Image_usage_flag_bits::sampled |
+               graphics::Image_usage_flag_bits::transfer_dst,
+    });
+    auto const staging_buffer = _graphics.create_staging_buffer(pixels);
+    auto work_recorder = _graphics.record_transient_work();
+    work_recorder.transition_image_layout(
+      {},
+      {
+        .stage_mask = graphics::Pipeline_stage_flag_bits::transfer,
+        .access_mask = graphics::Access_flag_bits::transfer_write,
+      },
+      graphics::Image_layout::undefined,
+      graphics::Image_layout::general,
+      image);
+    work_recorder.copy_buffer_to_image(
+      staging_buffer,
+      image,
+      {
+        .src_offset = 0,
+        .dst_mip_level = 0,
+        .dst_base_array_layer = 0,
+        .dst_array_layer_count = 1,
+        .dst_offset = {0, 0, 0},
+        .dst_extent = {ppm_image.width, ppm_image.height, 1},
+      });
+    work_recorder.barrier(
+      {
+        .stage_mask = graphics::Pipeline_stage_flag_bits::transfer,
+        .access_mask = graphics::Access_flag_bits::transfer_write,
+      },
+      {
+        .stage_mask = graphics::Pipeline_stage_flag_bits::fragment_shader,
+        .access_mask = graphics::Access_flag_bits::shader_sampled_read,
+      });
+    auto work = _graphics.submit_transient_work(std::move(work_recorder));
+    work->await();
+    return image;
+  }
+
   std::tuple<rc::Strong<graphics::Pipeline>, rc::Strong<graphics::Pipeline>>
   get_graphics_pipelines(graphics::Image_format swapchain_image_format) {
     ZoneScoped;
@@ -520,19 +600,6 @@ private:
 
   rc::Strong<graphics::Pipeline>
   make_grid_pipeline(graphics::Image_format swapchain_image_format) {
-    auto const push_constant_ranges = std::array{
-      graphics::Push_constant_range{
-        .stage_flags = graphics::Shader_stage_flag_bits::vertex |
-                       graphics::Shader_stage_flag_bits::fragment,
-        .offset = 0,
-        .size = 92,
-      },
-    };
-    auto const pipeline_layout =
-      _grid_pipeline ? _grid_pipeline->get_layout()
-                     : _graphics.create_pipeline_layout({
-                         .push_constant_ranges = push_constant_ranges,
-                       });
     auto const shader_stages =
       std::vector<graphics::Pipeline_shader_stage_create_info>{
         {
@@ -559,7 +626,8 @@ private:
         {
           .color_attachment_formats = {&color_attachment_format, 1},
         },
-      .layout = pipeline_layout,
+      .layout = {},
+      .descriptor_heap_enabled = true,
     });
   }
 
@@ -613,6 +681,7 @@ private:
   vk::UniqueSurfaceKHR _vk_surface{};
   graphics::Graphics _graphics{};
   rc::Strong<graphics::Image> _depth_image{};
+  rc::Strong<graphics::Image> _placeholder_texture{};
   graphics::Shader _grid_vertex_shader;
   graphics::Shader _grid_fragment_shader;
   graphics::Shader _mesh_vertex_shader;

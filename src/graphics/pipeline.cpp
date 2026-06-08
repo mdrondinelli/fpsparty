@@ -94,13 +94,19 @@ Pipeline::Pipeline(Pipeline_create_info const &info) : _layout{info.layout} {
                                ? vk::Format::eD32Sfloat
                                : vk::Format::eUndefined,
   };
+  auto const vk_flags_info = vk::PipelineCreateFlags2CreateInfo{
+    .pNext = &vk_rendering_info,
+    .flags = info.descriptor_heap_enabled
+               ? vk::PipelineCreateFlagBits2::eDescriptorHeapEXT
+               : vk::PipelineCreateFlags2{},
+  };
   _vk_pipeline = std::move(
     Global_vulkan_state::get()
       .device()
       .createGraphicsPipelinesUnique(
         {},
         {vk::GraphicsPipelineCreateInfo{
-          .pNext = &vk_rendering_info,
+          .pNext = &vk_flags_info,
           .stageCount = static_cast<std::uint32_t>(vk_shader_stages.size()),
           .pStages = vk_shader_stages.data(),
           .pVertexInputState = &vk_vertex_input_state,
@@ -111,8 +117,10 @@ Pipeline::Pipeline(Pipeline_create_info const &info) : _layout{info.layout} {
           .pDepthStencilState = &vk_depth_stencil_state,
           .pColorBlendState = &vk_color_blend_state,
           .pDynamicState = &vk_dynamic_state,
-          .layout =
-            detail::get_pipeline_layout_vk_pipeline_layout(*info.layout),
+          .layout = info.descriptor_heap_enabled
+                      ? vk::PipelineLayout{}
+                      : detail::get_pipeline_layout_vk_pipeline_layout(
+                          *info.layout),
         }})
       .value[0]);
 }
