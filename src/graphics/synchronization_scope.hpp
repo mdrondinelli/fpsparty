@@ -6,29 +6,41 @@
 
 namespace fpsparty::graphics {
 enum class Pipeline_stage_flag_bits : std::uint64_t {
-  transfer =
-    static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eTransfer),
+  draw_indirect =
+    static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eDrawIndirect),
+  vertex_shader =
+    static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eVertexShader),
   fragment_shader =
     static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eFragmentShader),
-  color_attachment_output = static_cast<std::uint64_t>(
-    vk::PipelineStageFlagBits2::eColorAttachmentOutput),
   early_fragment_tests =
     static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eEarlyFragmentTests),
   late_fragment_tests =
     static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eLateFragmentTests),
+  color_attachment_output = static_cast<std::uint64_t>(
+    vk::PipelineStageFlagBits2::eColorAttachmentOutput),
+  transfer =
+    static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eTransfer),
+  index_input =
+    static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eIndexInput),
 };
 
 enum class Access_flag_bits : std::uint64_t {
-  transfer_write =
-    static_cast<std::uint64_t>(vk::AccessFlagBits2::eTransferWrite),
-  shader_sampled_read =
-    static_cast<std::uint64_t>(vk::AccessFlagBits2::eShaderSampledRead),
+  indirect_command_read =
+    static_cast<std::uint64_t>(vk::AccessFlagBits2::eIndirectCommandRead),
+  index_read =
+    static_cast<std::uint64_t>(vk::AccessFlagBits2::eIndexRead),
   color_attachment_write =
     static_cast<std::uint64_t>(vk::AccessFlagBits2::eColorAttachmentWrite),
   depth_stencil_attachment_read = static_cast<std::uint64_t>(
     vk::AccessFlagBits2::eDepthStencilAttachmentRead),
   depth_stencil_attachment_write = static_cast<std::uint64_t>(
     vk::AccessFlagBits2::eDepthStencilAttachmentWrite),
+  transfer_write =
+    static_cast<std::uint64_t>(vk::AccessFlagBits2::eTransferWrite),
+  shader_sampled_read =
+    static_cast<std::uint64_t>(vk::AccessFlagBits2::eShaderSampledRead),
+  shader_storage_read =
+    static_cast<std::uint64_t>(vk::AccessFlagBits2::eShaderStorageRead),
 };
 
 using Pipeline_stage_flags = Flags<Pipeline_stage_flag_bits>;

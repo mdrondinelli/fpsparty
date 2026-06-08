@@ -498,6 +498,15 @@ private:
         .dst_offset = 0,
         .size = data.size(),
       });
+    work_recorder.barrier(
+      {
+        .stage_mask = graphics::Pipeline_stage_flag_bits::transfer,
+        .access_mask = graphics::Access_flag_bits::transfer_write,
+      },
+      {
+        .stage_mask = graphics::Pipeline_stage_flag_bits::vertex_shader,
+        .access_mask = graphics::Access_flag_bits::shader_storage_read,
+      });
     auto work = _graphics.submit_transient_work(std::move(work_recorder));
     work->await();
     return vertex_buffer;
@@ -514,6 +523,15 @@ private:
         .src_offset = 0,
         .dst_offset = 0,
         .size = data.size(),
+      });
+    work_recorder.barrier(
+      {
+        .stage_mask = graphics::Pipeline_stage_flag_bits::transfer,
+        .access_mask = graphics::Access_flag_bits::transfer_write,
+      },
+      {
+        .stage_mask = graphics::Pipeline_stage_flag_bits::index_input,
+        .access_mask = graphics::Access_flag_bits::index_read,
       });
     auto work = _graphics.submit_transient_work(std::move(work_recorder));
     work->await();
