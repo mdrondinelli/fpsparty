@@ -113,6 +113,13 @@ public:
     Allocation_create_info const &allocation_create_info,
     Allocation_info *allocation_info = nullptr) const;
 
+  std::tuple<vk::UniqueBuffer, vma::Unique_allocation>
+  create_buffer_unique_with_alignment(
+    vk::BufferCreateInfo const &buffer_create_info,
+    Allocation_create_info const &allocation_create_info,
+    vk::DeviceSize min_alignment,
+    Allocation_info *allocation_info = nullptr) const;
+
   std::tuple<vk::Image, vma::Allocation> create_image(
     vk::ImageCreateInfo const &image_create_info,
     Allocation_create_info const &allocation_create_info,
@@ -269,6 +276,35 @@ Allocator::create_buffer_unique(
   return std::tuple{
     vk::UniqueBuffer{buffer, vk::Device{allocator_info.device}},
     Unique_allocation{allocation, *this}};
+}
+
+inline std::tuple<vk::UniqueBuffer, vma::Unique_allocation>
+Allocator::create_buffer_unique_with_alignment(
+  vk::BufferCreateInfo const &buffer_create_info,
+  Allocation_create_info const &allocation_create_info,
+  vk::DeviceSize min_alignment,
+  Allocation_info *allocation_info) const {
+  auto c_buffer_create_info = VkBufferCreateInfo{};
+  std::memcpy(
+    &c_buffer_create_info, &buffer_create_info, sizeof(VkBufferCreateInfo));
+  auto c_buffer = VkBuffer{};
+  auto c_allocation = VmaAllocation{};
+  auto const result = vmaCreateBufferWithAlignment(
+    _value,
+    &c_buffer_create_info,
+    &allocation_create_info,
+    min_alignment,
+    &c_buffer,
+    &c_allocation,
+    allocation_info);
+  if (vk::Result{result} != vk::Result::eSuccess) {
+    throw Buffer_creation_error{};
+  }
+  auto allocator_info = VmaAllocatorInfo{};
+  vmaGetAllocatorInfo(_value, &allocator_info);
+  return std::tuple{
+    vk::UniqueBuffer{vk::Buffer{c_buffer}, vk::Device{allocator_info.device}},
+    Unique_allocation{vma::Allocation{c_allocation}, *this}};
 }
 
 inline std::tuple<vk::Image, vma::Allocation> Allocator::create_image(

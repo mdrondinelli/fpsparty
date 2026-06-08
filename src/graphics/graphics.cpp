@@ -118,6 +118,7 @@ vk::UniqueSemaphore make_semaphore(
 }
 
 constexpr auto sampler_descriptor_count = 2;
+
 } // namespace
 
 Graphics::Graphics(Graphics_create_info const &info)
@@ -130,12 +131,20 @@ Graphics::Graphics(Graphics_create_info const &info)
       _sampler_heap{create_buffer({
         .size = sampler_descriptor_count * Global_vulkan_state::get()
                                              .descriptor_heap_properties()
-                                             .samplerDescriptorSize,
+                                             .samplerDescriptorSize +
+                Global_vulkan_state::get()
+                  .descriptor_heap_properties()
+                  .minSamplerHeapReservedRange,
         .usage = Buffer_usage_flag_bits::shader_device_address |
                  Buffer_usage_flag_bits::descriptor_heap,
         .mapping_mode = Mapping_mode::write_only,
+        .min_alignment = Global_vulkan_state::get()
+                           .descriptor_heap_properties()
+                           .samplerHeapAlignment,
       })},
-      _descriptor_heaps{{.buffer_factory = &_buffer_factory}} {
+      _descriptor_heaps{
+        {.buffer_factory = &_buffer_factory,
+         .descriptor_heap_size = info.descriptor_heap_size}} {
   init_swapchain(select_swapchain_present_mode());
   for (auto i = std::size_t{}; i != info.max_frames_in_flight; ++i) {
     auto const swapchain_image_acquire_semaphore_name =
@@ -173,12 +182,7 @@ Graphics::Graphics(Graphics_create_info const &info)
 
 void Graphics::poll_works() {
   ZoneScoped;
-  _works.poll(_work_resources);
-}
-
-rc::Strong<Pipeline_layout>
-Graphics::create_pipeline_layout(Pipeline_layout_create_info const &info) {
-  return _pipeline_layout_factory.create(info);
+  _works.poll(_work_resources, _descriptor_heaps);
 }
 
 rc::Strong<Pipeline>
@@ -221,8 +225,7 @@ rc::Strong<Image> Graphics::create_image(Image_create_info const &info) {
 }
 
 Work_recorder Graphics::record_transient_work() {
-  return detail::acquire_work_recorder(
-    _work_resources.pop(), _descriptor_heaps.pop());
+  return detail::acquire_transient_work_recorder(_work_resources.pop());
 }
 
 rc::Strong<Work> Graphics::submit_transient_work(Work_recorder recorder) {
@@ -257,8 +260,8 @@ Graphics::try_record_frame_work() {
     }
   }();
   return std::pair<Work_recorder, rc::Strong<Image>>{
-    detail::acquire_work_recorder(
-      _work_resources.pop(), _descriptor_heaps.pop()),
+    detail::acquire_frame_work_recorder(
+      _work_resources.pop(), _sampler_heap, _descriptor_heaps.pop()),
     _swapchain_images.at(frame_resource.swapchain_image_index),
   };
 }

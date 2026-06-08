@@ -9,18 +9,22 @@
 #include "graphics/image_layout.hpp"
 #include "graphics/index_type.hpp"
 #include "graphics/pipeline.hpp"
-#include "graphics/pipeline_layout.hpp"
 #include "graphics/synchronization_scope.hpp"
 #include "graphics/work_resource.hpp"
 #include "rc.hpp"
+#include <optional>
 #include <vulkan/vulkan.hpp>
 
 namespace fpsparty::graphics {
 class Work_recorder;
 
 namespace detail {
-Work_recorder acquire_work_recorder(
-  Work_resource resource, rc::Strong<Buffer> descriptor_heap) noexcept;
+Work_recorder acquire_transient_work_recorder(Work_resource resource) noexcept;
+
+Work_recorder acquire_frame_work_recorder(
+  Work_resource resource,
+  rc::Strong<Buffer> sampler_heap,
+  rc::Strong<Buffer> descriptor_heap) noexcept;
 
 Work_resource release_work_recorder(Work_recorder recorder) noexcept;
 } // namespace detail
@@ -118,29 +122,25 @@ public:
 
   void draw_indexed_indirect(Indirect_indexed_draw_info const &info) noexcept;
 
-  void push_constants(
-    rc::Strong<Pipeline_layout const> pipeline_layout,
-    Shader_stage_flags stage_flags,
-    std::uint32_t offset,
-    std::span<std::byte const> data) noexcept;
+  void
+  push_data(std::uint32_t offset, std::span<std::byte const> data) noexcept;
 
   void push_buffer_device_address(
-    rc::Strong<Pipeline_layout const> pipeline_layout,
-    Shader_stage_flags stage_flags,
-    std::uint32_t offset,
-    rc::Strong<Buffer> buffer) noexcept;
+    std::uint32_t offset, rc::Strong<Buffer> buffer) noexcept;
 
   void add_reference(rc::Strong<Buffer const> buffer);
 
   void add_reference(rc::Strong<Image const> image);
 
-  void add_reference(rc::Strong<Pipeline const> pipeline_layout);
-
-  void add_reference(rc::Strong<Pipeline_layout const> pipeline_layout);
+  void add_reference(rc::Strong<Pipeline const> pipeline);
 
 private:
-  friend Work_recorder detail::acquire_work_recorder(
+  friend Work_recorder detail::acquire_transient_work_recorder(
+    detail::Work_resource resource) noexcept;
+
+  friend Work_recorder detail::acquire_frame_work_recorder(
     detail::Work_resource resource,
+    rc::Strong<Buffer> sampler_heap,
     rc::Strong<Buffer> descriptor_heap) noexcept;
 
   friend detail::Work_resource
@@ -151,7 +151,8 @@ private:
   vk::CommandBuffer get_command_buffer() const noexcept;
 
   detail::Work_resource _resource;
-  Mapped_memory _descriptor_heap_memory;
+  std::optional<Mapped_memory> _descriptor_heap_memory{};
+  std::uint64_t _descriptor_heap_capacity{};
   std::uint32_t _descriptor_heap_offset{};
 };
 } // namespace fpsparty::graphics

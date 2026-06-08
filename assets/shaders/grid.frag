@@ -9,11 +9,16 @@ layout(location = 0) out vec4 out_color;
 
 void main() {
   const uint texture_index = nonuniformEXT(push_constants.texture_index);
+  const vec3 abs_normal = abs(push_constants.normal.xyz);
+  const vec2 texture_coordinates =
+    abs_normal.x > 0.5f ? in_world_space_position.yz
+    : abs_normal.y > 0.5f ? in_world_space_position.xz
+                          : in_world_space_position.xy;
   const ivec2 tex_size = textureSize(
     sampler2D(sampled_images[texture_index], FPSPARTY_SAMPLER_LINEAR), 0);
   const vec3 base_color = texelFetch(
     sampler2D(sampled_images[texture_index], FPSPARTY_SAMPLER_LINEAR),
-    ivec2(fract(in_world_space_position.xy) * tex_size),
+    ivec2(fract(texture_coordinates) * tex_size),
     0).rgb;
   const vec3 fog_color = vec3(0.4196f, 0.6196f, 0.7451f);
   out_color = vec4(

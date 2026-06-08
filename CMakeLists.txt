@@ -95,7 +95,11 @@ target_include_directories(
   PRIVATE
   ${CMAKE_SOURCE_DIR}/extern/tracy-0.12.2
 )
-target_link_libraries(libclient PUBLIC game graphics libscene net PRIVATE tracy)
+target_link_libraries(
+  libclient
+  PUBLIC game graphics libscene net ppm
+  PRIVATE tracy
+)
 
 add_executable(
   client-tests
@@ -165,7 +169,6 @@ add_library(
   src/graphics/graphics.cpp
   src/graphics/global_vulkan_state.cpp
   src/graphics/mapped_memory.cpp
-  src/graphics/pipeline_layout.cpp
   src/graphics/pipeline.cpp
   src/graphics/shader.cpp
   src/graphics/work.cpp

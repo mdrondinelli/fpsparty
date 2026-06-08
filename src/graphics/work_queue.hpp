@@ -1,6 +1,7 @@
 #ifndef FPSPARTY_GRAPHICS_WORK_QUEUE_HPP
 #define FPSPARTY_GRAPHICS_WORK_QUEUE_HPP
 
+#include "graphics/descriptor_heap_pool.hpp"
 #include "graphics/work.hpp"
 #include "graphics/work_resource.hpp"
 #include "graphics/work_resource_pool.hpp"
@@ -15,7 +16,9 @@ struct Work_queue_submit_info {
 
 class Work_queue {
 public:
-  void poll(Work_resource_pool &resource_pool);
+  void poll(
+    Work_resource_pool &resource_pool,
+    Descriptor_heap_pool &descriptor_heap_pool);
 
   rc::Strong<Work> submit(Work_queue_submit_info const &info);
 

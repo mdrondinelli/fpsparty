@@ -10,6 +10,7 @@ namespace fpsparty::graphics {
 namespace {
 auto const vk_device_extensions = std::array{
   vk::KHRSwapchainExtensionName,
+  vk::KHRShaderUntypedPointersExtensionName,
   vk::EXTDescriptorHeapExtensionName,
 };
 
@@ -122,17 +123,26 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
     .queueCount = 1,
     .pQueuePriorities = &queue_priority,
   };
-  auto extended_dynamic_state_features =
-    vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT{
-      .extendedDynamicState = true,
+  auto descriptor_heap_features = vk::PhysicalDeviceDescriptorHeapFeaturesEXT{
+    .descriptorHeap = true,
+  };
+  auto shader_untyped_pointers_features =
+    vk::PhysicalDeviceShaderUntypedPointersFeaturesKHR{
+      .pNext = &descriptor_heap_features,
+      .shaderUntypedPointers = true,
     };
   auto buffer_device_address_features =
     vk::PhysicalDeviceBufferDeviceAddressFeatures{
-      .pNext = &extended_dynamic_state_features,
+      .pNext = &shader_untyped_pointers_features,
       .bufferDeviceAddress = true,
     };
+  auto extended_dynamic_state_features =
+    vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT{
+      .pNext = &buffer_device_address_features,
+      .extendedDynamicState = true,
+    };
   auto vulkan_1_3_features = vk::PhysicalDeviceVulkan13Features{
-    .pNext = &buffer_device_address_features,
+    .pNext = &extended_dynamic_state_features,
     .synchronization2 = true,
     .dynamicRendering = true,
   };

@@ -26,6 +26,7 @@ struct Graphics_create_info {
   vk::SurfaceKHR surface;
   bool vsync_preferred{true};
   unsigned max_frames_in_flight{2};
+  std::uint32_t descriptor_heap_size{1024 * 1024};
 };
 
 class Graphics {
@@ -39,9 +40,6 @@ public:
   explicit Graphics(Graphics_create_info const &info);
 
   void poll_works();
-
-  rc::Strong<Pipeline_layout>
-  create_pipeline_layout(Pipeline_layout_create_info const &info);
 
   rc::Strong<Pipeline> create_pipeline(Pipeline_create_info const &info);
 
@@ -87,7 +85,6 @@ private:
   vk::SurfaceKHR _surface{};
   std::vector<vk::PresentModeKHR> _surface_present_modes{};
   bool _vsync_preferred{};
-  rc::Factory<Pipeline_layout> _pipeline_layout_factory{};
   rc::Factory<Pipeline> _pipeline_factory{};
   rc::Factory<Buffer> _buffer_factory{};
   rc::Factory<Image> _image_factory{};

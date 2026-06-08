@@ -28,6 +28,5 @@ void reset_work_resource(Work_resource &resource) {
   resource.buffers.clear();
   resource.images.clear();
   resource.pipelines.clear();
-  resource.pipeline_layouts.clear();
 }
 } // namespace fpsparty::graphics::detail

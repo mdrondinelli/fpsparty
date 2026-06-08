@@ -247,6 +247,19 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
         .dst_offset = 0,
         .size = draw_buffer_size,
       });
+    recorder.barrier(
+      {
+        .stage_mask = graphics::Pipeline_stage_flag_bits::transfer,
+        .access_mask = graphics::Access_flag_bits::transfer_write,
+      },
+      {
+        .stage_mask = graphics::Pipeline_stage_flag_bits::draw_indirect |
+                      graphics::Pipeline_stage_flag_bits::index_input |
+                      graphics::Pipeline_stage_flag_bits::vertex_shader,
+        .access_mask = graphics::Access_flag_bits::indirect_command_read |
+                       graphics::Access_flag_bits::index_read |
+                       graphics::Access_flag_bits::shader_storage_read,
+      });
     _upload_work = info.graphics->submit_transient_work(std::move(recorder));
     _upload_work->add_done_callback(this);
   }
