@@ -3,11 +3,16 @@
 #include <numeric>
 
 namespace fpsparty::graphics::detail {
+
 namespace {
+
+constexpr auto descriptor_heap_size = std::uint64_t{1024 * 1024};
+
 constexpr std::uint64_t align_up(
   std::uint64_t value, std::uint64_t alignment) noexcept {
   return (value + alignment - 1) / alignment * alignment;
 }
+
 } // namespace
 
 Descriptor_heap_pool::Descriptor_heap_pool(
@@ -28,10 +33,7 @@ rc::Strong<Buffer> Descriptor_heap_pool::pop() {
       properties.imageDescriptorAlignment,
       properties.bufferDescriptorAlignment);
     auto const reserved_range_offset =
-      align_up(4096, descriptor_alignment);
-    // TODO: make descriptor heaps grow
-    // future strategy:
-    // allocate new larger buffer, copy old buffer to new, rebind
+      align_up(descriptor_heap_size, descriptor_alignment);
     return _buffer_factory->create(
       Buffer_create_info{
         .size =
