@@ -1,8 +1,8 @@
 #include "server.hpp"
 #include "enet.hpp"
-#include "net/core/constants.hpp"
-#include "net/core/entity_id.hpp"
-#include "net/core/message_type.hpp"
+#include "net/constants.hpp"
+#include "net/entity_id.hpp"
+#include "net/message_type.hpp"
 #include "serial/ostream_writer.hpp"
 #include "serial/serialize.hpp"
 #include "serial/span_reader.hpp"
@@ -59,19 +59,21 @@ void Server::send_player_join_response(
 
 void Server::send_world_snapshot(
   enet::Peer peer,
+  Sequence_number tick_number,
   std::span<std::byte const> grid_state,
   std::span<std::byte const> public_entity_state,
   std::span<std::byte const> player_entity_state) {
   auto packet = enet::create_packet_unique({
     .data = nullptr,
-    .data_length = sizeof(Message_type) + sizeof(std::uint32_t) +
+    .data_length = sizeof(Message_type) + sizeof(Sequence_number) +
                    sizeof(std::uint32_t) + sizeof(std::uint32_t) +
-                   grid_state.size() + public_entity_state.size() +
-                   player_entity_state.size(),
+                   sizeof(std::uint32_t) + grid_state.size() +
+                   public_entity_state.size() + player_entity_state.size(),
   });
   auto writer = serial::Span_writer{std::as_writable_bytes(packet->get_data())};
   using serial::serialize;
   serialize<Message_type>(writer, Message_type::world_snapshot);
+  serialize<Sequence_number>(writer, tick_number);
   serialize<std::uint32_t>(writer, grid_state.size());
   serialize<std::uint32_t>(writer, public_entity_state.size());
   serialize<std::uint32_t>(writer, player_entity_state.size());

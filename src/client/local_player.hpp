@@ -5,9 +5,9 @@
 
 #include <Eigen/Dense>
 
-#include <net/core/entity_id.hpp>
-#include <net/core/input_state.hpp>
-#include <net/core/player_join_request_id.hpp>
+#include <net/entity_id.hpp>
+#include <net/input_state.hpp>
+#include <net/player_join_request_id.hpp>
 
 namespace fpsparty::client {
 

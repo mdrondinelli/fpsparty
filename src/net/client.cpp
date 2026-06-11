@@ -1,8 +1,8 @@
 #include "client.hpp"
 #include "enet.hpp"
-#include "net/core/constants.hpp"
-#include "net/core/entity_id.hpp"
-#include "net/core/message_type.hpp"
+#include "net/constants.hpp"
+#include "net/entity_id.hpp"
+#include "net/message_type.hpp"
 #include "serial/ostream_writer.hpp"
 #include "serial/serialize.hpp"
 #include "serial/span_reader.hpp"
@@ -72,8 +72,7 @@ void Client::send_player_leave_request(net::Entity_id player_entity_id) {
 }
 
 void Client::send_player_input_state(
-  net::Entity_id player_entity_id,
-  net::Input_state const &input_state) {
+  net::Entity_id player_entity_id, net::Input_state const &input_state) {
   auto packet_writer = serial::Ostringstream_writer{};
   using serial::serialize;
   serialize<net::Message_type>(
@@ -112,8 +111,7 @@ void Client::handle_event(enet::Event const &e) {
     }
     switch (*message_type) {
     case Message_type::player_join_response: {
-      auto const request_id =
-        deserialize<net::Player_join_request_id>(reader);
+      auto const request_id = deserialize<net::Player_join_request_id>(reader);
       if (!request_id || *request_id == 0) {
         goto malformed_message;
       }
@@ -125,19 +123,22 @@ void Client::handle_event(enet::Event const &e) {
       return;
     }
     case Message_type::world_snapshot: {
+      auto const tick_number = deserialize<Sequence_number>(reader);
+      if (!tick_number) {
+        std::cerr << "Failed to deserialize tick_number.\n";
+        goto malformed_message;
+      }
       auto const grid_state_size = deserialize<std::uint32_t>(reader);
       if (!grid_state_size) {
         std::cerr << "Failed to deserialize grid_state_size.\n";
         goto malformed_message;
       }
-      auto const public_entity_state_size =
-        deserialize<std::uint32_t>(reader);
+      auto const public_entity_state_size = deserialize<std::uint32_t>(reader);
       if (!public_entity_state_size) {
         std::cerr << "Failed to deserialize public_entity_state_size.\n";
         goto malformed_message;
       }
-      auto const player_entity_state_size =
-        deserialize<std::uint32_t>(reader);
+      auto const player_entity_state_size = deserialize<std::uint32_t>(reader);
       if (!player_entity_state_size) {
         std::cerr << "Failed to deserialize player_entity_state_size.\n";
         goto malformed_message;
@@ -162,6 +163,7 @@ void Client::handle_event(enet::Event const &e) {
         goto malformed_message;
       }
       on_world_snapshot(
+        *tick_number,
         *grid_state_reader,
         *public_entity_state_reader,
         *player_entity_state_reader);

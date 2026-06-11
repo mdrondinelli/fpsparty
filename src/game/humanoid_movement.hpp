@@ -1,7 +1,7 @@
 #ifndef FPSPARTY_GAME_HUMANOID_MOVEMENT_HPP
 #define FPSPARTY_GAME_HUMANOID_MOVEMENT_HPP
 
-#include "net/core/input_state.hpp"
+#include "net/input_state.hpp"
 #include <Eigen/Dense>
 
 namespace fpsparty::game {

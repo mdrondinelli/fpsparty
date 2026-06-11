@@ -2,7 +2,7 @@
 #include "enet.hpp"
 #include "game/entity_type.hpp"
 #include "game/grid.hpp"
-#include "net/core/constants.hpp"
+#include "net/constants.hpp"
 #include "net/server.hpp"
 #include "serial/ostream_writer.hpp"
 #include "serial/serialize.hpp"
@@ -41,12 +41,14 @@ public:
   }
 
   void send_snapshot(
+    net::Sequence_number tick_number,
     std::span<std::byte const> grid_state,
     std::span<std::byte const> public_entity_state,
     std::span<std::byte const> player_entity_state) {
     REQUIRE_FALSE(join_requests.empty());
     send_world_snapshot(
       join_requests.front().peer,
+      tick_number,
       grid_state,
       public_entity_state,
       player_entity_state);
@@ -79,9 +81,31 @@ protected:
   }
 };
 
-template <typename Predicate>
-void poll_until(
-  Test_server &server, client::Client &client, Predicate predicate) {
+class Snapshot_client : public net::Client {
+public:
+  Snapshot_client() : net::Client{{}} {}
+
+  std::optional<net::Sequence_number> snapshot_tick_number;
+
+protected:
+  void on_connect() override {}
+
+  void on_disconnect() override {}
+
+  void on_player_join_response(
+    net::Player_join_request_id, net::Entity_id) override {}
+
+  void on_world_snapshot(
+    net::Sequence_number tick_number,
+    serial::Span_reader &,
+    serial::Span_reader &,
+    serial::Span_reader &) override {
+    snapshot_tick_number = tick_number;
+  }
+};
+
+template <typename Client, typename Predicate>
+void poll_until(Test_server &server, Client &client, Predicate predicate) {
   for (auto i = 0; i != 10000 && !predicate(); ++i) {
     client.poll_events();
     server.poll_events();
@@ -89,8 +113,7 @@ void poll_until(
   REQUIRE(predicate());
 }
 
-std::vector<std::byte>
-bytes(serial::Ostringstream_writer const &writer) {
+std::vector<std::byte> bytes(serial::Ostringstream_writer const &writer) {
   auto const view = writer.stream().view();
   auto result = std::vector<std::byte>(view.size());
   std::memcpy(result.data(), view.data(), view.size());
@@ -110,6 +133,35 @@ TEST_CASE("Player join request IDs serialize in network messages") {
       reader) == request_id);
 }
 
+TEST_CASE("World snapshots deliver the server tick number") {
+  constexpr auto port = std::uint16_t{29877};
+  auto enet_guard = fpsparty::enet::Initialization_guard{};
+  auto server = std::unique_ptr<Test_server>{};
+  auto client = std::unique_ptr<Snapshot_client>{};
+  try {
+    enet_guard = fpsparty::enet::Initialization_guard{{}};
+    server = std::make_unique<Test_server>(port);
+    client = std::make_unique<Snapshot_client>();
+  } catch (fpsparty::enet::Initialization_guard::Construction_error const &) {
+    SKIP("ENet initialization is unavailable in this environment.");
+  } catch (fpsparty::enet::Host::Construction_error const &) {
+    SKIP("ENet host creation is unavailable in this environment.");
+  }
+  client->connect({
+    .host = *fpsparty::enet::parse_ip("127.0.0.1"),
+    .port = port,
+  });
+  poll_until(*server, *client, [&] { return client->is_connected(); });
+  client->send_player_join_request(1);
+  poll_until(*server, *client, [&] { return !server->join_requests.empty(); });
+
+  constexpr auto tick_number = fpsparty::net::Sequence_number{123456};
+  server->send_snapshot(tick_number, {}, {}, {});
+  poll_until(
+    *server, *client, [&] { return client->snapshot_tick_number.has_value(); });
+  CHECK(client->snapshot_tick_number == tick_number);
+}
+
 TEST_CASE("Client correlates multiple local player joins") {
   constexpr auto port = std::uint16_t{29876};
   auto enet_guard = fpsparty::enet::Initialization_guard{};
@@ -123,8 +175,7 @@ TEST_CASE("Client correlates multiple local player joins") {
         .net_info = {},
         .tick_duration = 1.0f / 60.0f,
       });
-  } catch (
-    fpsparty::enet::Initialization_guard::Construction_error const &) {
+  } catch (fpsparty::enet::Initialization_guard::Construction_error const &) {
     SKIP("ENet initialization is unavailable in this environment.");
   } catch (fpsparty::enet::Host::Construction_error const &) {
     SKIP("ENet host creation is unavailable in this environment.");
@@ -158,16 +209,14 @@ TEST_CASE("Client correlates multiple local player joins") {
   auto &third = client->join_player();
   CHECK(&first == first_address);
   CHECK(&second == second_address);
-  CHECK(
-    third.get_state() == fpsparty::client::Local_player_state::joining);
+  CHECK(third.get_state() == fpsparty::client::Local_player_state::joining);
 
   auto first_input = fpsparty::net::Input_state{.move_left = true};
   auto second_input = fpsparty::net::Input_state{.move_right = true};
   first.set_input_state(first_input);
   second.set_input_state(second_input);
   client->tick(1.0f);
-  poll_until(
-    *server, *client, [&] { return server->inputs.size() == 2; });
+  poll_until(*server, *client, [&] { return server->inputs.size() == 2; });
   CHECK(server->inputs[0].player_entity_id == 11);
   CHECK(server->inputs[0].state.move_left);
   CHECK(server->inputs[1].player_entity_id == 22);
@@ -176,8 +225,7 @@ TEST_CASE("Client correlates multiple local player joins") {
   auto grid_writer = fpsparty::serial::Ostringstream_writer{};
   fpsparty::game::Grid{{}}.dump(grid_writer);
   auto player_writer = fpsparty::serial::Ostringstream_writer{};
-  fpsparty::serial::serialize<std::uint32_t>(
-    player_writer, std::uint32_t{2});
+  fpsparty::serial::serialize<std::uint32_t>(player_writer, std::uint32_t{2});
   for (auto const [player_entity_id, humanoid_entity_id] :
        {std::pair{11u, 101u}, std::pair{22u, 102u}}) {
     fpsparty::serial::serialize<fpsparty::game::Entity_type>(
@@ -188,12 +236,9 @@ TEST_CASE("Client correlates multiple local player joins") {
       player_writer, humanoid_entity_id);
   }
   auto public_writer = fpsparty::serial::Ostringstream_writer{};
-  fpsparty::serial::serialize<std::uint32_t>(
-    public_writer, std::uint32_t{3});
+  fpsparty::serial::serialize<std::uint32_t>(public_writer, std::uint32_t{3});
   for (auto const [entity_id, x] :
-       {std::pair{101u, 1.0f},
-        std::pair{102u, 2.0f},
-        std::pair{999u, 3.0f}}) {
+       {std::pair{101u, 1.0f}, std::pair{102u, 2.0f}, std::pair{999u, 3.0f}}) {
     fpsparty::serial::serialize<fpsparty::game::Entity_type>(
       public_writer, fpsparty::game::Entity_type::humanoid);
     fpsparty::serial::serialize<fpsparty::net::Entity_id>(
@@ -207,7 +252,7 @@ TEST_CASE("Client correlates multiple local player joins") {
   auto const grid_state = bytes(grid_writer);
   auto const public_state = bytes(public_writer);
   auto const player_state = bytes(player_writer);
-  server->send_snapshot(grid_state, public_state, player_state);
+  server->send_snapshot(7, grid_state, public_state, player_state);
   poll_until(*server, *client, [&] {
     return first.get_camera_snapshot() && second.get_camera_snapshot();
   });

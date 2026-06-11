@@ -3,8 +3,8 @@
 
 #include <Eigen/Dense>
 
-#include <net/core/entity_id.hpp>
-#include <net/core/input_state.hpp>
+#include <net/entity_id.hpp>
+#include <net/input_state.hpp>
 #include <serial/writer.hpp>
 
 #include "entity_traits.hpp"

@@ -1,7 +1,7 @@
 #ifndef FPSPARTY_GAME_PLAYER_HPP
 #define FPSPARTY_GAME_PLAYER_HPP
 
-#include <net/core/input_state.hpp>
+#include <net/input_state.hpp>
 #include <serial/writer.hpp>
 
 #include "entity_handle.hpp"

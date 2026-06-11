@@ -3,7 +3,7 @@
 #include "enet.hpp"
 #include "glfw.hpp"
 #include "graphics/global_vulkan_state.hpp"
-#include "net/core/constants.hpp"
+#include "net/constants.hpp"
 #include <chrono>
 #include <csignal>
 #include <iostream>

@@ -1,6 +1,6 @@
 #include "constants.hpp"
 #include "enet.hpp"
-#include "net/core/constants.hpp"
+#include "net/constants.hpp"
 #include "server/server.hpp"
 #include <cassert>
 #include <chrono>

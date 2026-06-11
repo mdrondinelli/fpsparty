@@ -18,8 +18,7 @@ struct Peer_node {
 };
 
 void erase_player(
-  game::Entity_world &world,
-  game::Entity_handle<game::Player> player_handle) {
+  game::Entity_world &world, game::Entity_handle<game::Player> player_handle) {
   auto const players = world.get_all<game::Player>();
   auto const player_it = players.find(player_handle);
   if (player_it == players.end()) {
@@ -45,6 +44,7 @@ bool Server::tick(float duration) {
   if (_tick_timer <= 0.0f) {
     _tick_timer += _tick_duration;
     _game.tick(_tick_duration);
+    ++_tick_number;
     return true;
   }
   return false;
@@ -96,6 +96,7 @@ void Server::broadcast_game_state() {
     }
     net::Server::send_world_snapshot(
       peer,
+      _tick_number,
       std::as_bytes(
         std::span{
           grid_state_writer.stream().view().data(),
@@ -117,6 +118,10 @@ void Server::broadcast_game_state() {
 game::Game const &Server::get_game() const noexcept { return _game; }
 
 game::Game &Server::get_game() noexcept { return _game; }
+
+net::Sequence_number Server::get_tick_number() const noexcept {
+  return _tick_number;
+}
 
 void Server::on_peer_connect(enet::Peer peer) {
   std::cout << "Peer connected.\n";

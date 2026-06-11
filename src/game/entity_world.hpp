@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include <net/core/entity_id.hpp>
+#include <net/entity_id.hpp>
 
 #include "entity_handle.hpp"
 #include "entity_traits.hpp"

@@ -1,7 +1,7 @@
 #ifndef FPSPARTY_GAME_ENTITY_HANDLE_HPP
 #define FPSPARTY_GAME_ENTITY_HANDLE_HPP
 
-#include <net/core/entity_id.hpp>
+#include <net/entity_id.hpp>
 
 #include <concepts>
 #include <type_traits>
