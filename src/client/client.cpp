@@ -33,7 +33,8 @@ void Client::tick(float duration) {
       _tick_timer += _tick_duration;
       for (auto const &player : _local_players) {
         if (player->_state == Local_player_state::joined) {
-          send_player_input_state(*player->_player_entity_id, player->_input_state);
+          send_player_input_state(
+            *player->_player_entity_id, player->_input_state);
         }
       }
     } catch (...) {
@@ -49,7 +50,8 @@ bool Client::has_scene() const noexcept { return _scene.has_value(); }
 Local_player &Client::join_player() {
   assert(is_connected());
   assert(_next_player_join_request_id != 0);
-  auto &retval = *_local_players.emplace_back(std::unique_ptr<Local_player>{
+  auto &retval = *_local_players.emplace_back(
+    std::unique_ptr<Local_player>{
       new Local_player{_next_player_join_request_id}});
   try {
     send_player_join_request(_next_player_join_request_id);
@@ -78,9 +80,7 @@ scene::Scene const *Client::get_scene() const noexcept {
   return _scene ? &*_scene : nullptr;
 }
 
-void Client::on_connect() {
-  _scene = scene::Scene{};
-}
+void Client::on_connect() { _scene = scene::Scene{}; }
 
 void Client::on_disconnect() {
   _tick_timer = 0.0f;
@@ -91,8 +91,7 @@ void Client::on_disconnect() {
 }
 
 void Client::on_player_join_response(
-  net::Player_join_request_id request_id,
-  net::Entity_id player_entity_id) {
+  net::Player_join_request_id request_id, net::Entity_id player_entity_id) {
   auto const it = std::ranges::find_if(_local_players, [&](auto const &player) {
     return player->_state == Local_player_state::joining &&
            player->_request_id == request_id;

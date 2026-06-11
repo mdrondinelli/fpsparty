@@ -4,11 +4,10 @@ namespace fpsparty::client {
 Local_player::Local_player(net::Player_join_request_id request_id) noexcept
     : _request_id{request_id} {}
 
-Local_player_state Local_player::get_state() const noexcept {
-  return _state;
-}
+Local_player_state Local_player::get_state() const noexcept { return _state; }
 
-std::optional<net::Entity_id> const &Local_player::get_entity_id() const noexcept {
+std::optional<net::Entity_id> const &
+Local_player::get_entity_id() const noexcept {
   return _player_entity_id;
 }
 

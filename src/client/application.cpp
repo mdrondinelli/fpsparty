@@ -186,8 +186,7 @@ public:
     _cube_index_buffer =
       upload_indices(std::as_bytes(std::span{cube_mesh_indices}));
     std::cout << "Uploaded cube index buffer.\n";
-    _placeholder_texture =
-      upload_texture("./assets/textures/placeholder.ppm");
+    _placeholder_texture = upload_texture("./assets/textures/placeholder.ppm");
     std::cout << "Uploaded placeholder texture.\n";
   }
 
@@ -316,18 +315,14 @@ private:
         work_recorder.set_cull_mode(graphics::Cull_mode::back);
         work_recorder.bind_index_buffer(
           _grid_mesh->get_index_buffer(), graphics::Index_type::u32);
-        work_recorder.push_data(
-          0,
-          std::as_bytes(std::span{&view_projection_matrix, 1}));
-        work_recorder.push_buffer_device_address(
-          80, _grid_mesh->get_vertex_buffer());
-        work_recorder.push_data(
-          88,
-          std::as_bytes(std::span{&texture_index, 1}));
+        work_recorder
+          .push_data(0, std::as_bytes(std::span{&view_projection_matrix, 1}));
+        work_recorder
+          .push_buffer_device_address(80, _grid_mesh->get_vertex_buffer());
+        work_recorder
+          .push_data(88, std::as_bytes(std::span{&texture_index, 1}));
         auto record_normal_push_constant = [&](Eigen::Vector4f const &value) {
-          work_recorder.push_data(
-            64,
-            std::as_bytes(std::span{&value, 1}));
+          work_recorder.push_data(64, std::as_bytes(std::span{&value, 1}));
         };
         record_normal_push_constant({1.0f, 0.0f, 0.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, game::Axis::x, Sign::positive);
@@ -348,8 +343,7 @@ private:
       work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
       work_recorder
         .bind_index_buffer(_cube_index_buffer, graphics::Index_type::u16);
-      work_recorder.push_buffer_device_address(
-        64, _cube_vertex_buffer);
+      work_recorder.push_buffer_device_address(64, _cube_vertex_buffer);
       for (auto const &instance : scene->get_mesh_instances()) {
         auto rotation_matrix = Eigen::Matrix4f{Eigen::Matrix4f::Identity()};
         rotation_matrix.block<3, 3>(0, 0) =
@@ -361,8 +355,7 @@ private:
         auto const model_view_projection_matrix =
           (view_projection_matrix * model_matrix).eval();
         work_recorder.push_data(
-          0,
-          std::as_bytes(std::span{&model_view_projection_matrix, 1}));
+          0, std::as_bytes(std::span{&model_view_projection_matrix, 1}));
         work_recorder.draw_indexed({
           .index_count = static_cast<std::uint32_t>(cube_mesh_indices.size()),
           .instance_count = 1,
