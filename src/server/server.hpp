@@ -2,6 +2,7 @@
 #define FPSPARTY_SERVER_SERVER_HPP
 
 #include "game/game.hpp"
+#include "net/sequence_number.hpp"
 #include "net/server.hpp"
 
 namespace fpsparty::server {
@@ -23,6 +24,8 @@ public:
 
   game::Game &get_game() noexcept;
 
+  net::Sequence_number get_tick_number() const noexcept;
+
 protected:
   void on_peer_connect(enet::Peer peer) override;
 
@@ -43,6 +46,7 @@ private:
   game::Game _game;
   float _tick_duration{};
   float _tick_timer{};
+  net::Sequence_number _tick_number{};
 };
 } // namespace fpsparty::server
 

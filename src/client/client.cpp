@@ -109,6 +109,7 @@ void Client::on_player_join_response(
 }
 
 void Client::on_world_snapshot(
+  net::Sequence_number,
   serial::Span_reader &grid_state_reader,
   serial::Span_reader &public_entity_state_reader,
   serial::Span_reader &player_entity_state_reader) {

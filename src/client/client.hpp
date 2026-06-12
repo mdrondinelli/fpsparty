@@ -3,8 +3,8 @@
 
 #include "client/local_player.hpp"
 #include "net/client.hpp"
-#include "net/core/entity_id.hpp"
-#include "net/core/input_state.hpp"
+#include "net/entity_id.hpp"
+#include "net/input_state.hpp"
 #include "scene/scene.hpp"
 #include <cstddef>
 #include <memory>
@@ -47,6 +47,7 @@ protected:
     net::Entity_id player_entity_id) override;
 
   void on_world_snapshot(
+    net::Sequence_number tick_number,
     serial::Span_reader &grid_state_reader,
     serial::Span_reader &public_entity_state_reader,
     serial::Span_reader &player_entity_state_reader) override;

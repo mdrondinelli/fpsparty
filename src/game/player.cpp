@@ -1,5 +1,5 @@
 #include "player.hpp"
-#include "net/core/entity_id.hpp"
+#include "net/entity_id.hpp"
 #include "serial/serialize.hpp"
 
 namespace fpsparty::game {
