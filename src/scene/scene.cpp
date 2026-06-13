@@ -176,7 +176,7 @@ Camera const *Scene::get_interpolated_camera(std::uint64_t id) const noexcept {
   assert(!_indexed_keyframes.empty());
   auto const index = _indexed_keyframes.front().camera_indices.get(id);
   if (index) {
-    if (!_interpolation.valid) {
+    if (_interpolation.valid) {
       return &_interpolation.cameras[*index].value;
     } else {
       return &_indexed_keyframes.front().keyframe.cameras[*index].value;
@@ -189,7 +189,7 @@ Camera const *Scene::get_interpolated_camera(std::uint64_t id) const noexcept {
 std::span<Identified<Mesh_instance> const>
 Scene::get_interpolated_mesh_instances() const noexcept {
   assert(!_indexed_keyframes.empty());
-  if (!_interpolation.valid) {
+  if (_interpolation.valid) {
     return _interpolation.mesh_instances;
   } else {
     return _indexed_keyframes.front().keyframe.mesh_instances;
