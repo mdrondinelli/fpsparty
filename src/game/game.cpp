@@ -13,7 +13,6 @@
 #include "game/projectile_movement.hpp"
 #include "math/transformation_matrices.hpp"
 
-
 namespace fpsparty::game {
 namespace {
 void handle_use_secondary(Grid &grid, Humanoid &humanoid) {

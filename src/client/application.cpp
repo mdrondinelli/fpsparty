@@ -209,7 +209,7 @@ public:
     if (_state == State::connecting) {
       if (_client.is_connected()) {
         _state = State::connected;
-        _local_player = &_client.join_player();
+        _local_player = &_client.get_session()->join_player();
       } else if (!_client.is_connecting()) {
         _state = State::stopped;
         return false;
@@ -220,7 +220,7 @@ public:
         _state = State::stopped;
         return false;
       }
-      _client.tick(duration);
+      _client.update(duration);
     }
     update_grid_mesh();
     render();
@@ -229,9 +229,16 @@ public:
 
 private:
   enum class State {
+    // Initial state: issues connect and switches to connecting.
     initial,
+
+    // Connecting: polls connection status, switching to connected or stopped.
     connecting,
+
+    // Client connected. Says nothing about state of the players.
     connected,
+
+    // Stopped.
     stopped,
   };
 
@@ -289,14 +296,19 @@ private:
     work_recorder.set_depth_test_enabled(true);
     work_recorder.set_depth_write_enabled(true);
     work_recorder.set_depth_compare_op(graphics::Compare_op::greater);
-    auto const scene = _client.get_scene();
-    auto const camera = _local_player ? _local_player->get_camera_snapshot()
-                                      : std::optional<Camera_snapshot>{};
-    if (scene && camera) {
-      auto const view_matrix = (math::x_rotation_matrix(-camera->pitch) *
-                                math::y_rotation_matrix(-camera->yaw) *
-                                math::translation_matrix(-camera->position))
-                                 .eval();
+    auto const &session = _client.get_session();
+    auto const camera =
+      session && _local_player && _local_player->player_entity_id &&
+          _local_player->humanoid_entity_id
+        ? session->get_scene()
+            .get_interpolated_camera(*_local_player->player_entity_id)
+        : nullptr;
+    if (camera) {
+      auto const view_matrix =
+        (math::x_rotation_matrix(-_local_player->input_state.pitch) *
+         math::y_rotation_matrix(-_local_player->input_state.yaw) *
+         math::translation_matrix(-camera->position))
+          .eval();
       auto const aspect_ratio =
         static_cast<float>(swapchain_image->get_extent().x()) /
         static_cast<float>(swapchain_image->get_extent().y());
@@ -344,7 +356,8 @@ private:
       work_recorder
         .bind_index_buffer(_cube_index_buffer, graphics::Index_type::u16);
       work_recorder.push_buffer_device_address(64, _cube_vertex_buffer);
-      for (auto const &instance : scene->get_mesh_instances()) {
+      for (auto const &[id, instance] :
+           session->get_scene().get_interpolated_mesh_instances()) {
         auto rotation_matrix = Eigen::Matrix4f{Eigen::Matrix4f::Identity()};
         rotation_matrix.block<3, 3>(0, 0) =
           instance.orientation.toRotationMatrix();
@@ -374,7 +387,7 @@ private:
     if (key == glfw::Key::k_escape && action == glfw::Press_action::press) {
       _glfw_window->set_cursor_input_mode(glfw::Cursor_input_mode::normal);
     } else if (_local_player) {
-      auto input_state = _local_player->get_input_state();
+      auto input_state = _local_player->input_state;
       switch (key) {
       case glfw::Key::k_e:
         input_state.move_forward = action != glfw::Press_action::release;
@@ -397,7 +410,7 @@ private:
         break;
       default:
       }
-      _local_player->set_input_state(input_state);
+      _local_player->input_state = input_state;
     }
   }
 
@@ -407,13 +420,13 @@ private:
     glfw::Press_state action,
     int) override {
     if (_local_player) {
-      auto input_state = _local_player->get_input_state();
+      auto input_state = _local_player->input_state;
       if (button == glfw::Mouse_button::mb_left) {
         input_state.use_primary = action != glfw::Press_state::release;
       } else if (button == glfw::Mouse_button::mb_right) {
         input_state.use_secondary = action != glfw::Press_state::release;
       }
-      _local_player->set_input_state(input_state);
+      _local_player->input_state = input_state;
     }
     if (
       button == glfw::Mouse_button::mb_right &&
@@ -427,7 +440,7 @@ private:
     if (
       _local_player && _glfw_window->get_cursor_input_mode() ==
                          glfw::Cursor_input_mode::disabled) {
-      auto input_state = _local_player->get_input_state();
+      auto input_state = _local_player->input_state;
       input_state.yaw -=
         static_cast<float>(dxpos * constants::mouselook_sensititvity);
       input_state.pitch +=
@@ -436,25 +449,26 @@ private:
         input_state.pitch,
         -0.5f * std::numbers::pi_v<float>,
         0.5f * std::numbers::pi_v<float>);
-      _local_player->set_input_state(input_state);
+      _local_player->input_state = input_state;
     }
   }
 
   void update_grid_mesh() {
-    auto scene = _client.get_scene();
-    if (!scene) {
+    auto &session = _client.get_session();
+    if (!session) {
       _grid_mesh.reset();
       _pending_grid_mesh.reset();
       return;
     }
-    if (!scene->get_grid_remesh_flag()) {
+    auto &scene = session->get_scene();
+    if (!scene.get_grid_remesh_flag()) {
       return;
     }
     _pending_grid_mesh = std::make_unique<Grid_mesh>(Grid_mesh_create_info{
       .graphics = &_graphics,
-      .grid = &scene->get_grid(),
+      .grid = &scene.get_grid(),
     });
-    scene->clear_grid_remesh_flag();
+    scene.reset_grid_remesh_flag();
   }
 
   std::pair<rc::Strong<graphics::Image>, bool>

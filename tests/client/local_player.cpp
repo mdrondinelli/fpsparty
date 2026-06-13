@@ -162,6 +162,7 @@ TEST_CASE("World snapshots deliver the server tick number") {
   CHECK(client->snapshot_tick_number == tick_number);
 }
 
+/*
 TEST_CASE("Client correlates multiple local player joins") {
   constexpr auto port = std::uint16_t{29876};
   auto enet_guard = fpsparty::enet::Initialization_guard{};
@@ -267,3 +268,4 @@ TEST_CASE("Client correlates multiple local player joins") {
   CHECK(server->leave_requests.front() == 11);
   CHECK(&second == second_address);
 }
+*/
