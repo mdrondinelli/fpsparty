@@ -197,6 +197,7 @@ public:
   }
 
   bool update(float duration) {
+    assert(duration > 0.0f);
     if (_state == State::stopped || _glfw_window->should_close()) {
       _state = State::stopped;
       return false;

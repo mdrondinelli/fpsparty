@@ -37,11 +37,23 @@ void Session::update(float duration) {
       }
     }
   }
-  if (_state == State::playing) {
-    if (!_scene.update(duration) && _scene.get_max_buffered_keyframes() > 1) {
-      std::cerr << "Warning: server is lagging behind.\n";
-      _state = State::buffering;
-    }
+  if (
+    _state == State::playing && !_scene.update(duration) &&
+    _scene.get_max_buffered_keyframes() > 1) {
+    // TODO: better buffering for lower latency.
+    //
+    // With this logic, even a slightly delayed packet at
+    // max_buffered_keyframes = 2 will cause the client to go into buffering
+    // mode, which will look like lag. So we need to use 3, which is higher
+    // latency.
+    //
+    // It would be better to use a latency-based strategy. For example, the
+    // client could play 1.5 ticks behind the "average" progression coming off
+    // the network, then we have a half-tick margin.
+    //
+    // Probably want to set a max latency parameter.
+    std::cerr << "Warning: server is lagging behind.\n";
+    _state = State::buffering;
   }
 }
 

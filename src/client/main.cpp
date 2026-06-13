@@ -57,7 +57,7 @@ int main() {
     auto const duration =
       std::chrono::duration_cast<std::chrono::duration<float>>(loop_duration)
         .count();
-    if (!application.update(duration)) {
+    if (duration > 0.0f && !application.update(duration)) {
       break;
     }
     FrameMark;

@@ -12,6 +12,7 @@ Client::Client(Client_create_info const &info)
       _tick_duration{info.tick_duration} {}
 
 void Client::update(float duration) {
+  assert(duration > 0.0f);
   auto const tracy_frame_name = "Client::update";
   try {
     FrameMarkStart(tracy_frame_name);

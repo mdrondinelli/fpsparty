@@ -210,7 +210,7 @@ private:
     std::vector<EntityType> entities;
     std::vector<net::Entity_id> entity_ids;
     Hash_table index_lookup_table{8};
-    net::Entity_id next_entity_id{1};
+    net::Entity_id *next_entity_id{};
   };
 
   template <typename EntityType> struct Entry {
@@ -309,7 +309,7 @@ public:
       }
       auto &entity =
         _entity_array->entities.emplace_back(std::forward<Args>(args)...);
-      auto const id = _entity_array->next_entity_id++;
+      auto const id = (*_entity_array->next_entity_id)++;
       assert(id != 0);
       _entity_array->entity_ids.push_back(id);
       _entity_array->index_lookup_table.push(
@@ -424,8 +424,9 @@ public:
     if (_entity_arrays.size() <= type_index) {
       _entity_arrays.resize(type_index + 1);
     }
-    _entity_arrays[type_index] =
-      std::make_unique<Entity_array_impl<EntityType>>();
+    auto entity_array = std::make_unique<Entity_array_impl<EntityType>>();
+    entity_array->next_entity_id = _next_entity_id.get();
+    _entity_arrays[type_index] = std::move(entity_array);
   }
 
 private:
@@ -449,6 +450,7 @@ private:
   }
 
   std::vector<std::unique_ptr<Entity_array>> _entity_arrays;
+  std::unique_ptr<net::Entity_id> _next_entity_id{std::make_unique<net::Entity_id>(1)};
 };
 
 } // namespace fpsparty::game

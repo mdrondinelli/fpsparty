@@ -181,7 +181,7 @@ private:
     static constexpr std::uint32_t max_bucket_count = 0x80000000u;
 
   private:
-    static constexpr std::uint32_t hash(std::uint32_t key, int bits) noexcept {
+    static constexpr std::uint64_t hash(std::uint64_t key, int bits) noexcept {
       auto const shift = 64 - bits;
       key ^= key >> shift;
       return (key * 11400714819323198485llu) >> shift;
@@ -197,6 +197,18 @@ private:
     Hash_table mesh_instance_indices;
   };
 
+  struct Interpolation {
+    void clear() {
+      cameras.clear();
+      mesh_instances.clear();
+      valid = false;
+    }
+
+    std::vector<Identified<Camera>> cameras{};
+    std::vector<Identified<Mesh_instance>> mesh_instances{};
+    bool valid{};
+  };
+
   static constexpr std::uint32_t
   object_count_to_bucket_count(std::uint32_t n) noexcept {
     return std::max(
@@ -210,9 +222,8 @@ private:
 
   std::size_t _max_buffered_keyframes;
   float _keyframe_duration;
-  std::vector<Indexed_keyframe> _keyframes{};
-  std::vector<Identified<Camera>> _interpolated_cameras{};
-  std::vector<Identified<Mesh_instance>> _interpolated_mesh_instances{};
+  std::vector<Indexed_keyframe> _indexed_keyframes{};
+  Interpolation _interpolation{};
   std::uint64_t _keyframe_number{};
   float _inter_keyframe_time{};
   bool _grid_remesh_flag{};
