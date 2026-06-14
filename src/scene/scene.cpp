@@ -31,8 +31,6 @@ void Scene::push_keyframe(Keyframe &&keyframe) {
       _indexed_keyframes.empty()
         ? true
         : game::Grid::diff(get_grid(), next_base_keyframe.grid);
-  } else if (keyframe.number < _keyframe_number) {
-    return;
   }
   auto const camera_count = keyframe.cameras.size();
   auto const mesh_instance_count = keyframe.mesh_instances.size();
@@ -66,13 +64,15 @@ void Scene::push_keyframe(Keyframe &&keyframe) {
 bool Scene::update(float duration) {
   assert(duration > 0.0f);
   assert(_indexed_keyframes.size() > 0);
-  // no matter what, we're going to keep time.
-  // it is the consumer's responsibility to wait for a buffer of keyframes
   _inter_keyframe_time += duration / _keyframe_duration;
   if (_inter_keyframe_time >= 1.0f) {
     auto const increment = static_cast<std::uint64_t>(_inter_keyframe_time);
     _keyframe_number += increment;
     _inter_keyframe_time -= increment;
+  }
+  if (_keyframe_number >= _indexed_keyframes.back().keyframe.number) {
+    _keyframe_number = _indexed_keyframes.back().keyframe.number;
+    _inter_keyframe_time = 0.0f;
   }
   auto const old_keyframe_count = count_old_keyframes();
   auto const erase_count = old_keyframe_count > 0 ? old_keyframe_count - 1 : 0;
