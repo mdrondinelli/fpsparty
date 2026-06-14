@@ -8,8 +8,9 @@ namespace fpsparty::client {
 
 Client::Client(Client_create_info const &info)
     : net::Client{info.net_info},
-      _max_buffered_ticks{info.max_buffered_ticks},
-      _tick_duration{info.tick_duration} {}
+      _tick_duration{info.tick_duration},
+      _min_latency{info.min_latency},
+      _max_latency{info.max_latency} {}
 
 void Client::update(float duration) {
   assert(duration > 0.0f);
@@ -31,8 +32,9 @@ void Client::on_connect() {
   assert(!_session);
   _session = Session{{
     .client = this,
-    .max_buffered_ticks = _max_buffered_ticks,
     .tick_duration = _tick_duration,
+    .min_latency = _min_latency,
+    .max_latency = _max_latency,
   }};
 }
 

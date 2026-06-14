@@ -30,8 +30,9 @@ int main() {
     .client_info =
       {
         .net_info = {},
-        .max_buffered_ticks = 3,
         .tick_duration = constants::tick_duration,
+        .min_latency = 1.5f * constants::tick_duration,
+        .max_latency = 2.5f * constants::tick_duration,
       },
     .server_address =
       {

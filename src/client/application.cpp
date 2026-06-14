@@ -165,7 +165,7 @@ public:
         _graphics{{
           .window = *_glfw_window,
           .surface = *_vk_surface,
-          .vsync_preferred = false,
+          .vsync_preferred = true,
         }},
         _grid_vertex_shader{
           graphics::load_shader("./assets/shaders/grid.vert.spv")},

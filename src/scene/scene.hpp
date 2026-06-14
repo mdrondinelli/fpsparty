@@ -9,10 +9,10 @@
 namespace fpsparty::scene {
 
 struct Scene_create_info {
-  std::size_t max_buffered_keyframes;
   float keyframe_duration;
 };
 
+// TODO: clean up API so Scene is constructed with an initial keyframe
 class Scene {
 public:
   explicit Scene(Scene_create_info const &info);
@@ -20,20 +20,40 @@ public:
   /*
    * Appends a keyframe to the timeline.
    *
-   * If this is not the first keyframe, it must have a frame number greater
-   * than the previous keyframe.
-   *
-   * If this keyframe's frame numbe is less than the current frame number, this
-   * is a no-op.
+   * After the first call, keyframe must have a frame number greater than any
+   * previous keyframe. Otherwise is UB.
    */
-  void push_keyframe(Keyframe &&keyframe);
+  void push(Keyframe &&keyframe);
 
   /*
    * Advances the timeline by the given duration.
    *
-   * Returns true if a re-render is required.
+   * Returns true while playback is not starved.
+   *
+   * UB if empty.
    */
-  bool update(float duration);
+  bool play(float duration);
+
+  /**
+   * Fast-forwards the timeline to the given latency.
+   *
+   * If latency is behind curent playback, has no effect.
+   *
+   * If latency is ahead of most recrently pushed keyframe, clamps.
+   *
+   * UB if empty.
+   *
+   * Returns latency after the effect of the call.
+   */
+  float set_latency(float seconds) noexcept;
+
+  /**
+   * Returns the latency (positive) between the playback point and the
+   * most recently pushed keyframe.
+   *
+   * UB if empty.
+   */
+  float get_latency() const noexcept;
 
   /*
    * Returns the grid state at the current frame.
@@ -46,40 +66,53 @@ public:
 
   /*
    * Returns the cached interpolated cameras from the last advance_time call.
+   *
+   * UB if empty.
    */
   std::span<Identified<Camera> const> get_interpolated_cameras() const noexcept;
 
   /**
    * Returns the cached interpolated cameras from the last advance_time call.
+   *
+   * UB if empty.
    */
   Camera const *get_interpolated_camera(std::uint64_t id) const noexcept;
 
   /*
    * Returns the cached interpolated mesh instances from the last advance_time
    * call.
+   *
+   * UB if empty.
    */
   std::span<Identified<Mesh_instance> const>
   get_interpolated_mesh_instances() const noexcept;
 
   /*
-   * Returns the number of keyframes in the timeline.
+   * Returns the number of keyframes stored.
    */
   std::size_t get_keyframe_count() const noexcept;
 
   /*
-   * Returns the current frame number.
+   * Returns the base frame number of the playback point.
    */
   std::uint64_t get_keyframe_number() const noexcept;
 
   /*
-   * Returns the current inter-keyframe time.
+   * Returns the inter-keyframe time of the playback point.
    * This is on a scale of [0, 1).
    */
   float get_inter_keyframe_time() const noexcept;
 
-  std::size_t get_max_buffered_keyframes() const noexcept;
-
+  /*
+   * Returns the duration of a single keyframe.
+   * Passed in the constructor.
+   */
   float get_keyframe_duration() const noexcept;
+
+  /*
+   * True until the first keyframe is pushed.
+   */
+  bool empty() const noexcept;
 
 private:
   class Hash_table {
@@ -216,11 +249,12 @@ private:
       Hash_table::min_bucket_count);
   }
 
+  bool trim_old_keyframes() noexcept;
+
   std::size_t count_old_keyframes() const noexcept;
 
-  void interpolate();
+  bool interpolate();
 
-  std::size_t _max_buffered_keyframes;
   float _keyframe_duration;
   std::vector<Indexed_keyframe> _indexed_keyframes{};
   Interpolation _interpolation{};
