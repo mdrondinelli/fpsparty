@@ -12,8 +12,9 @@
 namespace fpsparty::client {
 struct Client_create_info {
   net::Client_create_info net_info;
-  std::uint32_t max_buffered_ticks;
   float tick_duration;
+  float min_latency;
+  float max_latency;
 };
 
 class Client : public net::Client {
@@ -48,8 +49,9 @@ protected:
     serial::Span_reader &player_entity_state_reader) override;
 
 private:
-  std::uint32_t _max_buffered_ticks{};
   float _tick_duration{};
+  float _min_latency{};
+  float _max_latency{};
   std::optional<Session> _session{};
 };
 } // namespace fpsparty::client

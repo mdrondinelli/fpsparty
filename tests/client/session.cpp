@@ -1,6 +1,6 @@
 // Tests for the latency-based buffering state machine in client::Session.
 //
-// API contract under test (implemented separately):
+// API contract under test:
 //   enum class Session_state { buffering, playing };   // fpsparty::client, namespace scope
 //   struct Session_create_info {
 //     net::Client_outbox *client;   // outbound-send seam (no socket in tests)
@@ -10,15 +10,15 @@
 //   };
 //   Session_state Session::get_state() const noexcept;
 //
-// The buffering policy reads only the scene clock, so tests feed keyframes
-// straight into get_scene() and drive update() — no socket, no serialized
-// snapshots.
+// The buffering policy lives in Session::update and reads only the scene clock,
+// so tests feed keyframes straight into get_scene() and drive update() -- no
+// socket, no serialized snapshots.
 
 #include "client/session.hpp"
 
 #include "game/grid.hpp"
 #include "net/client.hpp"
-#include "scene/keyframe.hpp"
+#include "scene/scene.hpp"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -61,7 +61,7 @@ make_session(net::Client_outbox &outbox, float min_latency, float max_latency) {
 
 void buffer(client::Session &session, std::uint64_t from, std::uint64_t to) {
   for (auto n = from; n <= to; ++n) {
-    session.get_scene().push_keyframe(make_keyframe(n));
+    session.get_scene().push(make_keyframe(n));
   }
 }
 } // namespace
@@ -69,6 +69,14 @@ void buffer(client::Session &session, std::uint64_t from, std::uint64_t to) {
 TEST_CASE("Session starts in the buffering state") {
   auto outbox = Recording_outbox{};
   auto session = make_session(outbox, 0.2f, 1.0f);
+  CHECK(session.get_state() == client::Session_state::buffering);
+}
+
+TEST_CASE("Session keeps buffering below min_latency") {
+  auto outbox = Recording_outbox{};
+  auto session = make_session(outbox, 0.2f, 1.0f);
+  buffer(session, 1, 2); // lead = 1 tick = 0.1s < min_latency
+  session.update(kd);
   CHECK(session.get_state() == client::Session_state::buffering);
 }
 
@@ -80,31 +88,21 @@ TEST_CASE("Session begins playing once latency reaches min_latency") {
   CHECK(session.get_state() == client::Session_state::playing);
 }
 
-TEST_CASE("Session keeps buffering below min_latency") {
-  auto outbox = Recording_outbox{};
-  auto session = make_session(outbox, 0.2f, 1.0f);
-  buffer(session, 1, 2); // lead = 1 tick < min_latency
-  session.update(kd);
-  CHECK(session.get_state() == client::Session_state::buffering);
-}
-
 TEST_CASE("Session re-enters buffering when playback starves") {
   auto outbox = Recording_outbox{};
   auto session = make_session(outbox, 0.1f, 1.0f);
-  buffer(session, 1, 2);  // lead = 1 tick = min_latency
-  session.update(kd);     // buffering -> playing (does not advance)
+  buffer(session, 1, 2); // lead = 1 tick = min_latency
+  session.update(kd);    // buffering -> playing, then advances onto newest
   REQUIRE(session.get_state() == client::Session_state::playing);
-  session.update(kd);     // advance consumes the only tick -> starve
+  session.update(kd); // stuck at newest, no progress -> starve -> buffering
   CHECK(session.get_state() == client::Session_state::buffering);
 }
 
 TEST_CASE("Session jumps forward when latency exceeds max_latency") {
   auto outbox = Recording_outbox{};
   auto session = make_session(outbox, 0.1f, 0.3f);
-  buffer(session, 1, 11);  // lead = 10 ticks = 1.0s > max_latency
-  session.update(kd);      // buffering -> playing
-  REQUIRE(session.get_state() == client::Session_state::playing);
-  session.update(0.01f);   // playing: advance, then jump lead down to min_latency
+  buffer(session, 1, 11); // lead = 10 ticks = 1.0s > max_latency
+  session.update(0.01f);  // buffering -> playing, then jump lead down to min
   CHECK(session.get_state() == client::Session_state::playing);
   CHECK(session.get_scene().get_latency() == Approx(0.1f));
 }

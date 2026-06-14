@@ -21,8 +21,9 @@ Eigen::Quaternionf yaw_orientation(float yaw) {
 
 Session::Session(Session_create_info const &info)
     : _client{info.client},
+      _min_latency{info.min_latency},
+      _max_latency{info.max_latency},
       _scene{{
-        .max_buffered_keyframes = info.max_buffered_ticks,
         .keyframe_duration = info.tick_duration,
       }} {}
 
@@ -37,23 +38,20 @@ void Session::update(float duration) {
       }
     }
   }
-  if (
-    _state == State::playing && !_scene.update(duration) &&
-    _scene.get_max_buffered_keyframes() > 1) {
-    // TODO: better buffering for lower latency.
-    //
-    // With this logic, even a slightly delayed packet at
-    // max_buffered_keyframes = 2 will cause the client to go into buffering
-    // mode, which will look like lag. So we need to use 3, which is higher
-    // latency.
-    //
-    // It would be better to use a latency-based strategy. For example, the
-    // client could play 1.5 ticks behind the "average" progression coming off
-    // the network, then we have a half-tick margin.
-    //
-    // Probably want to set a max latency parameter.
-    std::cerr << "Warning: server is lagging behind.\n";
-    _state = State::buffering;
+  if (_state == Session_state::buffering) {
+    if (!_scene.empty() && _scene.get_latency() >= _min_latency) {
+      _state = Session_state::playing;
+    }
+  }
+  if (_state == Session_state::playing) {
+    auto const current_latency = _scene.get_latency();
+    if (current_latency - duration >= _max_latency) {
+      std::cerr << "Warning: server is too far ahead.\n";
+      _scene.set_latency(_min_latency);
+    } else if (!_scene.play(duration) && _min_latency > 0.0f) {
+      std::cerr << "Warning: client is too far ahead.\n";
+      _state = Session_state::buffering;
+    }
   }
 }
 
@@ -116,12 +114,7 @@ void Session::on_world_snapshot(
   keyframe.grid.load(grid_state_reader);
   load_player_state(player_entity_state_reader);
   load_public_state(public_entity_state_reader, keyframe);
-  _scene.push_keyframe(std::move(keyframe));
-  if (
-    _state == State::buffering &&
-    _scene.get_keyframe_count() == _scene.get_max_buffered_keyframes()) {
-    _state = State::playing;
-  }
+  _scene.push(std::move(keyframe));
 }
 
 void Session::load_player_state(serial::Reader &reader) {
@@ -233,5 +226,7 @@ void Session::load_public_state(
 scene::Scene &Session::get_scene() noexcept { return _scene; }
 
 scene::Scene const &Session::get_scene() const noexcept { return _scene; }
+
+Session_state Session::get_state() const noexcept { return _state; }
 
 } // namespace fpsparty::client

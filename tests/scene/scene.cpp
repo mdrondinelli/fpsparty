@@ -3,8 +3,8 @@
 // API contract under test (implemented separately):
 //   struct Scene_create_info { float keyframe_duration; };
 //   float Scene::get_latency() const noexcept;       // (newest - P) * keyframe_duration, 0 if empty
-//   bool  Scene::update(float dt);                    // false when starved; clamps P at newest
-//   void  Scene::jump_to_latency(float seconds) noexcept;
+//   bool  Scene::play(float dt);                    // false when starved; clamps P at newest
+//   void  Scene::set_latency(float seconds) noexcept;
 //   std::size_t Scene::get_keyframe_count() const noexcept;
 //
 // All pure: keyframes are pushed directly as plain structs, no serialization,
@@ -40,56 +40,56 @@ scene::Keyframe make_keyframe(std::uint64_t number) {
 
 TEST_CASE("Scene latency is the keyframe lead in seconds") {
   auto scene = make_scene();
-  scene.push_keyframe(make_keyframe(10));
+  scene.push(make_keyframe(10));
   CHECK(scene.get_latency() == Approx(0.0f)); // playback pinned to first keyframe
-  scene.push_keyframe(make_keyframe(11));
+  scene.push(make_keyframe(11));
   CHECK(scene.get_latency() == Approx(kd)); // one tick ahead
-  scene.push_keyframe(make_keyframe(13));
+  scene.push(make_keyframe(13));
   CHECK(scene.get_latency() == Approx(3 * kd)); // three ticks ahead
 }
 
-TEST_CASE("Scene update advances playback and consumes latency") {
+TEST_CASE("Scene play advances playback and consumes latency") {
   auto scene = make_scene();
-  scene.push_keyframe(make_keyframe(10));
-  scene.push_keyframe(make_keyframe(12)); // lead = 2 ticks
-  CHECK(scene.update(kd));                 // advance one tick, forward frame remains
+  scene.push(make_keyframe(10));
+  scene.push(make_keyframe(12)); // lead = 2 ticks
+  CHECK(scene.play(kd));                 // advance one tick, forward frame remains
   CHECK(scene.get_latency() == Approx(kd));
 }
 
-TEST_CASE("Scene update starves and clamps at the newest keyframe") {
+TEST_CASE("Scene play starves and clamps at the newest keyframe") {
   auto scene = make_scene();
-  scene.push_keyframe(make_keyframe(10));
-  scene.push_keyframe(make_keyframe(11)); // lead = 1 tick
-  CHECK_FALSE(scene.update(kd));          // reaches newest -> starved
+  scene.push(make_keyframe(10));
+  scene.push(make_keyframe(11)); // lead = 1 tick
+  CHECK(scene.play(kd)); // advances onto newest (and trims) -> progress
   CHECK(scene.get_latency() == Approx(0.0f));
-  CHECK_FALSE(scene.update(kd)); // stays clamped at newest, still starved
+  CHECK_FALSE(scene.play(kd)); // stuck at newest, nothing to advance -> starved
   CHECK(scene.get_latency() == Approx(0.0f));
 }
 
-TEST_CASE("Scene jump_to_latency snaps the lead to the target") {
+TEST_CASE("Scene set_latency snaps the lead to the target") {
   auto scene = make_scene();
   for (auto n = std::uint64_t{10}; n <= 20; ++n) {
-    scene.push_keyframe(make_keyframe(n));
+    scene.push(make_keyframe(n));
   }
   REQUIRE(scene.get_latency() == Approx(10 * kd)); // lead = 10 ticks
-  scene.jump_to_latency(2 * kd);
+  scene.set_latency(2 * kd);
   CHECK(scene.get_latency() == Approx(2 * kd));
 }
 
-TEST_CASE("Scene jump_to_latency clamps to the available buffer") {
+TEST_CASE("Scene set_latency clamps to the available buffer") {
   auto scene = make_scene();
-  scene.push_keyframe(make_keyframe(10));
-  scene.push_keyframe(make_keyframe(11)); // only 1 tick of buffer
-  scene.jump_to_latency(10 * kd);         // ask for more lead than exists
+  scene.push(make_keyframe(10));
+  scene.push(make_keyframe(11)); // only 1 tick of buffer
+  scene.set_latency(10 * kd);         // ask for more lead than exists
   CHECK(scene.get_latency() == Approx(kd)); // clamped to the oldest keyframe
 }
 
-TEST_CASE("Scene update trims keyframes behind the playback point") {
+TEST_CASE("Scene play trims keyframes behind the playback point") {
   auto scene = make_scene();
   for (auto n = std::uint64_t{10}; n <= 13; ++n) {
-    scene.push_keyframe(make_keyframe(n));
+    scene.push(make_keyframe(n));
   }
   REQUIRE(scene.get_keyframe_count() == 4);
-  scene.update(2.5f * kd); // playback -> 12, keeping 12 as the interpolation base
+  scene.play(2.5f * kd); // playback -> 12, keeping 12 as the interpolation base
   CHECK(scene.get_keyframe_count() == 2); // 12 (base) and 13
 }

@@ -12,10 +12,16 @@
 
 namespace fpsparty::client {
 
+enum class Session_state {
+  buffering,
+  playing,
+};
+
 struct Session_create_info {
-  net::Client *client;
-  std::uint32_t max_buffered_ticks;
+  net::Client_outbox *client;
   float tick_duration;
+  float min_latency;
+  float max_latency;
 };
 
 class Session {
@@ -41,18 +47,17 @@ public:
 
   scene::Scene &get_scene() noexcept;
 
-private:
-  enum class State {
-    buffering,
-    playing,
-  };
+  Session_state get_state() const noexcept;
 
+private:
   void load_player_state(serial::Reader &reader);
 
   void load_public_state(serial::Reader &reader, scene::Keyframe &keyframe);
 
-  net::Client *_client;
-  State _state{State::buffering};
+  net::Client_outbox *_client;
+  Session_state _state{Session_state::buffering};
+  float _min_latency;
+  float _max_latency;
   scene::Scene _scene;
   std::vector<std::unique_ptr<Local_player>> _local_players{};
   net::Player_join_request_id _next_player_join_request_id{1};
