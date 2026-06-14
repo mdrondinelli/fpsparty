@@ -1,7 +1,6 @@
 #ifndef FPSPARTY_GAME_GRID_HPP
 #define FPSPARTY_GAME_GRID_HPP
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -19,11 +18,10 @@ namespace fpsparty::game {
 
 namespace detail {
 
-constexpr std::size_t linearize_chunk_offset(
-  std::array<std::size_t, 3> chunk_counts,
-  std::array<std::size_t, 3> chunk_offset) noexcept {
-  return chunk_offset[0] + chunk_offset[1] * chunk_counts[0] +
-         chunk_offset[2] * chunk_counts[0] * chunk_counts[1];
+constexpr std::size_t linearize_chunk_index(
+  math::ivec3 chunk_counts, math::ivec3 chunk_indices) noexcept {
+  return chunk_indices[0] + chunk_indices[1] * chunk_counts[0] +
+         chunk_indices[2] * chunk_counts[0] * chunk_counts[1];
 }
 
 } // namespace detail
@@ -35,7 +33,7 @@ struct Grid_create_info {
 };
 
 struct Grid_raycast_hit {
-  Eigen::Vector3i cell_indices{};
+  Eigen::Vector3i cell_coords{};
   Eigen::Vector3i normal{};
   float t{};
 };
@@ -47,9 +45,9 @@ public:
   static constexpr auto edge_length = std::size_t{4};
 
   static constexpr auto get_bit_index(Eigen::Vector3i const &offset) noexcept {
-    auto const i = offset.x() % edge_length;
-    auto const j = offset.y() % edge_length;
-    auto const k = offset.z() % edge_length;
+    auto const i = offset.x() & (edge_length - 1);
+    auto const j = offset.y() & (edge_length - 1);
+    auto const k = offset.z() & (edge_length - 1);
     return k * edge_length * edge_length + j * edge_length + i;
   }
 
@@ -88,23 +86,21 @@ class Chunk_span_template {
   public:
     std::pair<Eigen::Vector3i, U *> operator*() const noexcept {
       return {
-        {
-          static_cast<int>(_chunk_offset[0]),
-          static_cast<int>(_chunk_offset[1]),
-          static_cast<int>(_chunk_offset[2]),
-        },
-        _data + detail::linearize_chunk_offset(_chunk_counts, _chunk_offset),
+        _chunk_coords,
+        _data + detail::linearize_chunk_index(
+                  _chunk_bounds.diagonal() + math::ivec3::Ones(),
+                  _chunk_coords - _chunk_bounds.min()),
       };
     }
 
     Iterator_template &operator++() noexcept {
-      ++_chunk_offset[0];
-      if (_chunk_offset[0] == _chunk_counts[0]) {
-        _chunk_offset[0] = 0;
-        ++_chunk_offset[1];
-        if (_chunk_offset[1] == _chunk_counts[1]) {
-          _chunk_offset[1] = 0;
-          ++_chunk_offset[2];
+      ++_chunk_coords[0];
+      if (_chunk_coords[0] > _chunk_bounds.max()[0]) {
+        _chunk_coords[0] = _chunk_bounds.min()[0];
+        ++_chunk_coords[1];
+        if (_chunk_coords[1] > _chunk_bounds.max()[1]) {
+          _chunk_coords[1] = _chunk_bounds.min()[1];
+          ++_chunk_coords[2];
         }
       }
       return *this;
@@ -118,64 +114,59 @@ class Chunk_span_template {
 
     friend bool operator==(
       Iterator_template const &lhs, Iterator_template const &rhs) noexcept {
-      return lhs._chunk_offset == rhs._chunk_offset;
+      return lhs._chunk_coords == rhs._chunk_coords;
     }
 
   private:
     constexpr Iterator_template(
       U *data,
-      std::array<std::size_t, 3> const &chunk_counts,
-      std::array<std::size_t, 3> const &chunk_offset) noexcept
+      math::ibox3 const &chunk_bounds,
+      math::ivec3 chunk_coords) noexcept
         : _data{data},
-          _chunk_counts{chunk_counts},
-          _chunk_offset{chunk_offset} {}
+          _chunk_bounds{chunk_bounds},
+          _chunk_coords{chunk_coords} {}
 
     U *_data;
-    std::array<std::size_t, 3> _chunk_counts;
-    std::array<std::size_t, 3> _chunk_offset;
+    math::ibox3 _chunk_bounds;
+    math::ivec3 _chunk_coords;
   };
 
 public:
   using Iterator = Iterator_template<T>;
   using Const_iterator = Iterator_template<T const>;
 
-  Chunk_span_template(
-    T *data, std::array<std::size_t, 3> const &chunk_counts) noexcept
-      : _data{data}, _chunk_counts{chunk_counts} {}
+  Chunk_span_template(T *data, math::ibox3 const &chunk_bounds) noexcept
+      : _data{data}, _chunk_bounds{chunk_bounds} {}
 
   Iterator begin() const noexcept {
-    return {
-      _data,
-      _chunk_counts,
-      {
-        std::size_t{},
-        std::size_t{},
-        std::size_t{},
-      }};
+    return {_data, _chunk_bounds, _chunk_bounds.min()};
   }
 
   Const_iterator cbegin() const noexcept {
-    return {
-      _data,
-      _chunk_counts,
-      {
-        std::size_t{},
-        std::size_t{},
-        std::size_t{},
-      }};
+    return {_data, _chunk_bounds, _chunk_bounds.min()};
   }
 
   Iterator end() const noexcept {
-    return {_data, _chunk_counts, {0, 0, _chunk_counts[2]}};
+    return {
+      _data,
+      _chunk_bounds,
+      {_chunk_bounds.min()[0],
+       _chunk_bounds.min()[1],
+       _chunk_bounds.max()[2] + 1}};
   }
 
   Const_iterator cend() const noexcept {
-    return {_data, _chunk_counts, {0, 0, _chunk_counts[2]}};
+    return {
+      _data,
+      _chunk_bounds,
+      {_chunk_bounds.min()[0],
+       _chunk_bounds.min()[1],
+       _chunk_bounds.max()[2] + 1}};
   }
 
 private:
   T *_data;
-  std::array<std::size_t, 3> _chunk_counts;
+  math::ibox3 _chunk_bounds;
 };
 
 using Chunk_span = Chunk_span_template<Chunk>;
@@ -191,20 +182,28 @@ public:
 
   void dump(serial::Writer &writer) const;
 
-  void fill(Eigen::AlignedBox3i const &bounds, bool solid = true);
-
-  void set_solid(Eigen::Vector3i const &cell_coords, bool solid) noexcept;
-
-  bool is_solid(Eigen::Vector3i const &cell_coords) const noexcept;
+  void fill(math::ibox3 const &cells, bool solid = true);
 
   std::optional<Grid_raycast_hit> raycast(
-    Eigen::Vector3i const &origin_cell_indices,
+    Eigen::Vector3i const &origin_cell_coords,
     Eigen::Vector3f const &origin_cell_offset,
     Eigen::Vector3f const &ray_direction,
     float max_t) const noexcept;
 
-  bool bounds_check_cell(Eigen::Vector3i const &cell_coords) const noexcept;
+  void set_solid(math::ivec3 cell_coords, bool solid) noexcept;
 
+  bool is_solid(math::ivec3 cell_coords) const noexcept;
+
+  bool bounds_check_cell(math::ivec3 coords) const noexcept;
+
+private:
+  Chunk *get_chunk_unsafe(math::ivec3 coords) noexcept;
+
+  Chunk const *get_chunk_unsafe(math::ivec3 coords) const noexcept;
+
+  std::size_t linearize_chunk_index(math::ivec3 indices) const noexcept;
+
+public:
   Chunk_span get_chunks() noexcept;
 
   Const_chunk_span get_chunks() const noexcept;
@@ -215,10 +214,18 @@ public:
 
   math::ivec3 get_cell_counts() const noexcept;
 
-  math::ibox3 const &get_bounds() const noexcept;
+  math::ibox3 get_chunk_bounds() const noexcept;
+
+  math::ibox3 const &get_cell_bounds() const noexcept;
+
+  static math::ibox3 cell_to_chunk(math::ibox3 coords);
+
+  static math::ivec3 cell_to_chunk(math::ivec3 coords);
+
+  static math::ivec3 chunk_to_cell(math::ivec3 coords);
 
 private:
-  math::ibox3 _bounds;
+  math::ibox3 _cell_bounds;
   std::vector<Chunk> _chunks{};
 };
 

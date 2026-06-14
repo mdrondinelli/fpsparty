@@ -11,15 +11,15 @@ namespace fpsparty::game {
 
 bool Grid::diff(Grid const &lhs, Grid const &rhs) {
   if (
-    lhs.get_width() != rhs.get_width() ||
-    lhs.get_height() != rhs.get_height() ||
-    lhs.get_depth() != rhs.get_depth()) {
+    lhs.get_cell_bounds().min() != rhs.get_cell_bounds().min() ||
+    lhs.get_cell_bounds().max() != rhs.get_cell_bounds().max()) {
     return true;
   }
   return !std::ranges::equal(lhs._chunks, rhs._chunks);
 }
 
-Grid::Grid(Grid_create_info const &create_info) : _bounds{create_info.bounds} {
+Grid::Grid(Grid_create_info const &create_info)
+    : _cell_bounds{create_info.bounds} {
   auto const chunk_counts = get_chunk_counts();
   auto const width_chunks = chunk_counts(0);
   auto const height_chunks = chunk_counts(1);
@@ -29,20 +29,15 @@ Grid::Grid(Grid_create_info const &create_info) : _bounds{create_info.bounds} {
 
 void Grid::load(serial::Reader &reader) {
   using serial::deserialize;
-  auto const x_chunk_count = deserialize<std::uint32_t>(reader);
-  if (!x_chunk_count) {
+  auto const cell_bounds = deserialize<math::ibox3>(reader);
+  if (!cell_bounds) {
     throw Grid_loading_error{};
   }
-  auto const y_chunk_count = deserialize<std::uint32_t>(reader);
-  if (!y_chunk_count) {
-    throw Grid_loading_error{};
-  }
-  auto const z_chunk_count = deserialize<std::uint32_t>(reader);
-  if (!z_chunk_count) {
-    throw Grid_loading_error{};
-  }
-  _chunk_counts = {*x_chunk_count, *y_chunk_count, *z_chunk_count};
-  _chunks.resize(_chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2]);
+  _cell_bounds = *cell_bounds;
+  auto const chunk_bounds = cell_to_chunk(_cell_bounds);
+  auto const chunk_counts =
+    (chunk_bounds.diagonal() + math::ivec3::Ones()).eval();
+  _chunks.resize(chunk_counts(0) * chunk_counts(1) * chunk_counts(2));
   for (auto &chunk : _chunks) {
     auto const blocks = deserialize<std::uint64_t>(reader);
     if (!blocks) {
@@ -54,69 +49,30 @@ void Grid::load(serial::Reader &reader) {
 
 void Grid::dump(serial::Writer &writer) const {
   using serial::serialize;
-  for (auto i = 0; i != 3; ++i) {
-    serialize<std::uint32_t>(writer, _chunk_counts[i]);
-  }
+  serialize<math::ibox3>(writer, get_cell_bounds());
   for (auto const &chunk : _chunks) {
     serialize<std::uint64_t>(writer, chunk.blocks);
   }
 }
 
-void Grid::fill(Eigen::AlignedBox3i const &bounds, bool solid) {
-  // TODO: optimize this to take advantage of bitwise ops
-  auto const min = bounds.min().cwiseMax(Eigen::Vector3i::Zero()).eval();
-  auto const max = bounds.max()
-                     .cwiseMin(
-                       Eigen::Vector3i{
-                         static_cast<int>(get_width()),
-                         static_cast<int>(get_height()),
-                         static_cast<int>(get_depth()),
-                       })
-                     .eval();
-  if ((min.array() >= max.array()).any()) {
+void Grid::fill(math::ibox3 const &cells, bool solid) {
+  auto const bounded_cells = cells.intersection(get_cell_bounds());
+  if (bounded_cells.isEmpty()) {
     return;
   }
-  for (auto z = min.z(); z != max.z(); ++z) {
-    auto const k = z / Chunk::edge_length;
-    auto const z_0 = static_cast<int>(k * Chunk::edge_length);
-    for (auto y = min.y(); y != max.y(); ++y) {
-      auto const j = y / Chunk::edge_length;
-      auto const y_0 = static_cast<int>(j * Chunk::edge_length);
-      for (auto x = min.x(); x != max.x(); ++x) {
-        auto const i = x / Chunk::edge_length;
-        auto const x_0 = static_cast<int>(i * Chunk::edge_length);
-        auto const chunk_index =
-          detail::linearize_chunk_offset(_chunk_counts, {i, j, k});
-        auto &chunk = _chunks[chunk_index];
-        chunk.set_solid({x - x_0, y - y_0, z - z_0}, solid);
+  auto const &min = bounded_cells.min();
+  auto const &max = bounded_cells.max();
+  for (auto z = min.z(); z <= max.z(); ++z) {
+    for (auto y = min.y(); y <= max.y(); ++y) {
+      for (auto x = min.x(); x <= max.x(); ++x) {
+        set_solid({x, y, z}, solid);
       }
     }
   }
 }
 
-void Grid::set_solid(Eigen::Vector3i const &cell_coords, bool solid) noexcept {
-  if (!bounds_check_cell(cell_coords)) {
-    return;
-  }
-  auto const chunk_coords =
-    (cell_coords & ~static_cast<int>(Chunk::edge_length - 1)).eval();
-  auto const cell_offset =
-    (cell_coords - chunk_coords * Chunk::edge_length).eval();
-  get_chunk_unsafe(chunk_indices)->set_solid(cell_offset, solid);
-}
-
-bool Grid::is_solid(Eigen::Vector3i const &cell_indices) const noexcept {
-  if (bounds_check_cell(cell_indices)) {
-    auto const chunk_indices = (cell_indices / Chunk::edge_length).eval();
-    auto const cell_offset = cell_indices - chunk_indices * Chunk::edge_length;
-    return get_chunk_unsafe(chunk_indices)->is_solid(cell_offset);
-  } else {
-    return false;
-  }
-}
-
 std::optional<Grid_raycast_hit> Grid::raycast(
-  Eigen::Vector3i const &origin_cell_indices,
+  Eigen::Vector3i const &origin_cell_coords,
   Eigen::Vector3f const &origin_cell_offset,
   Eigen::Vector3f const &ray_direction,
   float max_t) const noexcept {
@@ -126,17 +82,17 @@ std::optional<Grid_raycast_hit> Grid::raycast(
   if (max_t < 0.0f) {
     return std::nullopt;
   }
-  auto cell_indices = origin_cell_indices;
-  if (is_solid(cell_indices)) {
+  auto cell_coords = origin_cell_coords;
+  if (is_solid(cell_coords)) {
     return Grid_raycast_hit{
-      .cell_indices = cell_indices,
-      .normal = Eigen::Vector3i::Zero(),
+      .cell_coords = cell_coords,
+      .normal = math::ivec3::Zero(),
       .t = 0.0f,
     };
   }
-  auto step = Eigen::Vector3i{Eigen::Vector3i::Zero()};
-  auto t_max = Eigen::Vector3f{Eigen::Vector3f::Zero()};
-  auto t_delta = Eigen::Vector3f{Eigen::Vector3f::Zero()};
+  auto step = math::ivec3::Zero().eval();
+  auto t_max = math::vec3::Zero().eval();
+  auto t_delta = math::vec3::Zero().eval();
   for (auto axis = 0; axis != 3; ++axis) {
     auto const direction = ray_direction(axis);
     if (direction > 0.0f) {
@@ -158,17 +114,17 @@ std::optional<Grid_raycast_hit> Grid::raycast(
     if (!(next_t <= max_t)) {
       return std::nullopt;
     }
-    auto normal = Eigen::Vector3i{Eigen::Vector3i::Zero()};
+    auto normal = math::ivec3::Zero().eval();
     for (auto axis = 0; axis != 3; ++axis) {
       if (t_max(axis) == next_t) {
-        cell_indices(axis) += step(axis);
+        cell_coords(axis) += step(axis);
         normal(axis) = -step(axis);
         t_max(axis) += t_delta(axis);
       }
     }
-    if (is_solid(cell_indices)) {
+    if (is_solid(cell_coords)) {
       return Grid_raycast_hit{
-        .cell_indices = cell_indices,
+        .cell_coords = cell_coords,
         .normal = normal,
         .t = next_t,
       };
@@ -176,35 +132,94 @@ std::optional<Grid_raycast_hit> Grid::raycast(
   }
 }
 
-bool Grid::bounds_check_cell(
-  Eigen::Vector3i const &cell_coords) const noexcept {
-  return _bounds.contains(cell_coords);
+void Grid::set_solid(math::ivec3 cell_coords, bool solid) noexcept {
+  if (!bounds_check_cell(cell_coords)) {
+    return;
+  }
+  auto const chunk_coords = cell_to_chunk(cell_coords);
+  auto const cell_base = chunk_to_cell(chunk_coords);
+  auto const cell_offset = (cell_coords - cell_base).eval();
+  get_chunk_unsafe(chunk_coords)->set_solid(cell_offset, solid);
+}
+
+bool Grid::is_solid(math::ivec3 cell_coords) const noexcept {
+  if (bounds_check_cell(cell_coords)) {
+    auto const chunk_coords = cell_to_chunk(cell_coords);
+    auto const cell_base = chunk_to_cell(chunk_coords);
+    auto const cell_offset = (cell_coords - cell_base).eval();
+    return get_chunk_unsafe(chunk_coords)->is_solid(cell_offset);
+  } else {
+    return false;
+  }
+}
+
+bool Grid::bounds_check_cell(math::ivec3 coords) const noexcept {
+  return get_cell_bounds().contains(coords);
+}
+
+Chunk *Grid::get_chunk_unsafe(math::ivec3 coords) noexcept {
+  return const_cast<Chunk *>(std::as_const(*this).get_chunk_unsafe(coords));
+}
+
+Chunk const *Grid::get_chunk_unsafe(math::ivec3 coords) const noexcept {
+  auto const indices = (coords - get_chunk_bounds().min()).eval();
+  auto const index = linearize_chunk_index(indices);
+  return &_chunks[index];
+}
+
+std::size_t Grid::linearize_chunk_index(math::ivec3 indices) const noexcept {
+  return detail::linearize_chunk_index(get_chunk_counts(), indices);
 }
 
 Chunk_span Grid::get_chunks() noexcept {
-  return {_chunks.data(), _chunk_counts};
+  return {
+    _chunks.data(),
+    get_chunk_bounds(),
+  };
 }
 
 Const_chunk_span Grid::get_chunks() const noexcept {
-  return {_chunks.data(), _chunk_counts};
+  return {
+    _chunks.data(),
+    get_chunk_bounds(),
+  };
 }
 
 Const_chunk_span Grid::get_const_chunks() const noexcept {
-  return {_chunks.data(), _chunk_counts};
+  return get_chunks();
 }
 
 math::ivec3 Grid::get_chunk_counts() const noexcept {
-  auto const cell_counts = get_cell_counts();
-  assert(cell_counts(0) % Chunk::edge_length == 0);
-  assert(cell_counts(1) % Chunk::edge_length == 0);
-  assert(cell_counts(2) % Chunk::edge_length == 0);
-  return cell_counts / Chunk::edge_length;
+  return get_chunk_bounds().diagonal() + math::ivec3::Ones();
 }
 
 math::ivec3 Grid::get_cell_counts() const noexcept {
-  return _bounds.diagonal() + math::ivec3::Ones();
+  return get_cell_bounds().diagonal() + math::ivec3::Ones();
 }
 
-math::ibox3 const &Grid::get_bounds() const noexcept { return _bounds; }
+math::ibox3 Grid::get_chunk_bounds() const noexcept {
+  return cell_to_chunk(get_cell_bounds());
+}
+
+math::ibox3 const &Grid::get_cell_bounds() const noexcept {
+  return _cell_bounds;
+}
+
+math::ibox3 Grid::cell_to_chunk(math::ibox3 coords) {
+  return math::ibox3{
+    cell_to_chunk(coords.min()),
+    cell_to_chunk(coords.max()),
+  };
+}
+
+math::ivec3 Grid::cell_to_chunk(math::ivec3 coords) {
+  return coords.unaryExpr(
+    [](i32 coord) { return coord >> std::countr_zero(Chunk::edge_length); });
+}
+
+math::ivec3 Grid::chunk_to_cell(math::ivec3 coords) {
+  return coords.unaryExpr(
+    [](i32 coord) { return coord << std::countr_zero(Chunk::edge_length); });
+}
 
 } // namespace fpsparty::game

@@ -3,8 +3,10 @@
 #include "game/constants.hpp"
 #include "game/grid.hpp"
 #include "serial/span_writer.hpp"
+
 #include <array>
 #include <cassert>
+#include <iostream>
 #include <span>
 #include <vector>
 
@@ -44,9 +46,9 @@ void append_face(
 void append_solid_cell_faces(
   Chunk_geometry &result,
   game::Grid const &grid,
-  Eigen::Vector3i const &cell_indices) {
+  math::ivec3 cell_coords) {
   auto const min =
-    (cell_indices.cast<float>() * game::constants::grid_cell_stride).eval();
+    (cell_coords.cast<float>() * game::constants::grid_cell_stride).eval();
   auto const max =
     (min + Eigen::Vector3f::Constant(game::constants::grid_cell_stride)).eval();
   auto const x0 = min.x();
@@ -55,7 +57,7 @@ void append_solid_cell_faces(
   auto const x1 = max.x();
   auto const y1 = max.y();
   auto const z1 = max.z();
-  if (!grid.is_solid(cell_indices + Eigen::Vector3i{1, 0, 0})) {
+  if (!grid.is_solid(cell_coords + math::ivec3{1, 0, 0})) {
     append_face(
       result,
       game::Axis::x,
@@ -67,7 +69,7 @@ void append_solid_cell_faces(
         Eigen::Vector3f{x1, y0, z1},
       });
   }
-  if (!grid.is_solid(cell_indices - Eigen::Vector3i{1, 0, 0})) {
+  if (!grid.is_solid(cell_coords - math::ivec3{1, 0, 0})) {
     append_face(
       result,
       game::Axis::x,
@@ -79,7 +81,7 @@ void append_solid_cell_faces(
         Eigen::Vector3f{x0, y1, z0},
       });
   }
-  if (!grid.is_solid(cell_indices + Eigen::Vector3i{0, 1, 0})) {
+  if (!grid.is_solid(cell_coords + math::ivec3{0, 1, 0})) {
     append_face(
       result,
       game::Axis::y,
@@ -91,7 +93,7 @@ void append_solid_cell_faces(
         Eigen::Vector3f{x1, y1, z0},
       });
   }
-  if (!grid.is_solid(cell_indices - Eigen::Vector3i{0, 1, 0})) {
+  if (!grid.is_solid(cell_coords - math::ivec3{0, 1, 0})) {
     append_face(
       result,
       game::Axis::y,
@@ -103,7 +105,7 @@ void append_solid_cell_faces(
         Eigen::Vector3f{x0, y0, z1},
       });
   }
-  if (!grid.is_solid(cell_indices + Eigen::Vector3i{0, 0, 1})) {
+  if (!grid.is_solid(cell_coords + math::ivec3{0, 0, 1})) {
     append_face(
       result,
       game::Axis::z,
@@ -115,7 +117,7 @@ void append_solid_cell_faces(
         Eigen::Vector3f{x0, y1, z1},
       });
   }
-  if (!grid.is_solid(cell_indices - Eigen::Vector3i{0, 0, 1})) {
+  if (!grid.is_solid(cell_coords - math::ivec3{0, 0, 1})) {
     append_face(
       result,
       game::Axis::z,
@@ -130,7 +132,7 @@ void append_solid_cell_faces(
 }
 
 Chunk_geometry generate_chunk_geometry(
-  Eigen::Vector3i const &chunk_indices,
+  Eigen::Vector3i const &chunk_coords,
   game::Chunk const &chunk,
   game::Grid const &grid) {
   auto result = Chunk_geometry{};
@@ -145,9 +147,9 @@ Chunk_geometry generate_chunk_geometry(
           result,
           grid,
           {
-            chunk_indices.x() * n + x,
-            chunk_indices.y() * n + y,
-            chunk_indices.z() * n + z,
+            chunk_coords.x() * n + x,
+            chunk_coords.y() * n + y,
+            chunk_coords.z() * n + z,
           });
       }
     }
@@ -161,9 +163,9 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
   auto indices = std::vector<std::uint32_t>{};
   auto draw_infos =
     std::array<std::array<std::vector<graphics::Indexed_draw_info>, 2>, 3>{};
-  for (auto const &[chunk_indices, chunk] : info.grid->get_chunks()) {
+  for (auto const &[chunk_coords, chunk] : info.grid->get_chunks()) {
     auto const geometry =
-      generate_chunk_geometry(chunk_indices, *chunk, *info.grid);
+      generate_chunk_geometry(chunk_coords, *chunk, *info.grid);
     for (auto axis = 0; axis != 3; ++axis) {
       for (auto sign = 0; sign != 2; ++sign) {
         auto const draw_info = graphics::Indexed_draw_info{

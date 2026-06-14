@@ -34,7 +34,7 @@ void handle_use_secondary(Grid &grid, Humanoid &humanoid) {
     forward,
     constants::block_interaction_range / constants::grid_cell_stride);
   if (hit) {
-    grid.set_solid(hit->cell_indices + hit->normal, true);
+    grid.set_solid(hit->cell_coords + hit->normal, true);
   }
 }
 

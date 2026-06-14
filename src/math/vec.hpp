@@ -9,10 +9,10 @@
 namespace fpsparty::math {
 
 using f32vec2 = Eigen::Matrix<f32, 2, 1>;
-using f32vec3 = Eigen::Matrix<f32, 2, 1>;
+using f32vec3 = Eigen::Matrix<f32, 3, 1>;
 using f32vec4 = Eigen::Matrix<f32, 4, 1>;
 using f64vec2 = Eigen::Matrix<f64, 2, 1>;
-using f64vec3 = Eigen::Matrix<f64, 2, 1>;
+using f64vec3 = Eigen::Matrix<f64, 3, 1>;
 using f64vec4 = Eigen::Matrix<f64, 4, 1>;
 using i8vec2 = Eigen::Matrix<i8, 2, 1>;
 using i8vec3 = Eigen::Matrix<i8, 3, 1>;
