@@ -19,13 +19,12 @@ bool Grid::diff(Grid const &lhs, Grid const &rhs) {
   return !std::ranges::equal(lhs._chunks, rhs._chunks);
 }
 
-Grid::Grid(Grid_create_info const &create_info)
-    : _chunk_counts{
-        (create_info.width + (Chunk::edge_length - 1)) / Chunk::edge_length,
-        (create_info.height + (Chunk::edge_length - 1)) / Chunk::edge_length,
-        (create_info.depth + (Chunk::edge_length - 1)) / Chunk::edge_length,
-      } {
-  _chunks.resize(_chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2]);
+Grid::Grid(Grid_create_info const &create_info) : _bounds{create_info.bounds} {
+  auto const chunk_counts = get_chunk_counts();
+  auto const width_chunks = chunk_counts(0);
+  auto const height_chunks = chunk_counts(1);
+  auto const depth_chunks = chunk_counts(2);
+  _chunks.resize(width_chunks * height_chunks * depth_chunks);
 }
 
 void Grid::load(serial::Reader &reader) {
@@ -63,24 +62,6 @@ void Grid::dump(serial::Writer &writer) const {
   }
 }
 
-Chunk_span Grid::get_chunks() noexcept {
-  assert(
-    _chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2] == _chunks.size());
-  return {_chunks.data(), _chunk_counts};
-}
-
-Const_chunk_span Grid::get_chunks() const noexcept {
-  assert(
-    _chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2] == _chunks.size());
-  return {_chunks.data(), _chunk_counts};
-}
-
-Const_chunk_span Grid::get_const_chunks() const noexcept {
-  assert(
-    _chunk_counts[0] * _chunk_counts[1] * _chunk_counts[2] == _chunks.size());
-  return {_chunks.data(), _chunk_counts};
-}
-
 void Grid::fill(Eigen::AlignedBox3i const &bounds, bool solid) {
   // TODO: optimize this to take advantage of bitwise ops
   auto const min = bounds.min().cwiseMax(Eigen::Vector3i::Zero()).eval();
@@ -113,12 +94,14 @@ void Grid::fill(Eigen::AlignedBox3i const &bounds, bool solid) {
   }
 }
 
-void Grid::set_solid(Eigen::Vector3i const &cell_indices, bool solid) noexcept {
-  if (!bounds_check_cell(cell_indices)) {
+void Grid::set_solid(Eigen::Vector3i const &cell_coords, bool solid) noexcept {
+  if (!bounds_check_cell(cell_coords)) {
     return;
   }
-  auto const chunk_indices = (cell_indices / Chunk::edge_length).eval();
-  auto const cell_offset = cell_indices - chunk_indices * Chunk::edge_length;
+  auto const chunk_coords =
+    (cell_coords & ~static_cast<int>(Chunk::edge_length - 1)).eval();
+  auto const cell_offset =
+    (cell_coords - chunk_coords * Chunk::edge_length).eval();
   get_chunk_unsafe(chunk_indices)->set_solid(cell_offset, solid);
 }
 
@@ -193,73 +176,35 @@ std::optional<Grid_raycast_hit> Grid::raycast(
   }
 }
 
-Chunk *Grid::get_chunk(Eigen::Vector3i const &chunk_indices) noexcept {
-  if (bounds_check_chunk(chunk_indices)) {
-    return get_chunk_unsafe(chunk_indices);
-  } else {
-    return nullptr;
-  }
-}
-
-Chunk const *
-Grid::get_chunk(Eigen::Vector3i const &chunk_indices) const noexcept {
-  if (bounds_check_chunk(chunk_indices)) {
-    return get_chunk_unsafe(chunk_indices);
-  } else {
-    return nullptr;
-  }
-}
-
-Chunk *Grid::get_chunk_unsafe(Eigen::Vector3i const &chunk_indices) noexcept {
-  return &_chunks[detail::linearize_chunk_offset(
-    _chunk_counts,
-    {
-      static_cast<std::size_t>(chunk_indices[0]),
-      static_cast<std::size_t>(chunk_indices[1]),
-      static_cast<std::size_t>(chunk_indices[2]),
-    })];
-}
-
-Chunk const *
-Grid::get_chunk_unsafe(Eigen::Vector3i const &chunk_indices) const noexcept {
-  return &_chunks[detail::linearize_chunk_offset(
-    _chunk_counts,
-    {
-      static_cast<std::size_t>(chunk_indices[0]),
-      static_cast<std::size_t>(chunk_indices[1]),
-      static_cast<std::size_t>(chunk_indices[2]),
-    })];
-}
-
 bool Grid::bounds_check_cell(
-  Eigen::Vector3i const &cell_indices) const noexcept {
-  return cell_indices[0] >= 0 &&
-         static_cast<std::size_t>(cell_indices[0]) < get_width() &&
-         cell_indices[1] >= 0 &&
-         static_cast<std::size_t>(cell_indices[1]) < get_height() &&
-         cell_indices[2] >= 0 &&
-         static_cast<std::size_t>(cell_indices[2]) < get_depth();
+  Eigen::Vector3i const &cell_coords) const noexcept {
+  return _bounds.contains(cell_coords);
 }
 
-bool Grid::bounds_check_chunk(
-  Eigen::Vector3i const &chunk_indices) const noexcept {
-  return chunk_indices[0] >= 0 &&
-         static_cast<std::size_t>(chunk_indices[0]) < _chunk_counts[0] &&
-         chunk_indices[1] >= 0 &&
-         static_cast<std::size_t>(chunk_indices[1]) < _chunk_counts[1] &&
-         chunk_indices[2] >= 0 &&
-         static_cast<std::size_t>(chunk_indices[2]) < _chunk_counts[2];
+Chunk_span Grid::get_chunks() noexcept {
+  return {_chunks.data(), _chunk_counts};
 }
 
-std::size_t Grid::get_width() const noexcept {
-  return _chunk_counts[0] * Chunk::edge_length;
+Const_chunk_span Grid::get_chunks() const noexcept {
+  return {_chunks.data(), _chunk_counts};
 }
 
-std::size_t Grid::get_height() const noexcept {
-  return _chunk_counts[1] * Chunk::edge_length;
+Const_chunk_span Grid::get_const_chunks() const noexcept {
+  return {_chunks.data(), _chunk_counts};
 }
 
-std::size_t Grid::get_depth() const noexcept {
-  return _chunk_counts[2] * Chunk::edge_length;
+math::ivec3 Grid::get_chunk_counts() const noexcept {
+  auto const cell_counts = get_cell_counts();
+  assert(cell_counts(0) % Chunk::edge_length == 0);
+  assert(cell_counts(1) % Chunk::edge_length == 0);
+  assert(cell_counts(2) % Chunk::edge_length == 0);
+  return cell_counts / Chunk::edge_length;
 }
+
+math::ivec3 Grid::get_cell_counts() const noexcept {
+  return _bounds.diagonal() + math::ivec3::Ones();
+}
+
+math::ibox3 const &Grid::get_bounds() const noexcept { return _bounds; }
+
 } // namespace fpsparty::game

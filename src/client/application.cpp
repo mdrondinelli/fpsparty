@@ -9,7 +9,7 @@
 #include "graphics/shader_stage.hpp"
 #include "graphics/synchronization_scope.hpp"
 #include "graphics/work_done_callback.hpp"
-#include "math/transformation_matrices.hpp"
+#include "math/transforms.hpp"
 #include "ppm/ppm.hpp"
 #include <Eigen/Dense>
 #include <algorithm>

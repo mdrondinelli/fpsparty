@@ -1,9 +1,6 @@
 #ifndef FPSPARTY_GAME_GRID_HPP
 #define FPSPARTY_GAME_GRID_HPP
 
-#include "serial/reader.hpp"
-#include "serial/writer.hpp"
-#include <Eigen/Dense>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -13,22 +10,28 @@
 #include <utility>
 #include <vector>
 
+#include <math/box.hpp>
+#include <math/vec.hpp>
+#include <serial/reader.hpp>
+#include <serial/writer.hpp>
+
 namespace fpsparty::game {
+
 namespace detail {
+
 constexpr std::size_t linearize_chunk_offset(
   std::array<std::size_t, 3> chunk_counts,
   std::array<std::size_t, 3> chunk_offset) noexcept {
   return chunk_offset[0] + chunk_offset[1] * chunk_counts[0] +
          chunk_offset[2] * chunk_counts[0] * chunk_counts[1];
 }
+
 } // namespace detail
 
 enum class Axis { x, y, z };
 
 struct Grid_create_info {
-  std::size_t width{};
-  std::size_t height{};
-  std::size_t depth{};
+  math::ibox3 bounds{};
 };
 
 struct Grid_raycast_hit {
@@ -190,9 +193,9 @@ public:
 
   void fill(Eigen::AlignedBox3i const &bounds, bool solid = true);
 
-  void set_solid(Eigen::Vector3i const &cell_indices, bool solid) noexcept;
+  void set_solid(Eigen::Vector3i const &cell_coords, bool solid) noexcept;
 
-  bool is_solid(Eigen::Vector3i const &cell_indices) const noexcept;
+  bool is_solid(Eigen::Vector3i const &cell_coords) const noexcept;
 
   std::optional<Grid_raycast_hit> raycast(
     Eigen::Vector3i const &origin_cell_indices,
@@ -200,18 +203,7 @@ public:
     Eigen::Vector3f const &ray_direction,
     float max_t) const noexcept;
 
-  Chunk *get_chunk(Eigen::Vector3i const &chunk_indices) noexcept;
-
-  Chunk const *get_chunk(Eigen::Vector3i const &chunk_indices) const noexcept;
-
-  Chunk *get_chunk_unsafe(Eigen::Vector3i const &chunk_indices) noexcept;
-
-  Chunk const *
-  get_chunk_unsafe(Eigen::Vector3i const &chunk_indices) const noexcept;
-
-  bool bounds_check_cell(Eigen::Vector3i const &cell_indices) const noexcept;
-
-  bool bounds_check_chunk(Eigen::Vector3i const &chunk_indices) const noexcept;
+  bool bounds_check_cell(Eigen::Vector3i const &cell_coords) const noexcept;
 
   Chunk_span get_chunks() noexcept;
 
@@ -219,16 +211,17 @@ public:
 
   Const_chunk_span get_const_chunks() const noexcept;
 
-  std::size_t get_width() const noexcept;
+  math::ivec3 get_chunk_counts() const noexcept;
 
-  std::size_t get_height() const noexcept;
+  math::ivec3 get_cell_counts() const noexcept;
 
-  std::size_t get_depth() const noexcept;
+  math::ibox3 const &get_bounds() const noexcept;
 
 private:
-  std::array<std::size_t, 3> _chunk_counts;
+  math::ibox3 _bounds;
   std::vector<Chunk> _chunks{};
 };
+
 } // namespace fpsparty::game
 
 #endif

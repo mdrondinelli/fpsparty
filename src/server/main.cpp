@@ -33,10 +33,10 @@ int main() {
         .port = net::constants::port,
         .max_clients = net::constants::max_clients,
       },
-    .game_info = {.grid_info = {.width = 32, .height = 32, .depth = 32}},
+    .game_info = {.grid_info = {.width = 32, .height = 16, .depth = 32}},
     .tick_duration = constants::tick_duration,
   }};
-  // green floor
+  // floor
   fill_blocks(server, {0, 0, 0}, {16, 1, 16});
   std::cout << "Server running on port " << net::constants::port << ".\n";
   using Clock = std::chrono::high_resolution_clock;
