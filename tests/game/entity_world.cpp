@@ -86,7 +86,7 @@ TEST_CASE("Entity world exposes registered empty typed storage") {
   CHECK(world.get(Entity_handle<Player>{}) == nullptr);
 }
 
-TEST_CASE("Entity world assigns ids independently per entity type") {
+TEST_CASE("Entity world assigns globally unique ids across entity types") {
   auto world = Entity_world{};
   world.register_entity_type<Player>();
   world.register_entity_type<Humanoid>();
@@ -95,7 +95,8 @@ TEST_CASE("Entity world assigns ids independently per entity type") {
   auto const humanoid = world.emplace<Humanoid>().handle;
 
   CHECK(player.id == 1);
-  CHECK(humanoid.id == 1);
+  CHECK(humanoid.id == 2);
+  CHECK(player.id != humanoid.id);
   CHECK(world.get(player) != nullptr);
   CHECK(world.get(humanoid) != nullptr);
 }
