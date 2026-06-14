@@ -110,6 +110,20 @@ target_link_libraries(net-tests net Catch2::Catch2WithMain)
 add_test(NAME net-tests COMMAND net-tests)
 
 add_executable(
+  scene-tests
+  tests/scene/scene.cpp
+)
+target_link_libraries(scene-tests scene Catch2::Catch2WithMain)
+add_test(NAME scene-tests COMMAND scene-tests)
+
+add_executable(
+  client-tests
+  tests/client/session.cpp
+)
+target_link_libraries(client-tests client Catch2::Catch2WithMain)
+add_test(NAME client-tests COMMAND client-tests)
+
+add_executable(
   game-tests
   tests/game/entity_world.cpp
   tests/game/grid_raycast.cpp
@@ -235,55 +249,44 @@ target_include_directories(
 target_link_libraries(client-app enet tracy client)
 
 # compiler options
-set_property(TARGET net game scene client net-tests game-tests server-tests ppm ppm-tests server graphics client-app PROPERTY CXX_STANDARD 23)
-set_property(TARGET net game scene client net-tests game-tests server-tests ppm ppm-tests server graphics client-app PROPERTY CXX_STANDARD_REQUIRED ON)
-set_property(TARGET net game scene client net-tests game-tests server-tests ppm ppm-tests server graphics client-app PROPERTY CXX_EXTENSIONS OFF)
+set(fpsparty_targets
+  net
+  game
+  scene
+  client
+  net-tests
+  scene-tests
+  client-tests
+  game-tests
+  server-tests
+  ppm
+  ppm-tests
+  server
+  graphics
+  client-app
+)
+set_property(TARGET ${fpsparty_targets} PROPERTY CXX_STANDARD 23)
+set_property(TARGET ${fpsparty_targets} PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET ${fpsparty_targets} PROPERTY CXX_EXTENSIONS OFF)
 if (MSVC)
-  target_compile_options(net PRIVATE /W4 /WX)
-  target_compile_options(game PRIVATE /W4 /WX)
-  target_compile_options(scene PRIVATE /W4 /WX)
-  target_compile_options(client PRIVATE /W4 /WX)
-  target_compile_options(net-tests PRIVATE /W4 /WX)
-  target_compile_options(game-tests PRIVATE /W4 /WX)
-  target_compile_options(server-tests PRIVATE /W4 /WX)
-  target_compile_options(ppm PRIVATE /W4 /WX)
-  target_compile_options(ppm-tests PRIVATE /W4 /WX)
-  target_compile_options(server PRIVATE /W4 /WX)
-  target_compile_options(graphics PRIVATE /W4 /WX)
-  target_compile_options(client-app PRIVATE /W4 /WX)
+  foreach(target ${fpsparty_targets})
+    target_compile_options(${target} PRIVATE /W4 /WX)
+  endforeach()
 else()
   set(extern_compile_options -stdlib=libc++ -O3)
   target_compile_options(tracy PRIVATE ${extern_compile_options})
   target_compile_options(Catch2 PRIVATE ${extern_compile_options})
   target_compile_options(Catch2WithMain PRIVATE ${extern_compile_options})
   set(fpsparty_compile_options -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
-  target_compile_options(net PRIVATE ${fpsparty_compile_options})
-  target_compile_options(game PRIVATE ${fpsparty_compile_options})
-  target_compile_options(scene PRIVATE ${fpsparty_compile_options})
-  target_compile_options(client PRIVATE ${fpsparty_compile_options})
-  target_compile_options(net-tests PRIVATE ${fpsparty_compile_options})
-  target_compile_options(game-tests PRIVATE ${fpsparty_compile_options})
-  target_compile_options(server-tests PRIVATE ${fpsparty_compile_options})
-  target_compile_options(ppm PRIVATE ${fpsparty_compile_options})
-  target_compile_options(ppm-tests PRIVATE ${fpsparty_compile_options})
-  target_compile_options(server PRIVATE ${fpsparty_compile_options})
-  target_compile_options(graphics PRIVATE ${fpsparty_compile_options})
-  target_compile_options(client-app PRIVATE ${fpsparty_compile_options})
+  foreach(target ${fpsparty_targets})
+    target_compile_options(${target} PRIVATE ${fpsparty_compile_options})
+  endforeach()
   set(extern_link_options -stdlib=libc++ -lc++abi)
   target_link_options(tracy PRIVATE ${extern_link_options})
   target_link_options(Catch2 PRIVATE ${extern_link_options})
   target_link_options(Catch2WithMain PRIVATE ${extern_link_options})
   set(fpsparty_link_options -stdlib=libc++ -lc++abi)
-  target_link_options(net PRIVATE ${fpsparty_link_options})
-  target_link_options(game PRIVATE ${fpsparty_link_options})
-  target_link_options(scene PRIVATE ${fpsparty_link_options})
-  target_link_options(client PRIVATE ${fpsparty_link_options})
-  target_link_options(net-tests PRIVATE ${fpsparty_link_options})
-  target_link_options(game-tests PRIVATE ${fpsparty_link_options})
-  target_link_options(server-tests PRIVATE ${fpsparty_link_options})
-  target_link_options(ppm PRIVATE ${fpsparty_link_options})
-  target_link_options(ppm-tests PRIVATE ${fpsparty_link_options})
-  target_link_options(server PRIVATE ${fpsparty_link_options})
-  target_link_options(graphics PRIVATE ${fpsparty_link_options})
-  target_link_options(client-app PRIVATE ${fpsparty_link_options})
+  foreach(target ${fpsparty_targets})
+    target_link_options(${target} PRIVATE ${fpsparty_link_options})
+  endforeach()
 endif()
