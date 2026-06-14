@@ -69,6 +69,9 @@ public:
   }
 
   std::uint64_t blocks{};
+
+  friend constexpr bool
+  operator==(Chunk const &lhs, Chunk const &rhs) noexcept = default;
 };
 
 template <typename T>
@@ -177,6 +180,8 @@ using Const_chunk_span = Chunk_span_template<Chunk const>;
 
 class Grid {
 public:
+  static bool diff(Grid const &lhs, Grid const &rhs);
+
   explicit Grid(Grid_create_info const &create_info);
 
   void load(serial::Reader &reader);

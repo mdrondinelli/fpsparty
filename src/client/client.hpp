@@ -1,19 +1,18 @@
 #ifndef FPSPARTY_CLIENT_CLIENT_HPP
 #define FPSPARTY_CLIENT_CLIENT_HPP
 
-#include "client/local_player.hpp"
-#include "net/client.hpp"
-#include "net/entity_id.hpp"
-#include "net/input_state.hpp"
-#include "scene/scene.hpp"
 #include <cstddef>
-#include <memory>
-#include <optional>
-#include <vector>
+
+#include <net/client.hpp>
+#include <net/entity_id.hpp>
+#include <scene/scene.hpp>
+
+#include "session.hpp"
 
 namespace fpsparty::client {
 struct Client_create_info {
   net::Client_create_info net_info;
+  std::uint32_t max_buffered_ticks;
   float tick_duration;
 };
 
@@ -25,17 +24,13 @@ public:
 
   Client &operator=(Client const &other) = delete;
 
-  void tick(float duration);
+  void update(float duration);
 
-  bool has_scene() const noexcept;
+  std::optional<Session> const &get_session() const noexcept {
+    return _session;
+  }
 
-  Local_player &join_player();
-
-  void leave_player(Local_player &player);
-
-  scene::Scene *get_scene() noexcept;
-
-  scene::Scene const *get_scene() const noexcept;
+  std::optional<Session> &get_session() noexcept { return _session; }
 
 protected:
   void on_connect() override;
@@ -53,16 +48,9 @@ protected:
     serial::Span_reader &player_entity_state_reader) override;
 
 private:
-  void load_player_entity_state(serial::Reader &reader);
-
-  void load_public_entity_state(serial::Reader &reader);
-
-  std::optional<scene::Scene> _scene{};
-  std::vector<std::unique_ptr<Local_player>> _local_players{};
-  std::vector<std::byte> _last_grid_state_payload{};
-  net::Player_join_request_id _next_player_join_request_id{1};
+  std::uint32_t _max_buffered_ticks{};
   float _tick_duration{};
-  float _tick_timer{};
+  std::optional<Session> _session{};
 };
 } // namespace fpsparty::client
 

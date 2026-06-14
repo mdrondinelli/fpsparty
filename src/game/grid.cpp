@@ -1,10 +1,24 @@
 #include "grid.hpp"
-#include "serial/serialize.hpp"
+
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <limits>
 
+#include <serial/serialize.hpp>
+
 namespace fpsparty::game {
+
+bool Grid::diff(Grid const &lhs, Grid const &rhs) {
+  if (
+    lhs.get_width() != rhs.get_width() ||
+    lhs.get_height() != rhs.get_height() ||
+    lhs.get_depth() != rhs.get_depth()) {
+    return true;
+  }
+  return !std::ranges::equal(lhs._chunks, rhs._chunks);
+}
+
 Grid::Grid(Grid_create_info const &create_info)
     : _chunk_counts{
         (create_info.width + (Chunk::edge_length - 1)) / Chunk::edge_length,

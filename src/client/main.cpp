@@ -30,6 +30,7 @@ int main() {
     .client_info =
       {
         .net_info = {},
+        .max_buffered_ticks = 3,
         .tick_duration = constants::tick_duration,
       },
     .server_address =
@@ -56,7 +57,7 @@ int main() {
     auto const duration =
       std::chrono::duration_cast<std::chrono::duration<float>>(loop_duration)
         .count();
-    if (!application.update(duration)) {
+    if (duration > 0.0f && !application.update(duration)) {
       break;
     }
     FrameMark;
