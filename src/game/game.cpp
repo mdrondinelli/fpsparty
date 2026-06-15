@@ -157,7 +157,7 @@ void Game::tick(float duration) {
         continue;
       }
       auto const projectile_half_extents =
-        Eigen::Vector3f::Constant(constants::projectile_half_extent);
+        Eigen::Vector3f::Constant(Projectile::half_extent);
       auto const projectile_bounds = Eigen::AlignedBox3f{
         projectile.position - projectile_half_extents,
         projectile.position + projectile_half_extents,

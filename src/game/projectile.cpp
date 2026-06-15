@@ -1,6 +1,6 @@
 #include "projectile.hpp"
 
-#include "serial/serialize.hpp"
+#include <serial/serialize.hpp>
 
 namespace fpsparty::game {
 
