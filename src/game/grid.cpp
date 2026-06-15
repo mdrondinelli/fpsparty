@@ -1,6 +1,7 @@
 #include "grid.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cassert>
 #include <cstdint>
 #include <limits>
