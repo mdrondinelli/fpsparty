@@ -11,7 +11,7 @@
 #include "game/player.hpp"
 #include "game/projectile.hpp"
 #include "game/projectile_movement.hpp"
-#include "math/transformation_matrices.hpp"
+#include "math/transforms.hpp"
 
 namespace fpsparty::game {
 namespace {
@@ -34,7 +34,7 @@ void handle_use_secondary(Grid &grid, Humanoid &humanoid) {
     forward,
     constants::block_interaction_range / constants::grid_cell_stride);
   if (hit) {
-    grid.set_solid(hit->cell_indices + hit->normal, true);
+    grid.set_solid(hit->cell_coords + hit->normal, true);
   }
 }
 

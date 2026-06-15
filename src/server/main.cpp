@@ -33,11 +33,21 @@ int main() {
         .port = net::constants::port,
         .max_clients = net::constants::max_clients,
       },
-    .game_info = {.grid_info = {.width = 32, .height = 32, .depth = 32}},
+    .game_info =
+      {
+        .grid_info =
+          {
+            .bounds =
+              math::ibox3{
+                math::ivec3{-32, 0, -32},
+                math::ivec3{31, 15, 31},
+              },
+          },
+      },
     .tick_duration = constants::tick_duration,
   }};
-  // green floor
-  fill_blocks(server, {0, 0, 0}, {16, 1, 16});
+  // floor
+  fill_blocks(server, {-16, 0, -16}, {15, 0, 15});
   std::cout << "Server running on port " << net::constants::port << ".\n";
   using Clock = std::chrono::high_resolution_clock;
   using Duration = Clock::duration;

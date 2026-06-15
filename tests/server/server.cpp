@@ -13,7 +13,15 @@ std::unique_ptr<server::Server> make_server() {
         .port = 0,
         .max_clients = 1,
       },
-    .game_info = {.grid_info = {.width = 4, .height = 4, .depth = 4}},
+    .game_info =
+      {.grid_info =
+         {
+           .bounds =
+             math::ibox3{
+               math::ivec3{0, 0, 0},
+               math::ivec3{3, 3, 3},
+             },
+         }},
     .tick_duration = 1.0f,
   });
 }
