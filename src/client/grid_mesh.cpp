@@ -6,7 +6,6 @@
 
 #include <array>
 #include <cassert>
-#include <iostream>
 #include <span>
 #include <vector>
 
