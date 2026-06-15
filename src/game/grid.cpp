@@ -20,11 +20,13 @@ bool Grid::diff(Grid const &lhs, Grid const &rhs) {
 
 Grid::Grid(Grid_create_info const &create_info)
     : _cell_bounds{create_info.bounds} {
-  auto const chunk_counts = get_chunk_counts();
-  auto const width_chunks = chunk_counts(0);
-  auto const height_chunks = chunk_counts(1);
-  auto const depth_chunks = chunk_counts(2);
-  _chunks.resize(width_chunks * height_chunks * depth_chunks);
+  if (!empty()) {
+    auto const chunk_counts = get_chunk_counts();
+    auto const width_chunks = chunk_counts(0);
+    auto const height_chunks = chunk_counts(1);
+    auto const depth_chunks = chunk_counts(2);
+    _chunks.resize(width_chunks * height_chunks * depth_chunks);
+  }
 }
 
 void Grid::load(serial::Reader &reader) {
@@ -34,16 +36,19 @@ void Grid::load(serial::Reader &reader) {
     throw Grid_loading_error{};
   }
   _cell_bounds = *cell_bounds;
-  auto const chunk_bounds = cell_to_chunk(_cell_bounds);
-  auto const chunk_counts =
-    (chunk_bounds.diagonal() + math::ivec3::Ones()).eval();
-  _chunks.resize(chunk_counts(0) * chunk_counts(1) * chunk_counts(2));
-  for (auto &chunk : _chunks) {
-    auto const blocks = deserialize<std::uint64_t>(reader);
-    if (!blocks) {
-      throw Grid_loading_error{};
+  _chunks.clear();
+  if (!empty()) {
+    auto const chunk_bounds = cell_to_chunk(_cell_bounds);
+    auto const chunk_counts =
+      (chunk_bounds.diagonal() + math::ivec3::Ones()).eval();
+    _chunks.resize(chunk_counts(0) * chunk_counts(1) * chunk_counts(2));
+    for (auto &chunk : _chunks) {
+      auto const blocks = deserialize<std::uint64_t>(reader);
+      if (!blocks) {
+        throw Grid_loading_error{};
+      }
+      chunk = Chunk{*blocks};
     }
-    chunk = Chunk{*blocks};
   }
 }
 
@@ -190,10 +195,12 @@ Const_chunk_span Grid::get_const_chunks() const noexcept {
 }
 
 math::ivec3 Grid::get_chunk_counts() const noexcept {
+  assert(!empty());
   return get_chunk_bounds().diagonal() + math::ivec3::Ones();
 }
 
 math::ivec3 Grid::get_cell_counts() const noexcept {
+  assert(!empty());
   return get_cell_bounds().diagonal() + math::ivec3::Ones();
 }
 
@@ -203,6 +210,10 @@ math::ibox3 Grid::get_chunk_bounds() const noexcept {
 
 math::ibox3 const &Grid::get_cell_bounds() const noexcept {
   return _cell_bounds;
+}
+
+bool Grid::empty() const noexcept {
+  return get_cell_bounds().isEmpty();
 }
 
 math::ibox3 Grid::cell_to_chunk(math::ibox3 coords) {

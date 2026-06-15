@@ -139,11 +139,19 @@ public:
       : _data{data}, _chunk_bounds{chunk_bounds} {}
 
   Iterator begin() const noexcept {
-    return {_data, _chunk_bounds, _chunk_bounds.min()};
+    if (!_chunk_bounds.isEmpty()) {
+      return {_data, _chunk_bounds, _chunk_bounds.min()};
+    } else {
+      return end();
+    }
   }
 
   Const_iterator cbegin() const noexcept {
-    return {_data, _chunk_bounds, _chunk_bounds.min()};
+    if (!_chunk_bounds.isEmpty()) {
+      return {_data, _chunk_bounds, _chunk_bounds.min()};
+    } else {
+      return end();
+    }
   }
 
   Iterator end() const noexcept {
@@ -217,6 +225,8 @@ public:
   math::ibox3 get_chunk_bounds() const noexcept;
 
   math::ibox3 const &get_cell_bounds() const noexcept;
+
+  bool empty() const noexcept;
 
   static math::ibox3 cell_to_chunk(math::ibox3 coords);
 
