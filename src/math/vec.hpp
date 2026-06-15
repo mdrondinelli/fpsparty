@@ -1,5 +1,5 @@
-#ifndef FPSPARTY_MATH_VECTOR_HPP
-#define FPSPARTY_MATH_VECTOR_HPP
+#ifndef FPSPARTY_MATH_VEC_HPP
+#define FPSPARTY_MATH_VEC_HPP
 
 #include <Eigen/Dense>
 
@@ -55,6 +55,6 @@ using uvec2 = u32vec2;
 using uvec3 = u32vec3;
 using uvec4 = u32vec4;
 
-} // namespace fpsparty
+} // namespace fpsparty::math
 
 #endif
