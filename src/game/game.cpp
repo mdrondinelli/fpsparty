@@ -10,7 +10,6 @@
 #include "game/humanoid_movement.hpp"
 #include "game/player.hpp"
 #include "game/projectile.hpp"
-#include "game/projectile_movement.hpp"
 #include "math/transforms.hpp"
 
 namespace fpsparty::game {
@@ -108,17 +107,13 @@ void Game::tick(float duration) {
   auto projectiles = _entities.get_all<Projectile>();
   for (auto it = projectiles.begin(); it != projectiles.end();) {
     auto &projectile = it.entity();
-    auto const movement_result = simulate_projectile_movement({
-      .initial_position = projectile.position,
-      .initial_velocity = projectile.velocity,
-      .duration = duration,
-    });
-    if (movement_result.final_position.y() < 0.0f) {
+    projectile.integrate(duration);
+    if (projectile.position.y() < 0.0f) {
       it = projectiles.erase(it);
       continue;
     }
     auto const projectile_cell_indices =
-      (movement_result.final_position / constants::grid_cell_stride)
+      (projectile.position / constants::grid_cell_stride)
         .array()
         .floor()
         .matrix()
@@ -129,8 +124,6 @@ void Game::tick(float duration) {
       it = projectiles.erase(it);
       continue;
     }
-    projectile.position = movement_result.final_position;
-    projectile.velocity = movement_result.final_velocity;
     ++it;
   }
   // humanoid-projectile collision

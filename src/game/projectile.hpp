@@ -13,11 +13,13 @@ namespace fpsparty::game {
 struct Humanoid;
 
 struct Projectile {
-  static auto constexpr half_extent = 0.125f;
+  void integrate(float dt);
 
   Entity_handle<Humanoid> creator{};
   math::vec3 position{math::vec3::Zero()};
   math::vec3 velocity{math::vec3::Zero()};
+
+  static auto constexpr half_extent = 0.125f;
 };
 
 template <> struct Entity_traits<Projectile> {

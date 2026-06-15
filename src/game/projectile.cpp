@@ -2,7 +2,14 @@
 
 #include <serial/serialize.hpp>
 
+#include "gravity.hpp"
+
 namespace fpsparty::game {
+
+void Projectile::integrate(float dt) {
+  velocity -= math::vec3::UnitY() * constants::gravitational_acceleration * dt;
+  position += velocity * dt;
+}
 
 void Entity_traits<Projectile>::dump(
   serial::Writer &writer, Projectile const &projectile) {
