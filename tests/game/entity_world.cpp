@@ -1,22 +1,20 @@
 #include "game/entity_world.hpp"
-#include "game/game.hpp"
-#include "game/humanoid.hpp"
-#include "game/player.hpp"
-#include "game/projectile.hpp"
-
-#include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
 #include <type_traits>
 #include <vector>
 
+#include <catch2/catch_test_macros.hpp>
+
+#include "game/humanoid.hpp"
+#include "game/player.hpp"
+#include "game/projectile.hpp"
+
 namespace {
 using fpsparty::game::Entity_handle;
 using fpsparty::game::Entity_world;
-using fpsparty::game::Game;
 using fpsparty::game::Humanoid;
 using fpsparty::game::Player;
-using fpsparty::game::Projectile;
 } // namespace
 
 TEST_CASE("Entity world hash table supports lookup update and removal") {
