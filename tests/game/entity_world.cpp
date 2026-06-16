@@ -7,8 +7,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "game/humanoid.hpp"
+#include "game/item.hpp"
 #include "game/player.hpp"
-#include "game/projectile.hpp"
 
 namespace {
 using fpsparty::game::Entity_handle;
@@ -106,8 +106,7 @@ TEST_CASE("Entity world traversal exposes entities with typed handles") {
   auto const second = world.emplace<Player>().handle;
 
   auto expected_id = std::uint32_t{1};
-  for (auto [player, handle] :
-       world.get_all<Player>()) {
+  for (auto [player, handle] : world.get_all<Player>()) {
     player.input_state.yaw = static_cast<float>(handle.id);
     CHECK(handle.id == expected_id++);
   }
@@ -152,10 +151,10 @@ TEST_CASE("Entity world const ranges expose const entries") {
   auto const &const_world = world;
   auto const range = const_world.get_all<Player>();
 
-  static_assert(std::is_const_v<
-                std::remove_reference_t<decltype(range[0].entity)>>);
-  static_assert(std::is_same_v<
-                decltype(range[0].handle), Entity_handle<Player const>>);
+  static_assert(
+    std::is_const_v<std::remove_reference_t<decltype(range[0].entity)>>);
+  static_assert(
+    std::is_same_v<decltype(range[0].handle), Entity_handle<Player const>>);
   CHECK(range.size() == 1);
 }
 
@@ -265,4 +264,3 @@ TEST_CASE("Entity world repairs lookup after swap-back erasure") {
   CHECK(world.get(last)->input_state.pitch == 3.0f);
   CHECK(world.get_all<Player>().size() == 2);
 }
-
