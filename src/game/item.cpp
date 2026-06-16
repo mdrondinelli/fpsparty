@@ -11,6 +11,7 @@ void Item::integrate(float dt) {
   velocity -= math::vec3::UnitY() * constants::gravitational_acceleration * dt;
   velocity += acceleration * dt;
   position += velocity * dt;
+  age += dt;
 }
 
 void Entity_traits<Item>::dump(serial::Writer &writer, Item const &item) {

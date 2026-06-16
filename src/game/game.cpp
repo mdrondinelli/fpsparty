@@ -9,7 +9,6 @@
 
 #include "constants.hpp"
 #include "humanoid.hpp"
-#include "humanoid_movement.hpp"
 #include "item.hpp"
 #include "player.hpp"
 
@@ -21,7 +20,7 @@ void handle_use_secondary(Grid &grid, Humanoid &humanoid) {
                        .eval();
   auto const forward = basis.col(2).head<3>().eval();
   auto const origin =
-    (humanoid.position + math::vec3::UnitY() * constants::humanoid_eye_height)
+    (humanoid.position + math::vec3::UnitY() * Humanoid::eye_height)
       .eval();
   auto const origin_cell =
     (origin / constants::grid_cell_stride).array().floor().matrix().eval();
@@ -52,15 +51,16 @@ void Game::tick(float duration) {
     humanoid.prev_input_state = humanoid.curr_input_state;
   }
   // copy player input state -> humanoid curr input state, spawn humanoids
-  auto const should_spawn = _entities.get_all<Humanoid>().size() < 2;
+  auto const should_spawn = true; //_entities.get_all<Humanoid>().size() < 2;
   for (auto [player, _] : _entities.get_all<Player>()) {
     auto humanoid = _entities.get(player.humanoid);
     if (player.humanoid && !humanoid) {
       player.humanoid = {};
     }
     if (!player.humanoid && should_spawn) {
-      player.humanoid = _entities.emplace<Humanoid>().handle;
-      humanoid = _entities.get(player.humanoid);
+      auto const humanoid_entry = _entities.emplace<Humanoid>();
+      player.humanoid = humanoid_entry.handle;
+      humanoid = &humanoid_entry.entity;
     }
     if (humanoid) {
       humanoid->curr_input_state = player.input_state;
@@ -68,16 +68,10 @@ void Game::tick(float duration) {
   }
   // humnanoid movement and primary/secondary
   for (auto [humanoid, humanoid_handle] : _entities.get_all<Humanoid>()) {
+    humanoid.integrate(duration);
+    _grid.find_contact(humanoid.bounds());
     if (
-      !humanoid.prev_input_state.use_secondary &&
-      humanoid.curr_input_state.use_secondary) {
-      handle_use_secondary(_grid, humanoid);
-    }
-    humanoid.attack_cooldown =
-      std::max(0.0f, humanoid.attack_cooldown - duration);
-    if (
-      humanoid.curr_input_state.use_primary &&
-      humanoid.attack_cooldown == 0.0f) {
+      humanoid.curr_input_state.use_primary && humanoid.attack_timer == 0.0f) {
       auto const basis =
         (math::y_rotation_matrix(humanoid.curr_input_state.yaw) *
          math::x_rotation_matrix(humanoid.curr_input_state.pitch))
@@ -91,18 +85,13 @@ void Game::tick(float duration) {
                     constants::item_forward_speed * forward +
                     constants::item_up_speed * up,
       });
-      humanoid.attack_cooldown = constants::attack_cooldown;
+      humanoid.attack_timer = Humanoid::attack_cooldown;
     }
-    auto const movement_info = Humanoid_movement_simulation_info{
-      .initial_position = humanoid.position,
-      .input_state = humanoid.curr_input_state,
-      .duration = duration,
-    };
-    auto const movement_result = simulate_humanoid_movement(movement_info);
-    humanoid.velocity =
-      (movement_result.final_position - movement_info.initial_position) /
-      duration;
-    humanoid.position = movement_result.final_position;
+    if (
+      !humanoid.prev_input_state.use_secondary &&
+      humanoid.curr_input_state.use_secondary) {
+      handle_use_secondary(_grid, humanoid);
+    }
   }
   // accumulate item forces
   auto items = _entities.get_all<Item>();
@@ -200,42 +189,21 @@ void Game::tick(float duration) {
     item.force = math::vec3::Zero();
   }
   // humanoid-item collision
-  auto humanoids = _entities.get_all<Humanoid>();
-  for (auto it = humanoids.begin(); it != humanoids.end();) {
-    auto [humanoid, humanoid_handle] = *it;
-    auto erased = false;
-    auto const humanoid_bounds = Eigen::AlignedBox3f{
-      humanoid.position -
-        Eigen::Vector3f{
-          constants::humanoid_half_width,
-          0.0f,
-          constants::humanoid_half_width,
-        },
-      humanoid.position +
-        Eigen::Vector3f{
-          constants::humanoid_half_width,
-          constants::humanoid_height,
-          constants::humanoid_half_width,
-        },
-    };
-    for (auto [item, _] : _entities.get_all<Item>()) {
-      if (item.creator == humanoid_handle) {
+  for (auto [humanoid, humanoid_handle] : _entities.get_all<Humanoid>()) {
+    auto const humanoid_bounds = humanoid.bounds();
+    for (auto item_it = items.begin(); item_it != items.end();) {
+      auto &item = item_it.entity();
+      if (
+        item.creator == humanoid_handle &&
+        item.age < Item::self_pickup_cooldown) {
+        ++item_it;
         continue;
       }
-      auto const item_half_extents =
-        Eigen::Vector3f::Constant(Item::half_extent);
-      auto const item_bounds = Eigen::AlignedBox3f{
-        item.position - item_half_extents,
-        item.position + item_half_extents,
-      };
-      if (item_bounds.intersects(humanoid_bounds)) {
-        it = humanoids.erase(it);
-        erased = true;
-        break;
+      if (item.bounds().intersects(humanoid_bounds)) {
+        item_it = items.erase(item_it);
+        continue;
       }
-    }
-    if (!erased) {
-      ++it;
+      ++item_it;
     }
   }
 }

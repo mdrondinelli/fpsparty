@@ -42,7 +42,6 @@ target_link_libraries(net PUBLIC enet)
 add_library(
   game
   src/game/grid.cpp
-  src/game/humanoid_movement.cpp
   src/game/game.cpp
   src/game/humanoid.cpp
   src/game/player.cpp

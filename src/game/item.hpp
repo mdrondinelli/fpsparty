@@ -27,12 +27,14 @@ struct Item {
   math::vec3 position{math::vec3::Zero()};
   math::vec3 velocity{math::vec3::Zero()};
   math::vec3 force{math::vec3::Zero()};
+  float age{0.0f};
 
   static auto constexpr half_extent = 0.125f;
   static auto constexpr mass = 1.0f; // 1kg
   static auto constexpr friction = 0.5f;
   static auto constexpr repulsion_stiffness = 512.0f;
   static auto constexpr repulsion_damping = 16.0f;
+  static auto constexpr self_pickup_cooldown = 0.5f;
 };
 
 template <> struct Entity_traits<Item> {
