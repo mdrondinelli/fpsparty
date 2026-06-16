@@ -124,6 +124,7 @@ add_test(NAME client-tests COMMAND client-tests)
 
 add_executable(
   game-tests
+  tests/game/box_tree.cpp
   tests/game/entity_world.cpp
   tests/game/grid.cpp
   tests/game/grid_raycast.cpp
