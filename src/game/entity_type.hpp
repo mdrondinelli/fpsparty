@@ -7,7 +7,7 @@ namespace fpsparty::game {
 enum class Entity_type : std::uint8_t {
   humanoid,
   player,
-  projectile,
+  item,
 };
 }
 

@@ -1,4 +1,4 @@
-#include "projectile.hpp"
+#include "item.hpp"
 
 #include <serial/serialize.hpp>
 
@@ -6,18 +6,17 @@
 
 namespace fpsparty::game {
 
-void Projectile::integrate(float dt) {
+void Item::integrate(float dt) {
   auto const acceleration = force / mass;
   velocity -= math::vec3::UnitY() * constants::gravitational_acceleration * dt;
   velocity += acceleration * dt;
   position += velocity * dt;
 }
 
-void Entity_traits<Projectile>::dump(
-  serial::Writer &writer, Projectile const &projectile) {
+void Entity_traits<Item>::dump(serial::Writer &writer, Item const &item) {
   using serial::serialize;
-  serialize<Eigen::Vector3f>(writer, projectile.position);
-  serialize<Eigen::Vector3f>(writer, projectile.velocity);
+  serialize<Eigen::Vector3f>(writer, item.position);
+  serialize<Eigen::Vector3f>(writer, item.velocity);
 }
 
 } // namespace fpsparty::game

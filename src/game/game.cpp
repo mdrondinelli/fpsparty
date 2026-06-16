@@ -10,8 +10,8 @@
 #include "constants.hpp"
 #include "humanoid.hpp"
 #include "humanoid_movement.hpp"
+#include "item.hpp"
 #include "player.hpp"
-#include "projectile.hpp"
 
 namespace fpsparty::game {
 namespace {
@@ -43,7 +43,7 @@ void handle_use_secondary(Grid &grid, Humanoid &humanoid) {
 Game::Game(Game_create_info const &info) : _grid{info.grid_info} {
   _entities.register_entity_type<Player>();
   _entities.register_entity_type<Humanoid>();
-  _entities.register_entity_type<Projectile>();
+  _entities.register_entity_type<Item>();
 }
 
 void Game::tick(float duration) {
@@ -84,12 +84,12 @@ void Game::tick(float duration) {
           .eval();
       auto const up = basis.col(1).template head<3>().eval();
       auto const forward = basis.col(2).template head<3>().eval();
-      _entities.insert<Projectile>({
+      _entities.insert<Item>({
         .creator = humanoid_handle,
         .position = humanoid.position + Eigen::Vector3f::UnitY() * 1.5f,
         .velocity = humanoid.velocity +
-                    constants::projectile_forward_speed * forward +
-                    constants::projectile_up_speed * up,
+                    constants::item_forward_speed * forward +
+                    constants::item_up_speed * up,
       });
       humanoid.attack_cooldown = constants::attack_cooldown;
     }
@@ -104,116 +104,116 @@ void Game::tick(float duration) {
       duration;
     humanoid.position = movement_result.final_position;
   }
-  // accumulate projectile forces
-  auto projectiles = _entities.get_all<Projectile>();
-  for (auto outer = projectiles.begin(); outer != projectiles.end(); ++outer) {
-    auto &outer_projectile = outer.entity();
-    for (auto inner = outer + 1; inner != projectiles.end(); ++inner) {
-      auto &inner_projectile = inner.entity();
+  // accumulate item forces
+  auto items = _entities.get_all<Item>();
+  for (auto outer = items.begin(); outer != items.end(); ++outer) {
+    auto &outer_item = outer.entity();
+    for (auto inner = outer + 1; inner != items.end(); ++inner) {
+      auto &inner_item = inner.entity();
       auto const displacement =
-        (inner_projectile.position - outer_projectile.position).eval();
+        (inner_item.position - outer_item.position).eval();
       auto const distance = displacement.norm();
-      auto const separation = distance - 2.0f * Projectile::half_extent;
+      auto const separation = distance - 2.0f * Item::half_extent;
       if (separation < 0.0f) {
         auto const n = distance > 0.0f ? (displacement / distance).eval()
                                        : math::vec3::UnitX().eval();
-        auto const inner_projectile_normal_velocity = inner_projectile.velocity.dot(n);
-        auto const outer_projectile_normal_velocity = outer_projectile.velocity.dot(n);
-        auto const v_rel_n = inner_projectile_normal_velocity - outer_projectile_normal_velocity;
-        auto const f = (Projectile::repulsion_stiffness * -separation * n - Projectile::repulsion_damping * v_rel_n * n).eval();
-        inner_projectile.force += f;
-        outer_projectile.force -= f;
+        auto const inner_item_normal_velocity = inner_item.velocity.dot(n);
+        auto const outer_item_normal_velocity = outer_item.velocity.dot(n);
+        auto const v_rel_n =
+          inner_item_normal_velocity - outer_item_normal_velocity;
+        auto const f = (Item::repulsion_stiffness * -separation * n -
+                        Item::repulsion_damping * v_rel_n * n)
+                         .eval();
+        inner_item.force += f;
+        outer_item.force -= f;
       }
     }
   }
-  // projectile movement and collision
+  // item movement and collision
   auto const subtick_count = 2;
   for (auto subtick = 0; subtick < subtick_count; ++subtick) {
-    for (auto it = projectiles.begin(); it != projectiles.end();) {
-      auto &projectile = it.entity();
-      auto const position_before = projectile.position;
-      projectile.integrate(duration / subtick_count);
-      if (projectile.position.y() < -64.0f) {
-        it = projectiles.erase(it);
+    for (auto it = items.begin(); it != items.end();) {
+      auto &item = it.entity();
+      auto const position_before = item.position;
+      item.integrate(duration / subtick_count);
+      if (item.position.y() < -64.0f) {
+        it = items.erase(it);
         continue;
       }
-      auto const contact = _grid.find_contact(projectile.bounds());
+      auto const contact = _grid.find_contact(item.bounds());
       if (contact) {
         auto const normal = contact->normal.cast<f32>().eval();
         auto const normal_positional_impulse =
-          (Projectile::mass * normal * -contact->separation).eval();
-        projectile.position += normal_positional_impulse / Projectile::mass;
-        auto const position_after = projectile.position;
+          (Item::mass * normal * -contact->separation).eval();
+        item.position += normal_positional_impulse / Item::mass;
+        auto const position_after = item.position;
         auto const position_delta = (position_after - position_before).eval();
         auto const normal_position_delta = position_delta.dot(normal);
         auto const tangent_position_delta =
           (position_delta - normal_position_delta * normal).eval();
         auto const friction_positional_impulse_norm =
-          Projectile::mass * Projectile::friction * -contact->separation;
+          Item::mass * Item::friction * -contact->separation;
         if (
-          friction_positional_impulse_norm <
-          Projectile::mass * tangent_position_delta.norm()) {
+          friction_positional_impulse_norm < Item::mass * tangent_position_delta
+                                                            .norm()) {
           auto const friction_positional_impulse =
             (friction_positional_impulse_norm * -tangent_position_delta
                                                    .normalized())
               .eval();
-          projectile.position += friction_positional_impulse / Projectile::mass;
+          item.position += friction_positional_impulse / Item::mass;
         } else {
-          projectile.position -= tangent_position_delta;
+          item.position -= tangent_position_delta;
         }
-        auto const momentum_before =
-          (Projectile::mass * projectile.velocity).eval();
+        auto const momentum_before = (Item::mass * item.velocity).eval();
         if (contact->normal.x() > 0) {
-          projectile.velocity.x() = std::max(projectile.velocity.x(), 0.0f);
+          item.velocity.x() = std::max(item.velocity.x(), 0.0f);
         } else if (contact->normal.x() < 0) {
-          projectile.velocity.x() = std::min(projectile.velocity.x(), 0.0f);
+          item.velocity.x() = std::min(item.velocity.x(), 0.0f);
         } else if (contact->normal.y() > 0) {
-          projectile.velocity.y() = std::max(projectile.velocity.y(), 0.0f);
+          item.velocity.y() = std::max(item.velocity.y(), 0.0f);
         } else if (contact->normal.y() < 0) {
-          projectile.velocity.y() = std::min(projectile.velocity.y(), 0.0f);
+          item.velocity.y() = std::min(item.velocity.y(), 0.0f);
         } else if (contact->normal.z() > 0) {
-          projectile.velocity.z() = std::max(projectile.velocity.z(), 0.0f);
+          item.velocity.z() = std::max(item.velocity.z(), 0.0f);
         } else if (contact->normal.z() < 0) {
-          projectile.velocity.z() = std::min(projectile.velocity.z(), 0.0f);
+          item.velocity.z() = std::min(item.velocity.z(), 0.0f);
         }
-        auto const momentum_after =
-          (Projectile::mass * projectile.velocity).eval();
+        auto const momentum_after = (Item::mass * item.velocity).eval();
         if (!momentum_after.isZero()) {
           auto const normal_impulse = (momentum_after - momentum_before).eval();
           auto const frictional_impulse_norm =
-            Projectile::friction * normal_impulse.norm();
+            Item::friction * normal_impulse.norm();
           if (frictional_impulse_norm < momentum_after.norm()) {
             auto const frictional_impulse =
-              (frictional_impulse_norm * -projectile.velocity.normalized())
-                .eval();
-            projectile.velocity += frictional_impulse / Projectile::mass;
+              (frictional_impulse_norm * -item.velocity.normalized()).eval();
+            item.velocity += frictional_impulse / Item::mass;
           } else {
-            projectile.velocity = math::vec3::Zero();
+            item.velocity = math::vec3::Zero();
           }
         }
       }
       /*
-      auto const projectile_cell_indices =
-        (projectile.position / constants::grid_cell_stride)
+      auto const item_cell_indices =
+        (item.position / constants::grid_cell_stride)
           .array()
           .floor()
           .matrix()
           .cast<int>()
           .eval();
-      if (_grid.is_solid(projectile_cell_indices)) {
-        _grid.set_solid(projectile_cell_indices, false);
-        it = projectiles.erase(it);
+      if (_grid.is_solid(item_cell_indices)) {
+        _grid.set_solid(item_cell_indices, false);
+        it = items.erase(it);
         continue;
       }
       */
       ++it;
     }
   }
-  // clear projectile forces
-  for (auto [projectile, _] : _entities.get_all<Projectile>()) {
-    projectile.force = math::vec3::Zero();
+  // clear item forces
+  for (auto [item, _] : _entities.get_all<Item>()) {
+    item.force = math::vec3::Zero();
   }
-  // humanoid-projectile collision
+  // humanoid-item collision
   auto humanoids = _entities.get_all<Humanoid>();
   for (auto it = humanoids.begin(); it != humanoids.end();) {
     auto [humanoid, humanoid_handle] = *it;
@@ -232,17 +232,17 @@ void Game::tick(float duration) {
           constants::humanoid_half_width,
         },
     };
-    for (auto [projectile, _] : _entities.get_all<Projectile>()) {
-      if (projectile.creator == humanoid_handle) {
+    for (auto [item, _] : _entities.get_all<Item>()) {
+      if (item.creator == humanoid_handle) {
         continue;
       }
-      auto const projectile_half_extents =
-        Eigen::Vector3f::Constant(Projectile::half_extent);
-      auto const projectile_bounds = Eigen::AlignedBox3f{
-        projectile.position - projectile_half_extents,
-        projectile.position + projectile_half_extents,
+      auto const item_half_extents =
+        Eigen::Vector3f::Constant(Item::half_extent);
+      auto const item_bounds = Eigen::AlignedBox3f{
+        item.position - item_half_extents,
+        item.position + item_half_extents,
       };
-      if (projectile_bounds.intersects(humanoid_bounds)) {
+      if (item_bounds.intersects(humanoid_bounds)) {
         it = humanoids.erase(it);
         erased = true;
         break;

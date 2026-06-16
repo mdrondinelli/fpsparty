@@ -46,7 +46,7 @@ add_library(
   src/game/game.cpp
   src/game/humanoid.cpp
   src/game/player.cpp
-  src/game/projectile.cpp
+  src/game/item.cpp
 )
 target_include_directories(
   game

@@ -199,11 +199,11 @@ void Session::load_public_state(
       }
       break;
     }
-    case game::Entity_type::projectile: {
+    case game::Entity_type::item: {
       auto const position = deserialize<Eigen::Vector3f>(reader);
       auto const velocity = deserialize<Eigen::Vector3f>(reader);
       if (!position || !velocity) {
-        std::cerr << "Malformed projectile state.\n";
+        std::cerr << "Malformed item state.\n";
         return;
       }
       keyframe.mesh_instances.emplace_back(

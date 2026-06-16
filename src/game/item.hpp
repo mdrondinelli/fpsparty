@@ -1,5 +1,5 @@
-#ifndef FPSPARTY_GAME_PROJECTILE_HPP
-#define FPSPARTY_GAME_PROJECTILE_HPP
+#ifndef FPSPARTY_GAME_ITEM_HPP
+#define FPSPARTY_GAME_ITEM_HPP
 
 #include <math/box.hpp>
 #include <math/vec.hpp>
@@ -13,7 +13,7 @@ namespace fpsparty::game {
 
 struct Humanoid;
 
-struct Projectile {
+struct Item {
   void integrate(float dt);
 
   math::box3 bounds() const noexcept {
@@ -35,10 +35,10 @@ struct Projectile {
   static auto constexpr repulsion_damping = 16.0f;
 };
 
-template <> struct Entity_traits<Projectile> {
-  static constexpr Entity_type type = Entity_type::projectile;
+template <> struct Entity_traits<Item> {
+  static constexpr Entity_type type = Entity_type::item;
 
-  static void dump(serial::Writer &writer, Projectile const &entity);
+  static void dump(serial::Writer &writer, Item const &entity);
 };
 
 } // namespace fpsparty::game

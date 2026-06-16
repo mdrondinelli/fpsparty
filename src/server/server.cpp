@@ -1,8 +1,8 @@
 #include "server.hpp"
 
 #include "game/humanoid.hpp"
+#include "game/item.hpp"
 #include "game/player.hpp"
-#include "game/projectile.hpp"
 #include "serial/ostream_writer.hpp"
 
 #include <algorithm>
@@ -57,22 +57,20 @@ void Server::broadcast_game_state() {
   auto public_state_writer = serial::Ostringstream_writer{};
   auto &world = _game.get_entities();
   auto const humanoids = world.get_all<game::Humanoid>();
-  auto const projectiles = world.get_all<game::Projectile>();
+  auto const items = world.get_all<game::Item>();
   serialize<std::uint32_t>(
     public_state_writer,
-    static_cast<std::uint32_t>(humanoids.size() + projectiles.size()));
+    static_cast<std::uint32_t>(humanoids.size() + items.size()));
   for (auto [humanoid, handle] : humanoids) {
     serialize<game::Entity_type>(
       public_state_writer, game::Entity_type::humanoid);
     serialize<net::Entity_id>(public_state_writer, handle.id);
     game::Entity_traits<game::Humanoid>::dump(public_state_writer, humanoid);
   }
-  for (auto [projectile, handle] : projectiles) {
-    serialize<game::Entity_type>(
-      public_state_writer, game::Entity_type::projectile);
+  for (auto [item, handle] : items) {
+    serialize<game::Entity_type>(public_state_writer, game::Entity_type::item);
     serialize<net::Entity_id>(public_state_writer, handle.id);
-    game::Entity_traits<game::Projectile>::dump(
-      public_state_writer, projectile);
+    game::Entity_traits<game::Item>::dump(public_state_writer, item);
   }
   auto const players = world.get_all<game::Player>();
   for (auto const &peer : get_peers()) {
