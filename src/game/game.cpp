@@ -61,6 +61,7 @@ void Game::tick(float duration) {
       auto const humanoid_entry = _entities.emplace<Humanoid>();
       player.humanoid = humanoid_entry.handle;
       humanoid = &humanoid_entry.entity;
+      humanoid->position = math::vec3{0.0f, 4.0f, 0.0f};
     }
     if (humanoid) {
       humanoid->curr_input_state = player.input_state;
@@ -68,8 +69,17 @@ void Game::tick(float duration) {
   }
   // humnanoid movement and primary/secondary
   for (auto [humanoid, humanoid_handle] : _entities.get_all<Humanoid>()) {
+    auto const position_before = humanoid.position;
     humanoid.integrate(duration);
-    _grid.find_contact(humanoid.bounds());
+    for (auto i = 0; i < 3; ++i) {
+      if (auto const contact = _grid.find_contact(humanoid.bounds())) {
+        humanoid.position -= contact->normal.cast<f32>() * contact->separation;
+      } else {
+        break;
+      }
+    }
+    auto const position_after = humanoid.position;
+    humanoid.velocity = (position_after - position_before) / duration;
     if (
       humanoid.curr_input_state.use_primary && humanoid.attack_timer == 0.0f) {
       auto const basis =
