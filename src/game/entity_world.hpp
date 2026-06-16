@@ -258,6 +258,21 @@ public:
         return result;
       }
 
+      friend constexpr Iterator operator+(
+        std::ptrdiff_t lhs, Iterator const &rhs) noexcept {
+        return rhs + lhs;
+      }
+
+      friend constexpr Iterator operator+(
+        Iterator const &lhs, std::ptrdiff_t rhs) noexcept {
+        return Iterator{lhs._entity_array, lhs._index + rhs};
+      }
+
+      friend constexpr Iterator operator-(
+        Iterator const &lhs, std::ptrdiff_t rhs) noexcept {
+        return Iterator{lhs._entity_array, lhs._index - rhs};
+      }
+
       friend constexpr bool
       operator==(Iterator const &lhs, Iterator const &rhs) noexcept {
         return lhs._index == rhs._index;

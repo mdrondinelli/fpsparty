@@ -7,7 +7,9 @@
 namespace fpsparty::game {
 
 void Projectile::integrate(float dt) {
+  auto const acceleration = force / mass;
   velocity -= math::vec3::UnitY() * constants::gravitational_acceleration * dt;
+  velocity += acceleration * dt;
   position += velocity * dt;
 }
 

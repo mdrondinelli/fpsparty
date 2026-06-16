@@ -78,9 +78,9 @@ void Grid::fill(math::ibox3 const &cells, bool solid) {
 }
 
 std::optional<Grid_raycast_hit> Grid::raycast(
-  Eigen::Vector3i const &origin_cell_coords,
-  Eigen::Vector3f const &origin_cell_offset,
-  Eigen::Vector3f const &ray_direction,
+  math::ivec3 origin_cell_coords,
+  math::vec3 origin_cell_offset,
+  math::vec3 ray_direction,
   float max_t) const noexcept {
   assert(ray_direction.squaredNorm() > 0.0f);
   assert((origin_cell_offset.array() >= 0.0f).all());
@@ -136,6 +136,117 @@ std::optional<Grid_raycast_hit> Grid::raycast(
       };
     }
   }
+}
+
+std::optional<Grid_contact>
+Grid::find_contact(math::box3 const &box) const noexcept {
+  auto const touched_cells = Grid::world_to_cell(box);
+  auto const &touched_min = touched_cells.min();
+  auto const &touched_max = touched_cells.max();
+  auto result = std::optional<Grid_contact>{};
+  for (auto z = touched_min.z(); z <= touched_max.z(); ++z) {
+    for (auto y = touched_min.y(); y <= touched_max.y(); ++y) {
+      for (auto x = touched_min.x(); x <= touched_max.x(); ++x) {
+        auto const cell_coords = math::ivec3{x, y, z};
+        if (is_solid(cell_coords)) {
+          auto const cell_box = math::box3{
+            cell_coords.cast<f32>(),
+            (cell_coords + math::ivec3::Ones()).cast<f32>(),
+          };
+          auto const pos_x_solid = /*box.min().x() <= cell_box.max().x() &&
+                                   cell_box.max().x() <= box.max().x() &&*/
+            is_solid({x + 1, y, z});
+          auto const pos_y_solid = /*box.min().y() <= cell_box.max().y() &&
+                                   cell_box.max().y() <= box.max().y() &&*/
+            is_solid({x, y + 1, z});
+          auto const pos_z_solid = /*box.min().z() <= cell_box.max().z() &&
+                                   cell_box.max().z() <= box.max().z() &&*/
+            is_solid({x, y, z + 1});
+          auto const neg_x_solid = /*box.min().x() <= cell_box.min().x() &&
+                                   cell_box.min().x() <= box.max().x() &&*/
+            is_solid({x - 1, y, z});
+          auto const neg_y_solid = /*box.min().y() <= cell_box.min().y() &&
+                                   cell_box.min().y() <= box.max().y() &&*/
+            is_solid({x, y - 1, z});
+          auto const neg_z_solid = /*box.min().z() <= cell_box.min().z() &&
+                                   cell_box.min().z() <= box.max().z() &&*/
+            is_solid({x, y, z - 1});
+          auto const pos = (cell_box.max() - box.min()).eval();
+          auto const neg = (box.max() - cell_box.min()).eval();
+          auto normal = math::ivec3::Zero().eval();
+          auto penetration = std::numeric_limits<f32>::infinity();
+          if (!pos_x_solid && pos.x() >= 0.0f && pos.x() < penetration) {
+            normal = math::ivec3::UnitX();
+            penetration = pos.x();
+          }
+          if (!pos_y_solid && pos.y() >= 0.0f && pos.y() < penetration) {
+            normal = math::ivec3::UnitY();
+            penetration = pos.y();
+          }
+          if (!pos_z_solid && pos.z() >= 0.0f && pos.z() < penetration) {
+            normal = math::ivec3::UnitZ();
+            penetration = pos.z();
+          }
+          if (!neg_x_solid && neg.x() >= 0.0f && neg.x() < penetration) {
+            normal = -math::ivec3::UnitX();
+            penetration = neg.x();
+          }
+          if (!neg_y_solid && neg.y() >= 0.0f && neg.y() < penetration) {
+            normal = -math::ivec3::UnitY();
+            penetration = neg.y();
+          }
+          if (!neg_z_solid && neg.z() >= 0.0f && neg.z() < penetration) {
+            normal = -math::ivec3::UnitZ();
+            penetration = neg.z();
+          }
+          if (!normal.isZero()) {
+            auto const separation = -penetration;
+            if (separation < 0.0f) {
+              if (!result) {
+                result = Grid_contact{
+                  .cell_coords = cell_coords,
+                  .normal = normal,
+                  .separation = separation,
+                };
+              } else {
+                auto const separated_box = math::box3{
+                  box.min() - separation * normal.cast<f32>(),
+                  box.max() - separation * normal.cast<f32>(),
+                };
+                auto const result_cell_box = math::box3{
+                  result->cell_coords.cast<f32>(),
+                  (result->cell_coords + math::ivec3::Ones()).cast<f32>(),
+                };
+                auto const intersection = separated_box.intersection(result_cell_box);
+                if (!intersection.isEmpty() && intersection.volume() > 0.0f) {
+                  // separated box intersects current result cell ->
+                  // take most penetrated / least separated contact
+                  if (separation < result->separation) {
+                    result = Grid_contact{
+                      .cell_coords = cell_coords,
+                      .normal = normal,
+                      .separation = separation,
+                    };
+                  }
+                } else {
+                  // separated box does not intersect current result cell ->
+                  // take least penetrated / most separated contact
+                  if (separation > result->separation) {
+                    result = Grid_contact{
+                      .cell_coords = cell_coords,
+                      .normal = normal,
+                      .separation = separation,
+                    };
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return result;
 }
 
 void Grid::set_solid(math::ivec3 cell_coords, bool solid) noexcept {
@@ -213,11 +324,16 @@ math::ibox3 const &Grid::get_cell_bounds() const noexcept {
   return _cell_bounds;
 }
 
-bool Grid::empty() const noexcept {
-  return get_cell_bounds().isEmpty();
+bool Grid::empty() const noexcept { return get_cell_bounds().isEmpty(); }
+
+math::ibox3 Grid::world_to_cell(math::box3 const &coords) {
+  return math::ibox3{
+    math::ivec3{coords.min().array().floor().cast<i32>()},
+    math::ivec3{coords.max().array().floor().cast<i32>()},
+  };
 }
 
-math::ibox3 Grid::cell_to_chunk(math::ibox3 coords) {
+math::ibox3 Grid::cell_to_chunk(math::ibox3 const &coords) {
   return math::ibox3{
     cell_to_chunk(coords.min()),
     cell_to_chunk(coords.max()),

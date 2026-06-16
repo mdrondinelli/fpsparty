@@ -33,9 +33,15 @@ struct Grid_create_info {
 };
 
 struct Grid_raycast_hit {
-  Eigen::Vector3i cell_coords{};
-  Eigen::Vector3i normal{};
+  math::ivec3 cell_coords{};
+  math::ivec3 normal{};
   float t{};
+};
+
+struct Grid_contact {
+  math::ivec3 cell_coords{};
+  math::ivec3 normal{};
+  float separation{};
 };
 
 class Grid_loading_error : public std::exception {};
@@ -44,7 +50,7 @@ class Chunk {
 public:
   static constexpr auto edge_length = std::size_t{4};
 
-  static constexpr auto get_bit_index(Eigen::Vector3i const &offset) noexcept {
+  static constexpr auto get_bit_index(math::ivec3 offset) noexcept {
     auto const i = offset.x() & (edge_length - 1);
     auto const j = offset.y() & (edge_length - 1);
     auto const k = offset.z() & (edge_length - 1);
@@ -55,12 +61,12 @@ public:
 
   constexpr explicit Chunk(std::uint64_t blocks) noexcept : blocks{blocks} {}
 
-  constexpr bool is_solid(Eigen::Vector3i const &offset) const noexcept {
+  constexpr bool is_solid(math::ivec3 offset) const noexcept {
     auto const bit_index = get_bit_index(offset);
     return blocks & (std::uint64_t{1} << bit_index);
   }
 
-  constexpr void set_solid(Eigen::Vector3i const &offset, bool value) noexcept {
+  constexpr void set_solid(math::ivec3 offset, bool value) noexcept {
     auto const bit_index = get_bit_index(offset);
     if (value) {
       blocks |= (std::uint64_t{1} << bit_index);
@@ -84,7 +90,7 @@ class Chunk_span_template {
     friend class Chunk_span_template;
 
   public:
-    std::pair<Eigen::Vector3i, U *> operator*() const noexcept {
+    std::pair<math::ivec3, U *> operator*() const noexcept {
       return {
         _chunk_coords,
         _data + detail::linearize_chunk_index(
@@ -193,10 +199,12 @@ public:
   void fill(math::ibox3 const &cells, bool solid = true);
 
   std::optional<Grid_raycast_hit> raycast(
-    Eigen::Vector3i const &origin_cell_coords,
-    Eigen::Vector3f const &origin_cell_offset,
-    Eigen::Vector3f const &ray_direction,
+    math::ivec3 origin_cell_coords,
+    math::vec3 origin_cell_offset,
+    math::vec3 ray_direction,
     float max_t) const noexcept;
+
+  std::optional<Grid_contact> find_contact(math::box3 const &box) const noexcept;
 
   void set_solid(math::ivec3 cell_coords, bool solid) noexcept;
 
@@ -228,7 +236,9 @@ public:
 
   bool empty() const noexcept;
 
-  static math::ibox3 cell_to_chunk(math::ibox3 coords);
+  static math::ibox3 world_to_cell(math::box3 const &coords);
+
+  static math::ibox3 cell_to_chunk(math::ibox3 const &coords);
 
   static math::ivec3 cell_to_chunk(math::ivec3 coords);
 
