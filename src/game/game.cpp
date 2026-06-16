@@ -192,20 +192,6 @@ void Game::tick(float duration) {
           }
         }
       }
-      /*
-      auto const item_cell_indices =
-        (item.position / constants::grid_cell_stride)
-          .array()
-          .floor()
-          .matrix()
-          .cast<int>()
-          .eval();
-      if (_grid.is_solid(item_cell_indices)) {
-        _grid.set_solid(item_cell_indices, false);
-        it = items.erase(it);
-        continue;
-      }
-      */
       ++it;
     }
   }
