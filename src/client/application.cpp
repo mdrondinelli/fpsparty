@@ -420,7 +420,10 @@ private:
     glfw::Mouse_button button,
     glfw::Press_state action,
     int) override {
-    if (_local_player) {
+    if (
+      _glfw_window->get_cursor_input_mode() ==
+        glfw::Cursor_input_mode::disabled &&
+      _local_player) {
       auto input_state = _local_player->input_state;
       if (button == glfw::Mouse_button::mb_left) {
         input_state.use_primary = action != glfw::Press_state::release;
