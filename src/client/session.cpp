@@ -201,8 +201,7 @@ void Session::load_public_state(
     }
     case game::Entity_type::item: {
       auto const position = deserialize<Eigen::Vector3f>(reader);
-      auto const velocity = deserialize<Eigen::Vector3f>(reader);
-      if (!position || !velocity) {
+      if (!position) {
         std::cerr << "Malformed item state.\n";
         return;
       }

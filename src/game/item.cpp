@@ -16,7 +16,6 @@ void Item::integrate(float dt) {
 void Entity_traits<Item>::dump(serial::Writer &writer, Item const &item) {
   using serial::serialize;
   serialize<Eigen::Vector3f>(writer, item.position);
-  serialize<Eigen::Vector3f>(writer, item.velocity);
 }
 
 } // namespace fpsparty::game
