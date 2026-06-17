@@ -10,7 +10,7 @@ struct Input_state {
   bool move_forward{};
   bool move_backward{};
   bool jump{};
-  bool crouch{};
+  bool run{};
   bool use_primary{};
   bool use_secondary{};
   float yaw{};
@@ -37,7 +37,7 @@ template <> struct Serializer<net::Input_state> {
     if (value.jump) {
       flags |= 1 << 4;
     }
-    if (value.crouch) {
+    if (value.run) {
       flags |= 1 << 5;
     }
     if (value.use_primary) {
@@ -70,7 +70,7 @@ template <> struct Serializer<net::Input_state> {
       .move_forward = (*flags & (1 << 2)) != 0,
       .move_backward = (*flags & (1 << 3)) != 0,
       .jump = (*flags & (1 << 4)) != 0,
-      .crouch = (*flags & (1 << 5)) != 0,
+      .run = (*flags & (1 << 5)) != 0,
       .use_primary = (*flags & (1 << 6)) != 0,
       .use_secondary = (*flags & (1 << 7)) != 0,
       .yaw = *yaw,

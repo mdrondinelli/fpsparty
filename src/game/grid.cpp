@@ -153,24 +153,12 @@ Grid::find_contact(math::box3 const &box) const noexcept {
             cell_coords.cast<f32>(),
             (cell_coords + math::ivec3::Ones()).cast<f32>(),
           };
-          auto const pos_x_solid = /*box.min().x() <= cell_box.max().x() &&
-                                   cell_box.max().x() <= box.max().x() &&*/
-            is_solid({x + 1, y, z});
-          auto const pos_y_solid = /*box.min().y() <= cell_box.max().y() &&
-                                   cell_box.max().y() <= box.max().y() &&*/
-            is_solid({x, y + 1, z});
-          auto const pos_z_solid = /*box.min().z() <= cell_box.max().z() &&
-                                   cell_box.max().z() <= box.max().z() &&*/
-            is_solid({x, y, z + 1});
-          auto const neg_x_solid = /*box.min().x() <= cell_box.min().x() &&
-                                   cell_box.min().x() <= box.max().x() &&*/
-            is_solid({x - 1, y, z});
-          auto const neg_y_solid = /*box.min().y() <= cell_box.min().y() &&
-                                   cell_box.min().y() <= box.max().y() &&*/
-            is_solid({x, y - 1, z});
-          auto const neg_z_solid = /*box.min().z() <= cell_box.min().z() &&
-                                   cell_box.min().z() <= box.max().z() &&*/
-            is_solid({x, y, z - 1});
+          auto const pos_x_solid = is_solid({x + 1, y, z});
+          auto const pos_y_solid = is_solid({x, y + 1, z});
+          auto const pos_z_solid = is_solid({x, y, z + 1});
+          auto const neg_x_solid = is_solid({x - 1, y, z});
+          auto const neg_y_solid = is_solid({x, y - 1, z});
+          auto const neg_z_solid = is_solid({x, y, z - 1});
           auto const pos = (cell_box.max() - box.min()).eval();
           auto const neg = (box.max() - cell_box.min()).eval();
           auto normal = math::ivec3::Zero().eval();
@@ -209,19 +197,46 @@ Grid::find_contact(math::box3 const &box) const noexcept {
                   .separation = separation,
                 };
               } else {
-                auto const separated_box = math::box3{
-                  box.min() - separation * normal.cast<f32>(),
-                  box.max() - separation * normal.cast<f32>(),
-                };
-                auto const result_cell_box = math::box3{
-                  result->cell_coords.cast<f32>(),
-                  (result->cell_coords + math::ivec3::Ones()).cast<f32>(),
-                };
-                auto const intersection = separated_box.intersection(result_cell_box);
-                if (!intersection.isEmpty() && intersection.volume() > 0.0f) {
-                  // separated box intersects current result cell ->
-                  // take most penetrated / least separated contact
-                  if (separation < result->separation) {
+                auto const also_resolves_result_contact = [&] {
+                  if (normal.x() < 0 && result->cell_coords.x() >= cell_coords.x()) {
+                    return true;
+                  }
+                  if (normal.y() < 0 && result->cell_coords.y() >= cell_coords.y()) {
+                    return true;
+                  }
+                  if (normal.z() < 0 && result->cell_coords.z() >= cell_coords.z()) {
+                    return true;
+                  }
+                  if (normal.x() > 0 && result->cell_coords.x() <= cell_coords.x()) {
+                    return true;
+                  }
+                  if (normal.y() > 0 && result->cell_coords.y() <= cell_coords.y()) {
+                    return true;
+                  }
+                  if (normal.z() > 0 && result->cell_coords.z() <= cell_coords.z()) {
+                    return true;
+                  }
+                  return false;
+                  /*
+                  // apply this contact to the untouched box to get the separated box
+                  auto const separated_box = math::box3{
+                    box.min() - separation * normal.cast<f32>(),
+                    box.max() - separation * normal.cast<f32>(),
+                  };
+                  // find the bounds of the current result contact's originating cell
+                  auto const result_cell_box = math::box3{
+                    result->cell_coords.cast<f32>(),
+                    (result->cell_coords + math::ivec3::Ones()).cast<f32>(),
+                  };
+                auto const intersection =
+                  separated_box.intersection(result_cell_box);
+                  return !intersection.isEmpty() && intersection.volume() > 0.0f;
+                  */
+                }();
+                if (also_resolves_result_contact) {
+                  // separated box does not intersect current result cell ->
+                  // take least penetrated / most separated contact
+                  if (separation > result->separation) {
                     result = Grid_contact{
                       .cell_coords = cell_coords,
                       .normal = normal,
@@ -229,9 +244,9 @@ Grid::find_contact(math::box3 const &box) const noexcept {
                     };
                   }
                 } else {
-                  // separated box does not intersect current result cell ->
-                  // take least penetrated / most separated contact
-                  if (separation > result->separation) {
+                  // separated box intersects current result cell ->
+                  // take most penetrated / least separated contact
+                  if (separation < result->separation) {
                     result = Grid_contact{
                       .cell_coords = cell_coords,
                       .normal = normal,
@@ -329,7 +344,7 @@ bool Grid::empty() const noexcept { return get_cell_bounds().isEmpty(); }
 math::ibox3 Grid::world_to_cell(math::box3 const &coords) {
   return math::ibox3{
     math::ivec3{coords.min().array().floor().cast<i32>()},
-    math::ivec3{coords.max().array().floor().cast<i32>()},
+    math::ivec3{coords.max().array().ceil().cast<i32>()} - math::ivec3::Ones(),
   };
 }
 

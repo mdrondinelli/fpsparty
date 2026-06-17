@@ -310,12 +310,13 @@ private:
          math::y_rotation_matrix(-_local_player->input_state.yaw) *
          math::translation_matrix(-camera->position))
           .eval();
+      auto const zoom = 1.0f;
       auto const aspect_ratio =
         static_cast<float>(swapchain_image->get_extent().x()) /
         static_cast<float>(swapchain_image->get_extent().y());
       auto const projection_matrix = math::perspective_projection_matrix(
-        aspect_ratio > 1.0f ? 1.0f : aspect_ratio,
-        aspect_ratio > 1.0f ? 1.0f / aspect_ratio : 1.0f,
+        aspect_ratio > 1.0f ? zoom : zoom * aspect_ratio,
+        aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
         0.1f);
       auto const view_projection_matrix =
         (projection_matrix * view_matrix).eval();
@@ -407,7 +408,7 @@ private:
         break;
       case glfw::Key::k_left_shift:
       case glfw::Key::k_right_shift:
-        input_state.crouch = action != glfw::Press_action::release;
+        input_state.run = action != glfw::Press_action::release;
         break;
       default:
       }

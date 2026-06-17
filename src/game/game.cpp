@@ -20,8 +20,7 @@ void handle_use_secondary(Grid &grid, Humanoid &humanoid) {
                        .eval();
   auto const forward = basis.col(2).head<3>().eval();
   auto const origin =
-    (humanoid.position + math::vec3::UnitY() * Humanoid::eye_height)
-      .eval();
+    (humanoid.position + math::vec3::UnitY() * Humanoid::eye_height).eval();
   auto const origin_cell =
     (origin / constants::grid_cell_stride).array().floor().matrix().eval();
   auto const origin_cell_indices = origin_cell.cast<int>().eval();
@@ -69,17 +68,49 @@ void Game::tick(float duration) {
   }
   // humnanoid movement and primary/secondary
   for (auto [humanoid, humanoid_handle] : _entities.get_all<Humanoid>()) {
-    auto const position_before = humanoid.position;
+    if (humanoid.grounded) {
+      humanoid.velocity.y() = 0.0f;
+      auto const desired_direction = humanoid.world_movement_direction();
+      auto const desired_speed = humanoid.curr_input_state.run
+                                   ? Humanoid::run_speed
+                                   : Humanoid::walk_speed;
+      auto const desired_velocity = (desired_direction * desired_speed).eval();
+      auto const delta_velocity = (desired_velocity - humanoid.velocity).eval();
+      // max acceleration is applied when going
+      humanoid.velocity +=
+        std::min(delta_velocity.norm() / (2.0f * desired_speed), 1.0f) *
+        Humanoid::ground_acceleration * delta_velocity.normalized() * duration;
+      if (humanoid.curr_input_state.jump && !humanoid.prev_input_state.jump) {
+        humanoid.velocity += Humanoid::jump_speed * math::vec3::UnitY();
+      }
+    } else {
+      auto const desired_direction = humanoid.world_movement_direction();
+      humanoid.velocity += desired_direction * Humanoid::air_acceleration * duration;
+    }
     humanoid.integrate(duration);
-    for (auto i = 0; i < 3; ++i) {
+    humanoid.grounded = false;
+    auto constexpr humanoid_contact_iterations = 3;
+    for (auto i = 0; i < humanoid_contact_iterations; ++i) {
       if (auto const contact = _grid.find_contact(humanoid.bounds())) {
         humanoid.position -= contact->normal.cast<f32>() * contact->separation;
+        if (contact->normal.x() > 0) {
+          humanoid.velocity.x() = std::max(humanoid.velocity.x(), 0.0f);
+        } else if (contact->normal.y() > 0) {
+          humanoid.velocity.y() = std::max(humanoid.velocity.y(), 0.0f);
+          humanoid.grounded = true;
+        } else if (contact->normal.z() > 0) {
+          humanoid.velocity.z() = std::max(humanoid.velocity.z(), 0.0f);
+        } else if (contact->normal.x() < 0) {
+          humanoid.velocity.x() = std::min(humanoid.velocity.x(), 0.0f);
+        } else if (contact->normal.y() < 0) {
+          humanoid.velocity.y() = std::min(humanoid.velocity.y(), 0.0f);
+        } else if (contact->normal.z() < 0) {
+          humanoid.velocity.z() = std::min(humanoid.velocity.z(), 0.0f);
+        }
       } else {
         break;
       }
     }
-    auto const position_after = humanoid.position;
-    humanoid.velocity = (position_after - position_before) / duration;
     if (
       humanoid.curr_input_state.use_primary && humanoid.attack_timer == 0.0f) {
       auto const basis =
@@ -129,12 +160,12 @@ void Game::tick(float duration) {
     }
   }
   // item movement and collision
-  auto const subtick_count = 2;
-  for (auto subtick = 0; subtick < subtick_count; ++subtick) {
+  auto const item_subtick_count = 3;
+  for (auto subtick = 0; subtick < item_subtick_count; ++subtick) {
     for (auto it = items.begin(); it != items.end();) {
       auto &item = it.entity();
       auto const position_before = item.position;
-      item.integrate(duration / subtick_count);
+      item.integrate(duration / item_subtick_count);
       if (item.position.y() < -64.0f) {
         it = items.erase(it);
         continue;
