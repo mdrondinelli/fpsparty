@@ -310,7 +310,7 @@ private:
          math::y_rotation_matrix(-_local_player->input_state.yaw) *
          math::translation_matrix(-camera->position))
           .eval();
-      auto const zoom = 1.0f;
+      auto const zoom = 1.5f;
       auto const aspect_ratio =
         static_cast<float>(swapchain_image->get_extent().x()) /
         static_cast<float>(swapchain_image->get_extent().y());

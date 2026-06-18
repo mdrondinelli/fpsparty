@@ -35,7 +35,9 @@ void Humanoid::integrate(float dt) noexcept {
   */
   velocity -= constants::gravitational_acceleration * math::vec3::UnitY() * dt;
   position += velocity * dt;
+  coyote_timer -= dt;
   attack_timer -= dt;
+  coyote_timer = std::max(coyote_timer, 0.0f);
   attack_timer = std::max(attack_timer, 0.0f);
 }
 

@@ -3,7 +3,7 @@
 
 namespace fpsparty::game::constants {
 
-auto constexpr gravitational_acceleration = 22.0f;
+auto constexpr gravitational_acceleration = 24.0f;
 
 }
 

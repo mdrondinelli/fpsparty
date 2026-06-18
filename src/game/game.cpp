@@ -80,14 +80,19 @@ void Game::tick(float duration) {
       humanoid.velocity +=
         std::min(delta_velocity.norm() / (2.0f * desired_speed), 1.0f) *
         Humanoid::ground_acceleration * delta_velocity.normalized() * duration;
-      if (humanoid.curr_input_state.jump && !humanoid.prev_input_state.jump) {
-        humanoid.velocity += Humanoid::jump_speed * math::vec3::UnitY();
-      }
     } else {
       auto const desired_direction = humanoid.world_movement_direction();
-      humanoid.velocity += desired_direction * Humanoid::air_acceleration * duration;
+      humanoid.velocity +=
+        desired_direction * Humanoid::air_acceleration * duration;
+    }
+    auto const can_jump = humanoid.grounded || humanoid.coyote_timer > 0.0f;
+    auto const want_jump = humanoid.curr_input_state.jump && !humanoid.prev_input_state.jump;
+    if (can_jump && want_jump) {
+      humanoid.coyote_timer = 0.0f;
+      humanoid.velocity.y() += Humanoid::jump_speed;
     }
     humanoid.integrate(duration);
+    auto const was_grounded = humanoid.grounded;
     humanoid.grounded = false;
     auto constexpr humanoid_contact_iterations = 3;
     for (auto i = 0; i < humanoid_contact_iterations; ++i) {
@@ -96,8 +101,21 @@ void Game::tick(float duration) {
         if (contact->normal.x() > 0) {
           humanoid.velocity.x() = std::max(humanoid.velocity.x(), 0.0f);
         } else if (contact->normal.y() > 0) {
+          auto const separating_velocity = humanoid.velocity.y();
           humanoid.velocity.y() = std::max(humanoid.velocity.y(), 0.0f);
           humanoid.grounded = true;
+          if (!was_grounded) {
+            // apply friction (only) on landing
+            if (separating_velocity < 0.0f) {
+              auto const speed = humanoid.velocity.norm();
+              if (speed > 0.0f) {
+                auto const delta_speed = std::max(
+                  -speed, Humanoid::landing_friction * separating_velocity);
+                humanoid.velocity =
+                  humanoid.velocity * (speed + delta_speed) / speed;
+              }
+            }
+          }
         } else if (contact->normal.z() > 0) {
           humanoid.velocity.z() = std::max(humanoid.velocity.z(), 0.0f);
         } else if (contact->normal.x() < 0) {
@@ -110,6 +128,9 @@ void Game::tick(float duration) {
       } else {
         break;
       }
+    }
+    if (!humanoid.grounded && was_grounded) {
+      humanoid.coyote_timer = Humanoid::coyote_duration;
     }
     if (
       humanoid.curr_input_state.use_primary && humanoid.attack_timer == 0.0f) {

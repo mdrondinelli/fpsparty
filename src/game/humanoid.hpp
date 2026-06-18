@@ -25,18 +25,21 @@ struct Humanoid {
   net::Input_state curr_input_state{};
   math::vec3 position{math::vec3::Zero()};
   math::vec3 velocity{math::vec3::Zero()};
+  float coyote_timer{};
   float attack_timer{};
   bool grounded{};
 
   static auto constexpr half_width = 0.35f;
   static auto constexpr height = 1.8f;
   static auto constexpr eye_height = 1.68f;
-  static auto constexpr ground_acceleration = 80.0f;
-  static auto constexpr air_acceleration = 2.0f;
+  static auto constexpr ground_acceleration = 72.0f;
+  static auto constexpr air_acceleration = 3.0f;
+  static auto constexpr landing_friction = 0.375f;
+  static auto constexpr coyote_duration = 1.0f / 16.0f;
   // static auto constexpr air_acceleration_speed_limit = 1.0f;
-  static auto constexpr walk_speed = 2.5f;
-  static auto constexpr run_speed = 5.0f;
-  static auto constexpr jump_speed = 7.0f;
+  static auto constexpr walk_speed = 3.0f;
+  static auto constexpr run_speed = 6.0f;
+  static auto constexpr jump_speed = 7.5f;
   static auto constexpr attack_cooldown = 0.8f;
 };
 
