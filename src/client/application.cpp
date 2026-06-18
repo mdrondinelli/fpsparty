@@ -131,6 +131,14 @@ auto const cube_mesh_indices = std::vector<std::uint16_t>{
 auto const crosshair_indices = std::array<std::uint16_t, 12>{0, 1, 2, 2, 1, 3, 4, 5, 6, 6, 5, 7};
 auto const composite_indices = std::array<std::uint16_t, 3>{0, 1, 2};
 auto const sky_color = math::vec4{0.4196f, 0.6196f, 0.7451f, 1.0f};
+auto constexpr z_near = 0.1f;
+
+struct Composite_push_constants {
+  std::uint32_t albedo_texture_index;
+  std::uint32_t mask_texture_index;
+  std::uint32_t depth_texture_index;
+  float z_near;
+};
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
@@ -271,7 +279,8 @@ private:
     auto [work_recorder, swapchain_image] = _graphics.record_frame_work();
     auto const framebuffer_extent = swapchain_image->get_extent().eval();
     auto const framebuffer_size = framebuffer_extent.head<2>().eval();
-    auto [hdr_image, hdr_image_created] = get_hdr_image(framebuffer_extent);
+    auto [albedo_image, albedo_image_created] =
+      get_albedo_image(framebuffer_extent);
     auto [crosshair_mask_image, crosshair_mask_image_created] =
       get_crosshair_mask_image(framebuffer_extent);
     auto [depth_image, depth_image_created] =
@@ -298,7 +307,7 @@ private:
           work_recorder.barrier(sampled_image_scope, color_attachment_scope);
         }
       };
-    record_color_attachment_transition(hdr_image, hdr_image_created);
+    record_color_attachment_transition(albedo_image, albedo_image_created);
     record_color_attachment_transition(
       crosshair_mask_image, crosshair_mask_image_created);
     auto const depth_scope = graphics::Synchronization_scope{
@@ -315,18 +324,10 @@ private:
         graphics::Image_layout::general,
         depth_image);
     } else {
-      work_recorder.barrier(
-        {
-          .stage_mask =
-            graphics::Pipeline_stage_flag_bits::early_fragment_tests |
-            graphics::Pipeline_stage_flag_bits::late_fragment_tests,
-          .access_mask =
-            graphics::Access_flag_bits::depth_stencil_attachment_write,
-        },
-        depth_scope);
+      work_recorder.barrier(sampled_image_scope, depth_scope);
     }
     work_recorder.begin_rendering({
-      .color_image = hdr_image,
+      .color_image = albedo_image,
       .depth_image = depth_image,
       .color_clear_value = sky_color,
     });
@@ -358,7 +359,7 @@ private:
       auto const projection_matrix = math::perspective_projection_matrix(
         aspect_ratio > 1.0f ? zoom : zoom * aspect_ratio,
         aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
-        0.1f);
+        z_near);
       auto const view_projection_matrix =
         (projection_matrix * view_matrix).eval();
       // draw grid
@@ -444,6 +445,7 @@ private:
     work_recorder.end_rendering();
 
     work_recorder.barrier(color_attachment_scope, sampled_image_scope);
+    work_recorder.barrier(depth_scope, sampled_image_scope);
     work_recorder.transition_image_layout(
       {},
       color_attachment_scope,
@@ -455,19 +457,25 @@ private:
     });
     work_recorder.set_viewport(framebuffer_size);
     work_recorder.set_scissor(framebuffer_size);
-    auto const hdr_texture_index =
-      work_recorder.upload_sampled_image_descriptor(hdr_image);
+    auto const albedo_texture_index =
+      work_recorder.upload_sampled_image_descriptor(albedo_image);
     auto const mask_texture_index =
       work_recorder.upload_sampled_image_descriptor(crosshair_mask_image);
-    auto const composite_push_constants =
-      std::array{hdr_texture_index, mask_texture_index};
+    auto const depth_texture_index =
+      work_recorder.upload_sampled_image_descriptor(depth_image);
+    auto const composite_push_constants = Composite_push_constants{
+      .albedo_texture_index = albedo_texture_index,
+      .mask_texture_index = mask_texture_index,
+      .depth_texture_index = depth_texture_index,
+      .z_near = z_near,
+    };
     work_recorder.bind_pipeline(composite_pipeline);
     work_recorder.set_cull_mode(graphics::Cull_mode::none);
     work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
     work_recorder
       .bind_index_buffer(_composite_index_buffer, graphics::Index_type::u16);
     work_recorder.push_data(
-      0, std::as_bytes(std::span{composite_push_constants}));
+      0, std::as_bytes(std::span{&composite_push_constants, 1}));
     work_recorder.draw_indexed({
       .index_count = static_cast<std::uint32_t>(composite_indices.size()),
       .instance_count = 1,
@@ -572,10 +580,10 @@ private:
   }
 
   std::pair<rc::Strong<graphics::Image>, bool>
-  get_hdr_image(math::ivec3 const &extent) {
+  get_albedo_image(math::ivec3 const &extent) {
     return get_color_image(
-      _hdr_image,
-      graphics::Image_format::r16g16b16a16_sfloat,
+      _albedo_image,
+      graphics::Image_format::b8g8r8a8_srgb,
       extent);
   }
 
@@ -615,7 +623,8 @@ private:
         .extent = extent,
         .mip_level_count = 1,
         .array_layer_count = 1,
-        .usage = graphics::Image_usage_flag_bits::depth_attachment,
+        .usage = graphics::Image_usage_flag_bits::sampled |
+                 graphics::Image_usage_flag_bits::depth_attachment,
       });
     }
     return {_depth_image, create_image};
@@ -777,7 +786,7 @@ private:
         },
       };
     auto const color_attachment_format =
-      graphics::Image_format::r16g16b16a16_sfloat;
+      graphics::Image_format::b8g8r8a8_srgb;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
@@ -808,7 +817,7 @@ private:
         },
       };
     auto const color_attachment_format =
-      graphics::Image_format::r16g16b16a16_sfloat;
+      graphics::Image_format::b8g8r8a8_srgb;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
@@ -895,7 +904,7 @@ private:
   vk::UniqueSurfaceKHR _vk_surface{};
   graphics::Graphics _graphics{};
   rc::Strong<graphics::Image> _depth_image{};
-  rc::Strong<graphics::Image> _hdr_image{};
+  rc::Strong<graphics::Image> _albedo_image{};
   rc::Strong<graphics::Image> _crosshair_mask_image{};
   rc::Strong<graphics::Image> _placeholder_texture{};
   graphics::Shader _grid_vertex_shader;
