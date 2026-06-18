@@ -30,6 +30,8 @@ shaders=(
   grid.frag
   shader.vert
   shader.frag
+  crosshair.vert
+  crosshair.frag
 )
 
 for shader in "${shaders[@]}"; do
