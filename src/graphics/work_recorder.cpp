@@ -210,7 +210,13 @@ void Work_recorder::begin_rendering(Rendering_begin_info const &info) {
     .imageLayout = vk::ImageLayout::eGeneral,
     .loadOp = vk::AttachmentLoadOp::eClear,
     .storeOp = vk::AttachmentStoreOp::eStore,
-    .clearValue = {{0.4196f, 0.6196f, 0.7451f, 1.0f}},
+    .clearValue =
+      {{
+        info.color_clear_value.x(),
+        info.color_clear_value.y(),
+        info.color_clear_value.z(),
+        info.color_clear_value.w(),
+      }},
   };
   auto const depth_attachment = vk::RenderingAttachmentInfo{
     .imageView = info.depth_image

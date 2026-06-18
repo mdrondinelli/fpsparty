@@ -32,6 +32,8 @@ shaders=(
   shader.frag
   crosshair.vert
   crosshair.frag
+  composite.vert
+  composite.frag
 )
 
 for shader in "${shaders[@]}"; do

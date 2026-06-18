@@ -10,6 +10,7 @@
 #include "graphics/synchronization_scope.hpp"
 #include "graphics/work_done_callback.hpp"
 #include "math/transforms.hpp"
+#include "math/vec.hpp"
 #include "ppm/ppm.hpp"
 #include <Eigen/Dense>
 #include <algorithm>
@@ -127,7 +128,9 @@ auto const cube_mesh_indices = std::vector<std::uint16_t>{
   21,
 };
 
-auto const crosshair_indices = std::array<std::uint16_t, 6>{0, 1, 2, 2, 1, 3};
+auto const crosshair_indices = std::array<std::uint16_t, 12>{0, 1, 2, 2, 1, 3, 4, 5, 6, 6, 5, 7};
+auto const composite_indices = std::array<std::uint16_t, 3>{0, 1, 2};
+auto const sky_color = math::vec4{0.4196f, 0.6196f, 0.7451f, 1.0f};
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
@@ -180,7 +183,11 @@ public:
         _crosshair_vertex_shader{
           graphics::load_shader("./assets/shaders/crosshair.vert.spv")},
         _crosshair_fragment_shader{
-          graphics::load_shader("./assets/shaders/crosshair.frag.spv")} {
+          graphics::load_shader("./assets/shaders/crosshair.frag.spv")},
+        _composite_vertex_shader{
+          graphics::load_shader("./assets/shaders/composite.vert.spv")},
+        _composite_fragment_shader{
+          graphics::load_shader("./assets/shaders/composite.frag.spv")} {
     std::cout << "Opened window.\n";
     // _graphics.set_vsync_preferred(false);
     _glfw_window->set_key_callback(this);
@@ -195,6 +202,9 @@ public:
     _crosshair_index_buffer =
       upload_indices(std::as_bytes(std::span{crosshair_indices}));
     std::cout << "Uploaded crosshair index buffer.\n";
+    _composite_index_buffer =
+      upload_indices(std::as_bytes(std::span{composite_indices}));
+    std::cout << "Uploaded composite index buffer.\n";
     _placeholder_texture = upload_texture("./assets/textures/placeholder.ppm");
     std::cout << "Uploaded placeholder texture.\n";
   }
@@ -259,18 +269,38 @@ private:
       _grid_mesh = std::move(_pending_grid_mesh);
     }
     auto [work_recorder, swapchain_image] = _graphics.record_frame_work();
-    work_recorder.transition_image_layout(
-      {},
-      {
-        .stage_mask =
-          graphics::Pipeline_stage_flag_bits::color_attachment_output,
-        .access_mask = graphics::Access_flag_bits::color_attachment_write,
-      },
-      graphics::Image_layout::undefined,
-      graphics::Image_layout::general,
-      swapchain_image);
+    auto const framebuffer_extent = swapchain_image->get_extent().eval();
+    auto const framebuffer_size = framebuffer_extent.head<2>().eval();
+    auto [hdr_image, hdr_image_created] = get_hdr_image(framebuffer_extent);
+    auto [crosshair_mask_image, crosshair_mask_image_created] =
+      get_crosshair_mask_image(framebuffer_extent);
     auto [depth_image, depth_image_created] =
-      get_depth_image(swapchain_image->get_extent());
+      get_depth_image(framebuffer_extent);
+    auto const color_attachment_scope = graphics::Synchronization_scope{
+      .stage_mask =
+        graphics::Pipeline_stage_flag_bits::color_attachment_output,
+      .access_mask = graphics::Access_flag_bits::color_attachment_write,
+    };
+    auto const sampled_image_scope = graphics::Synchronization_scope{
+      .stage_mask = graphics::Pipeline_stage_flag_bits::fragment_shader,
+      .access_mask = graphics::Access_flag_bits::shader_sampled_read,
+    };
+    auto record_color_attachment_transition =
+      [&](rc::Strong<graphics::Image> image, bool image_created) {
+        if (image_created) {
+          work_recorder.transition_image_layout(
+            {},
+            color_attachment_scope,
+            graphics::Image_layout::undefined,
+            graphics::Image_layout::general,
+            image);
+        } else {
+          work_recorder.barrier(sampled_image_scope, color_attachment_scope);
+        }
+      };
+    record_color_attachment_transition(hdr_image, hdr_image_created);
+    record_color_attachment_transition(
+      crosshair_mask_image, crosshair_mask_image_created);
     auto const depth_scope = graphics::Synchronization_scope{
       .stage_mask = graphics::Pipeline_stage_flag_bits::early_fragment_tests |
                     graphics::Pipeline_stage_flag_bits::late_fragment_tests,
@@ -296,13 +326,15 @@ private:
         depth_scope);
     }
     work_recorder.begin_rendering({
-      .color_image = swapchain_image,
+      .color_image = hdr_image,
       .depth_image = depth_image,
+      .color_clear_value = sky_color,
     });
-    auto const [grid_pipeline, mesh_pipeline, crosshair_pipeline] =
+    auto const
+      [grid_pipeline, mesh_pipeline, crosshair_pipeline, composite_pipeline] =
       get_graphics_pipelines(swapchain_image->get_format());
-    work_recorder.set_viewport(swapchain_image->get_extent().head<2>());
-    work_recorder.set_scissor(swapchain_image->get_extent().head<2>());
+    work_recorder.set_viewport(framebuffer_size);
+    work_recorder.set_scissor(framebuffer_size);
     work_recorder.set_depth_test_enabled(true);
     work_recorder.set_depth_write_enabled(true);
     work_recorder.set_depth_compare_op(graphics::Compare_op::greater);
@@ -344,7 +376,7 @@ private:
           .push_buffer_device_address(80, _grid_mesh->get_vertex_buffer());
         work_recorder
           .push_data(88, std::as_bytes(std::span{&texture_index, 1}));
-        auto record_normal_push_constant = [&](Eigen::Vector4f const &value) {
+        auto record_normal_push_constant = [&](math::vec4 const &value) {
           work_recorder.push_data(64, std::as_bytes(std::span{&value, 1}));
         };
         record_normal_push_constant({1.0f, 0.0f, 0.0f, 0.0f});
@@ -389,18 +421,55 @@ private:
         });
       }
     }
+    work_recorder.end_rendering();
+
+    work_recorder.begin_rendering({
+      .color_image = crosshair_mask_image,
+    });
+    work_recorder.set_viewport(framebuffer_size);
+    work_recorder.set_scissor(framebuffer_size);
     work_recorder.bind_pipeline(crosshair_pipeline);
     work_recorder.set_cull_mode(graphics::Cull_mode::none);
     work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
-    work_recorder.set_depth_test_enabled(false);
-    work_recorder.set_depth_write_enabled(false);
     work_recorder
       .bind_index_buffer(_crosshair_index_buffer, graphics::Index_type::u16);
-    auto const crosshair_resolution = swapchain_image->get_extent().head<2>().eval();
-    work_recorder
-      .push_data(0, std::as_bytes(std::span{&crosshair_resolution, 1}));
+    work_recorder.push_data(0, std::as_bytes(std::span{&framebuffer_size, 1}));
     work_recorder.draw_indexed({
       .index_count = static_cast<std::uint32_t>(crosshair_indices.size()),
+      .instance_count = 1,
+      .first_index = 0,
+      .vertex_offset = 0,
+      .first_instance = 0,
+    });
+    work_recorder.end_rendering();
+
+    work_recorder.barrier(color_attachment_scope, sampled_image_scope);
+    work_recorder.transition_image_layout(
+      {},
+      color_attachment_scope,
+      graphics::Image_layout::undefined,
+      graphics::Image_layout::general,
+      swapchain_image);
+    work_recorder.begin_rendering({
+      .color_image = swapchain_image,
+    });
+    work_recorder.set_viewport(framebuffer_size);
+    work_recorder.set_scissor(framebuffer_size);
+    auto const hdr_texture_index =
+      work_recorder.upload_sampled_image_descriptor(hdr_image);
+    auto const mask_texture_index =
+      work_recorder.upload_sampled_image_descriptor(crosshair_mask_image);
+    auto const composite_push_constants =
+      std::array{hdr_texture_index, mask_texture_index};
+    work_recorder.bind_pipeline(composite_pipeline);
+    work_recorder.set_cull_mode(graphics::Cull_mode::none);
+    work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
+    work_recorder
+      .bind_index_buffer(_composite_index_buffer, graphics::Index_type::u16);
+    work_recorder.push_data(
+      0, std::as_bytes(std::span{composite_push_constants}));
+    work_recorder.draw_indexed({
+      .index_count = static_cast<std::uint32_t>(composite_indices.size()),
       .instance_count = 1,
       .first_index = 0,
       .vertex_offset = 0,
@@ -503,7 +572,40 @@ private:
   }
 
   std::pair<rc::Strong<graphics::Image>, bool>
-  get_depth_image(Eigen::Vector3i const &extent) {
+  get_hdr_image(math::ivec3 const &extent) {
+    return get_color_image(
+      _hdr_image,
+      graphics::Image_format::r16g16b16a16_sfloat,
+      extent);
+  }
+
+  std::pair<rc::Strong<graphics::Image>, bool>
+  get_crosshair_mask_image(math::ivec3 const &extent) {
+    return get_color_image(
+      _crosshair_mask_image, graphics::Image_format::r8_unorm, extent);
+  }
+
+  std::pair<rc::Strong<graphics::Image>, bool> get_color_image(
+    rc::Strong<graphics::Image> &image,
+    graphics::Image_format format,
+    math::ivec3 const &extent) {
+    auto const create_image = !image || image->get_extent() != extent;
+    if (create_image) {
+      image = _graphics.create_image({
+        .dimensionality = 2,
+        .format = format,
+        .extent = extent,
+        .mip_level_count = 1,
+        .array_layer_count = 1,
+        .usage = graphics::Image_usage_flag_bits::sampled |
+                 graphics::Image_usage_flag_bits::color_attachment,
+      });
+    }
+    return {image, create_image};
+  }
+
+  std::pair<rc::Strong<graphics::Image>, bool>
+  get_depth_image(math::ivec3 const &extent) {
     auto const create_image =
       !_depth_image || _depth_image->get_extent() != extent;
     if (create_image) {
@@ -639,22 +741,30 @@ private:
   std::tuple<
     rc::Strong<graphics::Pipeline>,
     rc::Strong<graphics::Pipeline>,
+    rc::Strong<graphics::Pipeline>,
     rc::Strong<graphics::Pipeline>>
   get_graphics_pipelines(graphics::Image_format swapchain_image_format) {
     ZoneScoped;
-    if (
-      !_pipelines_color_format ||
-      *_pipelines_color_format != swapchain_image_format) {
-      _grid_pipeline = make_grid_pipeline(swapchain_image_format);
-      _mesh_pipeline = make_mesh_pipeline(swapchain_image_format);
-      _crosshair_pipeline = make_crosshair_pipeline(swapchain_image_format);
-      _pipelines_color_format = swapchain_image_format;
+    if (!_grid_pipeline) {
+      _grid_pipeline = make_grid_pipeline();
     }
-    return {_grid_pipeline, _mesh_pipeline, _crosshair_pipeline};
+    if (!_mesh_pipeline) {
+      _mesh_pipeline = make_mesh_pipeline();
+    }
+    if (!_crosshair_pipeline) {
+      _crosshair_pipeline = make_crosshair_pipeline();
+    }
+    if (
+      !_composite_pipeline_color_format ||
+      *_composite_pipeline_color_format != swapchain_image_format) {
+      _composite_pipeline = make_composite_pipeline(swapchain_image_format);
+      _composite_pipeline_color_format = swapchain_image_format;
+    }
+    return {
+      _grid_pipeline, _mesh_pipeline, _crosshair_pipeline, _composite_pipeline};
   }
 
-  rc::Strong<graphics::Pipeline>
-  make_grid_pipeline(graphics::Image_format swapchain_image_format) {
+  rc::Strong<graphics::Pipeline> make_grid_pipeline() {
     auto const shader_stages =
       std::vector<graphics::Pipeline_shader_stage_create_info>{
         {
@@ -666,7 +776,8 @@ private:
           .shader = &_grid_fragment_shader,
         },
       };
-    auto const color_attachment_format = swapchain_image_format;
+    auto const color_attachment_format =
+      graphics::Image_format::r16g16b16a16_sfloat;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
@@ -684,8 +795,7 @@ private:
     });
   }
 
-  rc::Strong<graphics::Pipeline>
-  make_mesh_pipeline(graphics::Image_format swapchain_image_format) {
+  rc::Strong<graphics::Pipeline> make_mesh_pipeline() {
     auto const shader_stages =
       std::vector<graphics::Pipeline_shader_stage_create_info>{
         {
@@ -697,7 +807,8 @@ private:
           .shader = &_mesh_fragment_shader,
         },
       };
-    auto const color_attachment_format = swapchain_image_format;
+    auto const color_attachment_format =
+      graphics::Image_format::r16g16b16a16_sfloat;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
@@ -715,8 +826,7 @@ private:
     });
   }
 
-  rc::Strong<graphics::Pipeline>
-  make_crosshair_pipeline(graphics::Image_format swapchain_image_format) {
+  rc::Strong<graphics::Pipeline> make_crosshair_pipeline() {
     auto const shader_stages =
       std::vector<graphics::Pipeline_shader_stage_create_info>{
         {
@@ -728,6 +838,37 @@ private:
           .shader = &_crosshair_fragment_shader,
         },
       };
+    auto const color_attachment_format = graphics::Image_format::r8_unorm;
+    return _graphics.create_pipeline({
+      .shader_stages = std::span{shader_stages},
+      .input_assembly_state =
+        {
+          .primitive_topology = graphics::Primitive_topology::triangle_list,
+        },
+      .depth_state =
+        {
+          .depth_attachment_enabled = false,
+        },
+      .color_state =
+        {
+          .color_attachment_formats = {&color_attachment_format, 1},
+        },
+    });
+  }
+
+  rc::Strong<graphics::Pipeline>
+  make_composite_pipeline(graphics::Image_format swapchain_image_format) {
+    auto const shader_stages =
+      std::vector<graphics::Pipeline_shader_stage_create_info>{
+        {
+          .stage = graphics::Shader_stage_flag_bits::vertex,
+          .shader = &_composite_vertex_shader,
+        },
+        {
+          .stage = graphics::Shader_stage_flag_bits::fragment,
+          .shader = &_composite_fragment_shader,
+        },
+      };
     auto const color_attachment_format = swapchain_image_format;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
@@ -737,7 +878,7 @@ private:
         },
       .depth_state =
         {
-          .depth_attachment_enabled = true,
+          .depth_attachment_enabled = false,
         },
       .color_state =
         {
@@ -754,6 +895,8 @@ private:
   vk::UniqueSurfaceKHR _vk_surface{};
   graphics::Graphics _graphics{};
   rc::Strong<graphics::Image> _depth_image{};
+  rc::Strong<graphics::Image> _hdr_image{};
+  rc::Strong<graphics::Image> _crosshair_mask_image{};
   rc::Strong<graphics::Image> _placeholder_texture{};
   graphics::Shader _grid_vertex_shader;
   graphics::Shader _grid_fragment_shader;
@@ -761,15 +904,19 @@ private:
   graphics::Shader _mesh_fragment_shader;
   graphics::Shader _crosshair_vertex_shader;
   graphics::Shader _crosshair_fragment_shader;
+  graphics::Shader _composite_vertex_shader;
+  graphics::Shader _composite_fragment_shader;
   rc::Strong<graphics::Pipeline> _grid_pipeline{};
   rc::Strong<graphics::Pipeline> _mesh_pipeline{};
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
-  std::optional<graphics::Image_format> _pipelines_color_format{};
+  rc::Strong<graphics::Pipeline> _composite_pipeline{};
+  std::optional<graphics::Image_format> _composite_pipeline_color_format{};
   std::unique_ptr<Grid_mesh> _grid_mesh;
   std::unique_ptr<Grid_mesh> _pending_grid_mesh;
   rc::Strong<graphics::Buffer> _cube_vertex_buffer{};
   rc::Strong<graphics::Buffer> _cube_index_buffer{};
   rc::Strong<graphics::Buffer> _crosshair_index_buffer{};
+  rc::Strong<graphics::Buffer> _composite_index_buffer{};
 };
 
 Application::Application(Application_create_info const &create_info)

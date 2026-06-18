@@ -11,6 +11,7 @@
 #include "graphics/pipeline.hpp"
 #include "graphics/synchronization_scope.hpp"
 #include "graphics/work_resource.hpp"
+#include "math/vec.hpp"
 #include "rc.hpp"
 #include <optional>
 #include <vulkan/vulkan.hpp>
@@ -47,6 +48,7 @@ struct Buffer_image_copy_info {
 struct Rendering_begin_info {
   rc::Strong<Image> color_image;
   rc::Strong<Image> depth_image{};
+  math::vec4 color_clear_value{0.0f, 0.0f, 0.0f, 1.0f};
 };
 
 struct Indexed_draw_info {
