@@ -27,8 +27,7 @@ void main() {
     sampler2D(sampled_images[depth_texture_index], FPSPARTY_SAMPLER_NEAREST),
     pixel,
     0).r;
-  const float view_depth =
-    depth > 0.0f ? push_constants.z_near / depth : 1000000.0f;
+  const float view_depth = push_constants.z_near / depth;
   const vec3 fog_color = vec3(0.4196f, 0.6196f, 0.7451f);
   color = mix(
     color,
