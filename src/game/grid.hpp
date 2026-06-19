@@ -2,7 +2,6 @@
 #define FPSPARTY_GAME_GRID_HPP
 
 #include <cstddef>
-#include <cstdint>
 #include <exception>
 #include <optional>
 #include <type_traits>
@@ -13,6 +12,8 @@
 #include <math/vec.hpp>
 #include <serial/reader.hpp>
 #include <serial/writer.hpp>
+
+#include "block.hpp"
 
 namespace fpsparty::game {
 
@@ -50,32 +51,36 @@ class Chunk {
 public:
   static constexpr auto edge_length = std::size_t{4};
 
-  static constexpr auto get_bit_index(math::ivec3 offset) noexcept {
+  static constexpr auto get_block_index(math::ivec3 offset) noexcept {
     auto const i = offset.x() & (edge_length - 1);
     auto const j = offset.y() & (edge_length - 1);
     auto const k = offset.z() & (edge_length - 1);
     return k * edge_length * edge_length + j * edge_length + i;
   }
 
-  Chunk() noexcept = default;
+  constexpr Chunk() noexcept = default;
 
-  constexpr explicit Chunk(std::uint64_t blocks) noexcept : blocks{blocks} {}
+  // constexpr explicit Chunk(std::uint64_t blocks) noexcept : blocks{blocks} {}
+
+  constexpr std::pair<Block, int> get_block(math::ivec3 offset) const noexcept {
+    auto const idx = get_block_index(offset);
+    auto const byte = bytes[idx];
+    return {
+      static_cast<Block>(byte >> 2), static_cast<int>(byte & std::byte{0b11})};
+  }
+
+  constexpr void set_block(math::ivec3 offset, Block value, int data) noexcept {
+    auto const idx = get_block_index(offset);
+    bytes[idx] = (static_cast<std::byte>(value) << 2) |
+                 static_cast<std::byte>(data & 0b11);
+  }
 
   constexpr bool is_solid(math::ivec3 offset) const noexcept {
-    auto const bit_index = get_bit_index(offset);
-    return blocks & (std::uint64_t{1} << bit_index);
+    auto const idx = get_block_index(offset);
+    return static_cast<bool>(bytes[idx]);
   }
 
-  constexpr void set_solid(math::ivec3 offset, bool value) noexcept {
-    auto const bit_index = get_bit_index(offset);
-    if (value) {
-      blocks |= (std::uint64_t{1} << bit_index);
-    } else {
-      blocks &= ~(std::uint64_t{1} << bit_index);
-    }
-  }
-
-  std::uint64_t blocks{};
+  std::array<std::byte, 64> bytes{};
 
   friend constexpr bool
   operator==(Chunk const &lhs, Chunk const &rhs) noexcept = default;
@@ -196,7 +201,7 @@ public:
 
   void dump(serial::Writer &writer) const;
 
-  void fill(math::ibox3 const &cells, bool solid = true);
+  void fill(math::ibox3 const &cells, Block block, int data = 0);
 
   std::optional<Grid_raycast_hit> raycast(
     math::ivec3 origin_cell_coords,
@@ -204,9 +209,13 @@ public:
     math::vec3 ray_direction,
     float max_t) const noexcept;
 
-  std::optional<Grid_contact> find_contact(math::box3 const &box) const noexcept;
+  std::optional<Grid_contact>
+  find_contact(math::box3 const &box) const noexcept;
 
-  void set_solid(math::ivec3 cell_coords, bool solid) noexcept;
+  // returns true iff cell_coords was in bounds
+  bool set_block(math::ivec3 cell_coords, Block block, int data = 0) noexcept;
+
+  std::pair<Block, int> get_block(math::ivec3 cell_coords) const noexcept;
 
   bool is_solid(math::ivec3 cell_coords) const noexcept;
 

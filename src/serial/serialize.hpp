@@ -32,6 +32,20 @@ template <> struct Serializer<bool> {
   }
 };
 
+template <> struct Serializer<std::byte> {
+  void write(Writer &writer, std::byte value) const {
+    writer.write(std::as_bytes(std::span{&value, 1}));
+  }
+
+  std::optional<std::byte> read(Reader &reader) const {
+    std::byte value{};
+    if (!reader.read(std::as_writable_bytes(std::span{&value, 1}))) {
+      return std::nullopt;
+    }
+    return value;
+  }
+};
+
 template <std::integral T> struct Serializer<T> {
   template <std::integral U> void write(Writer &writer, U value) const {
     if (

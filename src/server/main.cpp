@@ -14,12 +14,21 @@ namespace {
 std::sig_atomic_t volatile signal_status{};
 void handle_signal(int signal) { signal_status = signal; }
 
+void set_block(
+  server::Server &server,
+  math::ivec3 const &pos,
+  game::Block block,
+  int data = 0) {
+  server.get_game().get_grid().set_block(pos, block, data);
+}
+
 void fill_blocks(
   server::Server &server,
-  Eigen::Vector3i const &min,
-  Eigen::Vector3i const &max,
-  bool solid = true) {
-  server.get_game().get_grid().fill({min, max}, solid);
+  math::ivec3 const &min,
+  math::ivec3 const &max,
+  game::Block block,
+  int data = 0) {
+  server.get_game().get_grid().fill({min, max}, block, data);
 }
 } // namespace
 
@@ -47,7 +56,11 @@ int main() {
     .tick_duration = constants::tick_duration,
   }};
   // floor
-  fill_blocks(server, {-16, 0, -16}, {15, 0, 15});
+  fill_blocks(server, {-16, 0, -16}, {15, 0, 15}, game::Block::solid);
+  // doorway
+  fill_blocks(server, {-1, 1, 0}, {-1, 3, 0}, game::Block::solid);
+  fill_blocks(server, {1, 1, 0}, {1, 3, 0}, game::Block::solid);
+  set_block(server, {0, 3, 0}, game::Block::solid);
   std::cout << "Server running on port " << net::constants::port << ".\n";
   using Clock = std::chrono::high_resolution_clock;
   using Duration = Clock::duration;

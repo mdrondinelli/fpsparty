@@ -4,13 +4,13 @@
 
 namespace {
 
-void set_solid(
-  fpsparty::game::Grid &grid, Eigen::Vector3i const &cell_coords) {
+void set_solid(fpsparty::game::Grid &grid, Eigen::Vector3i const &cell_coords) {
   grid.fill(
-    Eigen::AlignedBox3i{
+    fpsparty::math::ibox3{
       cell_coords,
       cell_coords,
-    });
+    },
+    fpsparty::game::Block::solid);
 }
 
 auto const grid_create_info = fpsparty::game::Grid_create_info{

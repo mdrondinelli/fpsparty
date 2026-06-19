@@ -13,7 +13,9 @@
 #include "player.hpp"
 
 namespace fpsparty::game {
+
 namespace {
+
 void handle_use_secondary(Grid &grid, Humanoid &humanoid) {
   auto const basis = (math::y_rotation_matrix(humanoid.curr_input_state.yaw) *
                       math::x_rotation_matrix(humanoid.curr_input_state.pitch))
@@ -32,7 +34,7 @@ void handle_use_secondary(Grid &grid, Humanoid &humanoid) {
     forward,
     constants::block_interaction_range / constants::grid_cell_stride);
   if (hit) {
-    grid.set_solid(hit->cell_coords + hit->normal, true);
+    grid.set_block(hit->cell_coords + hit->normal, Block::solid);
   }
 }
 

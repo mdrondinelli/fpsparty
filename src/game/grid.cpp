@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <bit>
 #include <cassert>
-#include <cstdint>
 #include <limits>
 
 #include <serial/serialize.hpp>
@@ -44,11 +43,14 @@ void Grid::load(serial::Reader &reader) {
       (chunk_bounds.diagonal() + math::ivec3::Ones()).eval();
     _chunks.resize(chunk_counts(0) * chunk_counts(1) * chunk_counts(2));
     for (auto &chunk : _chunks) {
-      auto const blocks = deserialize<std::uint64_t>(reader);
-      if (!blocks) {
-        throw Grid_loading_error{};
+      chunk = Chunk{};
+      for (auto &byte : chunk.bytes) {
+        auto const deserialized_byte = deserialize<std::byte>(reader);
+        if (!deserialized_byte) {
+          throw Grid_loading_error{};
+        }
+        byte = *deserialized_byte;
       }
-      chunk = Chunk{*blocks};
     }
   }
 }
@@ -57,11 +59,13 @@ void Grid::dump(serial::Writer &writer) const {
   using serial::serialize;
   serialize<math::ibox3>(writer, get_cell_bounds());
   for (auto const &chunk : _chunks) {
-    serialize<std::uint64_t>(writer, chunk.blocks);
+    for (auto const &byte : chunk.bytes) {
+      serialize<std::byte>(writer, byte);
+    }
   }
 }
 
-void Grid::fill(math::ibox3 const &cells, bool solid) {
+void Grid::fill(math::ibox3 const &cells, Block block, int data) {
   auto const bounded_cells = cells.intersection(get_cell_bounds());
   if (bounded_cells.isEmpty()) {
     return;
@@ -71,7 +75,7 @@ void Grid::fill(math::ibox3 const &cells, bool solid) {
   for (auto z = min.z(); z <= max.z(); ++z) {
     for (auto y = min.y(); y <= max.y(); ++y) {
       for (auto x = min.x(); x <= max.x(); ++x) {
-        set_solid({x, y, z}, solid);
+        set_block({x, y, z}, block, data);
       }
     }
   }
@@ -198,39 +202,52 @@ Grid::find_contact(math::box3 const &box) const noexcept {
                 };
               } else {
                 auto const also_resolves_result_contact = [&] {
-                  if (normal.x() < 0 && result->cell_coords.x() >= cell_coords.x()) {
+                  if (
+                    normal.x() < 0 &&
+                    result->cell_coords.x() >= cell_coords.x()) {
                     return true;
                   }
-                  if (normal.y() < 0 && result->cell_coords.y() >= cell_coords.y()) {
+                  if (
+                    normal.y() < 0 &&
+                    result->cell_coords.y() >= cell_coords.y()) {
                     return true;
                   }
-                  if (normal.z() < 0 && result->cell_coords.z() >= cell_coords.z()) {
+                  if (
+                    normal.z() < 0 &&
+                    result->cell_coords.z() >= cell_coords.z()) {
                     return true;
                   }
-                  if (normal.x() > 0 && result->cell_coords.x() <= cell_coords.x()) {
+                  if (
+                    normal.x() > 0 &&
+                    result->cell_coords.x() <= cell_coords.x()) {
                     return true;
                   }
-                  if (normal.y() > 0 && result->cell_coords.y() <= cell_coords.y()) {
+                  if (
+                    normal.y() > 0 &&
+                    result->cell_coords.y() <= cell_coords.y()) {
                     return true;
                   }
-                  if (normal.z() > 0 && result->cell_coords.z() <= cell_coords.z()) {
+                  if (
+                    normal.z() > 0 &&
+                    result->cell_coords.z() <= cell_coords.z()) {
                     return true;
                   }
                   return false;
                   /*
-                  // apply this contact to the untouched box to get the separated box
-                  auto const separated_box = math::box3{
-                    box.min() - separation * normal.cast<f32>(),
-                    box.max() - separation * normal.cast<f32>(),
+                  // apply this contact to the untouched box to get the
+                separated box auto const separated_box = math::box3{ box.min() -
+                separation * normal.cast<f32>(), box.max() - separation *
+                normal.cast<f32>(),
                   };
-                  // find the bounds of the current result contact's originating cell
-                  auto const result_cell_box = math::box3{
+                  // find the bounds of the current result contact's originating
+                cell auto const result_cell_box = math::box3{
                     result->cell_coords.cast<f32>(),
                     (result->cell_coords + math::ivec3::Ones()).cast<f32>(),
                   };
                 auto const intersection =
                   separated_box.intersection(result_cell_box);
-                  return !intersection.isEmpty() && intersection.volume() > 0.0f;
+                  return !intersection.isEmpty() && intersection.volume() >
+                0.0f;
                   */
                 }();
                 if (also_resolves_result_contact) {
@@ -264,14 +281,25 @@ Grid::find_contact(math::box3 const &box) const noexcept {
   return result;
 }
 
-void Grid::set_solid(math::ivec3 cell_coords, bool solid) noexcept {
+bool Grid::set_block(math::ivec3 cell_coords, Block block, int data) noexcept {
   if (!bounds_check_cell(cell_coords)) {
-    return;
+    return false;
   }
   auto const chunk_coords = cell_to_chunk(cell_coords);
   auto const cell_base = chunk_to_cell(chunk_coords);
   auto const cell_offset = (cell_coords - cell_base).eval();
-  get_chunk_unsafe(chunk_coords)->set_solid(cell_offset, solid);
+  get_chunk_unsafe(chunk_coords)->set_block(cell_offset, block, data);
+  return true;
+}
+
+std::pair<Block, int> Grid::get_block(math::ivec3 cell_coords) const noexcept {
+  if (!bounds_check_cell(cell_coords)) {
+    return {Block::air, 0};
+  }
+  auto const chunk_coords = cell_to_chunk(cell_coords);
+  auto const cell_base = chunk_to_cell(chunk_coords);
+  auto const cell_offset = (cell_coords - cell_base).eval();
+  return get_chunk_unsafe(chunk_coords)->get_block(cell_offset);
 }
 
 bool Grid::is_solid(math::ivec3 cell_coords) const noexcept {

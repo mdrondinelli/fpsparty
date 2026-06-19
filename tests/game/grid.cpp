@@ -15,14 +15,13 @@ namespace serial = fpsparty::serial;
 auto const straddling_bounds =
   math::ibox3{math::ivec3{-8, -8, -8}, math::ivec3{7, 7, 7}};
 
-game::Grid make_grid() {
-  return game::Grid{{.bounds = straddling_bounds}};
-}
+game::Grid make_grid() { return game::Grid{{.bounds = straddling_bounds}}; }
 
 } // namespace
 
 TEST_CASE("Grid cell_to_chunk floors toward negative infinity") {
-  CHECK(game::Grid::cell_to_chunk(math::ivec3{0, 3, 4}) == math::ivec3{0, 0, 1});
+  CHECK(
+    game::Grid::cell_to_chunk(math::ivec3{0, 3, 4}) == math::ivec3{0, 0, 1});
   CHECK(
     game::Grid::cell_to_chunk(math::ivec3{-1, -4, -5}) ==
     math::ivec3{-1, -1, -2});
@@ -37,8 +36,8 @@ TEST_CASE("Grid chunk_to_cell returns the chunk's origin cell") {
 
 TEST_CASE("Grid stores and reports solidity at negative coordinates") {
   auto grid = make_grid();
-  grid.set_solid({-8, -8, -8}, true);
-  grid.set_solid({-1, 0, 3}, true);
+  grid.set_block({-8, -8, -8}, game::Block::solid);
+  grid.set_block({-1, 0, 3}, game::Block::solid);
   CHECK(grid.is_solid({-8, -8, -8}));
   CHECK(grid.is_solid({-1, 0, 3}));
   CHECK_FALSE(grid.is_solid({-7, -8, -8}));
@@ -54,14 +53,16 @@ TEST_CASE("Grid bounds are inclusive at both corners") {
 
 TEST_CASE("Grid treats out-of-bounds writes and reads as non-solid") {
   auto grid = make_grid();
-  grid.set_solid({8, 0, 0}, true);
+  grid.set_block({8, 0, 0}, game::Block::solid);
   CHECK_FALSE(grid.is_solid({8, 0, 0}));
   CHECK_FALSE(grid.is_solid({-9, 0, 0}));
 }
 
 TEST_CASE("Grid fill sets every cell in an inclusive box") {
   auto grid = make_grid();
-  grid.fill(math::ibox3{math::ivec3{-2, -2, -2}, math::ivec3{0, 0, 0}});
+  grid.fill(
+    math::ibox3{math::ivec3{-2, -2, -2}, math::ivec3{0, 0, 0}},
+    game::Block::solid);
   CHECK(grid.is_solid({-2, -2, -2}));
   CHECK(grid.is_solid({0, 0, 0}));
   CHECK_FALSE(grid.is_solid({1, 0, 0}));
@@ -70,7 +71,9 @@ TEST_CASE("Grid fill sets every cell in an inclusive box") {
 
 TEST_CASE("Grid fill clamps to the grid bounds") {
   auto grid = make_grid();
-  grid.fill(math::ibox3{math::ivec3{5, 5, 5}, math::ivec3{100, 100, 100}});
+  grid.fill(
+    math::ibox3{math::ivec3{5, 5, 5}, math::ivec3{100, 100, 100}},
+    game::Block::solid);
   CHECK(grid.is_solid({7, 7, 7}));
   CHECK(grid.is_solid({5, 5, 5}));
 }
@@ -96,8 +99,8 @@ TEST_CASE("Default-constructed grid is empty and iterates no chunks") {
 
 TEST_CASE("Grid survives a serialization round-trip") {
   auto original = make_grid();
-  original.set_solid({-8, -8, -8}, true);
-  original.set_solid({7, 7, 7}, true);
+  original.set_block({-8, -8, -8}, game::Block::solid);
+  original.set_block({7, 7, 7}, game::Block::solid);
   auto buffer = std::array<std::byte, 4096>{};
   auto writer = serial::Span_writer{buffer};
   original.dump(writer);
@@ -121,7 +124,7 @@ TEST_CASE("Grid diff distinguishes bounds and cell contents") {
   }
   SECTION("differing cells differ") {
     auto other = make_grid();
-    other.set_solid({0, 0, 0}, true);
+    other.set_block({0, 0, 0}, game::Block::solid);
     CHECK(game::Grid::diff(base, other));
   }
 }
