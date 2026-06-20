@@ -3,6 +3,7 @@
 #include "grid.glsl"
 
 layout(location = 0) out vec3 out_world_space_position;
+layout(location = 1) flat out uint out_texture_index;
 
 void main() {
   Vertex vertex = push_constants.vertex_buffer.vertices[gl_VertexIndex];
@@ -12,4 +13,5 @@ void main() {
     push_constants.view_projection_matrix * 
     vec4(position + push_constants.normal.xyz * push_constants.normal.w, 1.0);
   out_world_space_position = position;
+  out_texture_index = vertex.texture_index;
 }

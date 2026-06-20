@@ -22,14 +22,18 @@ void append_face(
   Chunk_geometry &result,
   game::Axis axis,
   Sign sign,
-  std::array<Eigen::Vector3f, 4> const &positions) {
+  std::array<math::vec3, 4> const &positions,
+  std::uint32_t texture_index) {
   auto const axis_index = static_cast<int>(axis);
   auto const side_index = sign_index(sign);
   auto &vertices = result.vertices[axis_index][side_index];
   auto &indices = result.indices[axis_index][side_index];
   auto const first_index = static_cast<std::uint32_t>(vertices.size());
   for (auto const &position : positions) {
-    vertices.push_back({.position = position});
+    vertices.push_back({
+        .position = position,
+        .texture_index = texture_index,
+    });
   }
   indices.append_range(
     std::array<std::uint32_t, 6>{
@@ -49,24 +53,27 @@ void append_solid_cell_faces(
   auto const min =
     (cell_coords.cast<float>() * game::constants::grid_cell_stride).eval();
   auto const max =
-    (min + Eigen::Vector3f::Constant(game::constants::grid_cell_stride)).eval();
+    (min + math::vec3::Constant(game::constants::grid_cell_stride)).eval();
   auto const x0 = min.x();
   auto const y0 = min.y();
   auto const z0 = min.z();
   auto const x1 = max.x();
   auto const y1 = max.y();
   auto const z1 = max.z();
+  auto const texture_index = 
+      static_cast<std::uint32_t>(grid.get_block(cell_coords).first) - 1;
   if (!grid.is_solid(cell_coords + math::ivec3{1, 0, 0})) {
     append_face(
       result,
       game::Axis::x,
       Sign::positive,
       {
-        Eigen::Vector3f{x1, y0, z0},
-        Eigen::Vector3f{x1, y1, z0},
-        Eigen::Vector3f{x1, y1, z1},
-        Eigen::Vector3f{x1, y0, z1},
-      });
+        math::vec3{x1, y0, z0},
+        math::vec3{x1, y1, z0},
+        math::vec3{x1, y1, z1},
+        math::vec3{x1, y0, z1},
+      },
+      texture_index);
   }
   if (!grid.is_solid(cell_coords - math::ivec3{1, 0, 0})) {
     append_face(
@@ -74,11 +81,12 @@ void append_solid_cell_faces(
       game::Axis::x,
       Sign::negative,
       {
-        Eigen::Vector3f{x0, y0, z0},
-        Eigen::Vector3f{x0, y0, z1},
-        Eigen::Vector3f{x0, y1, z1},
-        Eigen::Vector3f{x0, y1, z0},
-      });
+        math::vec3{x0, y0, z0},
+        math::vec3{x0, y0, z1},
+        math::vec3{x0, y1, z1},
+        math::vec3{x0, y1, z0},
+      },
+      texture_index);
   }
   if (!grid.is_solid(cell_coords + math::ivec3{0, 1, 0})) {
     append_face(
@@ -86,11 +94,12 @@ void append_solid_cell_faces(
       game::Axis::y,
       Sign::positive,
       {
-        Eigen::Vector3f{x0, y1, z0},
-        Eigen::Vector3f{x0, y1, z1},
-        Eigen::Vector3f{x1, y1, z1},
-        Eigen::Vector3f{x1, y1, z0},
-      });
+        math::vec3{x0, y1, z0},
+        math::vec3{x0, y1, z1},
+        math::vec3{x1, y1, z1},
+        math::vec3{x1, y1, z0},
+      },
+      texture_index);
   }
   if (!grid.is_solid(cell_coords - math::ivec3{0, 1, 0})) {
     append_face(
@@ -98,11 +107,12 @@ void append_solid_cell_faces(
       game::Axis::y,
       Sign::negative,
       {
-        Eigen::Vector3f{x0, y0, z0},
-        Eigen::Vector3f{x1, y0, z0},
-        Eigen::Vector3f{x1, y0, z1},
-        Eigen::Vector3f{x0, y0, z1},
-      });
+        math::vec3{x0, y0, z0},
+        math::vec3{x1, y0, z0},
+        math::vec3{x1, y0, z1},
+        math::vec3{x0, y0, z1},
+      },
+      texture_index);
   }
   if (!grid.is_solid(cell_coords + math::ivec3{0, 0, 1})) {
     append_face(
@@ -110,11 +120,12 @@ void append_solid_cell_faces(
       game::Axis::z,
       Sign::positive,
       {
-        Eigen::Vector3f{x0, y0, z1},
-        Eigen::Vector3f{x1, y0, z1},
-        Eigen::Vector3f{x1, y1, z1},
-        Eigen::Vector3f{x0, y1, z1},
-      });
+        math::vec3{x0, y0, z1},
+        math::vec3{x1, y0, z1},
+        math::vec3{x1, y1, z1},
+        math::vec3{x0, y1, z1},
+      },
+      texture_index);
   }
   if (!grid.is_solid(cell_coords - math::ivec3{0, 0, 1})) {
     append_face(
@@ -122,16 +133,17 @@ void append_solid_cell_faces(
       game::Axis::z,
       Sign::negative,
       {
-        Eigen::Vector3f{x0, y0, z0},
-        Eigen::Vector3f{x0, y1, z0},
-        Eigen::Vector3f{x1, y1, z0},
-        Eigen::Vector3f{x1, y0, z0},
-      });
+        math::vec3{x0, y0, z0},
+        math::vec3{x0, y1, z0},
+        math::vec3{x1, y1, z0},
+        math::vec3{x1, y0, z0},
+      },
+      texture_index);
   }
 }
 
 Chunk_geometry generate_chunk_geometry(
-  Eigen::Vector3i const &chunk_coords,
+  math::ivec3 chunk_coords,
   game::Chunk const &chunk,
   game::Grid const &grid) {
   auto result = Chunk_geometry{};
@@ -199,14 +211,15 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
     auto const staging_buffer_memory = staging_buffer->map();
     auto staging_buffer_writer =
       serial::Span_writer{staging_buffer_memory.get()};
+    auto const vertex_buffer_offset = staging_buffer_writer.offset();
     staging_buffer_writer.write(std::as_bytes(std::span{vertices}));
+    auto const index_buffer_offset = staging_buffer_writer.offset();
     staging_buffer_writer.write(std::as_bytes(std::span{indices}));
-    auto const staging_buffer_draw_buffer_offset =
-      staging_buffer_writer.offset();
+    auto const draw_buffer_offset = staging_buffer_writer.offset();
     for (auto axis = 0; axis != 3; ++axis) {
       for (auto sign = 0; sign != 2; ++sign) {
         _draw_infos[axis][sign].offset =
-          staging_buffer_writer.offset() - staging_buffer_draw_buffer_offset;
+          staging_buffer_writer.offset() - draw_buffer_offset;
         _draw_infos[axis][sign].draw_count = draw_infos[axis][sign].size();
         staging_buffer_writer
           .write(std::as_bytes(std::span{draw_infos[axis][sign]}));
@@ -228,7 +241,7 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
       staging_buffer,
       _vertex_buffer,
       {
-        .src_offset = 0,
+        .src_offset = vertex_buffer_offset,
         .dst_offset = 0,
         .size = vertex_buffer_size,
       });
@@ -236,7 +249,7 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
       staging_buffer,
       _index_buffer,
       {
-        .src_offset = vertex_buffer_size,
+        .src_offset = index_buffer_offset,
         .dst_offset = 0,
         .size = index_buffer_size,
       });
@@ -244,7 +257,7 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
       staging_buffer,
       _draw_buffer,
       {
-        .src_offset = staging_buffer_draw_buffer_offset,
+        .src_offset = draw_buffer_offset,
         .dst_offset = 0,
         .size = draw_buffer_size,
       });

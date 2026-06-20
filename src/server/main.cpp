@@ -56,11 +56,11 @@ int main() {
     .tick_duration = constants::tick_duration,
   }};
   // floor
-  fill_blocks(server, {-16, 0, -16}, {15, 0, 15}, game::Block::solid);
+  fill_blocks(server, {-16, 0, -16}, {15, 0, 15}, game::Block::dirt);
   // doorway
-  fill_blocks(server, {-1, 1, 0}, {-1, 3, 0}, game::Block::solid);
-  fill_blocks(server, {1, 1, 0}, {1, 3, 0}, game::Block::solid);
-  set_block(server, {0, 3, 0}, game::Block::solid);
+  fill_blocks(server, {-1, 1, 1}, {-1, 3, 1}, game::Block::solid);
+  fill_blocks(server, {1, 1, 1}, {1, 3, 1}, game::Block::solid);
+  set_block(server, {0, 3, 1}, game::Block::solid);
   std::cout << "Server running on port " << net::constants::port << ".\n";
   using Clock = std::chrono::high_resolution_clock;
   using Duration = Clock::duration;

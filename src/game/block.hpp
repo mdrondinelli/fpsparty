@@ -2,7 +2,7 @@
 #define FPSPARTY_GAME_BLOCK_HPP
 
 namespace fpsparty::game {
-  enum class Block { air, solid, conveyor };
+  enum class Block { air, solid, dirt, conveyor };
 }
 
 #endif

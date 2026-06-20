@@ -128,7 +128,8 @@ auto const cube_mesh_indices = std::vector<std::uint16_t>{
   21,
 };
 
-auto const crosshair_indices = std::array<std::uint16_t, 12>{0, 1, 2, 2, 1, 3, 4, 5, 6, 6, 5, 7};
+auto const crosshair_indices =
+  std::array<std::uint16_t, 12>{0, 1, 2, 2, 1, 3, 4, 5, 6, 6, 5, 7};
 auto const composite_indices = std::array<std::uint16_t, 3>{0, 1, 2};
 auto const sky_color = math::vec4{0.4196f, 0.6196f, 0.7451f, 1.0f};
 auto constexpr z_near = 0.1f;
@@ -215,6 +216,10 @@ public:
     std::cout << "Uploaded composite index buffer.\n";
     _placeholder_texture = upload_texture("./assets/textures/placeholder.ppm");
     std::cout << "Uploaded placeholder texture.\n";
+    _dirt_texture = upload_texture("./assets/textures/dirt.ppm");
+    std::cout << "Uploaded dirt texture.\n";
+    _conveyor_texture = upload_texture("./assets/textures/conveyor.ppm");
+    std::cout << "Uploaded conveyor texture.\n";
   }
 
   ~Impl() {
@@ -286,8 +291,7 @@ private:
     auto [depth_image, depth_image_created] =
       get_depth_image(framebuffer_extent);
     auto const color_attachment_scope = graphics::Synchronization_scope{
-      .stage_mask =
-        graphics::Pipeline_stage_flag_bits::color_attachment_output,
+      .stage_mask = graphics::Pipeline_stage_flag_bits::color_attachment_output,
       .access_mask = graphics::Access_flag_bits::color_attachment_write,
     };
     auto const sampled_image_scope = graphics::Synchronization_scope{
@@ -333,7 +337,7 @@ private:
     });
     auto const
       [grid_pipeline, mesh_pipeline, crosshair_pipeline, composite_pipeline] =
-      get_graphics_pipelines(swapchain_image->get_format());
+        get_graphics_pipelines(swapchain_image->get_format());
     work_recorder.set_viewport(framebuffer_size);
     work_recorder.set_scissor(framebuffer_size);
     work_recorder.set_depth_test_enabled(true);
@@ -352,7 +356,7 @@ private:
          math::y_rotation_matrix(-_local_player->input_state.yaw) *
          math::translation_matrix(-camera->position))
           .eval();
-      auto const zoom = 1.5f;
+      auto const zoom = 1.25f;
       auto const aspect_ratio =
         static_cast<float>(swapchain_image->get_extent().x()) /
         static_cast<float>(swapchain_image->get_extent().y());
@@ -364,8 +368,17 @@ private:
         (projection_matrix * view_matrix).eval();
       // draw grid
       if (_grid_mesh && _grid_mesh->is_uploaded()) {
-        auto const texture_index =
+        auto const placeholder_texture_index =
           work_recorder.upload_sampled_image_descriptor(_placeholder_texture);
+        auto const dirt_texture_index =
+          work_recorder.upload_sampled_image_descriptor(_dirt_texture);
+        auto const conveyor_texture_index =
+          work_recorder.upload_sampled_image_descriptor(_conveyor_texture);
+        auto const texture_indices = std::array<std::uint32_t, 3>{
+          placeholder_texture_index,
+          dirt_texture_index,
+          conveyor_texture_index,
+        };
         work_recorder.bind_pipeline(grid_pipeline);
         work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
         work_recorder.set_cull_mode(graphics::Cull_mode::back);
@@ -375,22 +388,24 @@ private:
           .push_data(0, std::as_bytes(std::span{&view_projection_matrix, 1}));
         work_recorder
           .push_buffer_device_address(80, _grid_mesh->get_vertex_buffer());
-        work_recorder
-          .push_data(88, std::as_bytes(std::span{&texture_index, 1}));
-        auto record_normal_push_constant = [&](math::vec4 const &value) {
+        work_recorder.push_data(
+          88,
+          std::as_bytes(
+            std::span{texture_indices.data(), texture_indices.size()}));
+        auto push_normal = [&](math::vec4 const &value) {
           work_recorder.push_data(64, std::as_bytes(std::span{&value, 1}));
         };
-        record_normal_push_constant({1.0f, 0.0f, 0.0f, 0.0f});
+        push_normal({1.0f, 0.0f, 0.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, game::Axis::x, Sign::positive);
-        record_normal_push_constant({-1.0f, 0.0f, 0.0f, 0.0f});
+        push_normal({-1.0f, 0.0f, 0.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, game::Axis::x, Sign::negative);
-        record_normal_push_constant({0.0f, 1.0f, 0.0f, 0.0f});
+        push_normal({0.0f, 1.0f, 0.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, game::Axis::y, Sign::positive);
-        record_normal_push_constant({0.0f, -1.0f, 0.0f, 0.0f});
+        push_normal({0.0f, -1.0f, 0.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, game::Axis::y, Sign::negative);
-        record_normal_push_constant({0.0f, 0.0f, 1.0f, 0.0f});
+        push_normal({0.0f, 0.0f, 1.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, game::Axis::z, Sign::positive);
-        record_normal_push_constant({0.0f, 0.0f, -1.0f, 0.0f});
+        push_normal({0.0f, 0.0f, -1.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, game::Axis::z, Sign::negative);
       }
       // draw cubes
@@ -474,8 +489,8 @@ private:
     work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
     work_recorder
       .bind_index_buffer(_composite_index_buffer, graphics::Index_type::u16);
-    work_recorder.push_data(
-      0, std::as_bytes(std::span{&composite_push_constants, 1}));
+    work_recorder
+      .push_data(0, std::as_bytes(std::span{&composite_push_constants, 1}));
     work_recorder.draw_indexed({
       .index_count = static_cast<std::uint32_t>(composite_indices.size()),
       .instance_count = 1,
@@ -582,9 +597,7 @@ private:
   std::pair<rc::Strong<graphics::Image>, bool>
   get_albedo_image(math::ivec3 const &extent) {
     return get_color_image(
-      _albedo_image,
-      graphics::Image_format::b8g8r8a8_srgb,
-      extent);
+      _albedo_image, graphics::Image_format::b8g8r8a8_srgb, extent);
   }
 
   std::pair<rc::Strong<graphics::Image>, bool>
@@ -785,8 +798,7 @@ private:
           .shader = &_grid_fragment_shader,
         },
       };
-    auto const color_attachment_format =
-      graphics::Image_format::b8g8r8a8_srgb;
+    auto const color_attachment_format = graphics::Image_format::b8g8r8a8_srgb;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
@@ -816,8 +828,7 @@ private:
           .shader = &_mesh_fragment_shader,
         },
       };
-    auto const color_attachment_format =
-      graphics::Image_format::b8g8r8a8_srgb;
+    auto const color_attachment_format = graphics::Image_format::b8g8r8a8_srgb;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
@@ -907,6 +918,8 @@ private:
   rc::Strong<graphics::Image> _albedo_image{};
   rc::Strong<graphics::Image> _crosshair_mask_image{};
   rc::Strong<graphics::Image> _placeholder_texture{};
+  rc::Strong<graphics::Image> _dirt_texture{};
+  rc::Strong<graphics::Image> _conveyor_texture{};
   graphics::Shader _grid_vertex_shader;
   graphics::Shader _grid_fragment_shader;
   graphics::Shader _mesh_vertex_shader;

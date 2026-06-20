@@ -3,32 +3,44 @@
 #include "grid.glsl"
 
 layout(location = 0) in vec3 in_world_space_position;
+layout(location = 1) flat in uint in_texture_index;
 
 layout(location = 0) out vec4 out_color;
 
 void main() {
-  const uint texture_index = nonuniformEXT(push_constants.texture_index);
+  const uint texture_index = nonuniformEXT(
+      push_constants.texture_indices[in_texture_index]);
   const vec3 normal = push_constants.normal.xyz;
   vec2 texture_coordinates;
   if (abs(normal.x) > 0.5f) {
     if (normal.x > 0.0f) {
       texture_coordinates = vec2(
         1.0f - in_world_space_position.z,
-        in_world_space_position.y);
+        1.0f - in_world_space_position.y);
     } else {
       texture_coordinates = vec2(
         in_world_space_position.z,
-        in_world_space_position.y);
+        1.0f - in_world_space_position.y);
     }
   } else if (abs(normal.y) > 0.5f) {
-    texture_coordinates = vec2(1.0f, 1.0f) - in_world_space_position.xz;
+    if (normal.y > 0.0f) {
+      texture_coordinates = vec2(
+          1.0f - in_world_space_position.x,
+          1.0f - in_world_space_position.z);
+    } else {
+      texture_coordinates = vec2(
+          in_world_space_position.x,
+          1.0f - in_world_space_position.z);
+    }
   } else {
     if (normal.z > 0.0f) {
-      texture_coordinates = in_world_space_position.xy;
+      texture_coordinates = vec2(
+        in_world_space_position.x,
+        1.0f - in_world_space_position.y);
     } else {
       texture_coordinates = vec2(
         1.0f - in_world_space_position.x,
-        in_world_space_position.y);
+        1.0f - in_world_space_position.y);
     }
   }
   const ivec2 tex_size = textureSize(

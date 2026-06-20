@@ -29,10 +29,12 @@ void main() {
     0).r;
   const float view_depth = push_constants.z_near / depth;
   const vec3 fog_color = vec3(0.4196f, 0.6196f, 0.7451f);
+  /*
   color = mix(
     color,
     fog_color,
-    1.0f - pow(1.0f - 0.125f, view_depth));
+    1.0f - pow(15.0f / 16.0f, view_depth));
+  */
   const float mask = texelFetch(
     sampler2D(sampled_images[mask_texture_index], FPSPARTY_SAMPLER_NEAREST),
     pixel,
