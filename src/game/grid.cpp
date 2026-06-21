@@ -9,6 +9,30 @@
 
 namespace fpsparty::game {
 
+namespace {
+
+struct Contact_constraint {
+  math::ivec3 cell_coords{};
+  math::ivec3 normal{};
+  float penetration{-std::numeric_limits<f32>::infinity()};
+};
+
+void update_contact_constraint(
+  Contact_constraint &constraint,
+  math::ivec3 cell_coords,
+  math::ivec3 normal,
+  float penetration) noexcept {
+  if (penetration > constraint.penetration) {
+    constraint = Contact_constraint{
+      .cell_coords = cell_coords,
+      .normal = normal,
+      .penetration = penetration,
+    };
+  }
+}
+
+} // namespace
+
 bool Grid::diff(Grid const &lhs, Grid const &rhs) {
   if (
     lhs.get_cell_bounds().min() != rhs.get_cell_bounds().min() ||
@@ -147,7 +171,12 @@ Grid::find_contact(math::box3 const &box) const noexcept {
   auto const touched_cells = Grid::world_to_cell(box);
   auto const &touched_min = touched_cells.min();
   auto const &touched_max = touched_cells.max();
-  auto result = std::optional<Grid_contact>{};
+  auto pos_x_constraint = Contact_constraint{};
+  auto pos_y_constraint = Contact_constraint{};
+  auto pos_z_constraint = Contact_constraint{};
+  auto neg_x_constraint = Contact_constraint{};
+  auto neg_y_constraint = Contact_constraint{};
+  auto neg_z_constraint = Contact_constraint{};
   for (auto z = touched_min.z(); z <= touched_max.z(); ++z) {
     for (auto y = touched_min.y(); y <= touched_max.y(); ++y) {
       for (auto x = touched_min.x(); x <= touched_max.x(); ++x) {
@@ -157,127 +186,77 @@ Grid::find_contact(math::box3 const &box) const noexcept {
             cell_coords.cast<f32>(),
             (cell_coords + math::ivec3::Ones()).cast<f32>(),
           };
-          auto const pos_x_solid = is_solid({x + 1, y, z});
-          auto const pos_y_solid = is_solid({x, y + 1, z});
-          auto const pos_z_solid = is_solid({x, y, z + 1});
-          auto const neg_x_solid = is_solid({x - 1, y, z});
-          auto const neg_y_solid = is_solid({x, y - 1, z});
-          auto const neg_z_solid = is_solid({x, y, z - 1});
           auto const pos = (cell_box.max() - box.min()).eval();
           auto const neg = (box.max() - cell_box.min()).eval();
           auto normal = math::ivec3::Zero().eval();
           auto penetration = std::numeric_limits<f32>::infinity();
-          if (!pos_x_solid && pos.x() >= 0.0f && pos.x() < penetration) {
+          if (pos.x() < penetration) {
             normal = math::ivec3::UnitX();
             penetration = pos.x();
           }
-          if (!pos_y_solid && pos.y() >= 0.0f && pos.y() < penetration) {
+          if (pos.y() < penetration) {
             normal = math::ivec3::UnitY();
             penetration = pos.y();
           }
-          if (!pos_z_solid && pos.z() >= 0.0f && pos.z() < penetration) {
+          if (pos.z() < penetration) {
             normal = math::ivec3::UnitZ();
             penetration = pos.z();
           }
-          if (!neg_x_solid && neg.x() >= 0.0f && neg.x() < penetration) {
+          if (neg.x() < penetration) {
             normal = -math::ivec3::UnitX();
             penetration = neg.x();
           }
-          if (!neg_y_solid && neg.y() >= 0.0f && neg.y() < penetration) {
+          if (neg.y() < penetration) {
             normal = -math::ivec3::UnitY();
             penetration = neg.y();
           }
-          if (!neg_z_solid && neg.z() >= 0.0f && neg.z() < penetration) {
+          if (neg.z() < penetration) {
             normal = -math::ivec3::UnitZ();
             penetration = neg.z();
           }
-          if (!normal.isZero()) {
-            auto const separation = -penetration;
-            if (separation < 0.0f) {
-              if (!result) {
-                result = Grid_contact{
-                  .cell_coords = cell_coords,
-                  .normal = normal,
-                  .separation = separation,
-                };
-              } else {
-                auto const also_resolves_result_contact = [&] {
-                  if (
-                    normal.x() < 0 &&
-                    result->cell_coords.x() >= cell_coords.x()) {
-                    return true;
-                  }
-                  if (
-                    normal.y() < 0 &&
-                    result->cell_coords.y() >= cell_coords.y()) {
-                    return true;
-                  }
-                  if (
-                    normal.z() < 0 &&
-                    result->cell_coords.z() >= cell_coords.z()) {
-                    return true;
-                  }
-                  if (
-                    normal.x() > 0 &&
-                    result->cell_coords.x() <= cell_coords.x()) {
-                    return true;
-                  }
-                  if (
-                    normal.y() > 0 &&
-                    result->cell_coords.y() <= cell_coords.y()) {
-                    return true;
-                  }
-                  if (
-                    normal.z() > 0 &&
-                    result->cell_coords.z() <= cell_coords.z()) {
-                    return true;
-                  }
-                  return false;
-                  /*
-                  // apply this contact to the untouched box to get the
-                separated box auto const separated_box = math::box3{ box.min() -
-                separation * normal.cast<f32>(), box.max() - separation *
-                normal.cast<f32>(),
-                  };
-                  // find the bounds of the current result contact's originating
-                cell auto const result_cell_box = math::box3{
-                    result->cell_coords.cast<f32>(),
-                    (result->cell_coords + math::ivec3::Ones()).cast<f32>(),
-                  };
-                auto const intersection =
-                  separated_box.intersection(result_cell_box);
-                  return !intersection.isEmpty() && intersection.volume() >
-                0.0f;
-                  */
-                }();
-                if (also_resolves_result_contact) {
-                  // separated box does not intersect current result cell ->
-                  // take least penetrated / most separated contact
-                  if (separation > result->separation) {
-                    result = Grid_contact{
-                      .cell_coords = cell_coords,
-                      .normal = normal,
-                      .separation = separation,
-                    };
-                  }
-                } else {
-                  // separated box intersects current result cell ->
-                  // take most penetrated / least separated contact
-                  if (separation < result->separation) {
-                    result = Grid_contact{
-                      .cell_coords = cell_coords,
-                      .normal = normal,
-                      .separation = separation,
-                    };
-                  }
-                }
-              }
-            }
+          if (normal == math::ivec3::UnitX()) {
+            update_contact_constraint(
+              pos_x_constraint, cell_coords, normal, penetration);
+          } else if (normal == math::ivec3::UnitY()) {
+            update_contact_constraint(
+              pos_y_constraint, cell_coords, normal, penetration);
+          } else if (normal == math::ivec3::UnitZ()) {
+            update_contact_constraint(
+              pos_z_constraint, cell_coords, normal, penetration);
+          } else if (normal == -math::ivec3::UnitX()) {
+            update_contact_constraint(
+              neg_x_constraint, cell_coords, normal, penetration);
+          } else if (normal == -math::ivec3::UnitY()) {
+            update_contact_constraint(
+              neg_y_constraint, cell_coords, normal, penetration);
+          } else if (normal == -math::ivec3::UnitZ()) {
+            update_contact_constraint(
+              neg_z_constraint, cell_coords, normal, penetration);
           }
         }
       }
     }
   }
+  auto result = std::optional<Grid_contact>{};
+  auto const update_result = [&](Contact_constraint const &constraint) {
+    if (constraint.penetration < 0.0f) {
+      return;
+    }
+    auto const separation = -constraint.penetration;
+    if (!result || separation < result->separation) {
+      result = Grid_contact{
+        .cell_coords = constraint.cell_coords,
+        .normal = constraint.normal,
+        .separation = separation,
+      };
+    }
+  };
+  update_result(pos_x_constraint);
+  update_result(pos_y_constraint);
+  update_result(pos_z_constraint);
+  update_result(neg_x_constraint);
+  update_result(neg_y_constraint);
+  update_result(neg_z_constraint);
   return result;
 }
 

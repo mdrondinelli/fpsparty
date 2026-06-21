@@ -78,6 +78,22 @@ TEST_CASE("Grid fill clamps to the grid bounds") {
   CHECK(grid.is_solid({5, 5, 5}));
 }
 
+TEST_CASE("Grid contact ignores blocks that only touch the box edge") {
+  auto grid = make_grid();
+  grid.fill(
+    math::ibox3{math::ivec3{-8, -1, -8}, math::ivec3{7, -1, 7}},
+    game::Block::placeholder);
+  grid.set_block({1, 0, 0}, game::Block::placeholder);
+
+  auto const contact = grid.find_contact(
+    math::box3{
+      math::vec3{2.0f, -0.01f, -0.01f}, math::vec3{2.7f, 1.79f, 0.69f}});
+
+  REQUIRE(contact);
+  CHECK(contact->normal == math::ivec3::UnitY());
+  CHECK(contact->cell_coords.y() == -1);
+}
+
 TEST_CASE("Grid reports cell and chunk extents spanning negative bounds") {
   auto const grid = make_grid();
   CHECK(grid.get_cell_counts() == math::ivec3{16, 16, 16});
