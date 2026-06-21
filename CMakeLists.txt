@@ -78,10 +78,19 @@ target_link_libraries(scene PUBLIC game)
 add_library(
   client
   src/client/application.cpp
+  src/client/block_mesh/block_mesh.cpp
+  src/client/block_mesh/full.cpp
+  src/client/block_mod/conveyor.cpp
+  src/client/block_mod/dirt.cpp
+  src/client/block_mod/placeholder.cpp
+  src/client/block_mod/stone.cpp
+  src/client/block_model_registry.cpp
+  src/client/block_texture_registry.cpp
   src/client/client.cpp
-  src/client/session.cpp
   src/client/grid_mesh.cpp
   src/client/local_player.cpp
+  src/client/session.cpp
+  src/client/texture_manager.cpp
 )
 target_include_directories(
   client

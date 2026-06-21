@@ -2,7 +2,7 @@
 
 #include "grid.glsl"
 
-layout(location = 0) out vec3 out_world_space_position;
+layout(location = 0) out vec2 out_texcoord;
 layout(location = 1) flat out uint out_texture_index;
 
 void main() {
@@ -12,6 +12,10 @@ void main() {
   gl_Position = 
     push_constants.view_projection_matrix * 
     vec4(position + push_constants.normal.xyz * push_constants.normal.w, 1.0);
-  out_world_space_position = position;
-  out_texture_index = vertex.texture_index;
+  if (vertex.texture_index == 3) {
+    vertex.texcoord[1] += push_constants.time * 0.5;
+  }
+  out_texcoord = vec2(vertex.texcoord[0], vertex.texcoord[1]);
+  out_texture_index =
+    push_constants.texture_index_buffer.indices[vertex.texture_index];
 }

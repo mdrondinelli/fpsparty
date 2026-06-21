@@ -8,6 +8,7 @@
 #include <vulkan/vulkan.hpp>
 
 #include <glfw.hpp>
+#include <int.hpp>
 #include <rc.hpp>
 
 #include "buffer.hpp"
@@ -26,7 +27,7 @@ struct Graphics_create_info {
   vk::SurfaceKHR surface;
   bool vsync_preferred{true};
   unsigned max_frames_in_flight{2};
-  std::uint32_t descriptor_heap_size{1024 * 1024};
+  u32 descriptor_heap_size{1024 * 1024};
 };
 
 class Graphics {
@@ -71,7 +72,7 @@ public:
 private:
   struct Frame_resource {
     vk::UniqueSemaphore swapchain_image_acquire_semaphore{};
-    std::uint32_t swapchain_image_index{};
+    u32 swapchain_image_index{};
     rc::Strong<Work> pending_work{};
   };
 

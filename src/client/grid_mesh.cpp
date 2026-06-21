@@ -1,195 +1,91 @@
 #include "grid_mesh.hpp"
 #include "client/grid_vertex.hpp"
-#include "game/constants.hpp"
 #include "game/grid.hpp"
 #include "serial/span_writer.hpp"
 
 #include <array>
 #include <cassert>
+#include <iostream>
 #include <span>
 #include <vector>
 
 namespace fpsparty::client {
-namespace {
-struct Chunk_geometry {
-  std::array<std::array<std::vector<Grid_vertex>, 2>, 3> vertices;
-  std::array<std::array<std::vector<std::uint32_t>, 2>, 3> indices;
-};
-
-constexpr int sign_index(Sign sign) noexcept { return static_cast<int>(sign); }
-
-void append_face(
-  Chunk_geometry &result,
-  game::Axis axis,
-  Sign sign,
-  std::array<math::vec3, 4> const &positions,
-  std::uint32_t texture_index) {
-  auto const axis_index = static_cast<int>(axis);
-  auto const side_index = sign_index(sign);
-  auto &vertices = result.vertices[axis_index][side_index];
-  auto &indices = result.indices[axis_index][side_index];
-  auto const first_index = static_cast<std::uint32_t>(vertices.size());
-  for (auto const &position : positions) {
-    vertices.push_back({
-        .position = position,
-        .texture_index = texture_index,
-    });
-  }
-  indices.append_range(
-    std::array<std::uint32_t, 6>{
-      first_index + 0,
-      first_index + 1,
-      first_index + 2,
-      first_index + 2,
-      first_index + 3,
-      first_index + 0,
-    });
-}
-
-void append_solid_cell_faces(
-  Chunk_geometry &result,
-  game::Grid const &grid,
-  math::ivec3 cell_coords) {
-  auto const min =
-    (cell_coords.cast<float>() * game::constants::grid_cell_stride).eval();
-  auto const max =
-    (min + math::vec3::Constant(game::constants::grid_cell_stride)).eval();
-  auto const x0 = min.x();
-  auto const y0 = min.y();
-  auto const z0 = min.z();
-  auto const x1 = max.x();
-  auto const y1 = max.y();
-  auto const z1 = max.z();
-  auto const texture_index = 
-      static_cast<std::uint32_t>(grid.get_block(cell_coords).first) - 1;
-  if (!grid.is_solid(cell_coords + math::ivec3{1, 0, 0})) {
-    append_face(
-      result,
-      game::Axis::x,
-      Sign::positive,
-      {
-        math::vec3{x1, y0, z0},
-        math::vec3{x1, y1, z0},
-        math::vec3{x1, y1, z1},
-        math::vec3{x1, y0, z1},
-      },
-      texture_index);
-  }
-  if (!grid.is_solid(cell_coords - math::ivec3{1, 0, 0})) {
-    append_face(
-      result,
-      game::Axis::x,
-      Sign::negative,
-      {
-        math::vec3{x0, y0, z0},
-        math::vec3{x0, y0, z1},
-        math::vec3{x0, y1, z1},
-        math::vec3{x0, y1, z0},
-      },
-      texture_index);
-  }
-  if (!grid.is_solid(cell_coords + math::ivec3{0, 1, 0})) {
-    append_face(
-      result,
-      game::Axis::y,
-      Sign::positive,
-      {
-        math::vec3{x0, y1, z0},
-        math::vec3{x0, y1, z1},
-        math::vec3{x1, y1, z1},
-        math::vec3{x1, y1, z0},
-      },
-      texture_index);
-  }
-  if (!grid.is_solid(cell_coords - math::ivec3{0, 1, 0})) {
-    append_face(
-      result,
-      game::Axis::y,
-      Sign::negative,
-      {
-        math::vec3{x0, y0, z0},
-        math::vec3{x1, y0, z0},
-        math::vec3{x1, y0, z1},
-        math::vec3{x0, y0, z1},
-      },
-      texture_index);
-  }
-  if (!grid.is_solid(cell_coords + math::ivec3{0, 0, 1})) {
-    append_face(
-      result,
-      game::Axis::z,
-      Sign::positive,
-      {
-        math::vec3{x0, y0, z1},
-        math::vec3{x1, y0, z1},
-        math::vec3{x1, y1, z1},
-        math::vec3{x0, y1, z1},
-      },
-      texture_index);
-  }
-  if (!grid.is_solid(cell_coords - math::ivec3{0, 0, 1})) {
-    append_face(
-      result,
-      game::Axis::z,
-      Sign::negative,
-      {
-        math::vec3{x0, y0, z0},
-        math::vec3{x0, y1, z0},
-        math::vec3{x1, y1, z0},
-        math::vec3{x1, y0, z0},
-      },
-      texture_index);
-  }
-}
-
-Chunk_geometry generate_chunk_geometry(
-  math::ivec3 chunk_coords,
-  game::Chunk const &chunk,
-  game::Grid const &grid) {
-  auto result = Chunk_geometry{};
-  constexpr auto n = static_cast<int>(game::Chunk::edge_length);
-  for (auto x = 0; x != n; ++x) {
-    for (auto y = 0; y != n; ++y) {
-      for (auto z = 0; z != n; ++z) {
-        if (!chunk.is_solid({x, y, z})) {
-          continue;
-        }
-        append_solid_cell_faces(
-          result,
-          grid,
-          {
-            chunk_coords.x() * n + x,
-            chunk_coords.y() * n + y,
-            chunk_coords.z() * n + z,
-          });
-      }
-    }
-  }
-  return result;
-}
-} // namespace
 
 Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
+  auto const get_block_model = [&](math::ivec3 coords) {
+    auto const [block, data] = info.grid->get_block(coords);
+    return info.block_model_registry->get(block, data);
+  };
   auto vertices = std::vector<Grid_vertex>{};
   auto indices = std::vector<std::uint32_t>{};
   auto draw_infos =
     std::array<std::array<std::vector<graphics::Indexed_draw_info>, 2>, 3>{};
   for (auto const &[chunk_coords, chunk] : info.grid->get_chunks()) {
-    auto const geometry =
-      generate_chunk_geometry(chunk_coords, *chunk, *info.grid);
+    auto chunk_vertices =
+      std::array<std::array<std::vector<Grid_vertex>, 2>, 3>{};
+    auto chunk_indices = std::array<std::array<std::vector<u32>, 2>, 3>{};
+    constexpr auto n = static_cast<int>(game::Chunk::edge_length);
+    for (auto rel_x = 0; rel_x != n; ++rel_x) {
+      auto const x = rel_x + chunk_coords.x() * n;
+      for (auto rel_y = 0; rel_y != n; ++rel_y) {
+        auto const y = rel_y + chunk_coords.y() * n;
+        for (auto rel_z = 0; rel_z != n; ++rel_z) {
+          auto const z = rel_z + chunk_coords.z() * n;
+          auto const [block, data] = chunk->get_block({rel_x, rel_y, rel_z});
+          auto const block_model = info.block_model_registry->get(block, data);
+          if (!block_model) {
+            continue;
+          }
+          auto const block_coords = math::ivec3{x, y, z};
+          for (auto const &axis :
+               {math::axis3::x, math::axis3::y, math::axis3::z}) {
+            for (auto const &sign :
+                 {math::sign::positive, math::sign::negative}) {
+              auto &aligned_chunk_vertices =
+                chunk_vertices[static_cast<int>(axis)][static_cast<int>(sign)];
+              auto &aligned_chunk_indices =
+                chunk_indices[static_cast<int>(axis)][static_cast<int>(sign)];
+              auto const &aligned_submesh =
+                block_model->mesh.aligned_submesh({axis, sign});
+              for (auto const &face : aligned_submesh.faces) {
+                if (face.occluder) {
+                  auto const occluder_model = get_block_model(
+                    block_coords + static_cast<math::ivec3>(*face.occluder));
+                  if (
+                    occluder_model &&
+                    occluder_model->occludes_neighbor(-*face.occluder)) {
+                    continue;
+                  }
+                }
+                auto const first_index =
+                  static_cast<u32>(aligned_chunk_vertices.size());
+                for (auto i = 0; i != 4; ++i) {
+                  aligned_chunk_vertices.emplace_back(face.vertices[i]);
+                  aligned_chunk_vertices.back().position +=
+                    block_coords.cast<f32>();
+                }
+                for (auto const i : {0, 1, 2, 2, 3, 0}) {
+                  aligned_chunk_indices.emplace_back(first_index + i);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
     for (auto axis = 0; axis != 3; ++axis) {
       for (auto sign = 0; sign != 2; ++sign) {
         auto const draw_info = graphics::Indexed_draw_info{
           .index_count =
-            static_cast<std::uint32_t>(geometry.indices[axis][sign].size()),
+            static_cast<std::uint32_t>(chunk_indices[axis][sign].size()),
           .instance_count = 1,
           .first_index = static_cast<std::uint32_t>(indices.size()),
           .vertex_offset = static_cast<std::int32_t>(vertices.size()),
           .first_instance = 0,
         };
         if (draw_info.index_count) {
-          vertices.append_range(geometry.vertices[axis][sign]);
-          indices.append_range(geometry.indices[axis][sign]);
+          vertices.append_range(chunk_vertices[axis][sign]);
+          indices.append_range(chunk_indices[axis][sign]);
           draw_infos[axis][sign].emplace_back(draw_info);
         }
       }
@@ -286,10 +182,10 @@ Grid_mesh::~Grid_mesh() {
 }
 
 void Grid_mesh::record_draws(
-  graphics::Work_recorder &recorder, game::Axis axis, client::Sign sign) {
+  graphics::Work_recorder &recorder, math::signed_axis3 normal) {
   assert(is_uploaded());
   auto const draw_info =
-    _draw_infos[static_cast<int>(axis)][static_cast<int>(sign)];
+    _draw_infos[static_cast<int>(normal.axis)][static_cast<int>(normal.sign)];
   recorder.draw_indexed_indirect({
     .buffer = _draw_buffer,
     .offset = draw_info.offset,

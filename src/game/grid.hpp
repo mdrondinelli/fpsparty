@@ -27,8 +27,6 @@ constexpr std::size_t linearize_chunk_index(
 
 } // namespace detail
 
-enum class Axis { x, y, z };
-
 struct Grid_create_info {
   math::ibox3 bounds{};
 };
@@ -60,19 +58,14 @@ public:
 
   constexpr Chunk() noexcept = default;
 
-  // constexpr explicit Chunk(std::uint64_t blocks) noexcept : blocks{blocks} {}
-
   constexpr std::pair<Block, int> get_block(math::ivec3 offset) const noexcept {
     auto const idx = get_block_index(offset);
-    auto const byte = bytes[idx];
-    return {
-      static_cast<Block>(byte >> 2), static_cast<int>(byte & std::byte{0b11})};
+    return unpack_block_data(bytes[idx]);
   }
 
   constexpr void set_block(math::ivec3 offset, Block value, int data) noexcept {
     auto const idx = get_block_index(offset);
-    bytes[idx] = (static_cast<std::byte>(value) << 2) |
-                 static_cast<std::byte>(data & 0b11);
+    bytes[idx] = pack_block_data(value, data);
   }
 
   constexpr bool is_solid(math::ivec3 offset) const noexcept {

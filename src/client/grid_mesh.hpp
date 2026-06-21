@@ -1,19 +1,24 @@
 #ifndef FPSPARTY_CLIENT_GRID_MESH_HPP
 #define FPSPARTY_CLIENT_GRID_MESH_HPP
 
-#include "client/sign.hpp"
-#include "game/grid.hpp"
-#include "graphics/graphics.hpp"
-#include "graphics/work_done_callback.hpp"
-#include "graphics/work_recorder.hpp"
-#include "rc.hpp"
 #include <array>
 #include <cstdint>
+
+#include <rc.hpp>
+
+#include <game/grid.hpp>
+#include <graphics/graphics.hpp>
+#include <graphics/work_done_callback.hpp>
+#include <graphics/work_recorder.hpp>
+#include <math/axis.hpp>
+
+#include "block_model_registry.hpp"
 
 namespace fpsparty::client {
 struct Grid_mesh_create_info {
   graphics::Graphics *graphics;
   game::Grid const *grid;
+  Block_model_registry const *block_model_registry;
 };
 
 class Grid_mesh : graphics::Work_done_callback {
@@ -24,8 +29,7 @@ public:
 
   void record_draws(
     graphics::Work_recorder &recorder,
-    game::Axis normal_axis,
-    client::Sign normal_sign);
+    math::signed_axis3 normal);
 
   bool is_uploaded() const noexcept;
 

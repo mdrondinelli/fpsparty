@@ -10,7 +10,7 @@ void set_solid(fpsparty::game::Grid &grid, Eigen::Vector3i const &cell_coords) {
       cell_coords,
       cell_coords,
     },
-    fpsparty::game::Block::solid);
+    fpsparty::game::Block::placeholder);
 }
 
 auto const grid_create_info = fpsparty::game::Grid_create_info{

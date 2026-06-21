@@ -1,18 +1,3 @@
-#include "client/application.hpp"
-#include "client/client.hpp"
-#include "client/grid_mesh.hpp"
-#include "constants.hpp"
-#include "glfw.hpp"
-#include "graphics/global_vulkan_state.hpp"
-#include "graphics/graphics.hpp"
-#include "graphics/pipeline.hpp"
-#include "graphics/shader_stage.hpp"
-#include "graphics/synchronization_scope.hpp"
-#include "graphics/work_done_callback.hpp"
-#include "math/transforms.hpp"
-#include "math/vec.hpp"
-#include "ppm/ppm.hpp"
-#include <Eigen/Dense>
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -23,15 +8,42 @@
 #include <optional>
 #include <span>
 #include <stdexcept>
-#include <tracy/Tracy.hpp>
 #include <tuple>
 #include <vector>
+
+#include <tracy/Tracy.hpp>
 #include <vulkan/vulkan.hpp>
+
+#include <constants.hpp>
+#include <glfw.hpp>
+#include <graphics/global_vulkan_state.hpp>
+#include <graphics/graphics.hpp>
+#include <graphics/pipeline.hpp>
+#include <graphics/shader_stage.hpp>
+#include <graphics/synchronization_scope.hpp>
+#include <graphics/work_done_callback.hpp>
+#include <math/transforms.hpp>
+#include <math/vec.hpp>
+#include <ppm/ppm.hpp>
+
+#include "application.hpp"
+#include "block_mod/block_mod.hpp"
+#include "block_mod/conveyor.hpp"
+#include "block_mod/dirt.hpp"
+#include "block_mod/placeholder.hpp"
+#include "block_mod/stone.hpp"
+#include "block_model_registry.hpp"
+#include "block_texture_registry.hpp"
+#include "client.hpp"
+#include "grid_mesh.hpp"
+#include "texture_manager.hpp"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 namespace fpsparty::client {
+
 namespace {
+
 struct Vertex {
   float x;
   float y;
@@ -196,7 +208,9 @@ public:
         _composite_vertex_shader{
           graphics::load_shader("./assets/shaders/composite.vert.spv")},
         _composite_fragment_shader{
-          graphics::load_shader("./assets/shaders/composite.frag.spv")} {
+          graphics::load_shader("./assets/shaders/composite.frag.spv")},
+        _texture_manager{{.graphics = &_graphics}},
+        _block_texture_registry{{.graphics = &_graphics}} {
     std::cout << "Opened window.\n";
     // _graphics.set_vsync_preferred(false);
     _glfw_window->set_key_callback(this);
@@ -214,12 +228,15 @@ public:
     _composite_index_buffer =
       upload_indices(std::as_bytes(std::span{composite_indices}));
     std::cout << "Uploaded composite index buffer.\n";
-    _placeholder_texture = upload_texture("./assets/textures/placeholder.ppm");
-    std::cout << "Uploaded placeholder texture.\n";
-    _dirt_texture = upload_texture("./assets/textures/dirt.ppm");
-    std::cout << "Uploaded dirt texture.\n";
-    _conveyor_texture = upload_texture("./assets/textures/conveyor.ppm");
-    std::cout << "Uploaded conveyor texture.\n";
+    auto const block_mod_init_info = Block_mod_init_info{
+      .texture_manager = &_texture_manager,
+      .texture_registry = &_block_texture_registry,
+      .model_registry = &_block_model_registry,
+    };
+    Placeholder_block_mod{}.init(block_mod_init_info);
+    Stone_block_mod{}.init(block_mod_init_info);
+    Dirt_block_mod{}.init(block_mod_init_info);
+    Conveyor_block_mod{}.init(block_mod_init_info);
   }
 
   ~Impl() {
@@ -254,6 +271,7 @@ public:
         return false;
       }
       _client.update(duration);
+      _time += duration;
     }
     update_grid_mesh();
     render();
@@ -368,17 +386,6 @@ private:
         (projection_matrix * view_matrix).eval();
       // draw grid
       if (_grid_mesh && _grid_mesh->is_uploaded()) {
-        auto const placeholder_texture_index =
-          work_recorder.upload_sampled_image_descriptor(_placeholder_texture);
-        auto const dirt_texture_index =
-          work_recorder.upload_sampled_image_descriptor(_dirt_texture);
-        auto const conveyor_texture_index =
-          work_recorder.upload_sampled_image_descriptor(_conveyor_texture);
-        auto const texture_indices = std::array<std::uint32_t, 3>{
-          placeholder_texture_index,
-          dirt_texture_index,
-          conveyor_texture_index,
-        };
         work_recorder.bind_pipeline(grid_pipeline);
         work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
         work_recorder.set_cull_mode(graphics::Cull_mode::back);
@@ -388,25 +395,26 @@ private:
           .push_data(0, std::as_bytes(std::span{&view_projection_matrix, 1}));
         work_recorder
           .push_buffer_device_address(80, _grid_mesh->get_vertex_buffer());
+        _block_texture_registry.upload_descriptors(work_recorder);
+        work_recorder.push_buffer_device_address(
+          88, _block_texture_registry.get_descriptor_index_buffer());
         work_recorder.push_data(
-          88,
-          std::as_bytes(
-            std::span{texture_indices.data(), texture_indices.size()}));
+          96, std::as_bytes(std::span{&_time, 1}));
         auto push_normal = [&](math::vec4 const &value) {
           work_recorder.push_data(64, std::as_bytes(std::span{&value, 1}));
         };
         push_normal({1.0f, 0.0f, 0.0f, 0.0f});
-        _grid_mesh->record_draws(work_recorder, game::Axis::x, Sign::positive);
+        _grid_mesh->record_draws(work_recorder, +math::axis3::x);
         push_normal({-1.0f, 0.0f, 0.0f, 0.0f});
-        _grid_mesh->record_draws(work_recorder, game::Axis::x, Sign::negative);
+        _grid_mesh->record_draws(work_recorder, -math::axis3::x);
         push_normal({0.0f, 1.0f, 0.0f, 0.0f});
-        _grid_mesh->record_draws(work_recorder, game::Axis::y, Sign::positive);
+        _grid_mesh->record_draws(work_recorder, +math::axis3::y);
         push_normal({0.0f, -1.0f, 0.0f, 0.0f});
-        _grid_mesh->record_draws(work_recorder, game::Axis::y, Sign::negative);
+        _grid_mesh->record_draws(work_recorder, -math::axis3::y);
         push_normal({0.0f, 0.0f, 1.0f, 0.0f});
-        _grid_mesh->record_draws(work_recorder, game::Axis::z, Sign::positive);
+        _grid_mesh->record_draws(work_recorder, +math::axis3::z);
         push_normal({0.0f, 0.0f, -1.0f, 0.0f});
-        _grid_mesh->record_draws(work_recorder, game::Axis::z, Sign::negative);
+        _grid_mesh->record_draws(work_recorder, -math::axis3::z);
       }
       // draw cubes
       work_recorder.bind_pipeline(mesh_pipeline);
@@ -590,6 +598,7 @@ private:
     _pending_grid_mesh = std::make_unique<Grid_mesh>(Grid_mesh_create_info{
       .graphics = &_graphics,
       .grid = &scene.get_grid(),
+      .block_model_registry = &_block_model_registry,
     });
     scene.reset_grid_remesh_flag();
   }
@@ -917,9 +926,6 @@ private:
   rc::Strong<graphics::Image> _depth_image{};
   rc::Strong<graphics::Image> _albedo_image{};
   rc::Strong<graphics::Image> _crosshair_mask_image{};
-  rc::Strong<graphics::Image> _placeholder_texture{};
-  rc::Strong<graphics::Image> _dirt_texture{};
-  rc::Strong<graphics::Image> _conveyor_texture{};
   graphics::Shader _grid_vertex_shader;
   graphics::Shader _grid_fragment_shader;
   graphics::Shader _mesh_vertex_shader;
@@ -933,12 +939,16 @@ private:
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
   rc::Strong<graphics::Pipeline> _composite_pipeline{};
   std::optional<graphics::Image_format> _composite_pipeline_color_format{};
+  Texture_manager _texture_manager;
+  Block_texture_registry _block_texture_registry;
+  Block_model_registry _block_model_registry;
   std::unique_ptr<Grid_mesh> _grid_mesh;
   std::unique_ptr<Grid_mesh> _pending_grid_mesh;
   rc::Strong<graphics::Buffer> _cube_vertex_buffer{};
   rc::Strong<graphics::Buffer> _cube_index_buffer{};
   rc::Strong<graphics::Buffer> _crosshair_index_buffer{};
   rc::Strong<graphics::Buffer> _composite_index_buffer{};
+  float _time{};
 };
 
 Application::Application(Application_create_info const &create_info)
