@@ -16,8 +16,7 @@ namespace fpsparty::game {
 
 namespace {
 
-// strict overlap: touching faces don't count
-float box_overlap(math::box3 const &a, math::box3 const &b) noexcept {
+float box_penetration(math::box3 const &a, math::box3 const &b) noexcept {
   auto const intersection = a.intersection(b);
   if (intersection.isEmpty()) {
     return 0.0f;
@@ -56,12 +55,12 @@ void handle_use_secondary(
   auto const block_box = cell_bounds(target_cell);
   // don't place where a humanoid or item would be trapped inside the block
   for (auto [other, _] : entities.get_all<Humanoid>()) {
-    if (box_overlap(block_box, other.bounds()) > Humanoid::half_width) {
+    if (box_penetration(block_box, other.bounds()) > 0.0f) {
       return;
     }
   }
   for (auto [other, _] : entities.get_all<Item>()) {
-    if (box_overlap(block_box, other.bounds()) > Item::half_extent) {
+    if (box_penetration(block_box, other.bounds()) > 0.0f) {
       return;
     }
   }
