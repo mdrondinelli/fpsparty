@@ -25,7 +25,8 @@ float box_penetration(math::box3 const &a, math::box3 const &b) noexcept {
 }
 
 math::box3 cell_bounds(math::ivec3 cell_coords) noexcept {
-  auto const min = (cell_coords.cast<f32>() * constants::grid_cell_stride).eval();
+  auto const min =
+    (cell_coords.cast<f32>() * constants::grid_cell_stride).eval();
   return math::box3{
     min, (min + math::vec3::Constant(constants::grid_cell_stride)).eval()};
 }
@@ -117,7 +118,8 @@ void Game::tick(float duration) {
         desired_direction * Humanoid::air_acceleration * duration;
     }
     auto const can_jump = humanoid.grounded || humanoid.coyote_timer > 0.0f;
-    auto const want_jump = humanoid.curr_input_state.jump && !humanoid.prev_input_state.jump;
+    auto const want_jump =
+      humanoid.curr_input_state.jump && !humanoid.prev_input_state.jump;
     if (can_jump && want_jump) {
       humanoid.coyote_timer = 0.0f;
       humanoid.velocity.y() += Humanoid::jump_speed;
@@ -260,18 +262,29 @@ void Game::tick(float duration) {
         } else if (contact->normal.z() < 0) {
           item.velocity.z() = std::min(item.velocity.z(), 0.0f);
         }
+        auto surface_velocity = math::vec3::Zero().eval();
+        if (
+          _grid.get_block(contact->cell_coords).first == Block::conveyor &&
+          contact->normal.y() > 0) {
+          surface_velocity.z() = -9.0f / 16.0f;
+        }
         auto const momentum_after = (Item::mass * item.velocity).eval();
-        if (!momentum_after.isZero()) {
-          auto const normal_impulse = (momentum_after - momentum_before).eval();
-          auto const frictional_impulse_norm =
-            Item::friction * normal_impulse.norm();
-          if (frictional_impulse_norm < momentum_after.norm()) {
-            auto const frictional_impulse =
-              (frictional_impulse_norm * -item.velocity.normalized()).eval();
-            item.velocity += frictional_impulse / Item::mass;
-          } else {
-            item.velocity = math::vec3::Zero();
-          }
+        // if (!momentum_after.isZero()) {
+        auto const normal_impulse = (momentum_after - momentum_before).eval();
+        auto const max_frictional_impulse =
+          Item::friction * normal_impulse.norm();
+        auto const relative_velocity = item.velocity - surface_velocity;
+        auto const stopping_frictional_impulse =
+          -relative_velocity * Item::mass;
+        auto const stopping_frictional_impulse_norm =
+          stopping_frictional_impulse.norm();
+        if (stopping_frictional_impulse_norm > 0.0f) {
+          auto const actual_frictional_impulse_norm =
+            std::min(max_frictional_impulse, stopping_frictional_impulse_norm);
+          auto const actual_frictional_impulse =
+            stopping_frictional_impulse *
+            (actual_frictional_impulse_norm / stopping_frictional_impulse_norm);
+          item.velocity += actual_frictional_impulse / Item::mass;
         }
       }
       ++it;
