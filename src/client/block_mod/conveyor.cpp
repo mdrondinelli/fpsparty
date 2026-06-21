@@ -2,8 +2,6 @@
 
 #include <game/block.hpp>
 
-#include "../block_mesh/full.hpp"
-
 namespace fpsparty::client {
 
 void Conveyor_block_mod::init(Block_mod_init_info const &info) {
@@ -66,11 +64,40 @@ void Conveyor_block_mod::init(Block_mod_init_info const &info) {
     1.0f * math::axis2::x,
     0.5f * math::axis2::y,
     belt_texture_index);
+  // make it north (+z)
+  mesh.rotate_180(+math::axis3::y);
   info.model_registry->add(
     game::Block::conveyor,
-    0,
+    0b00,
     Block_model{
-      .mesh = std::move(mesh),
+      .mesh = mesh,
+      .neighbor_occlusion_flags = 1 << (+math::axis3::y).index(),
+    });
+  // west
+  mesh.rotate_90(+math::axis3::y);
+  info.model_registry->add(
+    game::Block::conveyor,
+    0b01,
+    Block_model{
+      .mesh = mesh,
+      .neighbor_occlusion_flags = 1 << (+math::axis3::y).index(),
+    });
+  // south
+  mesh.rotate_90(+math::axis3::y);
+  info.model_registry->add(
+    game::Block::conveyor,
+    0b10,
+    Block_model{
+      .mesh = mesh,
+      .neighbor_occlusion_flags = 1 << (+math::axis3::y).index(),
+    });
+  // east
+  mesh.rotate_90(+math::axis3::y);
+  info.model_registry->add(
+    game::Block::conveyor,
+    0b11,
+    Block_model{
+      .mesh = mesh,
       .neighbor_occlusion_flags = 1 << (+math::axis3::y).index(),
     });
 }

@@ -65,7 +65,22 @@ void handle_use_secondary(
       return;
     }
   }
-  grid.set_block(target_cell, Block::conveyor);
+  auto const data = [&] {
+    if (forward.z() > std::abs(forward.x())) {
+      return 0b00;
+    }
+    if (-forward.z() > std::abs(forward.x())) {
+      return 0b10;
+    }
+    if (forward.x() > std::abs(forward.z())) {
+      return 0b01;
+    }
+    if (-forward.x() > std::abs(forward.z())) {
+      return 0b11;
+    }
+    return 0;
+  }();
+  grid.set_block(target_cell, Block::conveyor, data);
 }
 
 } // namespace
@@ -263,10 +278,19 @@ void Game::tick(float duration) {
           item.velocity.z() = std::min(item.velocity.z(), 0.0f);
         }
         auto surface_velocity = math::vec3::Zero().eval();
-        if (
-          _grid.get_block(contact->cell_coords).first == Block::conveyor &&
-          contact->normal.y() > 0) {
-          surface_velocity.z() = -9.0f / 16.0f;
+        if (contact->normal.y() > 0) {
+          auto const [supporting_block, supporting_block_data] = _grid.get_block(contact->cell_coords);
+          if (supporting_block == Block::conveyor) {
+            if (supporting_block_data == 0b00) {
+              surface_velocity.z() = 9.0f / 16.0f;
+            } else if (supporting_block_data == 0b01) {
+              surface_velocity.x() = 9.0f / 16.0f;
+            } else if (supporting_block_data == 0b10) {
+              surface_velocity.z() = -9.0f / 16.0f;
+            } else if (supporting_block_data == 0b11) {
+              surface_velocity.x() = -9.0f / 16.0f;
+            }
+          }
         }
         auto const momentum_after = (Item::mass * item.velocity).eval();
         // if (!momentum_after.isZero()) {

@@ -35,6 +35,10 @@ public:
     math::scaled_axis2 texcoord_bitangent,
     std::uint32_t texture_index);
 
+  void rotate_90(math::signed_axis3 normal);
+
+  void rotate_180(math::signed_axis3 normal);
+
   Aligned_submesh const &aligned_submesh(math::signed_axis3 normal) const noexcept {
     return _aligned_submeshes[static_cast<int>(normal.axis)]
                              [static_cast<int>(normal.sign)];
