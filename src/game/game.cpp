@@ -16,7 +16,23 @@ namespace fpsparty::game {
 
 namespace {
 
-void handle_use_secondary(Grid &grid, Humanoid &humanoid) {
+// strict overlap: touching faces don't count
+float box_overlap(math::box3 const &a, math::box3 const &b) noexcept {
+  auto const intersection = a.intersection(b);
+  if (intersection.isEmpty()) {
+    return 0.0f;
+  }
+  return intersection.diagonal().minCoeff();
+}
+
+math::box3 cell_bounds(math::ivec3 cell_coords) noexcept {
+  auto const min = (cell_coords.cast<f32>() * constants::grid_cell_stride).eval();
+  return math::box3{
+    min, (min + math::vec3::Constant(constants::grid_cell_stride)).eval()};
+}
+
+void handle_use_secondary(
+  Grid &grid, Entity_world &entities, Humanoid &humanoid) {
   auto const basis = (math::y_rotation_matrix(humanoid.curr_input_state.yaw) *
                       math::x_rotation_matrix(humanoid.curr_input_state.pitch))
                        .eval();
@@ -33,9 +49,23 @@ void handle_use_secondary(Grid &grid, Humanoid &humanoid) {
     origin_cell_offset,
     forward,
     constants::block_interaction_range / constants::grid_cell_stride);
-  if (hit) {
-    grid.set_block(hit->cell_coords + hit->normal, Block::conveyor);
+  if (!hit) {
+    return;
   }
+  auto const target_cell = (hit->cell_coords + hit->normal).eval();
+  auto const block_box = cell_bounds(target_cell);
+  // don't place where a humanoid or item would be trapped inside the block
+  for (auto [other, _] : entities.get_all<Humanoid>()) {
+    if (box_overlap(block_box, other.bounds()) > Humanoid::half_width) {
+      return;
+    }
+  }
+  for (auto [other, _] : entities.get_all<Item>()) {
+    if (box_overlap(block_box, other.bounds()) > Item::half_extent) {
+      return;
+    }
+  }
+  grid.set_block(target_cell, Block::conveyor);
 }
 
 } // namespace
@@ -154,7 +184,7 @@ void Game::tick(float duration) {
     if (
       !humanoid.prev_input_state.use_secondary &&
       humanoid.curr_input_state.use_secondary) {
-      handle_use_secondary(_grid, humanoid);
+      handle_use_secondary(_grid, _entities, humanoid);
     }
   }
   // accumulate item forces
