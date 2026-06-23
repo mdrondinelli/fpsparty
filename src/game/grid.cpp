@@ -12,22 +12,29 @@ namespace fpsparty::game {
 namespace {
 
 struct Contact_constraint {
-  math::ivec3 cell_coords{};
   math::ivec3 normal{};
+  math::vec3 velocity{};
   float penetration{-std::numeric_limits<f32>::infinity()};
+  float surface_area{0.0f};
 };
 
 void update_contact_constraint(
   Contact_constraint &constraint,
-  math::ivec3 cell_coords,
   math::ivec3 normal,
-  float penetration) noexcept {
+  math::vec3 velocity,
+  float penetration,
+  float surface_area) noexcept {
   if (penetration > constraint.penetration) {
     constraint = Contact_constraint{
-      .cell_coords = cell_coords,
       .normal = normal,
+      .velocity = velocity,
       .penetration = penetration,
+      .surface_area = surface_area,
     };
+  } else if (penetration == constraint.penetration) {
+    constraint.velocity = (constraint.velocity * constraint.surface_area +
+                           velocity * surface_area) /
+                          (constraint.surface_area + surface_area);
   }
 }
 
@@ -172,6 +179,18 @@ Grid::find_contact(math::box3 const &box) const noexcept {
   auto const touched_cells = Grid::world_to_cell(box);
   auto const &touched_min = touched_cells.min();
   auto const &touched_max = touched_cells.max();
+  auto const box_xy_bounds = math::box2{
+    math::vec2{box.min().x(), box.min().y()},
+    math::vec2{box.max().x(), box.max().y()},
+  };
+  auto const box_xz_bounds = math::box2{
+    math::vec2{box.min().x(), box.min().z()},
+    math::vec2{box.max().x(), box.max().z()},
+  };
+  auto const box_yz_bounds = math::box2{
+    math::vec2{box.min().y(), box.min().z()},
+    math::vec2{box.max().y(), box.max().z()},
+  };
   auto pos_x_constraint = Contact_constraint{};
   auto pos_y_constraint = Contact_constraint{};
   auto pos_z_constraint = Contact_constraint{};
@@ -184,57 +203,189 @@ Grid::find_contact(math::box3 const &box) const noexcept {
         auto const cell_coords = math::ivec3{x, y, z};
         auto const [cell_block, cell_data] = get_block(cell_coords);
         if (cell_block != Block::air) {
-          auto const block_box = _block_bounds_registry->get(cell_block);
-          auto const cell_box = math::box3{
-            cell_coords.cast<f32>() + block_box.min(),
-            cell_coords.cast<f32>() + block_box.max(),
+          auto const block_bounds = _block_bounds_registry->get(cell_block);
+          auto const cell_bounds = math::box3{
+            cell_coords.cast<f32>() + block_bounds.min(),
+            cell_coords.cast<f32>() + block_bounds.max(),
           };
-          auto const pos = (cell_box.max() - box.min()).eval();
-          auto const neg = (box.max() - cell_box.min()).eval();
+          auto const pos = (cell_bounds.max() - box.min()).eval();
+          auto const neg = (box.max() - cell_bounds.min()).eval();
+          if (
+            pos.x() <= 0.0f || pos.y() <= 0.0f || pos.z() <= 0.0f ||
+            neg.x() <= 0.0f || neg.y() <= 0.0f || neg.z() <= 0.0f) {
+            continue;
+          }
+          auto const cell_xy_bounds = math::box2{
+            math::vec2{cell_bounds.min().x(), cell_bounds.min().y()},
+            math::vec2{cell_bounds.max().x(), cell_bounds.max().y()},
+          };
+          auto const cell_xz_bounds = math::box2{
+            math::vec2{cell_bounds.min().x(), cell_bounds.min().z()},
+            math::vec2{cell_bounds.max().x(), cell_bounds.max().z()},
+          };
+          auto const cell_yz_bounds = math::box2{
+            math::vec2{cell_bounds.min().y(), cell_bounds.min().z()},
+            math::vec2{cell_bounds.max().y(), cell_bounds.max().z()},
+          };
           auto normal = math::ivec3::Zero().eval();
           auto penetration = std::numeric_limits<f32>::infinity();
+          auto surface_area = 0.0f;
           if (pos.x() < penetration) {
             normal = math::ivec3::UnitX();
             penetration = pos.x();
+            surface_area = cell_yz_bounds.intersection(box_yz_bounds).volume();
           }
           if (pos.y() < penetration) {
             normal = math::ivec3::UnitY();
             penetration = pos.y();
+            surface_area = cell_xz_bounds.intersection(box_xz_bounds).volume();
           }
           if (pos.z() < penetration) {
             normal = math::ivec3::UnitZ();
             penetration = pos.z();
+            surface_area = cell_xy_bounds.intersection(box_xy_bounds).volume();
           }
           if (neg.x() < penetration) {
             normal = -math::ivec3::UnitX();
             penetration = neg.x();
+            surface_area = cell_yz_bounds.intersection(box_yz_bounds).volume();
           }
           if (neg.y() < penetration) {
             normal = -math::ivec3::UnitY();
             penetration = neg.y();
+            surface_area = cell_xz_bounds.intersection(box_xz_bounds).volume();
           }
           if (neg.z() < penetration) {
             normal = -math::ivec3::UnitZ();
             penetration = neg.z();
+            surface_area = cell_xy_bounds.intersection(box_xy_bounds).volume();
           }
           if (normal == math::ivec3::UnitX()) {
             update_contact_constraint(
-              pos_x_constraint, cell_coords, normal, penetration);
+              pos_x_constraint,
+              normal,
+              math::vec3::Zero(),
+              penetration,
+              surface_area);
           } else if (normal == math::ivec3::UnitY()) {
-            update_contact_constraint(
-              pos_y_constraint, cell_coords, normal, penetration);
+            if (cell_block == Block::conveyor) {
+              auto const velocity =
+                (9.0f / 16.0f * [&] -> math::vec3 {
+                  auto const p =
+                    (math::vec2{box.center().x(), box.center().z()} -
+                     math::vec2{cell_bounds.min().x(), cell_bounds.min().z()})
+                      .cwiseMax(math::vec2::Zero())
+                      .cwiseMin(math::vec2::Ones())
+                      .eval();
+                  auto const [pos_x_block, pos_x_data] =
+                    get_block({x + 1, y, z});
+                  auto const [neg_x_block, neg_x_data] =
+                    get_block({x - 1, y, z});
+                  auto const [pos_z_block, pos_z_data] =
+                    get_block({x, y, z + 1});
+                  auto const [neg_z_block, neg_z_data] =
+                    get_block({x, y, z - 1});
+                  auto const pos_x_neighbor =
+                    pos_x_block == Block::conveyor && pos_x_data == 0b11;
+                  auto const neg_x_neighbor =
+                    neg_x_block == Block::conveyor && neg_x_data == 0b01;
+                  auto const pos_z_neighbor =
+                    pos_z_block == Block::conveyor && pos_z_data == 0b10;
+                  auto const neg_z_neighbor =
+                    neg_z_block == Block::conveyor && neg_z_data == 0b00;
+                  if (cell_data == 0b00) {
+                    // north / +z
+                    if (neg_x_neighbor && p.x() < 0.25f) {
+                      auto const t = p.x() / 0.25f;
+                      return t * math::vec3::UnitZ() +
+                             (1.0f - t) * math::vec3::UnitX();
+                    } else if (pos_x_neighbor && p.x() > 0.75f) {
+                      auto const t = 1.0f - (p.x() - 0.75f) / 0.25f;
+                      return t * math::vec3::UnitZ() +
+                             (1.0f - t) * -math::vec3::UnitX();
+                    } else {
+                      return {0.0f, 0.0f, 1.0f};
+                    }
+                  } else if (cell_data == 0b01) {
+                    // west / +x
+                    if (neg_z_neighbor && p.y() < 0.25f) {
+                      auto const t = p.y() / 0.25f;
+                      return t * math::vec3::UnitX() +
+                             (1.0f - t) * math::vec3::UnitZ();
+                    } else if (pos_z_neighbor && p.y() > 0.75f) {
+                      auto const t = 1.0f - (p.y() - 0.75f) / 0.25f;
+                      return t * math::vec3::UnitX() +
+                             (1.0f - t) * -math::vec3::UnitZ();
+                    } else {
+                      return {1.0f, 0.0f, 0.0f};
+                    }
+                  } else if (cell_data == 0b10) {
+                    // south / -z
+                    if (neg_x_neighbor && p.x() < 0.25f) {
+                      auto const t = p.x() / 0.25f;
+                      return t * -math::vec3::UnitZ() +
+                             (1.0f - t) * math::vec3::UnitX();
+                    } else if (pos_x_neighbor && p.x() > 0.75f) {
+                      auto const t = 1.0f - (p.x() - 0.75f) / 0.25f;
+                      return t * -math::vec3::UnitZ() +
+                             (1.0f - t) * -math::vec3::UnitX();
+                    } else {
+                      return {0.0f, 0.0f, -1.0f};
+                    }
+                  } else /*if (cell_data == 0b11)*/ {
+                    // east / -x
+                    if (neg_z_neighbor && p.y() < 0.25f) {
+                      auto const t = p.y() / 0.25f;
+                      return t * -math::vec3::UnitX() +
+                             (1.0f - t) * math::vec3::UnitZ();
+                    } else if (pos_z_neighbor && p.y() > 0.75f) {
+                      auto const t = 1.0f - (p.y() - 0.75f) / 0.25f;
+                      return t * -math::vec3::UnitX() +
+                             (1.0f - t) * -math::vec3::UnitZ();
+                    } else {
+                      return {-1.0f, 0.0f, 0.0f};
+                    }
+                  }
+                }())
+                  .eval();
+              update_contact_constraint(
+                pos_y_constraint, normal, velocity, penetration, surface_area);
+            } else {
+              update_contact_constraint(
+                pos_y_constraint,
+                normal,
+                math::vec3::Zero(),
+                penetration,
+                surface_area);
+            }
           } else if (normal == math::ivec3::UnitZ()) {
             update_contact_constraint(
-              pos_z_constraint, cell_coords, normal, penetration);
+              pos_z_constraint,
+              normal,
+              math::vec3::Zero(),
+              penetration,
+              surface_area);
           } else if (normal == -math::ivec3::UnitX()) {
             update_contact_constraint(
-              neg_x_constraint, cell_coords, normal, penetration);
+              neg_x_constraint,
+              normal,
+              math::vec3::Zero(),
+              penetration,
+              surface_area);
           } else if (normal == -math::ivec3::UnitY()) {
             update_contact_constraint(
-              neg_y_constraint, cell_coords, normal, penetration);
+              neg_y_constraint,
+              normal,
+              math::vec3::Zero(),
+              penetration,
+              surface_area);
           } else if (normal == -math::ivec3::UnitZ()) {
             update_contact_constraint(
-              neg_z_constraint, cell_coords, normal, penetration);
+              neg_z_constraint,
+              normal,
+              math::vec3::Zero(),
+              penetration,
+              surface_area);
           }
         }
       }
@@ -248,8 +399,8 @@ Grid::find_contact(math::box3 const &box) const noexcept {
     auto const separation = -constraint.penetration;
     if (!result || separation < result->separation) {
       result = Grid_contact{
-        .cell_coords = constraint.cell_coords,
         .normal = constraint.normal,
+        .velocity = constraint.velocity,
         .separation = separation,
       };
     }
@@ -345,9 +496,7 @@ math::ibox3 Grid::get_chunk_bounds() const noexcept {
   return cell_to_chunk(get_cell_bounds());
 }
 
-math::ibox3 const &Grid::get_cell_bounds() const noexcept {
-  return _bounds;
-}
+math::ibox3 const &Grid::get_cell_bounds() const noexcept { return _bounds; }
 
 bool Grid::empty() const noexcept { return get_cell_bounds().isEmpty(); }
 

@@ -281,28 +281,12 @@ void Game::tick(float duration) {
         } else if (contact->normal.z() < 0) {
           item.velocity.z() = std::min(item.velocity.z(), 0.0f);
         }
-        auto surface_velocity = math::vec3::Zero().eval();
-        if (contact->normal.y() > 0) {
-          auto const [supporting_block, supporting_block_data] =
-            _grid.get_block(contact->cell_coords);
-          if (supporting_block == Block::conveyor) {
-            if (supporting_block_data == 0b00) {
-              surface_velocity.z() = 9.0f / 16.0f;
-            } else if (supporting_block_data == 0b01) {
-              surface_velocity.x() = 9.0f / 16.0f;
-            } else if (supporting_block_data == 0b10) {
-              surface_velocity.z() = -9.0f / 16.0f;
-            } else if (supporting_block_data == 0b11) {
-              surface_velocity.x() = -9.0f / 16.0f;
-            }
-          }
-        }
         auto const momentum_after = (Item::mass * item.velocity).eval();
         // if (!momentum_after.isZero()) {
         auto const normal_impulse = (momentum_after - momentum_before).eval();
         auto const max_frictional_impulse =
           Item::friction * normal_impulse.norm();
-        auto const relative_velocity = item.velocity - surface_velocity;
+        auto const relative_velocity = item.velocity - contact->velocity;
         auto const stopping_frictional_impulse =
           -relative_velocity * Item::mass;
         auto const stopping_frictional_impulse_norm =

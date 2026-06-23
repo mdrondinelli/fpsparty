@@ -40,8 +40,8 @@ struct Grid_raycast_hit {
 };
 
 struct Grid_contact {
-  math::ivec3 cell_coords{};
   math::ivec3 normal{};
+  math::vec3 velocity{};
   float separation{};
 };
 
