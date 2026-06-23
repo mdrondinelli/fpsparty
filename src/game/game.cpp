@@ -85,7 +85,11 @@ void handle_use_secondary(
 
 } // namespace
 
-Game::Game(Game_create_info const &info) : _grid{info.grid_info} {
+Game::Game(Game_create_info const &info)
+    : _grid{{
+        .block_bounds_registry = &_block_bounds_registry,
+        .bounds = info.grid_bounds,
+      }} {
   _entities.register_entity_type<Player>();
   _entities.register_entity_type<Humanoid>();
   _entities.register_entity_type<Item>();
@@ -279,7 +283,8 @@ void Game::tick(float duration) {
         }
         auto surface_velocity = math::vec3::Zero().eval();
         if (contact->normal.y() > 0) {
-          auto const [supporting_block, supporting_block_data] = _grid.get_block(contact->cell_coords);
+          auto const [supporting_block, supporting_block_data] =
+            _grid.get_block(contact->cell_coords);
           if (supporting_block == Block::conveyor) {
             if (supporting_block_data == 0b00) {
               surface_velocity.z() = 9.0f / 16.0f;

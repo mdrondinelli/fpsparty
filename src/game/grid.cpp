@@ -43,7 +43,8 @@ bool Grid::diff(Grid const &lhs, Grid const &rhs) {
 }
 
 Grid::Grid(Grid_create_info const &create_info)
-    : _cell_bounds{create_info.bounds} {
+    : _block_bounds_registry{create_info.block_bounds_registry},
+      _bounds{create_info.bounds} {
   if (!empty()) {
     auto const chunk_counts = get_chunk_counts();
     auto const width_chunks = chunk_counts(0);
@@ -59,10 +60,10 @@ void Grid::load(serial::Reader &reader) {
   if (!cell_bounds) {
     throw Grid_loading_error{};
   }
-  _cell_bounds = *cell_bounds;
+  _bounds = *cell_bounds;
   _chunks.clear();
   if (!empty()) {
-    auto const chunk_bounds = cell_to_chunk(_cell_bounds);
+    auto const chunk_bounds = cell_to_chunk(_bounds);
     auto const chunk_counts =
       (chunk_bounds.diagonal() + math::ivec3::Ones()).eval();
     _chunks.resize(chunk_counts(0) * chunk_counts(1) * chunk_counts(2));
@@ -181,10 +182,12 @@ Grid::find_contact(math::box3 const &box) const noexcept {
     for (auto y = touched_min.y(); y <= touched_max.y(); ++y) {
       for (auto x = touched_min.x(); x <= touched_max.x(); ++x) {
         auto const cell_coords = math::ivec3{x, y, z};
-        if (is_solid(cell_coords)) {
+        auto const [cell_block, cell_data] = get_block(cell_coords);
+        if (cell_block != Block::air) {
+          auto const block_box = _block_bounds_registry->get(cell_block);
           auto const cell_box = math::box3{
-            cell_coords.cast<f32>(),
-            (cell_coords + math::ivec3::Ones()).cast<f32>(),
+            cell_coords.cast<f32>() + block_box.min(),
+            cell_coords.cast<f32>() + block_box.max(),
           };
           auto const pos = (cell_box.max() - box.min()).eval();
           auto const neg = (box.max() - cell_box.min()).eval();
@@ -343,7 +346,7 @@ math::ibox3 Grid::get_chunk_bounds() const noexcept {
 }
 
 math::ibox3 const &Grid::get_cell_bounds() const noexcept {
-  return _cell_bounds;
+  return _bounds;
 }
 
 bool Grid::empty() const noexcept { return get_cell_bounds().isEmpty(); }

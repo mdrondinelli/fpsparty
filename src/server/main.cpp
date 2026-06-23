@@ -44,14 +44,11 @@ int main() {
       },
     .game_info =
       {
-        .grid_info =
-          {
-            .bounds =
-              math::ibox3{
+        .grid_bounds =
+          math::ibox3{
                 math::ivec3{-32, 0, -32},
                 math::ivec3{31, 15, 31},
               },
-          },
       },
     .tick_duration = constants::tick_duration,
   }};

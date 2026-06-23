@@ -14,6 +14,7 @@
 #include <serial/writer.hpp>
 
 #include "block.hpp"
+#include "block_bounds.hpp"
 
 namespace fpsparty::game {
 
@@ -28,6 +29,7 @@ constexpr std::size_t linearize_chunk_index(
 } // namespace detail
 
 struct Grid_create_info {
+  Block_bounds_registry const *block_bounds_registry{};
   math::ibox3 bounds{};
 };
 
@@ -247,7 +249,8 @@ public:
   static math::ivec3 chunk_to_cell(math::ivec3 coords);
 
 private:
-  math::ibox3 _cell_bounds;
+  Block_bounds_registry const *_block_bounds_registry;
+  math::ibox3 _bounds;
   std::vector<Chunk> _chunks{};
 };
 

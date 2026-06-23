@@ -6,7 +6,7 @@
 
 namespace fpsparty::game {
 struct Game_create_info {
-  Grid_create_info grid_info{};
+  math::ibox3 grid_bounds{};
 };
 
 class Game {
@@ -26,6 +26,7 @@ public:
   Entity_world &get_entities() noexcept;
 
 private:
+  Block_bounds_registry _block_bounds_registry;
   Grid _grid;
   Entity_world _entities{};
 };

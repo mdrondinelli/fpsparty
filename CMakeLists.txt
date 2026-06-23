@@ -41,6 +41,7 @@ target_link_libraries(net PUBLIC enet)
 # libgame
 add_library(
   game
+  src/game/block_bounds_registry.cpp
   src/game/grid.cpp
   src/game/game.cpp
   src/game/humanoid.cpp
