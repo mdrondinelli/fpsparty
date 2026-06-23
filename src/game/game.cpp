@@ -31,8 +31,8 @@ math::box3 cell_bounds(math::ivec3 cell_coords) noexcept {
     min, (min + math::vec3::Constant(constants::grid_cell_stride)).eval()};
 }
 
-void handle_use_secondary(
-  Grid &grid, Entity_world &entities, Humanoid &humanoid) {
+std::optional<Grid_raycast_hit>
+humanoid_raycast(Grid &grid, Humanoid &humanoid) {
   auto const basis = (math::y_rotation_matrix(humanoid.curr_input_state.yaw) *
                       math::x_rotation_matrix(humanoid.curr_input_state.pitch))
                        .eval();
@@ -44,11 +44,23 @@ void handle_use_secondary(
   auto const origin_cell_indices = origin_cell.cast<int>().eval();
   auto const origin_cell_offset =
     (origin / constants::grid_cell_stride - origin_cell).eval();
-  auto const hit = grid.raycast(
+  return grid.raycast(
     origin_cell_indices,
     origin_cell_offset,
     forward,
     constants::block_interaction_range / constants::grid_cell_stride);
+}
+
+void handle_use_primary(Humanoid &humanoid, Grid &grid) {
+  auto const hit = humanoid_raycast(grid, humanoid);
+  if (hit) {
+    grid.set_block(hit->cell_coords, Block::air);
+  }
+}
+
+void handle_use_secondary(
+  Humanoid &humanoid, Grid &grid, Entity_world &entities) {
+  auto const hit = humanoid_raycast(grid, humanoid);
   if (!hit) {
     return;
   }
@@ -66,16 +78,18 @@ void handle_use_secondary(
     }
   }
   auto const data = [&] {
-    if (forward.z() > std::abs(forward.x())) {
+    auto const forward_x = std::sin(humanoid.curr_input_state.yaw);
+    auto const forward_z = std::cos(humanoid.curr_input_state.yaw);
+    if (forward_z > std::abs(forward_x)) {
       return 0b00;
     }
-    if (-forward.z() > std::abs(forward.x())) {
+    if (-forward_z > std::abs(forward_x)) {
       return 0b10;
     }
-    if (forward.x() > std::abs(forward.z())) {
+    if (forward_x > std::abs(forward_z)) {
       return 0b01;
     }
-    if (-forward.x() > std::abs(forward.z())) {
+    if (-forward_x > std::abs(forward_z)) {
       return 0b11;
     }
     return 0;
@@ -185,7 +199,11 @@ void Game::tick(float duration) {
       humanoid.coyote_timer = Humanoid::coyote_duration;
     }
     if (
-      humanoid.curr_input_state.use_primary && humanoid.attack_timer == 0.0f) {
+      humanoid.curr_input_state.use_primary &&
+      !humanoid.prev_input_state.use_primary) {
+      handle_use_primary(humanoid, _grid);
+    }
+    if (humanoid.curr_input_state.drop && humanoid.attack_timer == 0.0f) {
       auto const basis =
         (math::y_rotation_matrix(humanoid.curr_input_state.yaw) *
          math::x_rotation_matrix(humanoid.curr_input_state.pitch))
@@ -202,9 +220,9 @@ void Game::tick(float duration) {
       humanoid.attack_timer = Humanoid::attack_cooldown;
     }
     if (
-      !humanoid.prev_input_state.use_secondary &&
-      humanoid.curr_input_state.use_secondary) {
-      handle_use_secondary(_grid, _entities, humanoid);
+      humanoid.curr_input_state.use_secondary &&
+      !humanoid.prev_input_state.use_secondary) {
+      handle_use_secondary(humanoid, _grid, _entities);
     }
   }
   // accumulate item forces

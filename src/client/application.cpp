@@ -536,6 +536,9 @@ private:
       case glfw::Key::k_right_shift:
         input_state.run = action != glfw::Press_action::release;
         break;
+      case glfw::Key::k_g:
+        input_state.drop = action != glfw::Press_action::release;
+        break;
       default:
       }
       _local_player->input_state = input_state;

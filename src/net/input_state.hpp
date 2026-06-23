@@ -13,6 +13,7 @@ struct Input_state {
   bool run{};
   bool use_primary{};
   bool use_secondary{};
+  bool drop{};
   float yaw{};
   float pitch{};
 };
@@ -21,7 +22,7 @@ struct Input_state {
 namespace fpsparty::serial {
 template <> struct Serializer<net::Input_state> {
   void write(Writer &writer, net::Input_state const &value) const {
-    auto flags = std::uint8_t{};
+    auto flags = std::uint16_t{};
     if (value.move_left) {
       flags |= 1 << 0;
     }
@@ -46,13 +47,16 @@ template <> struct Serializer<net::Input_state> {
     if (value.use_secondary) {
       flags |= 1 << 7;
     }
-    serialize<std::uint8_t>(writer, flags);
+    if (value.drop) {
+      flags |= 1 << 8;
+    }
+    serialize<std::uint16_t>(writer, flags);
     serialize<float>(writer, value.yaw);
     serialize<float>(writer, value.pitch);
   }
 
   std::optional<net::Input_state> read(Reader &reader) const {
-    auto const flags = deserialize<std::uint8_t>(reader);
+    auto const flags = deserialize<std::uint16_t>(reader);
     if (!flags) {
       return std::nullopt;
     }
@@ -73,6 +77,7 @@ template <> struct Serializer<net::Input_state> {
       .run = (*flags & (1 << 5)) != 0,
       .use_primary = (*flags & (1 << 6)) != 0,
       .use_secondary = (*flags & (1 << 7)) != 0,
+      .drop = (*flags & (1 << 8)) != 0,
       .yaw = *yaw,
       .pitch = *pitch,
     };
