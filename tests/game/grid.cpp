@@ -15,9 +15,23 @@ namespace serial = fpsparty::serial;
 auto const straddling_bounds =
   math::ibox3{math::ivec3{-8, -8, -8}, math::ivec3{7, 7, 7}};
 
-game::Grid make_grid() { return game::Grid{{.bounds = straddling_bounds}}; }
+game::Grid make_grid() {
+  static auto const block_bounds_registry = game::Block_bounds_registry{};
+  return game::Grid{{
+    .block_bounds_registry = &block_bounds_registry,
+    .bounds = straddling_bounds,
+  }};
+}
 
 } // namespace
+
+TEST_CASE("Grid block data packs block in the low byte and data in the high byte") {
+  auto const packed = game::pack_block_data(game::Block::conveyor, 0xab);
+  CHECK(packed == 0xab04);
+  CHECK(
+    game::unpack_block_data(packed) ==
+    std::pair{game::Block::conveyor, 0xab});
+}
 
 TEST_CASE("Grid cell_to_chunk floors toward negative infinity") {
   CHECK(
@@ -41,6 +55,12 @@ TEST_CASE("Grid stores and reports solidity at negative coordinates") {
   CHECK(grid.is_solid({-8, -8, -8}));
   CHECK(grid.is_solid({-1, 0, 3}));
   CHECK_FALSE(grid.is_solid({-7, -8, -8}));
+}
+
+TEST_CASE("Grid stores the full cell data byte") {
+  auto grid = make_grid();
+  grid.set_block({0, 0, 0}, game::Block::conveyor, 0xab);
+  CHECK(grid.get_block({0, 0, 0}) == std::pair{game::Block::conveyor, 0xab});
 }
 
 TEST_CASE("Grid bounds are inclusive at both corners") {
@@ -117,7 +137,7 @@ TEST_CASE("Grid survives a serialization round-trip") {
   auto original = make_grid();
   original.set_block({-8, -8, -8}, game::Block::placeholder);
   original.set_block({7, 7, 7}, game::Block::placeholder);
-  auto buffer = std::array<std::byte, 4096>{};
+  auto buffer = std::array<std::byte, 8300>{};
   auto writer = serial::Span_writer{buffer};
   original.dump(writer);
   auto reader = serial::Span_reader{std::span{buffer}.first(writer.offset())};

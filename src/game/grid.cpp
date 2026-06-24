@@ -76,12 +76,12 @@ void Grid::load(serial::Reader &reader) {
     _chunks.resize(chunk_counts(0) * chunk_counts(1) * chunk_counts(2));
     for (auto &chunk : _chunks) {
       chunk = Chunk{};
-      for (auto &byte : chunk.bytes) {
-        auto const deserialized_byte = deserialize<std::byte>(reader);
-        if (!deserialized_byte) {
+      for (auto &cell : chunk.cells) {
+        auto const deserialized_cell = deserialize<u16>(reader);
+        if (!deserialized_cell) {
           throw Grid_loading_error{};
         }
-        byte = *deserialized_byte;
+        cell = *deserialized_cell;
       }
     }
   }
@@ -91,8 +91,8 @@ void Grid::dump(serial::Writer &writer) const {
   using serial::serialize;
   serialize<math::ibox3>(writer, get_cell_bounds());
   for (auto const &chunk : _chunks) {
-    for (auto const &byte : chunk.bytes) {
-      serialize<std::byte>(writer, byte);
+    for (auto const &cell : chunk.cells) {
+      serialize<u16>(writer, cell);
     }
   }
 }

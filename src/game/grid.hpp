@@ -1,6 +1,7 @@
 #ifndef FPSPARTY_GAME_GRID_HPP
 #define FPSPARTY_GAME_GRID_HPP
 
+#include <array>
 #include <cstddef>
 #include <exception>
 #include <optional>
@@ -62,20 +63,20 @@ public:
 
   constexpr std::pair<Block, int> get_block(math::ivec3 offset) const noexcept {
     auto const idx = get_block_index(offset);
-    return unpack_block_data(bytes[idx]);
+    return unpack_block_data(cells[idx]);
   }
 
   constexpr void set_block(math::ivec3 offset, Block value, int data) noexcept {
     auto const idx = get_block_index(offset);
-    bytes[idx] = pack_block_data(value, data);
+    cells[idx] = pack_block_data(value, data);
   }
 
   constexpr bool is_solid(math::ivec3 offset) const noexcept {
     auto const idx = get_block_index(offset);
-    return static_cast<bool>(bytes[idx]);
+    return static_cast<bool>(cells[idx]);
   }
 
-  std::array<std::byte, 64> bytes{};
+  std::array<u16, 64> cells{};
 
   friend constexpr bool
   operator==(Chunk const &lhs, Chunk const &rhs) noexcept = default;
