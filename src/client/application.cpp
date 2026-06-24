@@ -539,6 +539,12 @@ private:
       case glfw::Key::k_g:
         input_state.drop = action != glfw::Press_action::release;
         break;
+      case glfw::Key::k_1:
+        input_state.slot_index = static_cast<u8>(game::Block::stone);
+        break;
+      case glfw::Key::k_2:
+        input_state.slot_index = static_cast<u8>(game::Block::conveyor);
+        break;
       default:
       }
       _local_player->input_state = input_state;

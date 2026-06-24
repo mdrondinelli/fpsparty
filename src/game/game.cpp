@@ -77,24 +77,27 @@ void handle_use_secondary(
       return;
     }
   }
+  auto const block = static_cast<Block>(humanoid.curr_input_state.slot_index);
   auto const data = [&] {
-    auto const forward_x = std::sin(humanoid.curr_input_state.yaw);
-    auto const forward_z = std::cos(humanoid.curr_input_state.yaw);
-    if (forward_z > std::abs(forward_x)) {
-      return 0b00;
-    }
-    if (-forward_z > std::abs(forward_x)) {
-      return 0b10;
-    }
-    if (forward_x > std::abs(forward_z)) {
-      return 0b01;
-    }
-    if (-forward_x > std::abs(forward_z)) {
-      return 0b11;
+    if (block == game::Block::conveyor) {
+      auto const forward_x = std::sin(humanoid.curr_input_state.yaw);
+      auto const forward_z = std::cos(humanoid.curr_input_state.yaw);
+      if (forward_z > std::abs(forward_x)) {
+        return 0b00;
+      }
+      if (-forward_z > std::abs(forward_x)) {
+        return 0b10;
+      }
+      if (forward_x > std::abs(forward_z)) {
+        return 0b01;
+      }
+      if (-forward_x > std::abs(forward_z)) {
+        return 0b11;
+      }
     }
     return 0;
   }();
-  grid.set_block(target_cell, Block::conveyor, data);
+  grid.set_block(target_cell, block, data);
 }
 
 } // namespace

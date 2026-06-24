@@ -1,9 +1,12 @@
 #ifndef FPSPARTY_NET_INPUT_STATE_HPP
 #define FPSPARTY_NET_INPUT_STATE_HPP
 
-#include "serial/serialize.hpp"
+#include <int.hpp>
+
+#include <serial/serialize.hpp>
 
 namespace fpsparty::net {
+
 struct Input_state {
   bool move_left{};
   bool move_right{};
@@ -14,6 +17,7 @@ struct Input_state {
   bool use_primary{};
   bool use_secondary{};
   bool drop{};
+  u8 slot_index{};
   float yaw{};
   float pitch{};
 };
@@ -22,7 +26,7 @@ struct Input_state {
 namespace fpsparty::serial {
 template <> struct Serializer<net::Input_state> {
   void write(Writer &writer, net::Input_state const &value) const {
-    auto flags = std::uint16_t{};
+    auto flags = u16{};
     if (value.move_left) {
       flags |= 1 << 0;
     }
@@ -50,7 +54,8 @@ template <> struct Serializer<net::Input_state> {
     if (value.drop) {
       flags |= 1 << 8;
     }
-    serialize<std::uint16_t>(writer, flags);
+    serialize<u16>(writer, flags);
+    serialize<u8>(writer, value.slot_index);
     serialize<float>(writer, value.yaw);
     serialize<float>(writer, value.pitch);
   }
@@ -58,6 +63,10 @@ template <> struct Serializer<net::Input_state> {
   std::optional<net::Input_state> read(Reader &reader) const {
     auto const flags = deserialize<std::uint16_t>(reader);
     if (!flags) {
+      return std::nullopt;
+    }
+    auto const slot_index = deserialize<std::uint8_t>(reader);
+    if (!slot_index) {
       return std::nullopt;
     }
     auto const yaw = deserialize<float>(reader);
@@ -78,10 +87,13 @@ template <> struct Serializer<net::Input_state> {
       .use_primary = (*flags & (1 << 6)) != 0,
       .use_secondary = (*flags & (1 << 7)) != 0,
       .drop = (*flags & (1 << 8)) != 0,
+      .slot_index = *slot_index,
       .yaw = *yaw,
       .pitch = *pitch,
     };
   }
 };
+
 } // namespace fpsparty::serial
+
 #endif
