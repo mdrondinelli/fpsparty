@@ -58,6 +58,14 @@ struct Synchronization_scope {
   Pipeline_stage_flags stage_mask;
   Access_flags access_mask;
 };
+
+constexpr Synchronization_scope
+operator|(Synchronization_scope lhs, Synchronization_scope rhs) noexcept {
+  return Synchronization_scope{
+    .stage_mask = lhs.stage_mask | rhs.stage_mask,
+    .access_mask = lhs.access_mask | rhs.access_mask,
+  };
+}
 } // namespace fpsparty::graphics
 
 #endif
