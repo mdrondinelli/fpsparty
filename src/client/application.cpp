@@ -8,7 +8,6 @@
 #include <optional>
 #include <span>
 #include <stdexcept>
-#include <tuple>
 #include <vector>
 
 #include <tracy/Tracy.hpp>
@@ -209,6 +208,9 @@ public:
           graphics::load_shader("./assets/shaders/composite.vert.spv")},
         _composite_fragment_shader{
           graphics::load_shader("./assets/shaders/composite.frag.spv")},
+        _grid_pipeline{make_grid_pipeline()},
+        _mesh_pipeline{make_mesh_pipeline()},
+        _crosshair_pipeline{make_crosshair_pipeline()},
         _texture_manager{{.graphics = &_graphics}},
         _block_texture_registry{{.graphics = &_graphics}} {
     std::cout << "Opened window.\n";
@@ -273,6 +275,7 @@ public:
       _client.update(duration);
       _time += duration;
     }
+    _graphics.poll_works();
     update_grid_mesh();
     render();
     return true;
@@ -295,67 +298,39 @@ private:
 
   void render() {
     ZoneScoped;
-    _graphics.poll_works();
     if (_pending_grid_mesh && _pending_grid_mesh->is_uploaded()) {
       _grid_mesh = std::move(_pending_grid_mesh);
     }
     auto [work_recorder, swapchain_image] = _graphics.record_frame_work();
     auto const framebuffer_extent = swapchain_image->get_extent().eval();
     auto const framebuffer_size = framebuffer_extent.head<2>().eval();
-    auto [albedo_image, albedo_image_created] =
-      get_albedo_image(framebuffer_extent);
-    auto [crosshair_mask_image, crosshair_mask_image_created] =
-      get_crosshair_mask_image(framebuffer_extent);
-    auto [depth_image, depth_image_created] =
-      get_depth_image(framebuffer_extent);
-    auto const color_attachment_scope = graphics::Synchronization_scope{
-      .stage_mask = graphics::Pipeline_stage_flag_bits::color_attachment_output,
-      .access_mask = graphics::Access_flag_bits::color_attachment_write,
-    };
-    auto const sampled_image_scope = graphics::Synchronization_scope{
-      .stage_mask = graphics::Pipeline_stage_flag_bits::fragment_shader,
-      .access_mask = graphics::Access_flag_bits::shader_sampled_read,
-    };
-    auto record_color_attachment_transition =
-      [&](rc::Strong<graphics::Image> image, bool image_created) {
-        if (image_created) {
-          work_recorder.transition_image_layout(
-            {},
-            color_attachment_scope,
-            graphics::Image_layout::undefined,
-            graphics::Image_layout::general,
-            image);
-        } else {
-          work_recorder.barrier(sampled_image_scope, color_attachment_scope);
-        }
-      };
-    record_color_attachment_transition(albedo_image, albedo_image_created);
-    record_color_attachment_transition(
-      crosshair_mask_image, crosshair_mask_image_created);
-    auto const depth_scope = graphics::Synchronization_scope{
-      .stage_mask = graphics::Pipeline_stage_flag_bits::early_fragment_tests |
-                    graphics::Pipeline_stage_flag_bits::late_fragment_tests,
-      .access_mask = graphics::Access_flag_bits::depth_stencil_attachment_read |
-                     graphics::Access_flag_bits::depth_stencil_attachment_write,
-    };
-    if (depth_image_created) {
-      work_recorder.transition_image_layout(
-        {},
-        depth_scope,
-        graphics::Image_layout::undefined,
-        graphics::Image_layout::general,
-        depth_image);
-    } else {
-      work_recorder.barrier(sampled_image_scope, depth_scope);
-    }
+    get_color_render_target(
+      work_recorder,
+      _albedo_image,
+      graphics::Image_format::b8g8r8a8_srgb,
+      framebuffer_extent);
+    get_color_render_target(
+      work_recorder,
+      _crosshair_mask_image,
+      graphics::Image_format::r8_unorm,
+      framebuffer_extent);
+    get_depth_render_target(work_recorder, _depth_image, framebuffer_extent);
+    record_forward_pass(work_recorder, framebuffer_size);
+    record_crosshair_pass(work_recorder, framebuffer_size);
+    record_composite_pass(work_recorder, swapchain_image, framebuffer_size);
+    _graphics.submit_frame_work(std::move(work_recorder));
+  }
+
+  void record_forward_pass(
+    graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
+    ZoneScoped;
+    work_recorder.barrier(
+      sampled_image_scope, color_attachment_scope | depth_attachment_scope);
     work_recorder.begin_rendering({
-      .color_image = albedo_image,
-      .depth_image = depth_image,
+      .color_image = _albedo_image,
+      .depth_image = _depth_image,
       .color_clear_value = sky_color,
     });
-    auto const
-      [grid_pipeline, mesh_pipeline, crosshair_pipeline, composite_pipeline] =
-        get_graphics_pipelines(swapchain_image->get_format());
     work_recorder.set_viewport(framebuffer_size);
     work_recorder.set_scissor(framebuffer_size);
     work_recorder.set_depth_test_enabled(true);
@@ -375,9 +350,8 @@ private:
          math::translation_matrix(-camera->position))
           .eval();
       auto const zoom = 1.25f;
-      auto const aspect_ratio =
-        static_cast<float>(swapchain_image->get_extent().x()) /
-        static_cast<float>(swapchain_image->get_extent().y());
+      auto const aspect_ratio = static_cast<float>(framebuffer_size.x()) /
+                                static_cast<float>(framebuffer_size.y());
       auto const projection_matrix = math::perspective_projection_matrix(
         aspect_ratio > 1.0f ? zoom : zoom * aspect_ratio,
         aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
@@ -386,7 +360,7 @@ private:
         (projection_matrix * view_matrix).eval();
       // draw grid
       if (_grid_mesh && _grid_mesh->is_uploaded()) {
-        work_recorder.bind_pipeline(grid_pipeline);
+        work_recorder.bind_pipeline(_grid_pipeline);
         work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
         work_recorder.set_cull_mode(graphics::Cull_mode::back);
         work_recorder.bind_index_buffer(
@@ -398,8 +372,7 @@ private:
         _block_texture_registry.upload_descriptors(work_recorder);
         work_recorder.push_buffer_device_address(
           88, _block_texture_registry.get_descriptor_index_buffer());
-        work_recorder.push_data(
-          96, std::as_bytes(std::span{&_time, 1}));
+        work_recorder.push_data(96, std::as_bytes(std::span{&_time, 1}));
         auto push_normal = [&](math::vec4 const &value) {
           work_recorder.push_data(64, std::as_bytes(std::span{&value, 1}));
         };
@@ -417,7 +390,7 @@ private:
         _grid_mesh->record_draws(work_recorder, -math::axis3::z);
       }
       // draw cubes
-      work_recorder.bind_pipeline(mesh_pipeline);
+      work_recorder.bind_pipeline(_mesh_pipeline);
       work_recorder.set_cull_mode(graphics::Cull_mode::back);
       work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
       work_recorder
@@ -446,13 +419,17 @@ private:
       }
     }
     work_recorder.end_rendering();
+  }
 
+  void record_crosshair_pass(
+    graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
+    ZoneScoped;
     work_recorder.begin_rendering({
-      .color_image = crosshair_mask_image,
+      .color_image = _crosshair_mask_image,
     });
     work_recorder.set_viewport(framebuffer_size);
     work_recorder.set_scissor(framebuffer_size);
-    work_recorder.bind_pipeline(crosshair_pipeline);
+    work_recorder.bind_pipeline(_crosshair_pipeline);
     work_recorder.set_cull_mode(graphics::Cull_mode::none);
     work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
     work_recorder
@@ -466,9 +443,15 @@ private:
       .first_instance = 0,
     });
     work_recorder.end_rendering();
+  }
 
-    work_recorder.barrier(color_attachment_scope, sampled_image_scope);
-    work_recorder.barrier(depth_scope, sampled_image_scope);
+  void record_composite_pass(
+    graphics::Work_recorder &work_recorder,
+    rc::Strong<graphics::Image> const &swapchain_image,
+    math::ivec2 framebuffer_size) {
+    ZoneScoped;
+    work_recorder.barrier(
+      color_attachment_scope | depth_attachment_scope, sampled_image_scope);
     work_recorder.transition_image_layout(
       {},
       color_attachment_scope,
@@ -481,18 +464,19 @@ private:
     work_recorder.set_viewport(framebuffer_size);
     work_recorder.set_scissor(framebuffer_size);
     auto const albedo_texture_index =
-      work_recorder.upload_sampled_image_descriptor(albedo_image);
+      work_recorder.upload_sampled_image_descriptor(_albedo_image);
     auto const mask_texture_index =
-      work_recorder.upload_sampled_image_descriptor(crosshair_mask_image);
+      work_recorder.upload_sampled_image_descriptor(_crosshair_mask_image);
     auto const depth_texture_index =
-      work_recorder.upload_sampled_image_descriptor(depth_image);
+      work_recorder.upload_sampled_image_descriptor(_depth_image);
     auto const composite_push_constants = Composite_push_constants{
       .albedo_texture_index = albedo_texture_index,
       .mask_texture_index = mask_texture_index,
       .depth_texture_index = depth_texture_index,
       .z_near = z_near,
     };
-    work_recorder.bind_pipeline(composite_pipeline);
+    work_recorder
+      .bind_pipeline(get_composite_pipeline(swapchain_image->get_format()));
     work_recorder.set_cull_mode(graphics::Cull_mode::none);
     work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
     work_recorder
@@ -500,14 +484,13 @@ private:
     work_recorder
       .push_data(0, std::as_bytes(std::span{&composite_push_constants, 1}));
     work_recorder.draw_indexed({
-      .index_count = static_cast<std::uint32_t>(composite_indices.size()),
+      .index_count = static_cast<u32>(composite_indices.size()),
       .instance_count = 1,
       .first_index = 0,
       .vertex_offset = 0,
       .first_instance = 0,
     });
     work_recorder.end_rendering();
-    _graphics.submit_frame_work(std::move(work_recorder));
   }
 
   void on_key(
@@ -594,6 +577,7 @@ private:
   }
 
   void update_grid_mesh() {
+    ZoneScoped;
     auto &session = _client.get_session();
     if (!session) {
       _grid_mesh.reset();
@@ -612,22 +596,11 @@ private:
     scene.reset_grid_remesh_flag();
   }
 
-  std::pair<rc::Strong<graphics::Image>, bool>
-  get_albedo_image(math::ivec3 const &extent) {
-    return get_color_image(
-      _albedo_image, graphics::Image_format::b8g8r8a8_srgb, extent);
-  }
-
-  std::pair<rc::Strong<graphics::Image>, bool>
-  get_crosshair_mask_image(math::ivec3 const &extent) {
-    return get_color_image(
-      _crosshair_mask_image, graphics::Image_format::r8_unorm, extent);
-  }
-
-  std::pair<rc::Strong<graphics::Image>, bool> get_color_image(
+  void get_color_render_target(
+    graphics::Work_recorder &work_recorder,
     rc::Strong<graphics::Image> &image,
     graphics::Image_format format,
-    math::ivec3 const &extent) {
+    math::ivec3 extent) {
     auto const create_image = !image || image->get_extent() != extent;
     if (create_image) {
       image = _graphics.create_image({
@@ -639,16 +612,22 @@ private:
         .usage = graphics::Image_usage_flag_bits::sampled |
                  graphics::Image_usage_flag_bits::color_attachment,
       });
+      work_recorder.transition_image_layout(
+        {},
+        color_attachment_scope,
+        graphics::Image_layout::undefined,
+        graphics::Image_layout::general,
+        image);
     }
-    return {image, create_image};
   }
 
-  std::pair<rc::Strong<graphics::Image>, bool>
-  get_depth_image(math::ivec3 const &extent) {
-    auto const create_image =
-      !_depth_image || _depth_image->get_extent() != extent;
+  void get_depth_render_target(
+    graphics::Work_recorder &work_recorder,
+    rc::Strong<graphics::Image> &image,
+    math::ivec3 extent) {
+    auto const create_image = !image || image->get_extent() != extent;
     if (create_image) {
-      _depth_image = _graphics.create_image({
+      image = _graphics.create_image({
         .dimensionality = 2,
         .format = graphics::Image_format::d32_sfloat,
         .extent = extent,
@@ -657,8 +636,13 @@ private:
         .usage = graphics::Image_usage_flag_bits::sampled |
                  graphics::Image_usage_flag_bits::depth_attachment,
       });
+      work_recorder.transition_image_layout(
+        {},
+        depth_attachment_scope,
+        graphics::Image_layout::undefined,
+        graphics::Image_layout::general,
+        image);
     }
-    return {_depth_image, create_image};
   }
 
   rc::Strong<graphics::Buffer>
@@ -778,30 +762,15 @@ private:
     return image;
   }
 
-  std::tuple<
-    rc::Strong<graphics::Pipeline>,
-    rc::Strong<graphics::Pipeline>,
-    rc::Strong<graphics::Pipeline>,
-    rc::Strong<graphics::Pipeline>>
-  get_graphics_pipelines(graphics::Image_format swapchain_image_format) {
-    ZoneScoped;
-    if (!_grid_pipeline) {
-      _grid_pipeline = make_grid_pipeline();
-    }
-    if (!_mesh_pipeline) {
-      _mesh_pipeline = make_mesh_pipeline();
-    }
-    if (!_crosshair_pipeline) {
-      _crosshair_pipeline = make_crosshair_pipeline();
-    }
+  rc::Strong<graphics::Pipeline>
+  get_composite_pipeline(graphics::Image_format swapchain_image_format) {
     if (
       !_composite_pipeline_color_format ||
       *_composite_pipeline_color_format != swapchain_image_format) {
       _composite_pipeline = make_composite_pipeline(swapchain_image_format);
       _composite_pipeline_color_format = swapchain_image_format;
     }
-    return {
-      _grid_pipeline, _mesh_pipeline, _crosshair_pipeline, _composite_pipeline};
+    return {_composite_pipeline};
   }
 
   rc::Strong<graphics::Pipeline> make_grid_pipeline() {
@@ -924,6 +893,25 @@ private:
         },
     });
   }
+
+  static auto constexpr sampled_image_scope = graphics::Synchronization_scope{
+    .stage_mask = graphics::Pipeline_stage_flag_bits::fragment_shader,
+    .access_mask = graphics::Access_flag_bits::shader_sampled_read,
+  };
+
+  static auto constexpr color_attachment_scope =
+    graphics::Synchronization_scope{
+      .stage_mask = graphics::Pipeline_stage_flag_bits::color_attachment_output,
+      .access_mask = graphics::Access_flag_bits::color_attachment_write,
+    };
+
+  static auto constexpr depth_attachment_scope =
+    graphics::Synchronization_scope{
+      .stage_mask = graphics::Pipeline_stage_flag_bits::early_fragment_tests |
+                    graphics::Pipeline_stage_flag_bits::late_fragment_tests,
+      .access_mask = graphics::Access_flag_bits::depth_stencil_attachment_read |
+                     graphics::Access_flag_bits::depth_stencil_attachment_write,
+    };
 
   State _state{State::initial};
   Client _client;
