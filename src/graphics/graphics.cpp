@@ -247,6 +247,7 @@ Graphics::try_record_frame_work() {
   frame_resource.swapchain_image_index = [&]() {
     for (;;) {
       try {
+        ZoneScopedN("vkAcquireNextImageKHR");
         auto const swapchain_image_index =
           Global_vulkan_state::get().device().acquireNextImageKHR(
             *_swapchain,
