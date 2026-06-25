@@ -335,6 +335,7 @@ bool Graphics::is_vsync_preferred() const noexcept { return _vsync_preferred; }
 void Graphics::set_vsync_preferred(bool value) { _vsync_preferred = value; }
 
 void Graphics::init_swapchain(vk::PresentModeKHR present_mode) {
+  ZoneScoped;
   assert(!_swapchain);
   assert(_vk_swapchain_images.empty());
   assert(_vk_swapchain_image_views.empty());
@@ -369,6 +370,7 @@ void Graphics::init_swapchain(vk::PresentModeKHR present_mode) {
 }
 
 void Graphics::deinit_swapchain() {
+  ZoneScoped;
   Global_vulkan_state::get().device().waitIdle();
   _swapchain_images.clear();
   _swapchain_image_release_semaphores.clear();
