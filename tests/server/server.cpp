@@ -40,15 +40,15 @@ TEST_CASE("Server tick numbers track completed simulation ticks") {
 
   CHECK(server->get_tick_number() == 0);
 
-  CHECK(server->tick(0.0f));
+  CHECK(server->update(0.0f));
   CHECK(server->get_tick_number() == 1);
 
-  CHECK_FALSE(server->tick(0.5f));
+  CHECK_FALSE(server->update(0.5f));
   CHECK(server->get_tick_number() == 1);
 
   server->broadcast_game_state();
   CHECK(server->get_tick_number() == 1);
 
-  CHECK(server->tick(0.5f));
+  CHECK(server->update(0.5f));
   CHECK(server->get_tick_number() == 2);
 }

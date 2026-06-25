@@ -16,7 +16,7 @@ class Server : public net::Server {
 public:
   explicit Server(Server_create_info const &info);
 
-  bool tick(float duration);
+  bool update(float duration);
 
   void broadcast_game_state();
 

@@ -14,7 +14,7 @@ add_subdirectory(extern/Catch2-3.13.0)
 enable_testing()
 add_library(
   tracy
-  extern/tracy-0.12.2/TracyClient.cpp
+  extern/tracy-0.13.1/public/TracyClient.cpp
 )
 
 # libnet
@@ -102,7 +102,7 @@ target_include_directories(
   client
   SYSTEM
   PRIVATE
-  ${CMAKE_SOURCE_DIR}/extern/tracy-0.12.2
+  ${CMAKE_SOURCE_DIR}/extern/tracy-0.13.1/public
 )
 target_link_libraries(
   client
@@ -151,7 +151,13 @@ target_include_directories(
   PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
-target_link_libraries(server-tests game net Catch2::Catch2WithMain)
+target_include_directories(
+  server-tests
+  SYSTEM
+  PRIVATE
+  ${CMAKE_SOURCE_DIR}/extern/tracy-0.13.1/public
+)
+target_link_libraries(server-tests game net tracy Catch2::Catch2WithMain)
 add_test(NAME server-tests COMMAND server-tests)
 
 # libppm
@@ -183,13 +189,14 @@ target_include_directories(
   SYSTEM
   PRIVATE
   ${CMAKE_SOURCE_DIR}/extern/enet/include
+  ${CMAKE_SOURCE_DIR}/extern/tracy-0.13.1/public
 )
 target_include_directories(
   server
   PRIVATE
   ${CMAKE_SOURCE_DIR}/src
 )
-target_link_libraries(server enet game net)
+target_link_libraries(server enet tracy game net)
 
 # libgraphics
 add_library(
@@ -234,7 +241,7 @@ target_include_directories(
   graphics
   SYSTEM
   PRIVATE
-  ${CMAKE_SOURCE_DIR}/extern/tracy-0.12.2
+  ${CMAKE_SOURCE_DIR}/extern/tracy-0.13.1/public
 )
 target_link_libraries(graphics glfw volk GPUOpen::VulkanMemoryAllocator)
 
@@ -249,7 +256,7 @@ target_include_directories(
   PRIVATE
   ${CMAKE_SOURCE_DIR}/extern/enet/include
   ${CMAKE_SOURCE_DIR}/extern/magic_enum-0.9.7/include
-  ${CMAKE_SOURCE_DIR}/extern/tracy-0.12.2
+  ${CMAKE_SOURCE_DIR}/extern/tracy-0.13.1/public
 )
 target_include_directories(
   client-app

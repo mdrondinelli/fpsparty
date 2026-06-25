@@ -9,6 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <span>
+#include <tracy/Tracy.hpp>
 #include <vector>
 
 namespace fpsparty::server {
@@ -39,11 +40,14 @@ Server::Server(Server_create_info const &info)
       _game{info.game_info},
       _tick_duration{info.tick_duration} {}
 
-bool Server::tick(float duration) {
+bool Server::update(float duration) {
   _tick_timer -= duration;
   if (_tick_timer <= 0.0f) {
     _tick_timer += _tick_duration;
-    _game.tick(_tick_duration);
+    {
+      ZoneScopedN("Game tick");
+      _game.tick(_tick_duration);
+    }
     ++_tick_number;
     return true;
   }
@@ -51,6 +55,7 @@ bool Server::tick(float duration) {
 }
 
 void Server::broadcast_game_state() {
+  ZoneScoped;
   using serial::serialize;
   auto grid_state_writer = serial::Ostringstream_writer{};
   _game.get_grid().dump(grid_state_writer);

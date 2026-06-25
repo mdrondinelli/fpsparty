@@ -7,6 +7,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
+#include <tracy/Tracy.hpp>
 
 using namespace fpsparty;
 
@@ -63,13 +64,15 @@ int main() {
   using Duration = Clock::duration;
   auto loop_duration = Duration{};
   auto loop_time = Clock::now();
+  FrameMark;
   while (!signal_status) {
     server.poll_events();
     auto const duration =
       std::chrono::duration_cast<std::chrono::duration<float>>(loop_duration)
         .count();
-    if (server.tick(duration)) {
+    if (server.update(duration)) {
       server.broadcast_game_state();
+      FrameMark;
     }
     auto const now = Clock::now();
     loop_duration = now - loop_time;
