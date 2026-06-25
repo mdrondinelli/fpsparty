@@ -1,16 +1,21 @@
 #include "grid_mesh.hpp"
-#include "client/grid_vertex.hpp"
-#include "game/grid.hpp"
-#include "serial/span_writer.hpp"
 
 #include <array>
 #include <cassert>
 #include <span>
 #include <vector>
 
+#include <tracy/Tracy.hpp>
+
+#include <game/grid.hpp>
+#include <serial/span_writer.hpp>
+
+#include "grid_vertex.hpp"
+
 namespace fpsparty::client {
 
 Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
+  ZoneScoped;
   auto const get_block_model = [&](math::ivec3 coords) {
     auto const [block, data] = info.grid->get_block(coords);
     return info.block_model_registry->get(block, data);
