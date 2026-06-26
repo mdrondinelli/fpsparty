@@ -377,12 +377,12 @@ math::vec3 Game::get_sun_direction() const noexcept {
     2.0f * std::numbers::pi_v<f32> * day_progress + _origin_longitude;
   auto const year_angle = 2.0f * std::numbers::pi_v<f32> * year_progress;
   return (math::x_rotation_matrix(-_origin_latitude) *
-          math::y_rotation_matrix(-_origin_longitude) *
+          math::z_rotation_matrix(-_origin_longitude) *
           math::z_rotation_matrix(-day_angle) *
           math::x_rotation_matrix(_axial_tilt) *
           math::vec4{
-            std::sin(year_angle),
-            -std::cos(year_angle),
+            -std::sin(year_angle),
+            std::cos(year_angle),
             0.0f,
             0.0f,
           })

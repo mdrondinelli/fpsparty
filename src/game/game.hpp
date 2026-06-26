@@ -16,10 +16,10 @@ struct Game_create_info {
   f32 axial_tilt{0.409105f};
 
   // Latitude of the origin of world space.
-  f32 origin_latitude{32.715f};
+  f32 origin_latitude{0.57098f};
 
   // Longitude of the origin of world space.
-  f32 origin_longitude{-117.1625f};
+  f32 origin_longitude{-2.044871f};
 
   // Time in real-time seconds between noons of consecutive in-game days.
   f32 solar_day_duration{20.0f * 60.0f};

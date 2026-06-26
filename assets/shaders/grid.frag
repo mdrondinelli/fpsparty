@@ -13,8 +13,12 @@ void main() {
     sampler2D(sampled_images[texture_index], FPSPARTY_SAMPLER_NEAREST),
     in_texcoord).rgb;
   const vec3 n = push_constants.normal.xyz;
-  const float n_dot_l = max(dot(n, push_constants.sun_direction), 0.0f); 
-  const vec3 E = vec3(1000.0f);
-  const vec3 L = base_color * E * n_dot_l / 3.14159f;
-  out_color = vec4(L, 1.0f);
+  if (push_constants.sun_direction.y >= 0.0f) {
+    const float n_dot_l = max(dot(n, push_constants.sun_direction), 0.0f); 
+    const vec3 E = vec3(1000.0f);
+    const vec3 L = base_color * E * n_dot_l / 3.14159f;
+    out_color = vec4(L, 1.0f);
+  } else {
+    out_color = vec4(0.0f, 0.0f, 0.0f, 1.0f);
+  }
 }
