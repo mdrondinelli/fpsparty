@@ -23,13 +23,15 @@ void main() {
     sampler2D(sampled_images[albedo_texture_index], FPSPARTY_SAMPLER_NEAREST),
     pixel,
     0).rgb;
+  color *= 1.0f / 512.0f; // exposure 
+  color /= color + vec3(1.0f); // tonemap
+  /*
   const float depth = texelFetch(
     sampler2D(sampled_images[depth_texture_index], FPSPARTY_SAMPLER_NEAREST),
     pixel,
     0).r;
   const float view_depth = push_constants.z_near / depth;
   const vec3 fog_color = vec3(0.4196f, 0.6196f, 0.7451f);
-  /*
   color = mix(
     color,
     fog_color,

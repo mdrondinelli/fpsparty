@@ -146,7 +146,7 @@ auto const sky_color = math::vec4{0.4196f, 0.6196f, 0.7451f, 1.0f};
 auto constexpr z_near = 0.1f;
 
 struct Composite_push_constants {
-  std::uint32_t albedo_texture_index;
+  std::uint32_t radiance_texture_index;
   std::uint32_t mask_texture_index;
   std::uint32_t depth_texture_index;
   float z_near;
@@ -306,15 +306,16 @@ private:
     auto const framebuffer_size = framebuffer_extent.head<2>().eval();
     get_color_render_target(
       work_recorder,
-      _albedo_image,
-      graphics::Image_format::b8g8r8a8_srgb,
+      _radiance_render_target,
+      graphics::Image_format::r16g16b16a16_sfloat,
       framebuffer_extent);
     get_color_render_target(
       work_recorder,
-      _crosshair_mask_image,
+      _crosshair_mask_render_target,
       graphics::Image_format::r8_unorm,
       framebuffer_extent);
-    get_depth_render_target(work_recorder, _depth_image, framebuffer_extent);
+    get_depth_render_target(
+      work_recorder, _depth_render_target, framebuffer_extent);
     record_forward_pass(work_recorder, framebuffer_size);
     record_crosshair_pass(work_recorder, framebuffer_size);
     record_composite_pass(work_recorder, swapchain_image, framebuffer_size);
@@ -327,8 +328,8 @@ private:
     work_recorder.barrier(
       sampled_image_scope, color_attachment_scope | depth_attachment_scope);
     work_recorder.begin_rendering({
-      .color_image = _albedo_image,
-      .depth_image = _depth_image,
+      .color_image = _radiance_render_target,
+      .depth_image = _depth_render_target,
       .color_clear_value = sky_color,
     });
     work_recorder.set_viewport(framebuffer_size);
@@ -366,15 +367,19 @@ private:
         work_recorder.bind_index_buffer(
           _grid_mesh->get_index_buffer(), graphics::Index_type::u32);
         work_recorder
-          .push_data(0, std::as_bytes(std::span{&view_projection_matrix, 1}));
-        work_recorder
-          .push_buffer_device_address(80, _grid_mesh->get_vertex_buffer());
-        _block_texture_registry.upload_descriptors(work_recorder);
+          .push_buffer_device_address(0, _grid_mesh->get_vertex_buffer());
         work_recorder.push_buffer_device_address(
-          88, _block_texture_registry.get_descriptor_index_buffer());
-        work_recorder.push_data(96, std::as_bytes(std::span{&_time, 1}));
+          8, _block_texture_registry.get_descriptor_index_buffer());
+        work_recorder
+          .push_data(16, std::as_bytes(std::span{&view_projection_matrix, 1}));
+        _block_texture_registry.upload_descriptors(work_recorder);
+        auto const sun_direction =
+          session->get_scene().get_interpolated_sun_direction();
+        work_recorder
+          .push_data(80, std::as_bytes(std::span{&sun_direction, 1}));
+        work_recorder.push_data(92, std::as_bytes(std::span{&_time, 1}));
         auto push_normal = [&](math::vec4 const &value) {
-          work_recorder.push_data(64, std::as_bytes(std::span{&value, 1}));
+          work_recorder.push_data(96, std::as_bytes(std::span{&value, 1}));
         };
         push_normal({1.0f, 0.0f, 0.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, +math::axis3::x);
@@ -425,7 +430,7 @@ private:
     graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
     ZoneScoped;
     work_recorder.begin_rendering({
-      .color_image = _crosshair_mask_image,
+      .color_image = _crosshair_mask_render_target,
     });
     work_recorder.set_viewport(framebuffer_size);
     work_recorder.set_scissor(framebuffer_size);
@@ -463,15 +468,16 @@ private:
     });
     work_recorder.set_viewport(framebuffer_size);
     work_recorder.set_scissor(framebuffer_size);
-    auto const albedo_texture_index =
-      work_recorder.upload_sampled_image_descriptor(_albedo_image);
-    auto const mask_texture_index =
-      work_recorder.upload_sampled_image_descriptor(_crosshair_mask_image);
+    auto const radiance_texture_index =
+      work_recorder.upload_sampled_image_descriptor(_radiance_render_target);
+    auto const crosshair_mask_texture_index =
+      work_recorder
+        .upload_sampled_image_descriptor(_crosshair_mask_render_target);
     auto const depth_texture_index =
-      work_recorder.upload_sampled_image_descriptor(_depth_image);
+      work_recorder.upload_sampled_image_descriptor(_depth_render_target);
     auto const composite_push_constants = Composite_push_constants{
-      .albedo_texture_index = albedo_texture_index,
-      .mask_texture_index = mask_texture_index,
+      .radiance_texture_index = radiance_texture_index,
+      .mask_texture_index = crosshair_mask_texture_index,
       .depth_texture_index = depth_texture_index,
       .z_near = z_near,
     };
@@ -785,7 +791,8 @@ private:
           .shader = &_grid_fragment_shader,
         },
       };
-    auto const color_attachment_format = graphics::Image_format::b8g8r8a8_srgb;
+    auto const color_attachment_format =
+      graphics::Image_format::r16g16b16a16_sfloat;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
@@ -815,7 +822,8 @@ private:
           .shader = &_mesh_fragment_shader,
         },
       };
-    auto const color_attachment_format = graphics::Image_format::b8g8r8a8_srgb;
+    auto const color_attachment_format =
+      graphics::Image_format::r16g16b16a16_sfloat;
     return _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
@@ -920,9 +928,9 @@ private:
   glfw::Unique_window _glfw_window{};
   vk::UniqueSurfaceKHR _vk_surface{};
   graphics::Graphics _graphics{};
-  rc::Strong<graphics::Image> _depth_image{};
-  rc::Strong<graphics::Image> _albedo_image{};
-  rc::Strong<graphics::Image> _crosshair_mask_image{};
+  rc::Strong<graphics::Image> _depth_render_target{};
+  rc::Strong<graphics::Image> _radiance_render_target{};
+  rc::Strong<graphics::Image> _crosshair_mask_render_target{};
   graphics::Shader _grid_vertex_shader;
   graphics::Shader _grid_fragment_shader;
   graphics::Shader _mesh_vertex_shader;

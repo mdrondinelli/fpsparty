@@ -28,6 +28,7 @@ struct Keyframe {
   game::Grid grid;
   std::vector<Identified<Camera>> cameras;
   std::vector<Identified<Mesh_instance>> mesh_instances;
+  math::vec3 sun_direction;
 };
 
 } // namespace fpsparty::scene

@@ -88,6 +88,15 @@ public:
   get_interpolated_mesh_instances() const noexcept;
 
   /*
+   * Returns the cached interpolated sun direction from the last advance_time
+   * call.
+   *
+   * UB if empty.
+   */
+  math::vec3 
+  get_interpolated_sun_direction() const noexcept;
+
+  /*
    * Returns the number of keyframes stored.
    */
   std::size_t get_keyframe_count() const noexcept;
@@ -239,6 +248,7 @@ private:
 
     std::vector<Identified<Camera>> cameras{};
     std::vector<Identified<Mesh_instance>> mesh_instances{};
+    math::vec3 sun_direction{};
     bool valid{};
   };
 

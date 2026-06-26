@@ -89,7 +89,8 @@ float Scene::set_latency(float seconds) noexcept {
 float Scene::get_latency() const noexcept {
   assert(!empty());
   return (_indexed_keyframes.back().keyframe.number - _keyframe_number -
-         _inter_keyframe_time) * _keyframe_duration;
+          _inter_keyframe_time) *
+         _keyframe_duration;
 }
 
 bool Scene::trim_old_keyframes() noexcept {
@@ -165,6 +166,11 @@ bool Scene::interpolate() {
       _interpolation.mesh_instances.emplace_back(id, curr_mesh_instance);
     }
   }
+  _interpolation.sun_direction =
+    ((1.0f - t) * _indexed_keyframes[0].keyframe.sun_direction +
+     t * _indexed_keyframes[1].keyframe.sun_direction)
+      .normalized()
+      .eval();
   _interpolation.valid = true;
   return true;
 }
@@ -209,6 +215,15 @@ Scene::get_interpolated_mesh_instances() const noexcept {
     return _interpolation.mesh_instances;
   } else {
     return _indexed_keyframes.front().keyframe.mesh_instances;
+  }
+}
+
+math::vec3 Scene::get_interpolated_sun_direction() const noexcept {
+  assert(!empty());
+  if (_interpolation.valid) {
+    return _interpolation.sun_direction;
+  } else {
+    return _indexed_keyframes.front().keyframe.sun_direction;
   }
 }
 

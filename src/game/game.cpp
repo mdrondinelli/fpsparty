@@ -1,11 +1,12 @@
 #include "game.hpp"
 
 #include <algorithm>
+#include <numbers>
 
-#include <Eigen/Dense>
-#include <Eigen/Geometry>
-
+#include <math/box.hpp>
+#include <math/mat.hpp>
 #include <math/transforms.hpp>
+#include <math/vec.hpp>
 
 #include "constants.hpp"
 #include "humanoid.hpp"
@@ -16,7 +17,7 @@ namespace fpsparty::game {
 
 namespace {
 
-float box_penetration(math::box3 const &a, math::box3 const &b) noexcept {
+f32 box_penetration(math::box3 const &a, math::box3 const &b) noexcept {
   auto const intersection = a.intersection(b);
   if (intersection.isEmpty()) {
     return 0.0f;
@@ -106,13 +107,19 @@ Game::Game(Game_create_info const &info)
     : _grid{{
         .block_bounds_registry = &_block_bounds_registry,
         .bounds = info.grid_bounds,
-      }} {
+      }},
+      _axial_tilt{info.axial_tilt},
+      _origin_latitude{info.origin_latitude},
+      _origin_longitude{info.origin_longitude},
+      _solar_day_duration{info.solar_day_duration},
+      _tropical_year_duration{info.tropical_year_duration},
+      _solar_time{info.initial_solar_time} {
   _entities.register_entity_type<Player>();
   _entities.register_entity_type<Humanoid>();
   _entities.register_entity_type<Item>();
 }
 
-void Game::tick(float duration) {
+void Game::tick(f32 duration) {
   // copy humanoid curr input state -> prev input state
   for (auto [humanoid, _] : _entities.get_all<Humanoid>()) {
     humanoid.prev_input_state = humanoid.curr_input_state;
@@ -346,14 +353,40 @@ void Game::tick(float duration) {
       ++item_it;
     }
   }
+  // update solar time
+  auto constexpr si_day_duration = 86'400.0f;
+  auto const solar_timescale = si_day_duration / _solar_day_duration;
+  auto const solar_time_delta = solar_timescale * duration;
+  _solar_time += static_cast<u64>(solar_time_delta * 1'000'000.0f);
 }
 
-Grid const &Game::get_grid() const noexcept { return _grid; }
-
-Grid &Game::get_grid() noexcept { return _grid; }
-
-Entity_world const &Game::get_entities() const noexcept { return _entities; }
-
-Entity_world &Game::get_entities() noexcept { return _entities; }
+math::vec3 Game::get_sun_direction() const noexcept {
+  auto const solar_microseconds_per_day = 86'400'000'000;
+  auto const solar_microseconds_per_year =
+    static_cast<f64>(solar_microseconds_per_day) *
+    static_cast<f64>(_tropical_year_duration);
+  auto const solar_microseconds_this_day =
+    _solar_time % static_cast<u64>(solar_microseconds_per_day);
+  auto const solar_microseconds_this_year =
+    _solar_time % static_cast<u64>(solar_microseconds_per_year);
+  auto const day_progress = static_cast<f32>(solar_microseconds_this_day) /
+                            static_cast<f32>(solar_microseconds_per_day);
+  auto const year_progress = static_cast<float>(
+    solar_microseconds_this_year / solar_microseconds_per_year);
+  auto const day_angle =
+    2.0f * std::numbers::pi_v<f32> * day_progress + _origin_longitude;
+  auto const year_angle = 2.0f * std::numbers::pi_v<f32> * year_progress;
+  return (math::x_rotation_matrix(-_origin_latitude) *
+          math::y_rotation_matrix(-_origin_longitude) *
+          math::z_rotation_matrix(-day_angle) *
+          math::x_rotation_matrix(_axial_tilt) *
+          math::vec4{
+            std::sin(year_angle),
+            -std::cos(year_angle),
+            0.0f,
+            0.0f,
+          })
+    .head<3>();
+}
 
 } // namespace fpsparty::game

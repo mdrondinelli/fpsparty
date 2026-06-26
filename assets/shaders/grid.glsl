@@ -19,9 +19,10 @@ readonly buffer Texture_index_buffer {
 };
 
 layout(push_constant) uniform Push_constants {
-  layout(offset = 0) mat4 view_projection_matrix;
-  layout(offset = 64) vec4 normal;
-  layout(offset = 80) Vertex_buffer vertex_buffer;
-  layout(offset = 88) Texture_index_buffer texture_index_buffer;
-  layout(offset = 96) float time;
+  layout(offset = 0) Vertex_buffer vertex_buffer;
+  layout(offset = 8) Texture_index_buffer texture_index_buffer;
+  layout(offset = 16) mat4 view_projection_matrix;
+  layout(offset = 80) vec3 sun_direction;
+  layout(offset = 92) float time;
+  layout(offset = 96) vec4 normal;
 } push_constants;
