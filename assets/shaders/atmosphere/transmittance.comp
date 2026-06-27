@@ -43,10 +43,10 @@ void main() {
   const vec2 lut_coords =
     (gl_GlobalInvocationID.xy + vec2(0.5f)) / push_constants.lut_size;
   const float h = mix(min_altitude, max_altitude, lut_coords.x);
-  const float sin_theta = lut_coords.y * 2.0f - 1.0f;
-  const float cos_theta = sqrt(1.0f - sin_theta * sin_theta);
+  const float cos_zenith = lut_coords.y * 2.0f - 1.0f;
+  const float sin_zenith = sqrt(1.0f - cos_zenith * cos_zenith);
   const vec3 x_0 = vec3(0.0f, r_ground + h, 0.0f);
-  const vec3 x_1 = ray_atmosphere(x_0, vec3(cos_theta, sin_theta, 0.0f));
+  const vec3 x_1 = ray_atmosphere(x_0, vec3(sin_zenith, cos_zenith, 0.0f));
   shared_optical_depths[gl_LocalInvocationID.z] =
     integrate_optical_depth(
         x_0,
