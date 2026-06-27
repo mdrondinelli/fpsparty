@@ -94,8 +94,8 @@ Image::Image(Image_create_info const &info) {
       },
       {
         vk::HostAddressRangeEXT{
-          .address = _sampled_image_descriptor.data(),
-          .size = _sampled_image_descriptor.size(),
+          .address = _storage_image_descriptor.data(),
+          .size = _storage_image_descriptor.size(),
         },
       });
   }
