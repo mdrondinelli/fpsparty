@@ -136,7 +136,7 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
       .usage = graphics::Buffer_usage_flag_bits::transfer_dst |
                graphics::Buffer_usage_flag_bits::indirect_buffer,
     });
-    auto recorder = info.graphics->record_transient_work();
+    auto recorder = info.graphics->record_transient_work({});
     recorder.copy_buffer(
       staging_buffer,
       _vertex_buffer,

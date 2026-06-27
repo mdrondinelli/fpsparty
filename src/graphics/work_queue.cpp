@@ -6,14 +6,13 @@
 
 namespace fpsparty::graphics::detail {
 void Work_queue::poll(
-  Work_resource_pool &resource_pool,
-  Descriptor_heap_pool &descriptor_heap_pool) {
+  Work_resource_pool &resource_pool, Descriptor_heap &descriptor_heap) {
   auto const pending_works_lock = std::scoped_lock{_pending_works_mutex};
   for (auto const &work : _pending_works) {
     if (detail::poll_work(*work)) {
       auto resource = detail::release_work(*work);
-      if (resource.descriptor_heap) {
-        descriptor_heap_pool.push(std::move(resource.descriptor_heap));
+      if (resource.descriptor_allocation) {
+        descriptor_heap.free(*resource.descriptor_allocation);
       }
       detail::reset_work_resource(resource);
       resource_pool.push(std::move(resource));

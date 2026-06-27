@@ -142,9 +142,9 @@ Graphics::Graphics(Graphics_create_info const &info)
                            .descriptor_heap_properties()
                            .samplerHeapAlignment,
       })},
-      _descriptor_heaps{
+      _descriptor_heap{
         {.buffer_factory = &_buffer_factory,
-         .descriptor_heap_size = info.descriptor_heap_size}} {
+         .capacity = info.descriptor_capacity}} {
   init_swapchain(select_swapchain_present_mode());
   for (auto i = std::size_t{}; i != info.max_frames_in_flight; ++i) {
     auto const swapchain_image_acquire_semaphore_name =
@@ -182,7 +182,7 @@ Graphics::Graphics(Graphics_create_info const &info)
 
 void Graphics::poll_works() {
   ZoneScoped;
-  _works.poll(_work_resources, _descriptor_heaps);
+  _works.poll(_work_resources, _descriptor_heap);
 }
 
 rc::Strong<Pipeline>
@@ -224,8 +224,19 @@ rc::Strong<Image> Graphics::create_image(Image_create_info const &info) {
   return _image_factory.create(info);
 }
 
-Work_recorder Graphics::record_transient_work() {
-  return detail::acquire_transient_work_recorder(_work_resources.pop());
+Work_recorder Graphics::record_transient_work(Work_record_info const &info) {
+  auto resource = _work_resources.pop();
+  return detail::acquire_work_recorder(
+    std::move(resource),
+    info.descriptor_capacity > 0
+      ? std::optional{detail::Work_recorder_descriptor_info{
+          .sampler_heap = _sampler_heap,
+          .resource_heap = _descriptor_heap.buffer(),
+          .descriptor_data = _descriptor_heap.data(),
+          .descriptor_allocation =
+            _descriptor_heap.alloc(info.descriptor_capacity),
+        }}
+      : std::nullopt);
 }
 
 rc::Strong<Work> Graphics::submit_transient_work(Work_recorder recorder) {
@@ -234,7 +245,7 @@ rc::Strong<Work> Graphics::submit_transient_work(Work_recorder recorder) {
 }
 
 std::optional<std::pair<Work_recorder, rc::Strong<Image>>>
-Graphics::try_record_frame_work() {
+Graphics::try_record_frame_work(Work_record_info const &info) {
   ZoneScoped;
   auto &frame_resource = _frame_resources[_frame_resource_index];
   if (frame_resource.pending_work) {
@@ -260,15 +271,26 @@ Graphics::try_record_frame_work() {
       }
     }
   }();
+  auto resource = _work_resources.pop();
   return std::pair<Work_recorder, rc::Strong<Image>>{
-    detail::acquire_frame_work_recorder(
-      _work_resources.pop(), _sampler_heap, _descriptor_heaps.pop()),
+    detail::acquire_work_recorder(
+    std::move(resource),
+    info.descriptor_capacity > 0
+      ? std::optional{detail::Work_recorder_descriptor_info{
+          .sampler_heap = _sampler_heap,
+          .resource_heap = _descriptor_heap.buffer(),
+          .descriptor_data = _descriptor_heap.data(),
+          .descriptor_allocation =
+            _descriptor_heap.alloc(info.descriptor_capacity),
+        }}
+      : std::nullopt),
     _swapchain_images.at(frame_resource.swapchain_image_index),
   };
 }
 
-std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
-  if (auto work = try_record_frame_work()) {
+std::pair<Work_recorder, rc::Strong<Image>>
+Graphics::record_frame_work(Work_record_info const &info) {
+  if (auto work = try_record_frame_work(info)) {
     return std::move(*work);
   }
   auto &frame_resource = _frame_resources[_frame_resource_index];
@@ -276,7 +298,7 @@ std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
     frame_resource.pending_work->await();
     frame_resource.pending_work = nullptr;
   }
-  return *try_record_frame_work();
+  return *try_record_frame_work(info);
 }
 
 rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {

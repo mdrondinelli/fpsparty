@@ -146,11 +146,17 @@ auto const sky_color = math::vec4{0.4196f, 0.6196f, 0.7451f, 1.0f};
 auto constexpr z_near = 0.1f;
 
 struct Composite_push_constants {
-  std::uint32_t radiance_texture_index;
-  std::uint32_t mask_texture_index;
-  std::uint32_t depth_texture_index;
+  u32 radiance_texture_index;
+  u32 mask_texture_index;
+  u32 depth_texture_index;
   float z_near;
 };
+
+static_assert(sizeof(Composite_push_constants) == 16);
+static_assert(offsetof(Composite_push_constants, radiance_texture_index) == 0);
+static_assert(offsetof(Composite_push_constants, mask_texture_index) == 4);
+static_assert(offsetof(Composite_push_constants, depth_texture_index) == 8);
+static_assert(offsetof(Composite_push_constants, z_near) == 12);
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
@@ -301,7 +307,8 @@ private:
     if (_pending_grid_mesh && _pending_grid_mesh->is_uploaded()) {
       _grid_mesh = std::move(_pending_grid_mesh);
     }
-    auto [work_recorder, swapchain_image] = _graphics.record_frame_work();
+    auto [work_recorder, swapchain_image] =
+      _graphics.record_frame_work({.descriptor_capacity = 32});
     auto const framebuffer_extent = swapchain_image->get_extent().eval();
     auto const framebuffer_size = framebuffer_extent.head<2>().eval();
     get_color_render_target(
@@ -359,6 +366,8 @@ private:
         z_near);
       auto const view_projection_matrix =
         (projection_matrix * view_matrix).eval();
+      auto const sun_direction =
+        session->get_scene().get_interpolated_sun_direction();
       // draw grid
       if (_grid_mesh && _grid_mesh->is_uploaded()) {
         work_recorder.bind_pipeline(_grid_pipeline);
@@ -366,15 +375,12 @@ private:
         work_recorder.set_cull_mode(graphics::Cull_mode::back);
         work_recorder.bind_index_buffer(
           _grid_mesh->get_index_buffer(), graphics::Index_type::u32);
-        work_recorder
-          .push_buffer_device_address(0, _grid_mesh->get_vertex_buffer());
-        work_recorder.push_buffer_device_address(
+        work_recorder.push_buffer(0, _grid_mesh->get_vertex_buffer());
+        work_recorder.push_buffer(
           8, _block_texture_registry.get_descriptor_index_buffer());
+        _block_texture_registry.upload_descriptors(work_recorder);
         work_recorder
           .push_data(16, std::as_bytes(std::span{&view_projection_matrix, 1}));
-        _block_texture_registry.upload_descriptors(work_recorder);
-        auto const sun_direction =
-          session->get_scene().get_interpolated_sun_direction();
         work_recorder
           .push_data(80, std::as_bytes(std::span{&sun_direction, 1}));
         work_recorder.push_data(92, std::as_bytes(std::span{&_time, 1}));
@@ -400,7 +406,7 @@ private:
       work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
       work_recorder
         .bind_index_buffer(_cube_index_buffer, graphics::Index_type::u16);
-      work_recorder.push_buffer_device_address(64, _cube_vertex_buffer);
+      work_recorder.push_buffer(64, _cube_vertex_buffer);
       for (auto const &[id, instance] :
            session->get_scene().get_interpolated_mesh_instances()) {
         auto rotation_matrix = Eigen::Matrix4f{Eigen::Matrix4f::Identity()};
@@ -659,7 +665,7 @@ private:
       .usage = graphics::Buffer_usage_flag_bits::transfer_dst |
                graphics::Buffer_usage_flag_bits::shader_device_address,
     });
-    auto work_recorder = _graphics.record_transient_work();
+    auto work_recorder = _graphics.record_transient_work({});
     work_recorder.copy_buffer(
       staging_buffer,
       vertex_buffer,
@@ -685,7 +691,7 @@ private:
   rc::Strong<graphics::Buffer> upload_indices(std::span<std::byte const> data) {
     auto const staging_buffer = _graphics.create_staging_buffer(data);
     auto index_buffer = _graphics.create_index_buffer(data.size());
-    auto work_recorder = _graphics.record_transient_work();
+    auto work_recorder = _graphics.record_transient_work({});
     work_recorder.copy_buffer(
       staging_buffer,
       index_buffer,
@@ -733,7 +739,7 @@ private:
                graphics::Image_usage_flag_bits::transfer_dst,
     });
     auto const staging_buffer = _graphics.create_staging_buffer(pixels);
-    auto work_recorder = _graphics.record_transient_work();
+    auto work_recorder = _graphics.record_transient_work({});
     work_recorder.transition_image_layout(
       {},
       {

@@ -202,7 +202,7 @@ target_link_libraries(server enet tracy game net)
 add_library(
   graphics
   src/graphics/buffer.cpp
-  src/graphics/descriptor_heap_pool.cpp
+  src/graphics/descriptor_heap.cpp
   src/graphics/image.cpp
   src/graphics/graphics.cpp
   src/graphics/global_vulkan_state.cpp

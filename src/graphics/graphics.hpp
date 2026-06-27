@@ -12,7 +12,7 @@
 #include <rc.hpp>
 
 #include "buffer.hpp"
-#include "descriptor_heap_pool.hpp"
+#include "descriptor_heap.hpp"
 #include "image.hpp"
 #include "pipeline.hpp"
 #include "work.hpp"
@@ -27,7 +27,11 @@ struct Graphics_create_info {
   vk::SurfaceKHR surface;
   bool vsync_preferred{true};
   unsigned max_frames_in_flight{2};
-  u32 descriptor_heap_size{1024 * 1024};
+  u32 descriptor_capacity{1 << 16};
+};
+
+struct Work_record_info {
+  u32 descriptor_capacity{};
 };
 
 class Graphics {
@@ -54,14 +58,15 @@ public:
 
   rc::Strong<Image> create_image(Image_create_info const &info);
 
-  Work_recorder record_transient_work();
+  Work_recorder record_transient_work(Work_record_info const &info);
 
   rc::Strong<Work> submit_transient_work(Work_recorder recorder);
 
   std::optional<std::pair<Work_recorder, rc::Strong<Image>>>
-  try_record_frame_work();
+  try_record_frame_work(Work_record_info const &info);
 
-  std::pair<Work_recorder, rc::Strong<Image>> record_frame_work();
+  std::pair<Work_recorder, rc::Strong<Image>>
+  record_frame_work(Work_record_info const &info);
 
   rc::Strong<Work> submit_frame_work(Work_recorder recorder);
 
@@ -98,7 +103,7 @@ private:
   std::vector<rc::Strong<Image>> _swapchain_images{};
   std::vector<vk::UniqueSemaphore> _swapchain_image_release_semaphores{};
   rc::Strong<Buffer> _sampler_heap{};
-  detail::Descriptor_heap_pool _descriptor_heaps{};
+  detail::Descriptor_heap _descriptor_heap{};
   detail::Work_resource_pool _work_resources{};
   detail::Work_queue _works{};
   std::vector<Frame_resource> _frame_resources{};
