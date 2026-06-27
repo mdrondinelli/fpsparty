@@ -16,3 +16,4 @@
 * Delta compression
 * Fake lag, jitter, packet loss
 * Client-side prediction
+* Classic vulkan descriptor implementation
