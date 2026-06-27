@@ -146,20 +146,7 @@ auto const composite_indices = std::array<std::uint16_t, 3>{0, 1, 2};
 auto const sky_color = math::vec4{0.4196f, 0.6196f, 0.7451f, 1.0f};
 auto constexpr z_near = 0.1f;
 auto constexpr transmittance_lut_width = 256;
-auto constexpr transmittance_lut_height = 256;
-
-struct Composite_push_constants {
-  u32 radiance_texture_index;
-  u32 mask_texture_index;
-  u32 depth_texture_index;
-  f32 z_near;
-};
-
-static_assert(sizeof(Composite_push_constants) == 16);
-static_assert(offsetof(Composite_push_constants, radiance_texture_index) == 0);
-static_assert(offsetof(Composite_push_constants, mask_texture_index) == 4);
-static_assert(offsetof(Composite_push_constants, depth_texture_index) == 8);
-static_assert(offsetof(Composite_push_constants, z_near) == 12);
+auto constexpr transmittance_lut_height = 1024;
 
 struct Transmittance_push_constants {
   math::ivec2 lut_size;
@@ -175,13 +162,32 @@ struct Sky_push_constants {
   math::vec2 zoom;
   f32 altitude;
   u32 transmittance_lut;
+  alignas(16) math::vec3 sun_direction;
+  alignas(16) math::vec3 sun_irradiance;
 };
 
-static_assert(sizeof(Sky_push_constants) == 80);
+static_assert(sizeof(Sky_push_constants) == 112);
 static_assert(offsetof(Sky_push_constants, camera_basis) == 0);
 static_assert(offsetof(Sky_push_constants, zoom) == 64);
 static_assert(offsetof(Sky_push_constants, altitude) == 72);
 static_assert(offsetof(Sky_push_constants, transmittance_lut) == 76);
+static_assert(offsetof(Sky_push_constants, sun_direction) == 80);
+static_assert(offsetof(Sky_push_constants, sun_irradiance) == 96);
+
+struct Composite_push_constants {
+  u32 radiance_texture_index;
+  u32 mask_texture_index;
+  u32 depth_texture_index;
+  f32 z_near;
+  u32 frame_number;
+};
+
+static_assert(sizeof(Composite_push_constants) == 20);
+static_assert(offsetof(Composite_push_constants, radiance_texture_index) == 0);
+static_assert(offsetof(Composite_push_constants, mask_texture_index) == 4);
+static_assert(offsetof(Composite_push_constants, depth_texture_index) == 8);
+static_assert(offsetof(Composite_push_constants, z_near) == 12);
+static_assert(offsetof(Composite_push_constants, frame_number) == 16);
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
@@ -310,11 +316,12 @@ public:
         return false;
       }
       _client.update(duration);
-      _time += duration;
+      _animation_time += duration;
     }
     _graphics.poll_works();
     update_grid_mesh();
     render();
+    ++_frame_number;
     return true;
   }
 
@@ -414,7 +421,7 @@ private:
           .push_data(16, std::as_bytes(std::span{&view_projection_matrix, 1}));
         work_recorder
           .push_data(80, std::as_bytes(std::span{&sun_direction, 1}));
-        work_recorder.push_data(92, std::as_bytes(std::span{&_time, 1}));
+        work_recorder.push_data(92, std::as_bytes(std::span{&_animation_time, 1}));
         auto push_normal = [&](math::vec4 const &value) {
           work_recorder.push_data(96, std::as_bytes(std::span{&value, 1}));
         };
@@ -459,18 +466,22 @@ private:
           .first_instance = 0,
         });
       }
-      record_sky_render(
+      record_sky_draw(
         work_recorder,
         framebuffer_size,
-        *camera);
+        camera->position,
+        session->get_scene().get_interpolated_sun_direction(),
+        math::vec3::Constant(1300.0f));
     }
     work_recorder.end_rendering();
   }
 
-  void record_sky_render(
+  void record_sky_draw(
     graphics::Work_recorder &work_recorder,
     math::ivec2 framebuffer_size,
-    scene::Camera const &camera) {
+    math::vec3 camera_position,
+    math::vec3 sun_direction,
+    math::vec3 sun_irradiance) {
     ZoneScoped;
     auto constexpr zoom = 1.25f;
     auto const aspect_ratio = static_cast<f32>(framebuffer_size.x()) /
@@ -482,10 +493,14 @@ private:
     auto const transmittance_lut =
       work_recorder.upload_sampled_image_descriptor(_transmittance_lut);
     auto const push_constants = Sky_push_constants{
-      .camera_basis = math::y_rotation_matrix(camera.yaw) * math::x_rotation_matrix(camera.pitch),
+      .camera_basis =
+        math::y_rotation_matrix(_local_player->input_state.yaw) *
+        math::x_rotation_matrix(_local_player->input_state.pitch),
       .zoom = zoom_vec,
-      .altitude = camera.position.y(),
+      .altitude = camera_position.y() + 84.0f,
       .transmittance_lut = transmittance_lut,
+      .sun_direction = sun_direction,
+      .sun_irradiance = sun_irradiance,
     };
     work_recorder.bind_pipeline(_sky_pipeline);
     work_recorder.set_viewport(framebuffer_size);
@@ -562,6 +577,7 @@ private:
       .mask_texture_index = crosshair_mask_texture_index,
       .depth_texture_index = depth_texture_index,
       .z_near = z_near,
+      .frame_number = _frame_number,
     };
     work_recorder
       .bind_pipeline(get_composite_pipeline(swapchain_image->get_format()));
@@ -1119,7 +1135,8 @@ private:
   rc::Strong<graphics::Buffer> _cube_index_buffer{};
   rc::Strong<graphics::Buffer> _crosshair_index_buffer{};
   rc::Strong<graphics::Buffer> _composite_index_buffer{};
-  float _time{};
+  u32 _frame_number{};
+  float _animation_time{};
 };
 
 Application::Application(Application_create_info const &create_info)

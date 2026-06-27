@@ -21,6 +21,7 @@ layout(descriptor_heap) uniform texture2D sampled_images[];
 
 DEFINE_STORAGE_IMAGE_ARRAY(rgba8)
 DEFINE_STORAGE_IMAGE_ARRAY(rgba16f)
+DEFINE_STORAGE_IMAGE_ARRAY(rgba32f)
 
 #undef DEFINE_STORAGE_IMAGE_ARRAY
 
