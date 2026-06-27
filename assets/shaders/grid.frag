@@ -15,7 +15,7 @@ void main() {
   const vec3 n = push_constants.normal.xyz;
   if (push_constants.sun_direction.y >= 0.0f) {
     const float n_dot_l = max(dot(n, push_constants.sun_direction), 0.0f); 
-    const vec3 E = vec3(1000.0f);
+    const vec3 E = vec3(1024.0f);
     const vec3 L = base_color * E * n_dot_l / 3.14159f;
     out_color = vec4(L, 1.0f);
   } else {
