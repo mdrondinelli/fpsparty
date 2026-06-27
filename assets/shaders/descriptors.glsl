@@ -11,6 +11,9 @@ layout(descriptor_heap) uniform sampler samplers[];
 
 layout(descriptor_heap) uniform texture2D sampled_images[];
 
+#define FPSPARTY_SAMPLE(index, sampler, texcoord) \
+  texture(sampler2D(sampled_images[index], FPSPARTY_SAMPLER_##sampler), texcoord)
+
 #define DEFINE_STORAGE_IMAGE_ARRAY(format) \
   layout(format, descriptor_heap) restrict uniform image2D format##_storage_images[];
 
