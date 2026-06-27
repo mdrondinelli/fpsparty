@@ -202,6 +202,7 @@ target_link_libraries(server enet tracy game net)
 add_library(
   graphics
   src/graphics/buffer.cpp
+  src/graphics/compute_pipeline.cpp
   src/graphics/descriptor_heap.cpp
   src/graphics/image.cpp
   src/graphics/graphics.cpp

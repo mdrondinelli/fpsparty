@@ -14,6 +14,7 @@
 #include <vulkan/vulkan.hpp>
 
 #include <constants.hpp>
+#include <flt.hpp>
 #include <glfw.hpp>
 #include <graphics/global_vulkan_state.hpp>
 #include <graphics/graphics.hpp>
@@ -144,12 +145,14 @@ auto const crosshair_indices =
 auto const composite_indices = std::array<std::uint16_t, 3>{0, 1, 2};
 auto const sky_color = math::vec4{0.4196f, 0.6196f, 0.7451f, 1.0f};
 auto constexpr z_near = 0.1f;
+auto constexpr transmittance_lut_width = 256;
+auto constexpr transmittance_lut_height = 256;
 
 struct Composite_push_constants {
   u32 radiance_texture_index;
   u32 mask_texture_index;
   u32 depth_texture_index;
-  float z_near;
+  f32 z_near;
 };
 
 static_assert(sizeof(Composite_push_constants) == 16);
@@ -157,6 +160,28 @@ static_assert(offsetof(Composite_push_constants, radiance_texture_index) == 0);
 static_assert(offsetof(Composite_push_constants, mask_texture_index) == 4);
 static_assert(offsetof(Composite_push_constants, depth_texture_index) == 8);
 static_assert(offsetof(Composite_push_constants, z_near) == 12);
+
+struct Transmittance_push_constants {
+  math::ivec2 lut_size;
+  i32 lut_index;
+};
+
+static_assert(sizeof(Transmittance_push_constants) == 12);
+static_assert(offsetof(Transmittance_push_constants, lut_size) == 0);
+static_assert(offsetof(Transmittance_push_constants, lut_index) == 8);
+
+struct Sky_push_constants {
+  math::mat4 camera_basis;
+  math::vec2 zoom;
+  f32 altitude;
+  u32 transmittance_lut;
+};
+
+static_assert(sizeof(Sky_push_constants) == 80);
+static_assert(offsetof(Sky_push_constants, camera_basis) == 0);
+static_assert(offsetof(Sky_push_constants, zoom) == 64);
+static_assert(offsetof(Sky_push_constants, altitude) == 72);
+static_assert(offsetof(Sky_push_constants, transmittance_lut) == 76);
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
@@ -214,9 +239,14 @@ public:
           graphics::load_shader("./assets/shaders/composite.vert.spv")},
         _composite_fragment_shader{
           graphics::load_shader("./assets/shaders/composite.frag.spv")},
+        _sky_vertex_shader{
+          graphics::load_shader("./assets/shaders/atmosphere/sky.vert.spv")},
+        _sky_fragment_shader{
+          graphics::load_shader("./assets/shaders/atmosphere/sky.frag.spv")},
         _grid_pipeline{make_grid_pipeline()},
         _mesh_pipeline{make_mesh_pipeline()},
         _crosshair_pipeline{make_crosshair_pipeline()},
+        _sky_pipeline{make_sky_pipeline()},
         _texture_manager{{.graphics = &_graphics}},
         _block_texture_registry{{.graphics = &_graphics}} {
     std::cout << "Opened window.\n";
@@ -224,6 +254,7 @@ public:
     _glfw_window->set_key_callback(this);
     _glfw_window->set_mouse_button_callback(this);
     _glfw_window->set_cursor_pos_callback(this);
+    init_transmittance_lut();
     _cube_vertex_buffer =
       upload_vertices(std::as_bytes(std::span{cube_mesh_vertices}));
     std::cout << "Uploaded cube vertex buffer.\n";
@@ -341,9 +372,6 @@ private:
     });
     work_recorder.set_viewport(framebuffer_size);
     work_recorder.set_scissor(framebuffer_size);
-    work_recorder.set_depth_test_enabled(true);
-    work_recorder.set_depth_write_enabled(true);
-    work_recorder.set_depth_compare_op(graphics::Compare_op::greater);
     auto const &session = _client.get_session();
     auto const camera =
       session && _local_player && _local_player->player_entity_id &&
@@ -351,6 +379,9 @@ private:
         ? session->get_scene()
             .get_interpolated_camera(*_local_player->player_entity_id)
         : nullptr;
+    work_recorder.set_depth_test_enabled(true);
+    work_recorder.set_depth_write_enabled(true);
+    work_recorder.set_depth_compare_op(graphics::Compare_op::greater);
     if (camera) {
       auto const view_matrix =
         (math::x_rotation_matrix(-_local_player->input_state.pitch) *
@@ -428,8 +459,53 @@ private:
           .first_instance = 0,
         });
       }
+      record_sky_render(
+        work_recorder,
+        framebuffer_size,
+        *camera);
     }
     work_recorder.end_rendering();
+  }
+
+  void record_sky_render(
+    graphics::Work_recorder &work_recorder,
+    math::ivec2 framebuffer_size,
+    scene::Camera const &camera) {
+    ZoneScoped;
+    auto constexpr zoom = 1.25f;
+    auto const aspect_ratio = static_cast<f32>(framebuffer_size.x()) /
+                              static_cast<f32>(framebuffer_size.y());
+    auto const zoom_vec = math::vec2{
+      aspect_ratio > 1.0f ? zoom : zoom * aspect_ratio,
+      aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
+    };
+    auto const transmittance_lut =
+      work_recorder.upload_sampled_image_descriptor(_transmittance_lut);
+    auto const push_constants = Sky_push_constants{
+      .camera_basis = math::y_rotation_matrix(camera.yaw) * math::x_rotation_matrix(camera.pitch),
+      .zoom = zoom_vec,
+      .altitude = camera.position.y(),
+      .transmittance_lut = transmittance_lut,
+    };
+    work_recorder.bind_pipeline(_sky_pipeline);
+    work_recorder.set_viewport(framebuffer_size);
+    work_recorder.set_scissor(framebuffer_size);
+    work_recorder.set_cull_mode(graphics::Cull_mode::none);
+    work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
+    work_recorder.set_depth_test_enabled(true);
+    work_recorder.set_depth_write_enabled(false);
+    work_recorder.set_depth_compare_op(graphics::Compare_op::equal);
+    work_recorder
+      .bind_index_buffer(_composite_index_buffer, graphics::Index_type::u16);
+    work_recorder
+      .push_data(0, std::as_bytes(std::span{&push_constants, 1}));
+    work_recorder.draw_indexed({
+      .index_count = static_cast<u32>(composite_indices.size()),
+      .instance_count = 1,
+      .first_index = 0,
+      .vertex_offset = 0,
+      .first_instance = 0,
+    });
   }
 
   void record_crosshair_pass(
@@ -606,6 +682,49 @@ private:
       .block_model_registry = &_block_model_registry,
     });
     scene.reset_grid_remesh_flag();
+  }
+
+  void init_transmittance_lut() {
+    ZoneScoped;
+    auto transmittance_shader = graphics::load_shader(
+      "./assets/shaders/atmosphere/transmittance.comp.spv");
+    auto transmittance_pipeline =
+      _graphics.create_compute_pipeline({.shader = &transmittance_shader});
+    auto const lut_size = math::ivec2{
+      transmittance_lut_width,
+      transmittance_lut_height,
+    };
+    _transmittance_lut = _graphics.create_image({
+      .dimensionality = 2,
+      .format = graphics::Image_format::r16g16b16a16_sfloat,
+      .extent = {lut_size.x(), lut_size.y(), 1},
+      .mip_level_count = 1,
+      .array_layer_count = 1,
+      .usage = graphics::Image_usage_flag_bits::sampled |
+               graphics::Image_usage_flag_bits::storage,
+    });
+    auto work_recorder =
+      _graphics.record_transient_work({.descriptor_capacity = 1});
+    work_recorder.transition_image_layout(
+      {},
+      compute_shader_storage_write_scope,
+      graphics::Image_layout::undefined,
+      graphics::Image_layout::general,
+      _transmittance_lut);
+    auto const lut_index =
+      work_recorder.upload_storage_image_descriptor(_transmittance_lut);
+    auto const push_constants = Transmittance_push_constants{
+      .lut_size = lut_size,
+      .lut_index = static_cast<i32>(lut_index),
+    };
+    work_recorder.bind_compute_pipeline(transmittance_pipeline);
+    work_recorder
+      .push_data(0, std::as_bytes(std::span{&push_constants, 1}));
+    work_recorder.dispatch(lut_size.x(), lut_size.y(), 1);
+    work_recorder.barrier(
+      compute_shader_storage_write_scope, sampled_image_scope);
+    auto work = _graphics.submit_transient_work(std::move(work_recorder));
+    work->await();
   }
 
   void get_color_render_target(
@@ -877,6 +996,37 @@ private:
     });
   }
 
+  rc::Strong<graphics::Pipeline> make_sky_pipeline() {
+    auto const shader_stages =
+      std::vector<graphics::Pipeline_shader_stage_create_info>{
+        {
+          .stage = graphics::Shader_stage_flag_bits::vertex,
+          .shader = &_sky_vertex_shader,
+        },
+        {
+          .stage = graphics::Shader_stage_flag_bits::fragment,
+          .shader = &_sky_fragment_shader,
+        },
+      };
+    auto const color_attachment_format =
+      graphics::Image_format::r16g16b16a16_sfloat;
+    return _graphics.create_pipeline({
+      .shader_stages = std::span{shader_stages},
+      .input_assembly_state =
+        {
+          .primitive_topology = graphics::Primitive_topology::triangle_list,
+        },
+      .depth_state =
+        {
+          .depth_attachment_enabled = true,
+        },
+      .color_state =
+        {
+          .color_attachment_formats = {&color_attachment_format, 1},
+        },
+    });
+  }
+
   rc::Strong<graphics::Pipeline>
   make_composite_pipeline(graphics::Image_format swapchain_image_format) {
     auto const shader_stages =
@@ -913,6 +1063,12 @@ private:
     .access_mask = graphics::Access_flag_bits::shader_sampled_read,
   };
 
+  static auto constexpr compute_shader_storage_write_scope =
+    graphics::Synchronization_scope{
+      .stage_mask = graphics::Pipeline_stage_flag_bits::compute_shader,
+      .access_mask = graphics::Access_flag_bits::shader_storage_write,
+    };
+
   static auto constexpr color_attachment_scope =
     graphics::Synchronization_scope{
       .stage_mask = graphics::Pipeline_stage_flag_bits::color_attachment_output,
@@ -945,11 +1101,15 @@ private:
   graphics::Shader _crosshair_fragment_shader;
   graphics::Shader _composite_vertex_shader;
   graphics::Shader _composite_fragment_shader;
+  graphics::Shader _sky_vertex_shader;
+  graphics::Shader _sky_fragment_shader;
   rc::Strong<graphics::Pipeline> _grid_pipeline{};
   rc::Strong<graphics::Pipeline> _mesh_pipeline{};
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
+  rc::Strong<graphics::Pipeline> _sky_pipeline{};
   rc::Strong<graphics::Pipeline> _composite_pipeline{};
   std::optional<graphics::Image_format> _composite_pipeline_color_format{};
+  rc::Strong<graphics::Image> _transmittance_lut{};
   Texture_manager _texture_manager;
   Block_texture_registry _block_texture_registry;
   Block_model_registry _block_model_registry;

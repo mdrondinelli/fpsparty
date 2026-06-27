@@ -3,6 +3,7 @@
 
 #include "graphics/buffer.hpp"
 #include "graphics/compare_op.hpp"
+#include "graphics/compute_pipeline.hpp"
 #include "graphics/cull_mode.hpp"
 #include "graphics/front_face.hpp"
 #include "graphics/image.hpp"
@@ -109,6 +110,8 @@ public:
 
   void bind_pipeline(rc::Strong<Pipeline const> pipeline);
 
+  void bind_compute_pipeline(rc::Strong<Compute_pipeline const> pipeline);
+
   void set_cull_mode(Cull_mode cull_mode);
 
   void set_front_face(Front_face front_face);
@@ -130,6 +133,8 @@ public:
 
   void draw_indexed_indirect(Indirect_indexed_draw_info const &info) noexcept;
 
+  void dispatch(std::uint32_t x, std::uint32_t y, std::uint32_t z) noexcept;
+
   void
   push_data(std::uint32_t offset, std::span<std::byte const> data) noexcept;
 
@@ -141,6 +146,8 @@ public:
   void add_reference(rc::Strong<Image const> image);
 
   void add_reference(rc::Strong<Pipeline const> pipeline);
+
+  void add_reference(rc::Strong<Compute_pipeline const> pipeline);
 
 private:
   friend Work_recorder detail::acquire_work_recorder(

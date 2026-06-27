@@ -8,6 +8,8 @@ namespace fpsparty::graphics {
 enum class Pipeline_stage_flag_bits : std::uint64_t {
   draw_indirect =
     static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eDrawIndirect),
+  compute_shader =
+    static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eComputeShader),
   vertex_shader =
     static_cast<std::uint64_t>(vk::PipelineStageFlagBits2::eVertexShader),
   fragment_shader =
@@ -39,6 +41,8 @@ enum class Access_flag_bits : std::uint64_t {
     static_cast<std::uint64_t>(vk::AccessFlagBits2::eShaderSampledRead),
   shader_storage_read =
     static_cast<std::uint64_t>(vk::AccessFlagBits2::eShaderStorageRead),
+  shader_storage_write =
+    static_cast<std::uint64_t>(vk::AccessFlagBits2::eShaderStorageWrite),
 };
 
 using Pipeline_stage_flags = Flags<Pipeline_stage_flag_bits>;

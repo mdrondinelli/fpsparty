@@ -7,7 +7,9 @@
 layout(descriptor_heap) uniform sampler samplers[];
 
 #define FPSPARTY_SAMPLER_NEAREST samplers[0]
-#define FPSPARTY_SAMPLER_LINEAR samplers[1]
+#define FPSPARTY_SAMPLER_NEAREST_CLAMP samplers[1]
+#define FPSPARTY_SAMPLER_LINEAR samplers[2]
+#define FPSPARTY_SAMPLER_LINEAR_CLAMP samplers[3]
 
 layout(descriptor_heap) uniform texture2D sampled_images[];
 

@@ -22,7 +22,7 @@ struct Game_create_info {
   f32 origin_longitude{-2.044871f};
 
   // Time in real-time seconds between noons of consecutive in-game days.
-  f32 solar_day_duration{20.0f * 60.0f};
+  f32 solar_day_duration{20.0f};
 
   // Time in in-game (synocdic) days between consecutive summer solstices.
   f32 tropical_year_duration{365.24217f};

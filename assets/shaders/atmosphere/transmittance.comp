@@ -4,7 +4,7 @@
 #include "atmosphere.glsl"
 
 const int work_group_size = 64;
-const int step_count = 128;
+const int step_count = 256;
 const int steps_per_invocation = step_count / work_group_size;
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = work_group_size) in;
@@ -28,8 +28,8 @@ vec3 integrate_optical_depth(vec3 x_0, vec3 x_1, int i_begin, int i_end) {
   return optical_depth;
 }
 
+// ro must be inside the atmosphere
 vec3 ray_atmosphere(vec3 ro, vec3 rd) {
-  // must be inside the atmosphere
   const float b = dot(ro, rd);
   const float c = dot(ro, ro) - r_atmosphere * r_atmosphere;
   const float h = b * b - c;

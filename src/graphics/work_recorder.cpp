@@ -259,6 +259,14 @@ void Work_recorder::bind_pipeline(rc::Strong<Pipeline const> pipeline) {
   add_reference(std::move(pipeline));
 }
 
+void Work_recorder::bind_compute_pipeline(
+  rc::Strong<Compute_pipeline const> pipeline) {
+  get_command_buffer().bindPipeline(
+    vk::PipelineBindPoint::eCompute,
+    detail::get_compute_pipeline_vk_pipeline(*pipeline));
+  add_reference(std::move(pipeline));
+}
+
 void Work_recorder::set_cull_mode(Cull_mode cull_mode) {
   get_command_buffer()
     .setCullMode(static_cast<vk::CullModeFlags>(static_cast<int>(cull_mode)));
@@ -331,6 +339,11 @@ void Work_recorder::draw_indexed_indirect(
   add_reference(info.buffer);
 }
 
+void Work_recorder::dispatch(
+  std::uint32_t x, std::uint32_t y, std::uint32_t z) noexcept {
+  get_command_buffer().dispatch(x, y, z);
+}
+
 void Work_recorder::push_data(
   std::uint32_t offset, std::span<std::byte const> data) noexcept {
   get_command_buffer().pushDataEXT({
@@ -363,6 +376,10 @@ void Work_recorder::add_reference(rc::Strong<Image const> image) {
 
 void Work_recorder::add_reference(rc::Strong<Pipeline const> pipeline) {
   _resource.pipelines.emplace_back(std::move(pipeline));
+}
+
+void Work_recorder::add_reference(rc::Strong<Compute_pipeline const> pipeline) {
+  _resource.compute_pipelines.emplace_back(std::move(pipeline));
 }
 
 vk::CommandBuffer Work_recorder::get_command_buffer() const noexcept {

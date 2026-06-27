@@ -12,6 +12,7 @@
 #include <rc.hpp>
 
 #include "buffer.hpp"
+#include "compute_pipeline.hpp"
 #include "descriptor_heap.hpp"
 #include "image.hpp"
 #include "pipeline.hpp"
@@ -47,6 +48,9 @@ public:
   void poll_works();
 
   rc::Strong<Pipeline> create_pipeline(Pipeline_create_info const &info);
+
+  rc::Strong<Compute_pipeline>
+  create_compute_pipeline(Compute_pipeline_create_info const &info);
 
   rc::Strong<Buffer> create_buffer(Buffer_create_info const &info);
 
@@ -92,6 +96,7 @@ private:
   std::vector<vk::PresentModeKHR> _surface_present_modes{};
   bool _vsync_preferred{};
   rc::Factory<Pipeline> _pipeline_factory{};
+  rc::Factory<Compute_pipeline> _compute_pipeline_factory{};
   rc::Factory<Buffer> _buffer_factory{};
   rc::Factory<Image> _image_factory{};
   vk::Format _swapchain_image_format{};

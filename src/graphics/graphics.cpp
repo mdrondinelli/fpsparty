@@ -12,7 +12,9 @@
 #include <vulkan/vulkan.hpp>
 
 namespace fpsparty::graphics {
+
 namespace {
+
 std::tuple<vk::Format, vk::Extent2D, vk::UniqueSwapchainKHR> make_swapchain(
   glfw::Window window,
   vk::SurfaceKHR surface,
@@ -117,7 +119,7 @@ vk::UniqueSemaphore make_semaphore(
   return retval;
 }
 
-constexpr auto sampler_descriptor_count = 2;
+constexpr auto sampler_descriptor_count = 4;
 
 } // namespace
 
@@ -159,14 +161,28 @@ Graphics::Graphics(Graphics_create_info const &info)
                                          .samplerDescriptorSize;
   auto const sampler_heap_memory = _sampler_heap->map();
   auto const nearest_sampler_create_info = vk::SamplerCreateInfo{};
+  auto const nearest_clamp_sampler_create_info = vk::SamplerCreateInfo{
+    .addressModeU = vk::SamplerAddressMode::eClampToEdge,
+    .addressModeV = vk::SamplerAddressMode::eClampToEdge,
+    .addressModeW = vk::SamplerAddressMode::eClampToEdge,
+  };
   auto const linear_sampler_create_info = vk::SamplerCreateInfo{
     .magFilter = vk::Filter::eLinear,
     .minFilter = vk::Filter::eLinear,
   };
+  auto const linear_clamp_sampler_create_info = vk::SamplerCreateInfo{
+    .magFilter = vk::Filter::eLinear,
+    .minFilter = vk::Filter::eLinear,
+    .addressModeU = vk::SamplerAddressMode::eClampToEdge,
+    .addressModeV = vk::SamplerAddressMode::eClampToEdge,
+    .addressModeW = vk::SamplerAddressMode::eClampToEdge,
+  };
   Global_vulkan_state::get().device().writeSamplerDescriptorsEXT(
     {
       nearest_sampler_create_info,
+      nearest_clamp_sampler_create_info,
       linear_sampler_create_info,
+      linear_clamp_sampler_create_info,
     },
     {
       {
@@ -175,6 +191,14 @@ Graphics::Graphics(Graphics_create_info const &info)
       },
       {
         sampler_heap_memory.get().data() + 1 * sampler_descriptor_size,
+        sampler_descriptor_size,
+      },
+      {
+        sampler_heap_memory.get().data() + 2 * sampler_descriptor_size,
+        sampler_descriptor_size,
+      },
+      {
+        sampler_heap_memory.get().data() + 3 * sampler_descriptor_size,
         sampler_descriptor_size,
       },
     });
@@ -188,6 +212,11 @@ void Graphics::poll_works() {
 rc::Strong<Pipeline>
 Graphics::create_pipeline(Pipeline_create_info const &info) {
   return _pipeline_factory.create(info);
+}
+
+rc::Strong<Compute_pipeline>
+Graphics::create_compute_pipeline(Compute_pipeline_create_info const &info) {
+  return _compute_pipeline_factory.create(info);
 }
 
 rc::Strong<Buffer> Graphics::create_buffer(Buffer_create_info const &info) {
