@@ -11,4 +11,12 @@ layout(descriptor_heap) uniform sampler samplers[];
 
 layout(descriptor_heap) uniform texture2D sampled_images[];
 
+#define DEFINE_STORAGE_IMAGE_ARRAY(format) \
+  layout(format, descriptor_heap) restrict uniform image2D format##_storage_images[];
+
+DEFINE_STORAGE_IMAGE_ARRAY(rgba8)
+DEFINE_STORAGE_IMAGE_ARRAY(rgba16f)
+
+#undef DEFINE_STORAGE_IMAGE_ARRAY
+
 #endif

@@ -1,0 +1,71 @@
+#version 450
+
+#include "../descriptors.glsl"
+#include "atmosphere.glsl"
+
+const int work_group_size = 64;
+const int step_count = 128;
+const int steps_per_invocation = step_count / work_group_size;
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = work_group_size) in;
+
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) ivec2 lut_size;
+  layout(offset = 8) int lut_index;
+} push_constants;
+
+vec3 integrate_optical_depth(vec3 x_0, vec3 x_1, int i_begin, int i_end) {
+  const float dx = length((x_1 - x_0) / float(step_count));
+  vec3 optical_depth = vec3(0.0);
+  for (int i = i_begin; i < i_end; i++) {
+    const vec3 x_i = mix(x_0, x_1, (i + 0.5f) / float(step_count));
+    const float h = altitude(x_i);
+    const vec3 e_r = rayleigh_scattering * rayleigh_density(h);
+    const float e_m = mie_extinction * mie_density(h);
+    const vec3 e_o = ozone_absorption * ozone_density(h);
+    optical_depth += (e_r + vec3(e_m) + e_o) * dx;
+  }
+  return optical_depth;
+}
+
+vec3 ray_atmosphere(vec3 ro, vec3 rd) {
+  // must be inside the atmosphere
+  const float b = dot(ro, rd);
+  const float c = dot(ro, ro) - r_atmosphere * r_atmosphere;
+  const float h = b * b - c;
+  const float t = -b + sqrt(h);
+  return ro + t * rd;
+}
+
+shared vec3 shared_optical_depths[work_group_size];
+
+void main() {
+  const vec2 lut_coords =
+    (gl_GlobalInvocationID.xy + vec2(0.5f)) / push_constants.lut_size;
+  const float h = mix(min_altitude, max_altitude, lut_coords.x);
+  const float sin_theta = lut_coords.y * 2.0f - 1.0f;
+  const float cos_theta = sqrt(1.0f - sin_theta * sin_theta);
+  const vec3 x_0 = vec3(0.0f, r_ground + h, 0.0f);
+  const vec3 x_1 = ray_atmosphere(x_0, vec3(cos_theta, sin_theta, 0.0f));
+  shared_optical_depths[gl_LocalInvocationID.z] =
+    integrate_optical_depth(
+        x_0,
+        x_1,
+        steps_per_invocation * int(gl_LocalInvocationID.z),
+        steps_per_invocation * (int(gl_LocalInvocationID.z) + 1));
+  uint stride = 1;
+  do {
+    barrier();
+    if ((gl_LocalInvocationID.z & (stride * 2u - 1u)) == 0u) {
+      shared_optical_depths[gl_LocalInvocationID.z] +=
+        shared_optical_depths[gl_LocalInvocationID.z + stride];
+    }
+    stride <<= 1;
+  } while (stride < work_group_size);
+  if (gl_LocalInvocationID.z == 0u) {
+    imageStore(
+        rgba16f_storage_images[push_constants.lut_index],
+        ivec2(gl_GlobalInvocationID.xy),
+        vec4(exp(-shared_optical_depths[0]), 0.0f));
+  }
+}
