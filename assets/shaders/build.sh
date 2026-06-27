@@ -34,6 +34,9 @@ shaders=(
   crosshair.frag
   composite.vert
   composite.frag
+  atmosphere/transmittance.comp
+  atmosphere/sky.vert
+  atmosphere/sky.frag
 )
 
 for shader in "${shaders[@]}"; do

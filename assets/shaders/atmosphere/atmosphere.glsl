@@ -42,4 +42,16 @@ float ozone_density(float altitude) {
   return max(0.0f, 1.0f - abs(altitude - 25000.0f) / 15000.0f);
 }
 
+vec2 pack_transmittance_lut_params(float altitude, float cos_zenith) {
+  const float x = (altitude - min_altitude) / (max_altitude - min_altitude);
+  const float y = cos_zenith * 0.5f + 0.5f;
+  return vec2(x, y);
+}
+
+vec2 unpack_transmittance_lut_params(vec2 packed) {
+  const float altitude = mix(min_altitude, max_altitude, packed.x);
+  const float cos_zenith = packed.y * 2.0f - 1.0f;
+  return vec2(altitude, cos_zenith);
+}
+
 #endif
