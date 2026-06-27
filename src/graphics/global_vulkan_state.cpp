@@ -131,14 +131,9 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
       .pNext = &descriptor_heap_features,
       .shaderUntypedPointers = true,
     };
-  auto buffer_device_address_features =
-    vk::PhysicalDeviceBufferDeviceAddressFeatures{
-      .pNext = &shader_untyped_pointers_features,
-      .bufferDeviceAddress = true,
-    };
   auto extended_dynamic_state_features =
     vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT{
-      .pNext = &buffer_device_address_features,
+      .pNext = &shader_untyped_pointers_features,
       .extendedDynamicState = true,
     };
   auto vulkan_1_3_features = vk::PhysicalDeviceVulkan13Features{
@@ -146,8 +141,13 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
     .synchronization2 = true,
     .dynamicRendering = true,
   };
-  auto const features = vk::PhysicalDeviceFeatures2{
+  auto vulkan_1_2_features = vk::PhysicalDeviceVulkan12Features{
     .pNext = &vulkan_1_3_features,
+    .shaderSampledImageArrayNonUniformIndexing = true,
+    .bufferDeviceAddress = true,
+  };
+  auto const features = vk::PhysicalDeviceFeatures2{
+    .pNext = &vulkan_1_2_features,
     .features =
       {
         .multiDrawIndirect = true,
