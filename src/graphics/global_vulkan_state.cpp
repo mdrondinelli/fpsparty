@@ -61,9 +61,9 @@ find_vk_physical_device(vk::Instance instance) {
   auto const physical_devices = instance.enumeratePhysicalDevices();
   for (auto const physical_device : physical_devices) {
     auto const properties = physical_device.getProperties();
-    if (properties.apiVersion < vk::ApiVersion13) {
+    if (properties.apiVersion < vk::ApiVersion14) {
       std::cout << "Skipping VkPhysicalDevice '" << properties.deviceName
-                << "' because it does not support Vulkan 1.3.\n";
+                << "' because it does not support Vulkan 1.4.\n";
       continue;
     }
     auto const queue_family_index = [&]() -> std::optional<std::uint32_t> {
@@ -184,7 +184,7 @@ vma::Unique_allocator make_vma_allocator(
     .pHeapSizeLimit = nullptr,
     .pVulkanFunctions = nullptr,
     .instance = instance,
-    .vulkanApiVersion = vk::ApiVersion13,
+    .vulkanApiVersion = vk::ApiVersion14,
     .pTypeExternalMemoryHandleTypes = nullptr,
   };
   auto const vulkan_functions = vma::import_functions_from_volk(create_info);
