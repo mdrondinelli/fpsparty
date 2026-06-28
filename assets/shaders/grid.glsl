@@ -1,6 +1,8 @@
-#extension GL_EXT_buffer_reference : require
+#ifndef FPSPARTY_GRID_GLSL
+#define FPSPARTY_GRID_GLSL
 
 #include "descriptors.glsl"
+#include "scene.glsl"
 
 struct Vertex {
   float position[3];
@@ -14,15 +16,17 @@ readonly buffer Vertex_buffer {
 };
 
 layout(std430, buffer_reference, buffer_reference_align = 4)
-readonly buffer Texture_index_buffer {
-  uint indices[];
+readonly buffer Texture_buffer {
+  uint textures[];
 };
 
 layout(push_constant) uniform Push_constants {
-  layout(offset = 0) Vertex_buffer vertex_buffer;
-  layout(offset = 8) Texture_index_buffer texture_index_buffer;
-  layout(offset = 16) mat4 view_projection_matrix;
-  layout(offset = 80) vec3 sun_direction;
-  layout(offset = 92) float time;
-  layout(offset = 96) vec4 normal;
+  layout(offset = 0) Scene scene;
+  layout(offset = 8) Vertex_buffer vertex_buffer;
+  layout(offset = 16) Texture_buffer texture_buffer;
+  layout(offset = 24) float normal_x;
+  layout(offset = 28) float normal_y;
+  layout(offset = 32) float normal_z;
 } push_constants;
+
+#endif

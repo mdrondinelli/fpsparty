@@ -1,5 +1,6 @@
 #version 450
-#extension GL_EXT_buffer_reference : require
+
+#include "scene.glsl"
 
 layout(location = 0) out vec3 out_color;
 
@@ -14,8 +15,9 @@ readonly buffer Vertex_buffer {
 };
 
 layout(push_constant) uniform Push_constants {
-  layout(offset = 0) mat4 model_view_projection_matrix;
-  layout(offset = 64) Vertex_buffer vertex_buffer;
+  layout(offset = 0) Scene scene;
+  layout(offset = 8) Vertex_buffer vertex_buffer;
+  layout(offset = 16) mat4 model_view_projection_matrix;
 } push_constants;
 
 void main() {

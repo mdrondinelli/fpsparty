@@ -148,16 +148,30 @@ auto constexpr z_near = 0.1f;
 auto constexpr transmittance_lut_width = 256;
 auto constexpr transmittance_lut_height = 1024;
 
-struct Transmittance_push_constants {
+struct Scene_uniform_data {
+  alignas(16) math::mat4 view_projection_matrix;
+  alignas(16) math::vec3 sun_irradiance;
+  alignas(16) math::vec3 sun_direction;
+  u32 transmittance_texture;
+  float animation_time;
+};
+
+static_assert(offsetof(Scene_uniform_data, view_projection_matrix) == 0);
+static_assert(offsetof(Scene_uniform_data, sun_irradiance) == 64);
+static_assert(offsetof(Scene_uniform_data, sun_direction) == 80);
+static_assert(offsetof(Scene_uniform_data, transmittance_texture) == 92);
+static_assert(offsetof(Scene_uniform_data, animation_time) == 96);
+
+struct Transmittance_push_data {
   math::ivec2 lut_size;
   i32 lut_index;
 };
 
-static_assert(sizeof(Transmittance_push_constants) == 12);
-static_assert(offsetof(Transmittance_push_constants, lut_size) == 0);
-static_assert(offsetof(Transmittance_push_constants, lut_index) == 8);
+static_assert(sizeof(Transmittance_push_data) == 12);
+static_assert(offsetof(Transmittance_push_data, lut_size) == 0);
+static_assert(offsetof(Transmittance_push_data, lut_index) == 8);
 
-struct Sky_push_constants {
+struct Sky_push_data {
   math::mat4 camera_basis;
   math::vec2 zoom;
   f32 altitude;
@@ -166,15 +180,15 @@ struct Sky_push_constants {
   alignas(16) math::vec3 sun_irradiance;
 };
 
-static_assert(sizeof(Sky_push_constants) == 112);
-static_assert(offsetof(Sky_push_constants, camera_basis) == 0);
-static_assert(offsetof(Sky_push_constants, zoom) == 64);
-static_assert(offsetof(Sky_push_constants, altitude) == 72);
-static_assert(offsetof(Sky_push_constants, transmittance_lut) == 76);
-static_assert(offsetof(Sky_push_constants, sun_direction) == 80);
-static_assert(offsetof(Sky_push_constants, sun_irradiance) == 96);
+static_assert(sizeof(Sky_push_data) == 112);
+static_assert(offsetof(Sky_push_data, camera_basis) == 0);
+static_assert(offsetof(Sky_push_data, zoom) == 64);
+static_assert(offsetof(Sky_push_data, altitude) == 72);
+static_assert(offsetof(Sky_push_data, transmittance_lut) == 76);
+static_assert(offsetof(Sky_push_data, sun_direction) == 80);
+static_assert(offsetof(Sky_push_data, sun_irradiance) == 96);
 
-struct Composite_push_constants {
+struct Composite_push_data {
   u32 radiance_texture_index;
   u32 mask_texture_index;
   u32 depth_texture_index;
@@ -182,12 +196,12 @@ struct Composite_push_constants {
   u32 frame_number;
 };
 
-static_assert(sizeof(Composite_push_constants) == 20);
-static_assert(offsetof(Composite_push_constants, radiance_texture_index) == 0);
-static_assert(offsetof(Composite_push_constants, mask_texture_index) == 4);
-static_assert(offsetof(Composite_push_constants, depth_texture_index) == 8);
-static_assert(offsetof(Composite_push_constants, z_near) == 12);
-static_assert(offsetof(Composite_push_constants, frame_number) == 16);
+static_assert(sizeof(Composite_push_data) == 20);
+static_assert(offsetof(Composite_push_data, radiance_texture_index) == 0);
+static_assert(offsetof(Composite_push_data, mask_texture_index) == 4);
+static_assert(offsetof(Composite_push_data, depth_texture_index) == 8);
+static_assert(offsetof(Composite_push_data, z_near) == 12);
+static_assert(offsetof(Composite_push_data, frame_number) == 16);
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
@@ -254,7 +268,13 @@ public:
         _crosshair_pipeline{make_crosshair_pipeline()},
         _sky_pipeline{make_sky_pipeline()},
         _texture_manager{{.graphics = &_graphics}},
-        _block_texture_registry{{.graphics = &_graphics}} {
+        _block_texture_registry{{.graphics = &_graphics}},
+        _scene_uniform_buffer{_graphics.create_buffer({
+          .size = 2 * sizeof(Scene_uniform_data),
+          .usage = graphics::Buffer_usage_flag_bits::shader_device_address,
+          .mapping_mode = graphics::Mapping_mode::write_only,
+          .min_alignment = 16,
+        })} {
     std::cout << "Opened window.\n";
     // _graphics.set_vsync_preferred(false);
     _glfw_window->set_key_callback(this);
@@ -310,16 +330,16 @@ public:
         return false;
       }
     }
+    _graphics.poll_works();
     if (_state == State::connected) {
       if (!_client.is_connected()) {
         _state = State::stopped;
         return false;
       }
       _client.update(duration);
+      update_grid_mesh();
       _animation_time += duration;
     }
-    _graphics.poll_works();
-    update_grid_mesh();
     render();
     ++_frame_number;
     return true;
@@ -406,6 +426,21 @@ private:
         (projection_matrix * view_matrix).eval();
       auto const sun_direction =
         session->get_scene().get_interpolated_sun_direction();
+      auto const scene_uniform_data = Scene_uniform_data{
+        .view_projection_matrix = view_projection_matrix,
+        .sun_irradiance = math::vec3::Constant(1300.0f),
+        .sun_direction = sun_direction,
+        .transmittance_texture =
+          work_recorder.upload_sampled_image_descriptor(_transmittance_lut),
+        .animation_time = _animation_time,
+      };
+      auto const scene_uniform_memory = _scene_uniform_buffer->map();
+      auto const scene_uniform_offset =
+        (_frame_number % 2) * sizeof(Scene_uniform_data);
+      std::memcpy(
+        scene_uniform_memory.get().data() + scene_uniform_offset,
+        &scene_uniform_data,
+        sizeof(Scene_uniform_data));
       // draw grid
       if (_grid_mesh && _grid_mesh->is_uploaded()) {
         work_recorder.bind_pipeline(_grid_pipeline);
@@ -413,29 +448,27 @@ private:
         work_recorder.set_cull_mode(graphics::Cull_mode::back);
         work_recorder.bind_index_buffer(
           _grid_mesh->get_index_buffer(), graphics::Index_type::u32);
-        work_recorder.push_buffer(0, _grid_mesh->get_vertex_buffer());
-        work_recorder.push_buffer(
-          8, _block_texture_registry.get_descriptor_index_buffer());
+        work_recorder.push_buffer_reference(
+          0, _scene_uniform_buffer, scene_uniform_offset);
+        work_recorder
+          .push_buffer_reference(8, _grid_mesh->get_vertex_buffer());
+        work_recorder
+          .push_buffer_reference(16, _block_texture_registry.get_buffer());
         _block_texture_registry.upload_descriptors(work_recorder);
-        work_recorder
-          .push_data(16, std::as_bytes(std::span{&view_projection_matrix, 1}));
-        work_recorder
-          .push_data(80, std::as_bytes(std::span{&sun_direction, 1}));
-        work_recorder.push_data(92, std::as_bytes(std::span{&_animation_time, 1}));
-        auto push_normal = [&](math::vec4 const &value) {
-          work_recorder.push_data(96, std::as_bytes(std::span{&value, 1}));
+        auto push_normal = [&](math::vec3 const &value) {
+          work_recorder.push_data(24, std::as_bytes(std::span{&value, 1}));
         };
-        push_normal({1.0f, 0.0f, 0.0f, 0.0f});
+        push_normal({1.0f, 0.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, +math::axis3::x);
-        push_normal({-1.0f, 0.0f, 0.0f, 0.0f});
+        push_normal({-1.0f, 0.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, -math::axis3::x);
-        push_normal({0.0f, 1.0f, 0.0f, 0.0f});
+        push_normal({0.0f, 1.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, +math::axis3::y);
-        push_normal({0.0f, -1.0f, 0.0f, 0.0f});
+        push_normal({0.0f, -1.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, -math::axis3::y);
-        push_normal({0.0f, 0.0f, 1.0f, 0.0f});
+        push_normal({0.0f, 0.0f, 1.0f});
         _grid_mesh->record_draws(work_recorder, +math::axis3::z);
-        push_normal({0.0f, 0.0f, -1.0f, 0.0f});
+        push_normal({0.0f, 0.0f, -1.0f});
         _grid_mesh->record_draws(work_recorder, -math::axis3::z);
       }
       // draw cubes
@@ -444,10 +477,12 @@ private:
       work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
       work_recorder
         .bind_index_buffer(_cube_index_buffer, graphics::Index_type::u16);
-      work_recorder.push_buffer(64, _cube_vertex_buffer);
+      work_recorder
+        .push_buffer_reference(0, _scene_uniform_buffer, scene_uniform_offset);
+      work_recorder.push_buffer_reference(8, _cube_vertex_buffer);
       for (auto const &[id, instance] :
            session->get_scene().get_interpolated_mesh_instances()) {
-        auto rotation_matrix = Eigen::Matrix4f{Eigen::Matrix4f::Identity()};
+        auto rotation_matrix = math::mat4::Identity().eval();
         rotation_matrix.block<3, 3>(0, 0) =
           instance.orientation.toRotationMatrix();
         auto const model_matrix =
@@ -457,7 +492,7 @@ private:
         auto const model_view_projection_matrix =
           (view_projection_matrix * model_matrix).eval();
         work_recorder.push_data(
-          0, std::as_bytes(std::span{&model_view_projection_matrix, 1}));
+          16, std::as_bytes(std::span{&model_view_projection_matrix, 1}));
         work_recorder.draw_indexed({
           .index_count = static_cast<std::uint32_t>(cube_mesh_indices.size()),
           .instance_count = 1,
@@ -492,10 +527,9 @@ private:
     };
     auto const transmittance_lut =
       work_recorder.upload_sampled_image_descriptor(_transmittance_lut);
-    auto const push_constants = Sky_push_constants{
-      .camera_basis =
-        math::y_rotation_matrix(_local_player->input_state.yaw) *
-        math::x_rotation_matrix(_local_player->input_state.pitch),
+    auto const push_constants = Sky_push_data{
+      .camera_basis = math::y_rotation_matrix(_local_player->input_state.yaw) *
+                      math::x_rotation_matrix(_local_player->input_state.pitch),
       .zoom = zoom_vec,
       .altitude = camera_position.y() + 84.0f,
       .transmittance_lut = transmittance_lut,
@@ -512,8 +546,7 @@ private:
     work_recorder.set_depth_compare_op(graphics::Compare_op::equal);
     work_recorder
       .bind_index_buffer(_composite_index_buffer, graphics::Index_type::u16);
-    work_recorder
-      .push_data(0, std::as_bytes(std::span{&push_constants, 1}));
+    work_recorder.push_data(0, std::as_bytes(std::span{&push_constants, 1}));
     work_recorder.draw_indexed({
       .index_count = static_cast<u32>(composite_indices.size()),
       .instance_count = 1,
@@ -572,7 +605,7 @@ private:
         .upload_sampled_image_descriptor(_crosshair_mask_render_target);
     auto const depth_texture_index =
       work_recorder.upload_sampled_image_descriptor(_depth_render_target);
-    auto const composite_push_constants = Composite_push_constants{
+    auto const composite_push_constants = Composite_push_data{
       .radiance_texture_index = radiance_texture_index,
       .mask_texture_index = crosshair_mask_texture_index,
       .depth_texture_index = depth_texture_index,
@@ -729,16 +762,15 @@ private:
       _transmittance_lut);
     auto const lut_index =
       work_recorder.upload_storage_image_descriptor(_transmittance_lut);
-    auto const push_constants = Transmittance_push_constants{
+    auto const push_constants = Transmittance_push_data{
       .lut_size = lut_size,
       .lut_index = static_cast<i32>(lut_index),
     };
     work_recorder.bind_compute_pipeline(transmittance_pipeline);
-    work_recorder
-      .push_data(0, std::as_bytes(std::span{&push_constants, 1}));
+    work_recorder.push_data(0, std::as_bytes(std::span{&push_constants, 1}));
     work_recorder.dispatch(lut_size.x(), lut_size.y(), 1);
-    work_recorder.barrier(
-      compute_shader_storage_write_scope, sampled_image_scope);
+    work_recorder
+      .barrier(compute_shader_storage_write_scope, sampled_image_scope);
     auto work = _graphics.submit_transient_work(std::move(work_recorder));
     work->await();
   }
@@ -1131,6 +1163,7 @@ private:
   Block_model_registry _block_model_registry;
   std::unique_ptr<Grid_mesh> _grid_mesh;
   std::unique_ptr<Grid_mesh> _pending_grid_mesh;
+  rc::Strong<graphics::Buffer> _scene_uniform_buffer{};
   rc::Strong<graphics::Buffer> _cube_vertex_buffer{};
   rc::Strong<graphics::Buffer> _cube_index_buffer{};
   rc::Strong<graphics::Buffer> _crosshair_index_buffer{};

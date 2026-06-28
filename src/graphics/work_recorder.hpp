@@ -45,11 +45,11 @@ struct Buffer_copy_info {
 
 struct Buffer_image_copy_info {
   std::size_t src_offset;
-  std::uint32_t dst_mip_level;
-  std::uint32_t dst_base_array_layer;
-  std::uint32_t dst_array_layer_count;
-  Eigen::Vector3i dst_offset;
-  Eigen::Vector3i dst_extent;
+  u32 dst_mip_level;
+  u32 dst_base_array_layer;
+  u32 dst_array_layer_count;
+  math::ivec3 dst_offset;
+  math::ivec3 dst_extent;
 };
 
 struct Rendering_begin_info {
@@ -59,28 +59,28 @@ struct Rendering_begin_info {
 };
 
 struct Indexed_draw_info {
-  std::uint32_t index_count;
-  std::uint32_t instance_count;
-  std::uint32_t first_index;
-  std::int32_t vertex_offset;
-  std::uint32_t first_instance;
+  u32 index_count;
+  u32 instance_count;
+  u32 first_index;
+  i32 vertex_offset;
+  u32 first_instance;
 };
 
 struct Indirect_indexed_draw_info {
   rc::Strong<Buffer> buffer;
-  std::uint64_t offset;
-  std::uint32_t draw_count;
-  std::uint32_t stride;
+  u64 offset;
+  u32 draw_count;
+  u32 stride;
 };
 
 class Work_recorder {
 public:
-  std::uint32_t upload_sampled_image_descriptor(rc::Strong<Image const> image);
+  u32 upload_sampled_image_descriptor(rc::Strong<Image const> image);
 
-  std::uint32_t upload_storage_image_descriptor(rc::Strong<Image> image);
+  u32 upload_storage_image_descriptor(rc::Strong<Image> image);
 
 private:
-  std::uint32_t alloc_descriptor();
+  u32 alloc_descriptor();
 
 public:
   void copy_buffer(
@@ -116,9 +116,9 @@ public:
 
   void set_front_face(Front_face front_face);
 
-  void set_viewport(Eigen::Vector2i const &extent);
+  void set_viewport(math::ivec2 extent);
 
-  void set_scissor(Eigen::Vector2i const &extent);
+  void set_scissor(math::ivec2 extent);
 
   void set_depth_test_enabled(bool enabled);
 
@@ -133,13 +133,12 @@ public:
 
   void draw_indexed_indirect(Indirect_indexed_draw_info const &info) noexcept;
 
-  void dispatch(std::uint32_t x, std::uint32_t y, std::uint32_t z) noexcept;
+  void dispatch(u32 x, u32 y, u32 z) noexcept;
 
-  void
-  push_data(std::uint32_t offset, std::span<std::byte const> data) noexcept;
+  void push_data(u32 push_offset, std::span<std::byte const> data) noexcept;
 
-  void push_buffer(
-    std::uint32_t offset, rc::Strong<Buffer> buffer) noexcept;
+  void push_buffer_reference(
+    u32 push_offset, rc::Strong<Buffer> base, u64 offset = 0) noexcept;
 
   void add_reference(rc::Strong<Buffer const> buffer);
 

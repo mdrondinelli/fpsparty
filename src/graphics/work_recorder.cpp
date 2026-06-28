@@ -276,7 +276,7 @@ void Work_recorder::set_front_face(Front_face front_face) {
   get_command_buffer().setFrontFace(static_cast<vk::FrontFace>(front_face));
 }
 
-void Work_recorder::set_viewport(Eigen::Vector2i const &extent) {
+void Work_recorder::set_viewport(math::ivec2 extent) {
   get_command_buffer().setViewport(
     0,
     {{
@@ -287,7 +287,7 @@ void Work_recorder::set_viewport(Eigen::Vector2i const &extent) {
     }});
 }
 
-void Work_recorder::set_scissor(Eigen::Vector2i const &extent) {
+void Work_recorder::set_scissor(math::ivec2 extent) {
   get_command_buffer().setScissor(
     0,
     {{
@@ -345,9 +345,9 @@ void Work_recorder::dispatch(
 }
 
 void Work_recorder::push_data(
-  std::uint32_t offset, std::span<std::byte const> data) noexcept {
+  std::uint32_t push_offset, std::span<std::byte const> data) noexcept {
   get_command_buffer().pushDataEXT({
-    .offset = offset,
+    .offset = push_offset,
     .data =
       {
         .address = data.data(),
@@ -356,10 +356,10 @@ void Work_recorder::push_data(
   });
 }
 
-void Work_recorder::push_buffer(
-  std::uint32_t offset, rc::Strong<Buffer> buffer) noexcept {
-  auto const address = buffer->get_device_address();
-  push_data(offset, std::as_bytes(std::span{&address, 1}));
+void Work_recorder::push_buffer_reference(
+  std::uint32_t push_offset, rc::Strong<Buffer> buffer, u64 offset) noexcept {
+  auto const address = buffer->get_device_address() + offset;
+  push_data(push_offset, std::as_bytes(std::span{&address, 1}));
   add_reference(std::move(buffer));
 }
 

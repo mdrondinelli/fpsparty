@@ -1,8 +1,7 @@
 #ifndef FPSPARTY_DESCRIPTORS_GLSL
 #define FPSPARTY_DESCRIPTORS_GLSL
 
-#extension GL_EXT_descriptor_heap : require
-#extension GL_EXT_nonuniform_qualifier : require
+#include "extensions.glsl"
 
 layout(descriptor_heap) uniform sampler samplers[];
 

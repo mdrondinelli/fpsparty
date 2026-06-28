@@ -21,12 +21,12 @@ public:
 
   void upload_descriptors(graphics::Work_recorder &recorder);
 
-  rc::Strong<graphics::Buffer> get_descriptor_index_buffer() const noexcept;
+  rc::Strong<graphics::Buffer> get_buffer() const noexcept;
 
 private:
-  u32 get_descriptor_index_buffer_capacity() const noexcept;
+  u32 get_buffer_capacity() const noexcept;
 
-  void create_descriptor_index_buffer(u32 capacity);
+  void create_buffer(u32 capacity);
 
   graphics::Graphics *_graphics;
   rc::Strong<graphics::Buffer> _descriptor_index_buffer;
