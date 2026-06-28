@@ -1,6 +1,7 @@
 #ifndef FPSPARTY_SCENE_GLSL
 #define FPSPARTY_SCENE_GLSL
 
+#include "descriptors.glsl"
 #include "extensions.glsl"
 
 layout(std430, buffer_reference, buffer_reference_align = 16)

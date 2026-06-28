@@ -45,54 +45,48 @@ namespace fpsparty::client {
 namespace {
 
 struct Vertex {
-  float x;
-  float y;
-  float z;
+  float px;
+  float py;
+  float pz;
+  float nx{};
+  float ny{};
+  float nz{};
   float r;
   float g;
   float b;
 };
 
-auto const floor_mesh_vertices = std::vector<Vertex>{
-  {.x = 10.0f, .y = 0.0f, .z = 10.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},
-  {.x = 10.0f, .y = 0.0f, .z = -10.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},
-  {.x = -10.0f, .y = 0.0f, .z = 10.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},
-  {.x = -10.0f, .y = 0.0f, .z = -10.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f},
-};
-
-auto const floor_mesh_indices = std::vector<std::uint16_t>{0, 1, 2, 3, 2, 1};
-
 auto const cube_mesh_vertices = std::vector<Vertex>{
   // +x face
-  {.x = 0.5f, .y = 0.5f, .z = 0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},   // 1
-  {.x = 0.5f, .y = -0.5f, .z = 0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f},  // 2
-  {.x = 0.5f, .y = 0.5f, .z = -0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f},  // 3
-  {.x = 0.5f, .y = -0.5f, .z = -0.5f, .r = 1.0f, .g = 1.0f, .b = 0.0f}, // 4
+  {.px = 0.5f, .py = 0.5f, .pz = 0.5f, .nx = 1.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},   // 1
+  {.px = 0.5f, .py = -0.5f, .pz = 0.5f, .nx = 1.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},  // 2
+  {.px = 0.5f, .py = 0.5f, .pz = -0.5f, .nx = 1.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},  // 3
+  {.px = 0.5f, .py = -0.5f, .pz = -0.5f, .nx = 1.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f}, // 4
   // -x face
-  {.x = -0.5f, .y = 0.5f, .z = -0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},  // 1
-  {.x = -0.5f, .y = -0.5f, .z = -0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f}, // 2
-  {.x = -0.5f, .y = 0.5f, .z = 0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f},   // 3
-  {.x = -0.5f, .y = -0.5f, .z = 0.5f, .r = 1.0f, .g = 1.0f, .b = 0.0f},  // 4
+  {.px = -0.5f, .py = 0.5f, .pz = -0.5f, .nx = -1.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},  // 1
+  {.px = -0.5f, .py = -0.5f, .pz = -0.5f, .nx = -1.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f}, // 2
+  {.px = -0.5f, .py = 0.5f, .pz = 0.5f, .nx = -1.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},   // 3
+  {.px = -0.5f, .py = -0.5f, .pz = 0.5f, .nx = -1.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f},  // 4
   // +y face
-  {.x = 0.5f, .y = 0.5f, .z = 0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},   // 1
-  {.x = 0.5f, .y = 0.5f, .z = -0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f},  // 2
-  {.x = -0.5f, .y = 0.5f, .z = 0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f},  // 3
-  {.x = -0.5f, .y = 0.5f, .z = -0.5f, .r = 1.0f, .g = 1.0f, .b = 0.0f}, // 4
+  {.px = 0.5f, .py = 0.5f, .pz = 0.5f, .ny = 1.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},   // 1
+  {.px = 0.5f, .py = 0.5f, .pz = -0.5f, .ny = 1.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},  // 2
+  {.px = -0.5f, .py = 0.5f, .pz = 0.5f, .ny = 1.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},  // 3
+  {.px = -0.5f, .py = 0.5f, .pz = -0.5f, .ny = 1.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f}, // 4
   // -y face
-  {.x = 0.5f, .y = -0.5f, .z = -0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f},  // 2
-  {.x = 0.5f, .y = -0.5f, .z = 0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},   // 1
-  {.x = -0.5f, .y = -0.5f, .z = -0.5f, .r = 1.0f, .g = 1.0f, .b = 0.0f}, // 4
-  {.x = -0.5f, .y = -0.5f, .z = 0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f},  // 3
+  {.px = 0.5f, .py = -0.5f, .pz = -0.5f, .ny = -1.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},  // 2
+  {.px = 0.5f, .py = -0.5f, .pz = 0.5f, .ny = -1.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},   // 1
+  {.px = -0.5f, .py = -0.5f, .pz = -0.5f, .ny = -1.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f}, // 4
+  {.px = -0.5f, .py = -0.5f, .pz = 0.5f, .ny = -1.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},  // 3
   // +z face
-  {.x = -0.5f, .y = 0.5f, .z = 0.5f, .r = 1.0f, .g = 1.0f, .b = 0.0f},  // 3
-  {.x = -0.5f, .y = -0.5f, .z = 0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f}, // 4
-  {.x = 0.5f, .y = 0.5f, .z = 0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f},   // 1
-  {.x = 0.5f, .y = -0.5f, .z = 0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},  // 2
+  {.px = -0.5f, .py = 0.5f, .pz = 0.5f, .nz = 1.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f},  // 3
+  {.px = -0.5f, .py = -0.5f, .pz = 0.5f, .nz = 1.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f}, // 4
+  {.px = 0.5f, .py = 0.5f, .pz = 0.5f, .nz = 1.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},   // 1
+  {.px = 0.5f, .py = -0.5f, .pz = 0.5f, .nz = 1.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},  // 2
   // -z face
-  {.x = 0.5f, .y = 0.5f, .z = -0.5f, .r = 0.0f, .g = 0.0f, .b = 1.0f},   // 1
-  {.x = 0.5f, .y = -0.5f, .z = -0.5f, .r = 1.0f, .g = 0.0f, .b = 0.0f},  // 2
-  {.x = -0.5f, .y = 0.5f, .z = -0.5f, .r = 1.0f, .g = 1.0f, .b = 0.0f},  // 3
-  {.x = -0.5f, .y = -0.5f, .z = -0.5f, .r = 0.0f, .g = 1.0f, .b = 0.0f}, // 4
+  {.px = 0.5f, .py = 0.5f, .pz = -0.5f, .nz = -1.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},   // 1
+  {.px = 0.5f, .py = -0.5f, .pz = -0.5f, .nz = -1.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},  // 2
+  {.px = -0.5f, .py = 0.5f, .pz = -0.5f, .nz = -1.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f},  // 3
+  {.px = -0.5f, .py = -0.5f, .pz = -0.5f, .nz = -1.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f}, // 4
 };
 
 auto const cube_mesh_indices = std::vector<std::uint16_t>{
@@ -489,10 +483,8 @@ private:
           (math::translation_matrix(instance.position) * rotation_matrix *
            math::axis_aligned_scale_matrix(instance.scale))
             .eval();
-        auto const model_view_projection_matrix =
-          (view_projection_matrix * model_matrix).eval();
         work_recorder.push_data(
-          16, std::as_bytes(std::span{&model_view_projection_matrix, 1}));
+          16, std::as_bytes(std::span{&model_matrix, 1}));
         work_recorder.draw_indexed({
           .index_count = static_cast<std::uint32_t>(cube_mesh_indices.size()),
           .instance_count = 1,
