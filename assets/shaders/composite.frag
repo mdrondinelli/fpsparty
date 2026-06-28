@@ -26,11 +26,15 @@ uvec3 pcg3d(uvec3 v)
 }
 
 vec3 srgb_to_linear(vec3 srgb) {
-  return pow(srgb, vec3(2.2f));
+  const vec3 low = srgb / 12.92f;
+  const vec3 high = pow((srgb + vec3(0.055f)) / 1.055f, vec3(2.4f));
+  return mix(high, low, lessThanEqual(srgb, vec3(0.04045f)));
 }
 
 vec3 linear_to_srgb(vec3 linear) {
-  return pow(linear, vec3(1.0f / 2.2f));
+  const vec3 low = linear * 12.92f;
+  const vec3 high = 1.055f * pow(linear, vec3(1.0f / 2.4f)) - 0.055f;
+  return mix(high, low, lessThanEqual(linear, vec3(0.0031308f)));
 }
 
 vec3 apply_noise(vec3 color, vec3 noise) {
