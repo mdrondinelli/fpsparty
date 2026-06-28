@@ -50,7 +50,7 @@ int main() {
                 math::ivec3{-32, 0, -32},
                 math::ivec3{31, 15, 31},
               },
-        .initial_solar_time = 12ull * 60ull * 60ull * 1'000'000ull,
+        .initial_solar_time = 8ull * 60ull * 60ull * 1'000'000ull,
       },
     .tick_duration = constants::tick_duration,
   }};

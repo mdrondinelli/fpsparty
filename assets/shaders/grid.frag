@@ -32,7 +32,8 @@ void main() {
   const float n_dot_l = max(dot(n, l), 0.0); 
   const vec3 E_top = push_constants.scene.sun_irradiance;
   const vec3 E =
-    E_top * transmittance_along_ray(in_position + vec3(0.0, r_ground, 0.0f), l);
+    E_top *
+    transmittance_along_ray(vec3(0.0, r_ground + in_position.y, 0.0f), l);
   const vec3 L = base_color / pi * E * n_dot_l;
   out_color = vec4(L, 1.0f);
 }

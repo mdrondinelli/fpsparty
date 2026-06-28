@@ -46,27 +46,52 @@ float ozone_density(float altitude) {
 
 vec2 pack_transmittance_lut_params(float altitude, float cos_zenith) {
   const float x = (altitude - min_altitude) / (max_altitude - min_altitude);
-  const float y = cos_zenith * 0.5 + 0.5;
+  const float y = sign(cos_zenith) * sqrt(abs(cos_zenith)) * 0.5 + 0.5;
   return vec2(x, y);
 }
 
 vec2 unpack_transmittance_lut_params(vec2 packed) {
   const float altitude = mix(min_altitude, max_altitude, packed.x);
-  const float cos_zenith = packed.y * 2.0 - 1.0;
-  return vec2(altitude, cos_zenith);
+  const float nonlinear_cos_zenith = packed.y * 2.0 - 1.0;
+  const float linear_cos_zenith =
+    sign(nonlinear_cos_zenith) * nonlinear_cos_zenith * nonlinear_cos_zenith;
+  return vec2(altitude, linear_cos_zenith);
 }
 
-vec2 pack_sky_view_lut_params(float longitude, float latitude) {
+vec2 pack_sky_view_lut_params(float longitude, float altitude, float zenith) {
   const float x = longitude / pi * 0.5 + 0.5;
-  const float y = sign(latitude) * sqrt(abs(latitude) / (pi / 2.0)) * 0.5 + 0.5;
-  return vec2(x, y);
+  const float gamma = 
+    acos((r_ground + min_altitude) / (r_ground + min_altitude + altitude));
+  const float horizon_zenith = gamma + pi / 2.0;
+  if (zenith < horizon_zenith) {
+    // above horizon
+    const float linear = (horizon_zenith - zenith) / horizon_zenith;
+    const float nonlinear = sqrt(linear);
+    return vec2(x, nonlinear * 0.5 + 0.5);
+  } else {
+    // below horizon
+    const float linear = (zenith - horizon_zenith) / (pi - horizon_zenith);
+    const float nonlinear = sqrt(linear);
+    return vec2(x, -nonlinear * 0.5 + 0.5);
+  }
 }
 
-vec2 unpack_sky_view_lut_params(vec2 packed) {
+vec2 unpack_sky_view_lut_params(vec2 packed, float altitude) {
   const float longitude = (packed.x - 0.5) * 2.0 * pi;
-  const float y = (packed.y - 0.5) * 2.0;
-  const float latitude = sign(y) * y * y * (pi / 2.0);
-  return vec2(longitude, latitude);
+  const float nonlinear_y = (packed.y - 0.5) * 2.0;
+  const float linear_y = sign(nonlinear_y) * nonlinear_y * nonlinear_y;
+  const float gamma =
+    acos((r_ground + min_altitude) / (r_ground + min_altitude + altitude));
+  const float horizon_zenith = gamma + pi / 2.0;
+  if (linear_y > 0.0) {
+    // above horizon
+    const float zenith = mix(horizon_zenith, 0, linear_y);
+    return vec2(longitude, zenith);
+  } else {
+    // below horizon
+    const float zenith = mix(horizon_zenith, pi, -linear_y);
+    return vec2(longitude, zenith);
+  }
 }
 
 #endif

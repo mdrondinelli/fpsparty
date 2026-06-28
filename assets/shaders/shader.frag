@@ -25,7 +25,7 @@ void main() {
   const vec3 E =
     E_top *
     transmittance_along_ray(
-      in_world_position + vec3(0.0, r_ground, 0.0),
+      vec3(0.0, r_ground + in_world_position.y, 0.0),
       push_constants.scene.sun_direction);
   const float n_dot_l =
     max(dot(in_world_normal, push_constants.scene.sun_direction), 0.0);

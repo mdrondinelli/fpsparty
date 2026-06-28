@@ -283,7 +283,7 @@ auto const crosshair_indices =
 auto const composite_indices = std::array<std::uint16_t, 3>{0, 1, 2};
 auto const sky_color = math::vec4{0.4196f, 0.6196f, 0.7451f, 1.0f};
 auto constexpr z_near = 0.1f;
-auto const transmittance_lut_size = math::ivec2{256, 1024};
+auto const transmittance_lut_size = math::ivec2{256, 128};
 auto const sky_view_lut_size = math::ivec2{256, 256};
 
 struct Scene_uniform_data {

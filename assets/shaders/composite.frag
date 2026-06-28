@@ -35,14 +35,15 @@ vec3 linear_to_srgb(vec3 linear) {
 
 vec3 apply_noise(vec3 color, vec3 noise) {
   const float quantization = 1.0f / 256.0f;
-  return srgb_to_linear(linear_to_srgb(color) + noise * quantization);
+  return srgb_to_linear(
+    max(linear_to_srgb(color) + noise * quantization, vec3(0.0f)));
 }
 
 void main() {
   const ivec2 pixel = ivec2(gl_FragCoord.xy);
   const uvec3 pixel_hash =
     pcg3d(uvec3(uvec2(pixel), uint(push_constants.frame_number)));
-  const vec3 pixel_noise = vec3(pixel_hash) / 4294967296.0f;
+  const vec3 pixel_noise = vec3(pixel_hash) / 4294967296.0f - 0.5;
   const uint albedo_texture_index =
     push_constants.albedo_texture_index;
   const uint mask_texture_index =
