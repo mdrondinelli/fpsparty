@@ -22,7 +22,7 @@ float ray_atmosphere(vec3 ro, vec3 rd) {
   const float b = dot(ro, rd);
   const float c = dot(ro, ro) - r_atmosphere * r_atmosphere;
   const float h = b * b - c;
-  const float t = -b + sqrt(h);
+  const float t = -b + sqrt(max(h, 0.0));
   return t;
 }
 
