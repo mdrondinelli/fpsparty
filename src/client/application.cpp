@@ -58,35 +58,179 @@ struct Vertex {
 
 auto const cube_mesh_vertices = std::vector<Vertex>{
   // +x face
-  {.px = 0.5f, .py = 0.5f, .pz = 0.5f, .nx = 1.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},   // 1
-  {.px = 0.5f, .py = -0.5f, .pz = 0.5f, .nx = 1.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},  // 2
-  {.px = 0.5f, .py = 0.5f, .pz = -0.5f, .nx = 1.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},  // 3
-  {.px = 0.5f, .py = -0.5f, .pz = -0.5f, .nx = 1.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f}, // 4
+  {.px = 0.5f,
+   .py = 0.5f,
+   .pz = 0.5f,
+   .nx = 1.0f,
+   .r = 1.0f,
+   .g = 0.0f,
+   .b = 0.0f}, // 1
+  {.px = 0.5f,
+   .py = -0.5f,
+   .pz = 0.5f,
+   .nx = 1.0f,
+   .r = 0.0f,
+   .g = 0.0f,
+   .b = 1.0f}, // 2
+  {.px = 0.5f,
+   .py = 0.5f,
+   .pz = -0.5f,
+   .nx = 1.0f,
+   .r = 0.0f,
+   .g = 1.0f,
+   .b = 0.0f}, // 3
+  {.px = 0.5f,
+   .py = -0.5f,
+   .pz = -0.5f,
+   .nx = 1.0f,
+   .r = 1.0f,
+   .g = 1.0f,
+   .b = 0.0f}, // 4
   // -x face
-  {.px = -0.5f, .py = 0.5f, .pz = -0.5f, .nx = -1.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},  // 1
-  {.px = -0.5f, .py = -0.5f, .pz = -0.5f, .nx = -1.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f}, // 2
-  {.px = -0.5f, .py = 0.5f, .pz = 0.5f, .nx = -1.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},   // 3
-  {.px = -0.5f, .py = -0.5f, .pz = 0.5f, .nx = -1.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f},  // 4
+  {.px = -0.5f,
+   .py = 0.5f,
+   .pz = -0.5f,
+   .nx = -1.0f,
+   .r = 1.0f,
+   .g = 0.0f,
+   .b = 0.0f}, // 1
+  {.px = -0.5f,
+   .py = -0.5f,
+   .pz = -0.5f,
+   .nx = -1.0f,
+   .r = 0.0f,
+   .g = 0.0f,
+   .b = 1.0f}, // 2
+  {.px = -0.5f,
+   .py = 0.5f,
+   .pz = 0.5f,
+   .nx = -1.0f,
+   .r = 0.0f,
+   .g = 1.0f,
+   .b = 0.0f}, // 3
+  {.px = -0.5f,
+   .py = -0.5f,
+   .pz = 0.5f,
+   .nx = -1.0f,
+   .r = 1.0f,
+   .g = 1.0f,
+   .b = 0.0f}, // 4
   // +y face
-  {.px = 0.5f, .py = 0.5f, .pz = 0.5f, .ny = 1.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},   // 1
-  {.px = 0.5f, .py = 0.5f, .pz = -0.5f, .ny = 1.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},  // 2
-  {.px = -0.5f, .py = 0.5f, .pz = 0.5f, .ny = 1.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},  // 3
-  {.px = -0.5f, .py = 0.5f, .pz = -0.5f, .ny = 1.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f}, // 4
+  {.px = 0.5f,
+   .py = 0.5f,
+   .pz = 0.5f,
+   .ny = 1.0f,
+   .r = 1.0f,
+   .g = 0.0f,
+   .b = 0.0f}, // 1
+  {.px = 0.5f,
+   .py = 0.5f,
+   .pz = -0.5f,
+   .ny = 1.0f,
+   .r = 0.0f,
+   .g = 0.0f,
+   .b = 1.0f}, // 2
+  {.px = -0.5f,
+   .py = 0.5f,
+   .pz = 0.5f,
+   .ny = 1.0f,
+   .r = 0.0f,
+   .g = 1.0f,
+   .b = 0.0f}, // 3
+  {.px = -0.5f,
+   .py = 0.5f,
+   .pz = -0.5f,
+   .ny = 1.0f,
+   .r = 1.0f,
+   .g = 1.0f,
+   .b = 0.0f}, // 4
   // -y face
-  {.px = 0.5f, .py = -0.5f, .pz = -0.5f, .ny = -1.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},  // 2
-  {.px = 0.5f, .py = -0.5f, .pz = 0.5f, .ny = -1.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},   // 1
-  {.px = -0.5f, .py = -0.5f, .pz = -0.5f, .ny = -1.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f}, // 4
-  {.px = -0.5f, .py = -0.5f, .pz = 0.5f, .ny = -1.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f},  // 3
+  {.px = 0.5f,
+   .py = -0.5f,
+   .pz = -0.5f,
+   .ny = -1.0f,
+   .r = 0.0f,
+   .g = 0.0f,
+   .b = 1.0f}, // 2
+  {.px = 0.5f,
+   .py = -0.5f,
+   .pz = 0.5f,
+   .ny = -1.0f,
+   .r = 1.0f,
+   .g = 0.0f,
+   .b = 0.0f}, // 1
+  {.px = -0.5f,
+   .py = -0.5f,
+   .pz = -0.5f,
+   .ny = -1.0f,
+   .r = 1.0f,
+   .g = 1.0f,
+   .b = 0.0f}, // 4
+  {.px = -0.5f,
+   .py = -0.5f,
+   .pz = 0.5f,
+   .ny = -1.0f,
+   .r = 0.0f,
+   .g = 1.0f,
+   .b = 0.0f}, // 3
   // +z face
-  {.px = -0.5f, .py = 0.5f, .pz = 0.5f, .nz = 1.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f},  // 3
-  {.px = -0.5f, .py = -0.5f, .pz = 0.5f, .nz = 1.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f}, // 4
-  {.px = 0.5f, .py = 0.5f, .pz = 0.5f, .nz = 1.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},   // 1
-  {.px = 0.5f, .py = -0.5f, .pz = 0.5f, .nz = 1.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},  // 2
+  {.px = -0.5f,
+   .py = 0.5f,
+   .pz = 0.5f,
+   .nz = 1.0f,
+   .r = 1.0f,
+   .g = 1.0f,
+   .b = 0.0f}, // 3
+  {.px = -0.5f,
+   .py = -0.5f,
+   .pz = 0.5f,
+   .nz = 1.0f,
+   .r = 0.0f,
+   .g = 1.0f,
+   .b = 0.0f}, // 4
+  {.px = 0.5f,
+   .py = 0.5f,
+   .pz = 0.5f,
+   .nz = 1.0f,
+   .r = 0.0f,
+   .g = 0.0f,
+   .b = 1.0f}, // 1
+  {.px = 0.5f,
+   .py = -0.5f,
+   .pz = 0.5f,
+   .nz = 1.0f,
+   .r = 1.0f,
+   .g = 0.0f,
+   .b = 0.0f}, // 2
   // -z face
-  {.px = 0.5f, .py = 0.5f, .pz = -0.5f, .nz = -1.0f, .r = 0.0f, .g = 0.0f, .b = 1.0f},   // 1
-  {.px = 0.5f, .py = -0.5f, .pz = -0.5f, .nz = -1.0f, .r = 1.0f, .g = 0.0f, .b = 0.0f},  // 2
-  {.px = -0.5f, .py = 0.5f, .pz = -0.5f, .nz = -1.0f, .r = 1.0f, .g = 1.0f, .b = 0.0f},  // 3
-  {.px = -0.5f, .py = -0.5f, .pz = -0.5f, .nz = -1.0f, .r = 0.0f, .g = 1.0f, .b = 0.0f}, // 4
+  {.px = 0.5f,
+   .py = 0.5f,
+   .pz = -0.5f,
+   .nz = -1.0f,
+   .r = 0.0f,
+   .g = 0.0f,
+   .b = 1.0f}, // 1
+  {.px = 0.5f,
+   .py = -0.5f,
+   .pz = -0.5f,
+   .nz = -1.0f,
+   .r = 1.0f,
+   .g = 0.0f,
+   .b = 0.0f}, // 2
+  {.px = -0.5f,
+   .py = 0.5f,
+   .pz = -0.5f,
+   .nz = -1.0f,
+   .r = 1.0f,
+   .g = 1.0f,
+   .b = 0.0f}, // 3
+  {.px = -0.5f,
+   .py = -0.5f,
+   .pz = -0.5f,
+   .nz = -1.0f,
+   .r = 0.0f,
+   .g = 1.0f,
+   .b = 0.0f}, // 4
 };
 
 auto const cube_mesh_indices = std::vector<std::uint16_t>{
@@ -139,8 +283,8 @@ auto const crosshair_indices =
 auto const composite_indices = std::array<std::uint16_t, 3>{0, 1, 2};
 auto const sky_color = math::vec4{0.4196f, 0.6196f, 0.7451f, 1.0f};
 auto constexpr z_near = 0.1f;
-auto constexpr transmittance_lut_width = 256;
-auto constexpr transmittance_lut_height = 1024;
+auto const transmittance_lut_size = math::ivec2{256, 1024};
+auto const sky_view_lut_size = math::ivec2{256, 256};
 
 struct Scene_uniform_data {
   alignas(16) math::mat4 view_projection_matrix;
@@ -157,13 +301,11 @@ static_assert(offsetof(Scene_uniform_data, transmittance_texture) == 92);
 static_assert(offsetof(Scene_uniform_data, animation_time) == 96);
 
 struct Transmittance_push_data {
-  math::ivec2 lut_size;
-  i32 lut_index;
+  u32 lut_index;
 };
 
-static_assert(sizeof(Transmittance_push_data) == 12);
-static_assert(offsetof(Transmittance_push_data, lut_size) == 0);
-static_assert(offsetof(Transmittance_push_data, lut_index) == 8);
+static_assert(sizeof(Transmittance_push_data) == 4);
+static_assert(offsetof(Transmittance_push_data, lut_index) == 0);
 
 struct Sky_push_data {
   math::mat4 camera_basis;
@@ -444,8 +586,7 @@ private:
           _grid_mesh->get_index_buffer(), graphics::Index_type::u32);
         work_recorder.push_buffer_reference(
           0, _scene_uniform_buffer, scene_uniform_offset);
-        work_recorder
-          .push_buffer_reference(8, _grid_mesh->get_vertex_buffer());
+        work_recorder.push_buffer_reference(8, _grid_mesh->get_vertex_buffer());
         work_recorder
           .push_buffer_reference(16, _block_texture_registry.get_buffer());
         _block_texture_registry.upload_descriptors(work_recorder);
@@ -483,8 +624,7 @@ private:
           (math::translation_matrix(instance.position) * rotation_matrix *
            math::axis_aligned_scale_matrix(instance.scale))
             .eval();
-        work_recorder.push_data(
-          16, std::as_bytes(std::span{&model_matrix, 1}));
+        work_recorder.push_data(16, std::as_bytes(std::span{&model_matrix, 1}));
         work_recorder.draw_indexed({
           .index_count = static_cast<std::uint32_t>(cube_mesh_indices.size()),
           .instance_count = 1,
@@ -731,14 +871,10 @@ private:
       "./assets/shaders/atmosphere/transmittance.comp.spv");
     auto transmittance_pipeline =
       _graphics.create_compute_pipeline({.shader = &transmittance_shader});
-    auto const lut_size = math::ivec2{
-      transmittance_lut_width,
-      transmittance_lut_height,
-    };
     _transmittance_lut = _graphics.create_image({
       .dimensionality = 2,
       .format = graphics::Image_format::r16g16b16a16_sfloat,
-      .extent = {lut_size.x(), lut_size.y(), 1},
+      .extent = {transmittance_lut_size.x(), transmittance_lut_size.y(), 1},
       .mip_level_count = 1,
       .array_layer_count = 1,
       .usage = graphics::Image_usage_flag_bits::sampled |
@@ -752,15 +888,14 @@ private:
       graphics::Image_layout::undefined,
       graphics::Image_layout::general,
       _transmittance_lut);
-    auto const lut_index =
-      work_recorder.upload_storage_image_descriptor(_transmittance_lut);
     auto const push_constants = Transmittance_push_data{
-      .lut_size = lut_size,
-      .lut_index = static_cast<i32>(lut_index),
+      .lut_index =
+        work_recorder.upload_storage_image_descriptor(_transmittance_lut),
     };
     work_recorder.bind_compute_pipeline(transmittance_pipeline);
     work_recorder.push_data(0, std::as_bytes(std::span{&push_constants, 1}));
-    work_recorder.dispatch(lut_size.x(), lut_size.y(), 1);
+    work_recorder
+      .dispatch(transmittance_lut_size.x(), transmittance_lut_size.y(), 1);
     work_recorder
       .barrier(compute_shader_storage_write_scope, sampled_image_scope);
     auto work = _graphics.submit_transient_work(std::move(work_recorder));

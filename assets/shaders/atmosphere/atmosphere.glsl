@@ -56,4 +56,17 @@ vec2 unpack_transmittance_lut_params(vec2 packed) {
   return vec2(altitude, cos_zenith);
 }
 
+vec2 pack_sky_view_lut_params(float longitude, float latitude) {
+  const float x = longitude / pi * 0.5 + 0.5;
+  const float y = sign(latitude) * sqrt(abs(latitude) / (pi / 2.0)) * 0.5 + 0.5;
+  return vec2(x, y);
+}
+
+vec2 unpack_sky_view_lut_params(vec2 packed) {
+  const float longitude = (packed.x - 0.5) * 2.0 * pi;
+  const float y = (packed.y - 0.5) * 2.0;
+  const float latitude = sign(y) * y * y * (pi / 2.0);
+  return vec2(longitude, latitude);
+}
+
 #endif
