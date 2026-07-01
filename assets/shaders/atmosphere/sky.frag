@@ -53,7 +53,7 @@ vec3 transmittance_ratio(vec3 numerator, vec3 denominator) {
 
 vec3 integrate_in_scattering(vec3 x_0, vec3 x_1, vec3 d) {
   const vec3 transmittance_numer = transmittance_along_ray(x_0, d);
-  const int step_count = 64;
+  const int step_count = 32;
   const float step_size = length(x_0 - x_1) / step_count;
   vec3 radiance = vec3(0.0);
   for (int i = 0; i < step_count; ++i) {
