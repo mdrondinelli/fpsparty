@@ -9,6 +9,7 @@ restrict readonly buffer Scene {
   mat4 view_projection_matrix;
   vec3 sun_irradiance;
   vec3 sun_direction;
+  uint transmittance_texture;
   float animation_time;
 };
 

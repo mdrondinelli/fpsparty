@@ -286,11 +286,12 @@ auto constexpr z_near = 0.1f;
 auto const transmittance_lut_size = math::ivec2{256, 128};
 auto const sky_view_lut_size = math::ivec2{256, 256};
 
-auto constexpr scene_uniform_data_size = std::size_t{96};
+auto constexpr scene_uniform_data_size = std::size_t{112};
 auto constexpr scene_view_projection_matrix_offset = std::size_t{0};
 auto constexpr scene_sun_irradiance_offset = std::size_t{64};
 auto constexpr scene_sun_direction_offset = std::size_t{80};
-auto constexpr scene_animation_time_offset = std::size_t{92};
+auto constexpr scene_transmittance_lut_offset = std::size_t{92};
+auto constexpr scene_animation_time_offset = std::size_t{96};
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
@@ -534,7 +535,12 @@ private:
         scene_view_projection_matrix_offset, view_projection_matrix);
       write_scene_uniform(scene_sun_irradiance_offset, sun_irradiance);
       write_scene_uniform(scene_sun_direction_offset, sun_direction);
+      auto const transmittance_lut_handle =
+        _transmittance_lut_sampled_descriptor->get_handle();
+      write_scene_uniform(
+        scene_transmittance_lut_offset, transmittance_lut_handle);
       write_scene_uniform(scene_animation_time_offset, _animation_time);
+      work_recorder.add_reference(_transmittance_lut_sampled_descriptor);
       // draw grid
       if (_grid_mesh && _grid_mesh->is_uploaded()) {
         work_recorder.bind_pipeline(_grid_pipeline);
@@ -548,7 +554,6 @@ private:
         work_recorder
           .push_buffer_reference(16, _block_texture_registry.get_buffer());
         _block_texture_registry.add_references(work_recorder);
-        work_recorder.push_descriptor(36, _transmittance_lut_sampled_descriptor);
         auto push_normal = [&](math::vec3 const &value) {
           work_recorder.push_data(24, std::as_bytes(std::span{&value, 1}));
         };
@@ -584,7 +589,6 @@ private:
            math::axis_aligned_scale_matrix(instance.scale))
             .eval();
         work_recorder.push_data(16, std::as_bytes(std::span{&model_matrix, 1}));
-        work_recorder.push_descriptor(80, _transmittance_lut_sampled_descriptor);
         work_recorder.draw_indexed({
           .index_count = static_cast<std::uint32_t>(cube_mesh_indices.size()),
           .instance_count = 1,
