@@ -285,9 +285,9 @@ Work_recorder Graphics::record_transient_work(Work_record_info const &info) {
   return detail::acquire_work_recorder(
     std::move(resource),
     std::optional{detail::Work_recorder_descriptor_info{
-          .sampler_heap = _sampler_heap,
-          .resource_heap = _descriptor_heap->buffer(),
-        }});
+      .sampler_heap = _sampler_heap,
+      .resource_heap = _descriptor_heap->buffer(),
+    }});
 }
 
 rc::Strong<Work> Graphics::submit_transient_work(Work_recorder recorder) {
@@ -326,11 +326,11 @@ Graphics::try_record_frame_work(Work_record_info const &info) {
   auto resource = _work_resources.pop();
   return std::pair<Work_recorder, rc::Strong<Image>>{
     detail::acquire_work_recorder(
-    std::move(resource),
-    std::optional{detail::Work_recorder_descriptor_info{
-          .sampler_heap = _sampler_heap,
-          .resource_heap = _descriptor_heap->buffer(),
-        }}),
+      std::move(resource),
+      std::optional{detail::Work_recorder_descriptor_info{
+        .sampler_heap = _sampler_heap,
+        .resource_heap = _descriptor_heap->buffer(),
+      }}),
     _swapchain_images.at(frame_resource.swapchain_image_index),
   };
 }

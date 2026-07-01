@@ -523,13 +523,13 @@ private:
       auto const scene_uniform_memory = _scene_uniform_buffer->map();
       auto const scene_uniform_offset =
         (_frame_number % 2) * scene_uniform_data_size;
-      auto const write_scene_uniform = [&]<typename T>(
-                                         std::size_t offset, T const &value) {
-        std::memcpy(
-          scene_uniform_memory.get().data() + scene_uniform_offset + offset,
-          &value,
-          sizeof(value));
-      };
+      auto const write_scene_uniform =
+        [&]<typename T>(std::size_t offset, T const &value) {
+          std::memcpy(
+            scene_uniform_memory.get().data() + scene_uniform_offset + offset,
+            &value,
+            sizeof(value));
+        };
       auto const sun_irradiance = math::vec3::Constant(1300.0f).eval();
       write_scene_uniform(
         scene_view_projection_matrix_offset, view_projection_matrix);

@@ -17,33 +17,39 @@ align_up(std::uint64_t value, std::uint64_t alignment) noexcept {
 
 } // namespace
 
-Descriptor_heap::Descriptor_heap(Descriptor_heap_create_info const &info) : _buffer{[&]{
-  auto const &properties = Global_vulkan_state::get().descriptor_heap_properties();
-  assert(properties.imageDescriptorSize % properties.imageDescriptorAlignment == 0);
-  auto const descriptor_alignment = std::lcm(
-    properties.imageDescriptorAlignment, properties.bufferDescriptorAlignment);
-  auto const reserved_range_offset = align_up(
-    static_cast<std::uint64_t>(info.capacity) *
-      properties.imageDescriptorSize,
-    descriptor_alignment);
-  return info.buffer_factory->create(
-    Buffer_create_info{
-      .size = reserved_range_offset + properties.minResourceHeapReservedRange,
-      .usage = Buffer_usage_flag_bits::shader_device_address |
-               Buffer_usage_flag_bits::descriptor_heap,
-      .mapping_mode = Mapping_mode::write_only,
-      .min_alignment = properties.resourceHeapAlignment,
-    });
-}()}, _memory{_buffer->map()} {
+Descriptor_heap::Descriptor_heap(Descriptor_heap_create_info const &info)
+    : _buffer{[&] {
+        auto const &properties =
+          Global_vulkan_state::get().descriptor_heap_properties();
+        assert(
+          properties.imageDescriptorSize % properties
+                                             .imageDescriptorAlignment ==
+          0);
+        auto const descriptor_alignment = std::lcm(
+          properties.imageDescriptorAlignment,
+          properties.bufferDescriptorAlignment);
+        auto const reserved_range_offset = align_up(
+          static_cast<std::uint64_t>(info.capacity) * properties
+                                                        .imageDescriptorSize,
+          descriptor_alignment);
+        return info.buffer_factory->create(
+          Buffer_create_info{
+            .size =
+              reserved_range_offset + properties.minResourceHeapReservedRange,
+            .usage = Buffer_usage_flag_bits::shader_device_address |
+                     Buffer_usage_flag_bits::descriptor_heap,
+            .mapping_mode = Mapping_mode::write_only,
+            .min_alignment = properties.resourceHeapAlignment,
+          });
+      }()},
+      _memory{_buffer->map()} {
   _free_list.reserve(info.capacity);
   for (auto i = info.capacity; i != 0; --i) {
     _free_list.push_back(i - 1);
   }
 }
 
-std::byte *Descriptor_heap::data() noexcept {
-  return _memory.get().data();
-}
+std::byte *Descriptor_heap::data() noexcept { return _memory.get().data(); }
 
 std::uint32_t Descriptor_heap::alloc() {
   auto const lock = std::scoped_lock{_mutex};

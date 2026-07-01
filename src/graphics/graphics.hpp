@@ -32,8 +32,7 @@ struct Graphics_create_info {
   u32 descriptor_capacity{4096u};
 };
 
-struct Work_record_info {
-};
+struct Work_record_info {};
 
 class Graphics {
 public:
@@ -65,7 +64,8 @@ public:
   rc::Strong<Descriptor>
   create_sampled_image_descriptor(rc::Strong<Image const> image);
 
-  rc::Strong<Descriptor> create_storage_image_descriptor(rc::Strong<Image> image);
+  rc::Strong<Descriptor>
+  create_storage_image_descriptor(rc::Strong<Image> image);
 
   Work_recorder record_transient_work(Work_record_info const &info);
 

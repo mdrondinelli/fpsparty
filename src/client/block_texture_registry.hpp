@@ -3,8 +3,8 @@
 
 #include <vector>
 
-#include <int.hpp>
 #include <graphics/graphics.hpp>
+#include <int.hpp>
 
 namespace fpsparty::client {
 
@@ -14,7 +14,8 @@ struct Block_texture_registry_create_info {
 
 class Block_texture_registry {
 public:
-  explicit Block_texture_registry(Block_texture_registry_create_info const &info);
+  explicit Block_texture_registry(
+    Block_texture_registry_create_info const &info);
 
   // Returns the texture index. Idempotent.
   u32 add(rc::Strong<graphics::Image> image);
@@ -34,6 +35,6 @@ private:
   std::vector<rc::Strong<graphics::Descriptor>> _descriptors;
 };
 
-}
+} // namespace fpsparty::client
 
 #endif
