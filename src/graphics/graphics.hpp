@@ -13,6 +13,7 @@
 
 #include "buffer.hpp"
 #include "compute_pipeline.hpp"
+#include "descriptor.hpp"
 #include "descriptor_heap.hpp"
 #include "image.hpp"
 #include "pipeline.hpp"
@@ -31,9 +32,7 @@ struct Graphics_create_info {
   u32 descriptor_capacity{4096u};
 };
 
-struct Work_record_info {
-  u32 descriptor_capacity{};
-};
+struct Work_record_info {};
 
 class Graphics {
 public:
@@ -61,6 +60,12 @@ public:
   rc::Strong<Buffer> create_index_buffer(std::size_t size);
 
   rc::Strong<Image> create_image(Image_create_info const &info);
+
+  rc::Strong<Descriptor>
+  create_sampled_image_descriptor(rc::Strong<Image const> image);
+
+  rc::Strong<Descriptor>
+  create_storage_image_descriptor(rc::Strong<Image> image);
 
   Work_recorder record_transient_work(Work_record_info const &info);
 
@@ -99,6 +104,8 @@ private:
   rc::Factory<Compute_pipeline> _compute_pipeline_factory{};
   rc::Factory<Buffer> _buffer_factory{};
   rc::Factory<Image> _image_factory{};
+  rc::Factory<Descriptor> _descriptor_factory{};
+  rc::Factory<detail::Descriptor_heap> _descriptor_heap_factory{};
   vk::Format _swapchain_image_format{};
   vk::Extent2D _swapchain_image_extent{};
   vk::PresentModeKHR _swapchain_present_mode{};
@@ -108,7 +115,7 @@ private:
   std::vector<rc::Strong<Image>> _swapchain_images{};
   std::vector<vk::UniqueSemaphore> _swapchain_image_release_semaphores{};
   rc::Strong<Buffer> _sampler_heap{};
-  detail::Descriptor_heap _descriptor_heap{};
+  rc::Strong<detail::Descriptor_heap> _descriptor_heap{};
   detail::Work_resource_pool _work_resources{};
   detail::Work_queue _works{};
   std::vector<Frame_resource> _frame_resources{};

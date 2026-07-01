@@ -5,6 +5,7 @@
 #include "graphics/compare_op.hpp"
 #include "graphics/compute_pipeline.hpp"
 #include "graphics/cull_mode.hpp"
+#include "graphics/descriptor.hpp"
 #include "graphics/front_face.hpp"
 #include "graphics/image.hpp"
 #include "graphics/image_layout.hpp"
@@ -25,8 +26,6 @@ namespace detail {
 struct Work_recorder_descriptor_info {
   rc::Strong<Buffer> sampler_heap;
   rc::Strong<Buffer> resource_heap;
-  std::byte *descriptor_data;
-  Descriptor_allocation descriptor_allocation;
 };
 
 Work_recorder acquire_work_recorder(
@@ -74,14 +73,6 @@ struct Indirect_indexed_draw_info {
 };
 
 class Work_recorder {
-public:
-  u32 upload_sampled_image_descriptor(rc::Strong<Image const> image);
-
-  u32 upload_storage_image_descriptor(rc::Strong<Image> image);
-
-private:
-  u32 alloc_descriptor();
-
 public:
   void copy_buffer(
     rc::Strong<Buffer const> src,
@@ -137,10 +128,15 @@ public:
 
   void push_data(u32 push_offset, std::span<std::byte const> data) noexcept;
 
+  void push_descriptor(
+    u32 push_offset, rc::Strong<Descriptor const> descriptor) noexcept;
+
   void push_buffer_reference(
     u32 push_offset, rc::Strong<Buffer> base, u64 offset = 0) noexcept;
 
   void add_reference(rc::Strong<Buffer const> buffer);
+
+  void add_reference(rc::Strong<Descriptor const> descriptor);
 
   void add_reference(rc::Strong<Image const> image);
 
@@ -162,8 +158,6 @@ private:
   vk::CommandBuffer get_command_buffer() const noexcept;
 
   detail::Work_resource _resource;
-  std::byte *_descriptor_data{};
-  u32 _descriptor_count{};
 };
 } // namespace fpsparty::graphics
 

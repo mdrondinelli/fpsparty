@@ -3,7 +3,7 @@
 
 #include <cstdint>
 #include <mutex>
-#include <optional>
+#include <span>
 #include <vector>
 
 #include <rc.hpp>
@@ -16,11 +16,6 @@ namespace fpsparty::graphics::detail {
 struct Descriptor_heap_create_info {
   rc::Factory<Buffer> *buffer_factory;
   std::uint32_t capacity{};
-};
-
-struct Descriptor_allocation {
-  std::uint32_t offset{};
-  std::uint32_t size{};
 };
 
 class Descriptor_heap {
@@ -37,14 +32,16 @@ public:
 
   std::byte *data() noexcept;
 
-  Descriptor_allocation alloc(std::uint32_t count);
+  std::uint32_t alloc();
 
-  void free(Descriptor_allocation allocation) noexcept;
+  void free(std::uint32_t index) noexcept;
+
+  void write(std::uint32_t index, std::span<std::byte const> descriptor);
 
 private:
   rc::Strong<Buffer> _buffer{};
   Mapped_memory _memory{};
-  std::vector<Descriptor_allocation> _free_list{};
+  std::vector<std::uint32_t> _free_list{};
   std::mutex _mutex;
 };
 

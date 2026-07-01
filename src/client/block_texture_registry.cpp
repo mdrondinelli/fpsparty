@@ -1,5 +1,7 @@
 #include "block_texture_registry.hpp"
 
+#include <cstring>
+
 namespace fpsparty::client {
 
 Block_texture_registry::Block_texture_registry(
@@ -18,21 +20,22 @@ u32 Block_texture_registry::add(rc::Strong<graphics::Image> image) {
     if (retval + 1 > capacity) {
       create_buffer(capacity * 2);
     }
+    auto descriptor = _graphics->create_sampled_image_descriptor(image);
+    auto const descriptor_index_buffer_memory = _descriptor_index_buffer->map();
+    auto const handle = descriptor->get_handle();
+    std::memcpy(
+      descriptor_index_buffer_memory.get().data() + sizeof(u32) * retval,
+      &handle,
+      sizeof(handle));
     _images.push_back(std::move(image));
+    _descriptors.push_back(std::move(descriptor));
     return retval;
   }
 }
 
-void Block_texture_registry::upload_descriptors(
-  graphics::Work_recorder &recorder) {
-  assert(_descriptor_index_buffer);
-  assert(_descriptor_index_buffer->get_size() >= sizeof(u32) * _images.size());
-  auto const index_buffer_memory = _descriptor_index_buffer->map();
-  auto dst = index_buffer_memory.get().data();
-  for (auto const &image : _images) {
-    auto const index = recorder.upload_sampled_image_descriptor(image);
-    std::memcpy(dst, &index, sizeof(u32));
-    dst += sizeof(u32);
+void Block_texture_registry::add_references(graphics::Work_recorder &recorder) {
+  for (auto const &descriptor : _descriptors) {
+    recorder.add_reference(descriptor);
   }
 }
 
@@ -47,11 +50,17 @@ u32 Block_texture_registry::get_buffer_capacity() const noexcept {
 }
 
 void Block_texture_registry::create_buffer(u32 capacity) {
+  auto old_buffer = std::move(_descriptor_index_buffer);
   _descriptor_index_buffer = _graphics->create_buffer({
     .size = sizeof(u32) * capacity,
     .usage = graphics::Buffer_usage_flag_bits::shader_device_address,
     .mapping_mode = graphics::Mapping_mode::write_only,
   });
+  if (old_buffer) {
+    auto const src = old_buffer->map();
+    auto const dst = _descriptor_index_buffer->map();
+    std::memcpy(dst.get().data(), src.get().data(), old_buffer->get_size());
+  }
 }
 
 } // namespace fpsparty::client
