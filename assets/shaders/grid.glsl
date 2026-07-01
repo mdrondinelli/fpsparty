@@ -27,6 +27,7 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 24) float normal_x;
   layout(offset = 28) float normal_y;
   layout(offset = 32) float normal_z;
+  layout(offset = 36) uint transmittance_texture;
 } push_constants;
 
 #endif

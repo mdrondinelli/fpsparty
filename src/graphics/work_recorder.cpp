@@ -60,13 +60,10 @@ Work_recorder acquire_work_recorder(
     .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
   });
   if (descriptor_info) {
-    resource.descriptor_allocation = descriptor_info->descriptor_allocation;
     bind_sampler_heap(resource, descriptor_info->sampler_heap);
     bind_resource_heap(resource, descriptor_info->resource_heap);
   }
   auto recorder = Work_recorder{std::move(resource)};
-  recorder._descriptor_data =
-    descriptor_info ? descriptor_info->descriptor_data : nullptr;
   return recorder;
 }
 
@@ -76,40 +73,6 @@ Work_resource release_work_recorder(Work_recorder recorder) noexcept {
 }
 
 } // namespace detail
-
-std::uint32_t
-Work_recorder::upload_sampled_image_descriptor(rc::Strong<Image const> image) {
-  auto const descriptor = image->get_sampled_image_descriptor();
-  auto const index = alloc_descriptor();
-  std::memcpy(
-    _descriptor_data + index * descriptor.size(),
-    descriptor.data(),
-    descriptor.size());
-  add_reference(std::move(image));
-  return index;
-}
-
-std::uint32_t
-Work_recorder::upload_storage_image_descriptor(rc::Strong<Image> image) {
-  auto const descriptor = image->get_storage_image_descriptor();
-  auto const index = alloc_descriptor();
-  std::memcpy(
-    _descriptor_data + index * descriptor.size(),
-    descriptor.data(),
-    descriptor.size());
-  add_reference(std::move(image));
-  return index;
-}
-
-std::uint32_t Work_recorder::alloc_descriptor() {
-  assert(_descriptor_data);
-  assert(_resource.descriptor_allocation);
-  auto const &allocation = *_resource.descriptor_allocation;
-  if (_descriptor_count >= allocation.size) {
-    throw std::runtime_error{"Descriptor heap allocation is too small"};
-  }
-  return allocation.offset + _descriptor_count++;
-}
 
 void Work_recorder::copy_buffer(
   rc::Strong<Buffer const> src,
@@ -356,6 +319,13 @@ void Work_recorder::push_data(
   });
 }
 
+void Work_recorder::push_descriptor(
+  std::uint32_t push_offset, rc::Strong<Descriptor const> descriptor) noexcept {
+  auto const handle = descriptor->get_handle();
+  push_data(push_offset, std::as_bytes(std::span{&handle, 1}));
+  add_reference(std::move(descriptor));
+}
+
 void Work_recorder::push_buffer_reference(
   std::uint32_t push_offset, rc::Strong<Buffer> buffer, u64 offset) noexcept {
   auto const address = buffer->get_device_address() + offset;
@@ -368,6 +338,10 @@ Work_recorder::Work_recorder(detail::Work_resource resource) noexcept
 
 void Work_recorder::add_reference(rc::Strong<Buffer const> buffer) {
   _resource.buffers.emplace_back(std::move(buffer));
+}
+
+void Work_recorder::add_reference(rc::Strong<Descriptor const> descriptor) {
+  _resource.descriptors.emplace_back(std::move(descriptor));
 }
 
 void Work_recorder::add_reference(rc::Strong<Image const> image) {

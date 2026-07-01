@@ -9,6 +9,7 @@
 
 #include "buffer.hpp"
 #include "compute_pipeline.hpp"
+#include "descriptor.hpp"
 #include "descriptor_heap.hpp"
 #include "image.hpp"
 #include "pipeline.hpp"
@@ -20,8 +21,8 @@ struct Work_resource {
   vk::UniqueFence vk_fence;
   vk::UniqueCommandPool vk_command_pool;
   vk::CommandBuffer vk_command_buffer;
-  std::optional<Descriptor_allocation> descriptor_allocation{};
   std::vector<rc::Strong<Buffer const>> buffers{};
+  std::vector<rc::Strong<Descriptor const>> descriptors{};
   std::vector<rc::Strong<Image const>> images{};
   std::vector<rc::Strong<Pipeline const>> pipelines{};
   std::vector<rc::Strong<Compute_pipeline const>> compute_pipelines{};

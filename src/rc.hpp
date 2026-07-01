@@ -39,7 +39,7 @@ Strong<T> construct_strong(Header *header, T *object) noexcept {
 }
 
 template <typename T>
-Strong<T> construct_weak(Header *header, T *object) noexcept {
+Weak<T> construct_weak(Header *header, T *object) noexcept {
   assert(header);
   assert(object);
   return Weak<T>{header, object};

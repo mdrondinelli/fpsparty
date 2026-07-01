@@ -1,8 +1,8 @@
 #include "descriptor_heap.hpp"
 #include "buffer_usage.hpp"
 #include "global_vulkan_state.hpp"
-#include <algorithm>
 #include <cassert>
+#include <cstring>
 #include <numeric>
 #include <stdexcept>
 
@@ -35,55 +35,40 @@ Descriptor_heap::Descriptor_heap(Descriptor_heap_create_info const &info) : _buf
       .min_alignment = properties.resourceHeapAlignment,
     });
 }()}, _memory{_buffer->map()} {
-  _free_list.push_back({.offset = 0, .size = info.capacity});
+  _free_list.reserve(info.capacity);
+  for (auto i = info.capacity; i != 0; --i) {
+    _free_list.push_back(i - 1);
+  }
 }
 
 std::byte *Descriptor_heap::data() noexcept {
   return _memory.get().data();
 }
 
-Descriptor_allocation Descriptor_heap::alloc(std::uint32_t count) {
+std::uint32_t Descriptor_heap::alloc() {
   auto const lock = std::scoped_lock{_mutex};
-  for (auto it = _free_list.begin(); it != _free_list.end(); ++it) {
-    if (it->size >= count) {
-      auto const offset = it->offset;
-      it->offset += count;
-      it->size -= count;
-      if (it->size == 0) {
-        _free_list.erase(it);
-      }
-      return {.offset = offset, .size = count};
-    }
+  if (_free_list.empty()) {
+    throw std::runtime_error{"Descriptor heap is out of space"};
   }
-  throw std::runtime_error{"Descriptor heap is out of space"};
+  auto const retval = _free_list.back();
+  _free_list.pop_back();
+  return retval;
 }
 
-void Descriptor_heap::free(
-  Descriptor_allocation allocation) noexcept {
-  if (allocation.size == 0) {
-    return;
-  }
+void Descriptor_heap::free(std::uint32_t index) noexcept {
   auto const lock = std::scoped_lock{_mutex};
-  auto const it = std::ranges::upper_bound(
-    _free_list,
-    allocation.offset,
-    {},
-    [](Descriptor_allocation const &region) { return region.offset; });
-  auto const inserted = _free_list.insert(
-    it, {.offset = allocation.offset, .size = allocation.size});
-  auto const next = std::next(inserted);
-  if (next != _free_list.end() &&
-      inserted->offset + inserted->size == next->offset) {
-    inserted->size += next->size;
-    _free_list.erase(next);
-  }
-  if (inserted != _free_list.begin()) {
-    auto const prev = std::prev(inserted);
-    if (prev->offset + prev->size == inserted->offset) {
-      prev->size += inserted->size;
-      _free_list.erase(inserted);
-    }
-  }
+  _free_list.push_back(index);
+}
+
+void Descriptor_heap::write(
+  std::uint32_t index, std::span<std::byte const> descriptor) {
+  auto const descriptor_size =
+    Global_vulkan_state::get().descriptor_heap_properties().imageDescriptorSize;
+  assert(descriptor.size() == descriptor_size);
+  std::memcpy(
+    data() + static_cast<std::size_t>(index) * descriptor_size,
+    descriptor.data(),
+    descriptor.size());
 }
 
 } // namespace fpsparty::graphics::detail

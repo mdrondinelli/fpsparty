@@ -24,8 +24,8 @@ void reset_work_resource(Work_resource &resource) {
   auto const device = Global_vulkan_state::get().device();
   device.resetFences({*resource.vk_fence});
   device.resetCommandPool(*resource.vk_command_pool);
-  resource.descriptor_allocation = {};
   resource.buffers.clear();
+  resource.descriptors.clear();
   resource.images.clear();
   resource.pipelines.clear();
   resource.compute_pipelines.clear();

@@ -15,7 +15,7 @@ vec3 transmittance_along_ray(vec3 ro, vec3 rd) {
   const float cos_zenith = dot(normalize(ro), rd);
   const vec2 lut_texcoord = pack_transmittance_lut_params(h, cos_zenith);
   return FPSPARTY_SAMPLE(
-      push_constants.scene.transmittance_texture,
+      push_constants.transmittance_texture,
       LINEAR_CLAMP,
       lut_texcoord).rgb;
 }

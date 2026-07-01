@@ -19,7 +19,7 @@ public:
   // Returns the texture index. Idempotent.
   u32 add(rc::Strong<graphics::Image> image);
 
-  void upload_descriptors(graphics::Work_recorder &recorder);
+  void add_references(graphics::Work_recorder &recorder);
 
   rc::Strong<graphics::Buffer> get_buffer() const noexcept;
 
@@ -31,6 +31,7 @@ private:
   graphics::Graphics *_graphics;
   rc::Strong<graphics::Buffer> _descriptor_index_buffer;
   std::vector<rc::Strong<graphics::Image>> _images;
+  std::vector<rc::Strong<graphics::Descriptor>> _descriptors;
 };
 
 }
