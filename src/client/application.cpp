@@ -309,20 +309,18 @@ static_assert(offsetof(Transmittance_push_data, lut_index) == 0);
 
 struct Sky_push_data {
   math::mat4 camera_basis;
-  math::vec2 zoom;
-  f32 altitude;
-  u32 transmittance_lut;
   alignas(16) math::vec3 sun_direction;
   alignas(16) math::vec3 sun_irradiance;
+  u32 transmittance_lut;
+  math::vec2 zoom;
 };
 
 static_assert(sizeof(Sky_push_data) == 112);
 static_assert(offsetof(Sky_push_data, camera_basis) == 0);
-static_assert(offsetof(Sky_push_data, zoom) == 64);
-static_assert(offsetof(Sky_push_data, altitude) == 72);
-static_assert(offsetof(Sky_push_data, transmittance_lut) == 76);
-static_assert(offsetof(Sky_push_data, sun_direction) == 80);
-static_assert(offsetof(Sky_push_data, sun_irradiance) == 96);
+static_assert(offsetof(Sky_push_data, sun_direction) == 64);
+static_assert(offsetof(Sky_push_data, sun_irradiance) == 80);
+static_assert(offsetof(Sky_push_data, transmittance_lut) == 92);
+static_assert(offsetof(Sky_push_data, zoom) == 96);
 
 struct Composite_push_data {
   u32 radiance_texture_index;
@@ -660,13 +658,13 @@ private:
     auto const transmittance_lut =
       work_recorder.upload_sampled_image_descriptor(_transmittance_lut);
     auto const push_constants = Sky_push_data{
-      .camera_basis = math::y_rotation_matrix(_local_player->input_state.yaw) *
+      .camera_basis = math::translation_matrix(camera_position) *
+                      math::y_rotation_matrix(_local_player->input_state.yaw) *
                       math::x_rotation_matrix(_local_player->input_state.pitch),
-      .zoom = zoom_vec,
-      .altitude = camera_position.y() + 84.0f,
-      .transmittance_lut = transmittance_lut,
       .sun_direction = sun_direction,
       .sun_irradiance = sun_irradiance,
+      .transmittance_lut = transmittance_lut,
+      .zoom = zoom_vec,
     };
     work_recorder.bind_pipeline(_sky_pipeline);
     work_recorder.set_viewport(framebuffer_size);

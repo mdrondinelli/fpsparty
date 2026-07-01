@@ -28,8 +28,9 @@ float rayleigh_phase(float cos_theta) {
 
 float mie_phase(float cos_theta) {
   const float g = 0.8;
+  const float denom = max(1.0 + g * g - 2.0 * g * cos_theta, 1.0e-6);
   return 3.0 / (8.0 * pi) * (1.0 - g * g) * (1.0 + cos_theta * cos_theta) /
-    ((2.0 + g * g) * pow(1.0 + g * g - 2.0 * g * cos_theta, 1.5));
+    ((2.0 + g * g) * pow(denom, 1.5));
 }
 
 float rayleigh_density(float altitude) {

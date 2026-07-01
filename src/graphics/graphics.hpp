@@ -28,7 +28,7 @@ struct Graphics_create_info {
   vk::SurfaceKHR surface;
   bool vsync_preferred{true};
   unsigned max_frames_in_flight{2};
-  u32 descriptor_capacity{1 << 16};
+  u32 descriptor_capacity{4096u};
 };
 
 struct Work_record_info {

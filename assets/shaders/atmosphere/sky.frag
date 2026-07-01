@@ -6,11 +6,10 @@
 
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) mat4 camera_basis;
-  layout(offset = 64) vec2 zoom;
-  layout(offset = 72) float altitude;
-  layout(offset = 76) uint transmittance_lut;
-  layout(offset = 80) vec3 sun_direction;
-  layout(offset = 96) vec3 sun_irradiance;
+  layout(offset = 64) vec3 sun_direction;
+  layout(offset = 80) vec3 sun_irradiance;
+  layout(offset = 92) uint transmittance_lut;
+  layout(offset = 96) vec2 zoom;
 } push_constants;
 
 layout(location = 0) in vec2 in_ndc;
@@ -33,7 +32,7 @@ float ray_planet(vec3 ro, vec3 rd) {
   const float c = dot(ro, ro) - r_min * r_min;
   const float h = b * b - c;
   if (h < 0.0) {
-    return -1.0;
+    return -1.0 / 0.0;
   }
   return -b - sqrt(h);
 }
@@ -48,9 +47,13 @@ vec3 transmittance_along_ray(vec3 ro, vec3 rd) {
       lut_texcoord).rgb;
 }
 
+vec3 transmittance_ratio(vec3 numerator, vec3 denominator) {
+  return numerator / max(denominator, vec3(1.0e-6));
+}
+
 vec3 integrate_in_scattering(vec3 x_0, vec3 x_1, vec3 d) {
-  const vec3 transmittance_factor = transmittance_along_ray(x_0, d);
-  const int step_count = 32;
+  const vec3 transmittance_numer = transmittance_along_ray(x_0, d);
+  const int step_count = 64;
   const float step_size = length(x_0 - x_1) / step_count;
   vec3 radiance = vec3(0.0);
   for (int i = 0; i < step_count; ++i) {
@@ -64,29 +67,34 @@ vec3 integrate_in_scattering(vec3 x_0, vec3 x_1, vec3 d) {
     const vec3 irradiance =
       transmittance_along_ray(x_i, push_constants.sun_direction) *
       push_constants.sun_irradiance;
+    const vec3 transmittance_denom = transmittance_along_ray(x_i, d);
+    const vec3 transmittance_to_sample = 
+      transmittance_ratio(transmittance_numer, transmittance_denom);
     radiance +=
       (rayleigh_scattering_coeff + vec3(mie_scattering_coeff)) * irradiance *
-      transmittance_factor / transmittance_along_ray(x_i, d) * step_size;
+      transmittance_to_sample * step_size;
   }
   return radiance;
 }
 
 void main() {
-  const vec3 ro =
-    vec3(0.0, r_ground + max(push_constants.altitude, 0.0), 0.0);
+  const vec3 camera_position = push_constants.camera_basis[3].xyz;
+  const vec3 ro = vec3(0.0, r_ground + camera_position.y, 0.0);
   const vec3 rd =
-    mat3(push_constants.camera_basis) *
-    normalize(vec3(vec2(-in_ndc.x, -in_ndc.y) * push_constants.zoom, 1.0));
+    normalize(
+      mat3(push_constants.camera_basis) *
+      vec3(vec2(-in_ndc.x, -in_ndc.y) * push_constants.zoom, 1.0));
   const float t_atmosphere = ray_atmosphere(ro, rd);
   const float t_planet = ray_planet(ro, rd);
-  const float t = t_planet >= 0.0 ? t_planet : t_atmosphere;
+  const bool hit_planet = t_planet >= 0.0;
+  const float t = hit_planet ? t_planet : t_atmosphere;
   const vec3 p = ro + t * rd;
-  const vec3 x_0 = t_planet >= 0.0 ? p : ro;
-  const vec3 x_1 = t_planet >= 0.0 ? ro : p;
-  const vec3 d = t_planet >= 0.0 ? -rd : rd;
+  const vec3 x_0 = hit_planet ? p : ro;
+  const vec3 x_1 = hit_planet ? ro : p;
+  const vec3 d = hit_planet ? -rd : rd;
   const vec3 in_scattering = integrate_in_scattering(x_0, x_1, d);
   vec3 radiance = in_scattering;
-  if (t_planet >= 0.0) {
+  if (hit_planet) {
     const vec3 n = normalize(p);
     const float n_dot_l = max(dot(n, push_constants.sun_direction), 0.0);
     const vec3 arriving_irradiance =
@@ -95,8 +103,9 @@ void main() {
     const vec3 reflected_radiance =
       planet_albedo / pi * arriving_irradiance * n_dot_l;
     radiance +=
-      transmittance_along_ray(p, -rd) /
-      transmittance_along_ray(ro, -rd) *
+      transmittance_ratio(
+        transmittance_along_ray(p, -rd),
+        transmittance_along_ray(ro, -rd)) *
       reflected_radiance;
   }
   out_color = vec4(radiance, 1.0);
