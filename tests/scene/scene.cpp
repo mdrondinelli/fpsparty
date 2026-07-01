@@ -34,6 +34,7 @@ scene::Keyframe make_keyframe(std::uint64_t number) {
     .grid = game::Grid{{}},
     .cameras = {},
     .mesh_instances = {},
+    .sun_direction = {},
   };
 }
 } // namespace

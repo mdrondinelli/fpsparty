@@ -61,9 +61,9 @@ find_vk_physical_device(vk::Instance instance) {
   auto const physical_devices = instance.enumeratePhysicalDevices();
   for (auto const physical_device : physical_devices) {
     auto const properties = physical_device.getProperties();
-    if (properties.apiVersion < vk::ApiVersion13) {
+    if (properties.apiVersion < vk::ApiVersion14) {
       std::cout << "Skipping VkPhysicalDevice '" << properties.deviceName
-                << "' because it does not support Vulkan 1.3.\n";
+                << "' because it does not support Vulkan 1.4.\n";
       continue;
     }
     auto const queue_family_index = [&]() -> std::optional<std::uint32_t> {
@@ -131,14 +131,9 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
       .pNext = &descriptor_heap_features,
       .shaderUntypedPointers = true,
     };
-  auto buffer_device_address_features =
-    vk::PhysicalDeviceBufferDeviceAddressFeatures{
-      .pNext = &shader_untyped_pointers_features,
-      .bufferDeviceAddress = true,
-    };
   auto extended_dynamic_state_features =
     vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT{
-      .pNext = &buffer_device_address_features,
+      .pNext = &shader_untyped_pointers_features,
       .extendedDynamicState = true,
     };
   auto vulkan_1_3_features = vk::PhysicalDeviceVulkan13Features{
@@ -146,8 +141,13 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
     .synchronization2 = true,
     .dynamicRendering = true,
   };
-  auto const features = vk::PhysicalDeviceFeatures2{
+  auto vulkan_1_2_features = vk::PhysicalDeviceVulkan12Features{
     .pNext = &vulkan_1_3_features,
+    .shaderSampledImageArrayNonUniformIndexing = true,
+    .bufferDeviceAddress = true,
+  };
+  auto const features = vk::PhysicalDeviceFeatures2{
+    .pNext = &vulkan_1_2_features,
     .features =
       {
         .multiDrawIndirect = true,
@@ -184,7 +184,7 @@ vma::Unique_allocator make_vma_allocator(
     .pHeapSizeLimit = nullptr,
     .pVulkanFunctions = nullptr,
     .instance = instance,
-    .vulkanApiVersion = vk::ApiVersion13,
+    .vulkanApiVersion = vk::ApiVersion14,
     .pTypeExternalMemoryHandleTypes = nullptr,
   };
   auto const vulkan_functions = vma::import_functions_from_volk(create_info);

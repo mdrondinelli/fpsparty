@@ -50,7 +50,7 @@ rc::Strong<graphics::Image> load_texture(graphics::Graphics &graphics, char cons
              graphics::Image_usage_flag_bits::transfer_dst,
   });
   auto const staging_buffer = graphics.create_staging_buffer(pixels);
-  auto work_recorder = graphics.record_transient_work();
+  auto work_recorder = graphics.record_transient_work({});
   work_recorder.transition_image_layout(
     {},
     {

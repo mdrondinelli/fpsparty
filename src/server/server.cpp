@@ -77,6 +77,7 @@ void Server::broadcast_game_state() {
     serialize<net::Entity_id>(public_state_writer, handle.id);
     game::Entity_traits<game::Item>::dump(public_state_writer, item);
   }
+  serialize<math::vec3>(public_state_writer, _game.get_sun_direction());
   auto const players = world.get_all<game::Player>();
   for (auto const &peer : get_peers()) {
     auto player_state_writer = serial::Ostringstream_writer{};

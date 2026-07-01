@@ -1,5 +1,6 @@
 build
 assets/shaders/*.spv
+assets/shaders/*/*.spv
 extern/enet/Makefile
 extern/enet/autom4te.cache/requests
 extern/enet/configure~

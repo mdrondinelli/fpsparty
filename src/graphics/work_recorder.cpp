@@ -10,22 +10,10 @@ namespace fpsparty::graphics {
 
 namespace detail {
 
-Work_recorder acquire_transient_work_recorder(Work_resource resource) noexcept {
-  resource.vk_command_buffer.begin({
-    .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
-  });
-  return Work_recorder{std::move(resource)};
-}
+namespace {
 
-Work_recorder acquire_frame_work_recorder(
-  Work_resource resource,
-  rc::Strong<Buffer> sampler_heap,
-  rc::Strong<Buffer> descriptor_heap) noexcept {
-  assert(sampler_heap);
-  assert(descriptor_heap);
-  resource.vk_command_buffer.begin({
-    .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
-  });
+void bind_sampler_heap(
+  Work_resource &resource, rc::Strong<Buffer> sampler_heap) {
   resource.vk_command_buffer.bindSamplerHeapEXT({
     .heapRange =
       {
@@ -40,23 +28,46 @@ Work_recorder acquire_frame_work_recorder(
                            .descriptor_heap_properties()
                            .minSamplerHeapReservedRange,
   });
+  resource.buffers.emplace_back(std::move(sampler_heap));
+}
+
+void bind_resource_heap(
+  Work_resource &resource, rc::Strong<Buffer> resource_heap) {
   resource.vk_command_buffer.bindResourceHeapEXT({
     .heapRange =
       {
-        .address = descriptor_heap->get_device_address(),
-        .size = descriptor_heap->get_size(),
+        .address = resource_heap->get_device_address(),
+        .size = resource_heap->get_size(),
       },
     .reservedRangeOffset =
-      descriptor_heap->get_size() - Global_vulkan_state::get()
-                                      .descriptor_heap_properties()
-                                      .minResourceHeapReservedRange,
+      resource_heap->get_size() - Global_vulkan_state::get()
+                                    .descriptor_heap_properties()
+                                    .minResourceHeapReservedRange,
     .reservedRangeSize = Global_vulkan_state::get()
                            .descriptor_heap_properties()
                            .minResourceHeapReservedRange,
   });
-  resource.buffers.emplace_back(std::move(sampler_heap));
-  resource.descriptor_heap = std::move(descriptor_heap);
-  return Work_recorder{std::move(resource)};
+  resource.buffers.emplace_back(std::move(resource_heap));
+}
+
+} // namespace
+
+Work_recorder acquire_work_recorder(
+  Work_resource resource,
+  std::optional<Work_recorder_descriptor_info> const
+    &descriptor_info) noexcept {
+  resource.vk_command_buffer.begin({
+    .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+  });
+  if (descriptor_info) {
+    resource.descriptor_allocation = descriptor_info->descriptor_allocation;
+    bind_sampler_heap(resource, descriptor_info->sampler_heap);
+    bind_resource_heap(resource, descriptor_info->resource_heap);
+  }
+  auto recorder = Work_recorder{std::move(resource)};
+  recorder._descriptor_data =
+    descriptor_info ? descriptor_info->descriptor_data : nullptr;
+  return recorder;
 }
 
 Work_resource release_work_recorder(Work_recorder recorder) noexcept {
@@ -68,42 +79,36 @@ Work_resource release_work_recorder(Work_recorder recorder) noexcept {
 
 std::uint32_t
 Work_recorder::upload_sampled_image_descriptor(rc::Strong<Image const> image) {
-  assert(_descriptor_heap_memory);
   auto const descriptor = image->get_sampled_image_descriptor();
-  auto const offset = alloc_descriptor(descriptor.size());
+  auto const index = alloc_descriptor();
   std::memcpy(
-    _descriptor_heap_memory->get().data() + offset,
+    _descriptor_data + index * descriptor.size(),
     descriptor.data(),
     descriptor.size());
   add_reference(std::move(image));
-  return offset / descriptor.size();
+  return index;
 }
 
 std::uint32_t
 Work_recorder::upload_storage_image_descriptor(rc::Strong<Image> image) {
-  assert(_descriptor_heap_memory);
   auto const descriptor = image->get_storage_image_descriptor();
-  auto const offset = alloc_descriptor(descriptor.size());
+  auto const index = alloc_descriptor();
   std::memcpy(
-    _descriptor_heap_memory->get().data() + offset,
+    _descriptor_data + index * descriptor.size(),
     descriptor.data(),
     descriptor.size());
   add_reference(std::move(image));
-  return offset / descriptor.size();
+  return index;
 }
 
-std::uint32_t Work_recorder::alloc_descriptor(std::size_t size) {
-  assert(_descriptor_heap_memory);
-  auto const remainder = _descriptor_heap_offset & (size - 1);
-  if (remainder != 0) {
-    _descriptor_heap_offset += size - remainder;
+std::uint32_t Work_recorder::alloc_descriptor() {
+  assert(_descriptor_data);
+  assert(_resource.descriptor_allocation);
+  auto const &allocation = *_resource.descriptor_allocation;
+  if (_descriptor_count >= allocation.size) {
+    throw std::runtime_error{"Descriptor heap allocation is too small"};
   }
-  auto const offset = _descriptor_heap_offset;
-  if (offset + size > _descriptor_heap_capacity) {
-    throw std::runtime_error{"Descriptor heap is too small"};
-  }
-  _descriptor_heap_offset += size;
-  return offset;
+  return allocation.offset + _descriptor_count++;
 }
 
 void Work_recorder::copy_buffer(
@@ -210,13 +215,12 @@ void Work_recorder::begin_rendering(Rendering_begin_info const &info) {
     .imageLayout = vk::ImageLayout::eGeneral,
     .loadOp = vk::AttachmentLoadOp::eClear,
     .storeOp = vk::AttachmentStoreOp::eStore,
-    .clearValue =
-      {{
-        info.color_clear_value.x(),
-        info.color_clear_value.y(),
-        info.color_clear_value.z(),
-        info.color_clear_value.w(),
-      }},
+    .clearValue = {{
+      info.color_clear_value.x(),
+      info.color_clear_value.y(),
+      info.color_clear_value.z(),
+      info.color_clear_value.w(),
+    }},
   };
   auto const depth_attachment = vk::RenderingAttachmentInfo{
     .imageView = info.depth_image
@@ -255,6 +259,14 @@ void Work_recorder::bind_pipeline(rc::Strong<Pipeline const> pipeline) {
   add_reference(std::move(pipeline));
 }
 
+void Work_recorder::bind_compute_pipeline(
+  rc::Strong<Compute_pipeline const> pipeline) {
+  get_command_buffer().bindPipeline(
+    vk::PipelineBindPoint::eCompute,
+    detail::get_compute_pipeline_vk_pipeline(*pipeline));
+  add_reference(std::move(pipeline));
+}
+
 void Work_recorder::set_cull_mode(Cull_mode cull_mode) {
   get_command_buffer()
     .setCullMode(static_cast<vk::CullModeFlags>(static_cast<int>(cull_mode)));
@@ -264,7 +276,7 @@ void Work_recorder::set_front_face(Front_face front_face) {
   get_command_buffer().setFrontFace(static_cast<vk::FrontFace>(front_face));
 }
 
-void Work_recorder::set_viewport(Eigen::Vector2i const &extent) {
+void Work_recorder::set_viewport(math::ivec2 extent) {
   get_command_buffer().setViewport(
     0,
     {{
@@ -275,7 +287,7 @@ void Work_recorder::set_viewport(Eigen::Vector2i const &extent) {
     }});
 }
 
-void Work_recorder::set_scissor(Eigen::Vector2i const &extent) {
+void Work_recorder::set_scissor(math::ivec2 extent) {
   get_command_buffer().setScissor(
     0,
     {{
@@ -327,10 +339,15 @@ void Work_recorder::draw_indexed_indirect(
   add_reference(info.buffer);
 }
 
+void Work_recorder::dispatch(
+  std::uint32_t x, std::uint32_t y, std::uint32_t z) noexcept {
+  get_command_buffer().dispatch(x, y, z);
+}
+
 void Work_recorder::push_data(
-  std::uint32_t offset, std::span<std::byte const> data) noexcept {
+  std::uint32_t push_offset, std::span<std::byte const> data) noexcept {
   get_command_buffer().pushDataEXT({
-    .offset = offset,
+    .offset = push_offset,
     .data =
       {
         .address = data.data(),
@@ -339,25 +356,15 @@ void Work_recorder::push_data(
   });
 }
 
-void Work_recorder::push_buffer_device_address(
-  std::uint32_t offset, rc::Strong<Buffer> buffer) noexcept {
-  auto const address = buffer->get_device_address();
-  push_data(offset, std::as_bytes(std::span{&address, 1}));
+void Work_recorder::push_buffer_reference(
+  std::uint32_t push_offset, rc::Strong<Buffer> buffer, u64 offset) noexcept {
+  auto const address = buffer->get_device_address() + offset;
+  push_data(push_offset, std::as_bytes(std::span{&address, 1}));
   add_reference(std::move(buffer));
 }
 
 Work_recorder::Work_recorder(detail::Work_resource resource) noexcept
-    : _resource{std::move(resource)},
-      _descriptor_heap_memory{
-        _resource.descriptor_heap
-          ? std::optional{_resource.descriptor_heap->map()}
-          : std::nullopt},
-      _descriptor_heap_capacity{
-        _resource.descriptor_heap ? _resource.descriptor_heap->get_size() -
-                                      Global_vulkan_state::get()
-                                        .descriptor_heap_properties()
-                                        .minResourceHeapReservedRange
-                                  : 0} {}
+    : _resource{std::move(resource)} {}
 
 void Work_recorder::add_reference(rc::Strong<Buffer const> buffer) {
   _resource.buffers.emplace_back(std::move(buffer));
@@ -369,6 +376,10 @@ void Work_recorder::add_reference(rc::Strong<Image const> image) {
 
 void Work_recorder::add_reference(rc::Strong<Pipeline const> pipeline) {
   _resource.pipelines.emplace_back(std::move(pipeline));
+}
+
+void Work_recorder::add_reference(rc::Strong<Compute_pipeline const> pipeline) {
+  _resource.compute_pipelines.emplace_back(std::move(pipeline));
 }
 
 vk::CommandBuffer Work_recorder::get_command_buffer() const noexcept {

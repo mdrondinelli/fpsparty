@@ -14,6 +14,8 @@ Mapped_memory create_mapped_memory(vma::Allocation allocation);
 
 class Mapped_memory {
 public:
+  constexpr Mapped_memory() noexcept = default;
+
   Mapped_memory(Mapped_memory const &other) noexcept;
 
   Mapped_memory &operator=(Mapped_memory const &other) noexcept;

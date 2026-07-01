@@ -3,6 +3,7 @@
 
 #include "graphics/buffer.hpp"
 #include "graphics/compare_op.hpp"
+#include "graphics/compute_pipeline.hpp"
 #include "graphics/cull_mode.hpp"
 #include "graphics/front_face.hpp"
 #include "graphics/image.hpp"
@@ -13,21 +14,27 @@
 #include "graphics/work_resource.hpp"
 #include "math/vec.hpp"
 #include "rc.hpp"
-#include <optional>
+
 #include <vulkan/vulkan.hpp>
 
 namespace fpsparty::graphics {
 class Work_recorder;
 
 namespace detail {
-Work_recorder acquire_transient_work_recorder(Work_resource resource) noexcept;
 
-Work_recorder acquire_frame_work_recorder(
+struct Work_recorder_descriptor_info {
+  rc::Strong<Buffer> sampler_heap;
+  rc::Strong<Buffer> resource_heap;
+  std::byte *descriptor_data;
+  Descriptor_allocation descriptor_allocation;
+};
+
+Work_recorder acquire_work_recorder(
   Work_resource resource,
-  rc::Strong<Buffer> sampler_heap,
-  rc::Strong<Buffer> descriptor_heap) noexcept;
+  std::optional<Work_recorder_descriptor_info> const &descriptor_info) noexcept;
 
 Work_resource release_work_recorder(Work_recorder recorder) noexcept;
+
 } // namespace detail
 
 struct Buffer_copy_info {
@@ -38,11 +45,11 @@ struct Buffer_copy_info {
 
 struct Buffer_image_copy_info {
   std::size_t src_offset;
-  std::uint32_t dst_mip_level;
-  std::uint32_t dst_base_array_layer;
-  std::uint32_t dst_array_layer_count;
-  Eigen::Vector3i dst_offset;
-  Eigen::Vector3i dst_extent;
+  u32 dst_mip_level;
+  u32 dst_base_array_layer;
+  u32 dst_array_layer_count;
+  math::ivec3 dst_offset;
+  math::ivec3 dst_extent;
 };
 
 struct Rendering_begin_info {
@@ -52,28 +59,28 @@ struct Rendering_begin_info {
 };
 
 struct Indexed_draw_info {
-  std::uint32_t index_count;
-  std::uint32_t instance_count;
-  std::uint32_t first_index;
-  std::int32_t vertex_offset;
-  std::uint32_t first_instance;
+  u32 index_count;
+  u32 instance_count;
+  u32 first_index;
+  i32 vertex_offset;
+  u32 first_instance;
 };
 
 struct Indirect_indexed_draw_info {
   rc::Strong<Buffer> buffer;
-  std::uint64_t offset;
-  std::uint32_t draw_count;
-  std::uint32_t stride;
+  u64 offset;
+  u32 draw_count;
+  u32 stride;
 };
 
 class Work_recorder {
 public:
-  std::uint32_t upload_sampled_image_descriptor(rc::Strong<Image const> image);
+  u32 upload_sampled_image_descriptor(rc::Strong<Image const> image);
 
-  std::uint32_t upload_storage_image_descriptor(rc::Strong<Image> image);
+  u32 upload_storage_image_descriptor(rc::Strong<Image> image);
 
 private:
-  std::uint32_t alloc_descriptor(std::size_t size);
+  u32 alloc_descriptor();
 
 public:
   void copy_buffer(
@@ -103,13 +110,15 @@ public:
 
   void bind_pipeline(rc::Strong<Pipeline const> pipeline);
 
+  void bind_compute_pipeline(rc::Strong<Compute_pipeline const> pipeline);
+
   void set_cull_mode(Cull_mode cull_mode);
 
   void set_front_face(Front_face front_face);
 
-  void set_viewport(Eigen::Vector2i const &extent);
+  void set_viewport(math::ivec2 extent);
 
-  void set_scissor(Eigen::Vector2i const &extent);
+  void set_scissor(math::ivec2 extent);
 
   void set_depth_test_enabled(bool enabled);
 
@@ -124,11 +133,12 @@ public:
 
   void draw_indexed_indirect(Indirect_indexed_draw_info const &info) noexcept;
 
-  void
-  push_data(std::uint32_t offset, std::span<std::byte const> data) noexcept;
+  void dispatch(u32 x, u32 y, u32 z) noexcept;
 
-  void push_buffer_device_address(
-    std::uint32_t offset, rc::Strong<Buffer> buffer) noexcept;
+  void push_data(u32 push_offset, std::span<std::byte const> data) noexcept;
+
+  void push_buffer_reference(
+    u32 push_offset, rc::Strong<Buffer> base, u64 offset = 0) noexcept;
 
   void add_reference(rc::Strong<Buffer const> buffer);
 
@@ -136,14 +146,13 @@ public:
 
   void add_reference(rc::Strong<Pipeline const> pipeline);
 
-private:
-  friend Work_recorder detail::acquire_transient_work_recorder(
-    detail::Work_resource resource) noexcept;
+  void add_reference(rc::Strong<Compute_pipeline const> pipeline);
 
-  friend Work_recorder detail::acquire_frame_work_recorder(
+private:
+  friend Work_recorder detail::acquire_work_recorder(
     detail::Work_resource resource,
-    rc::Strong<Buffer> sampler_heap,
-    rc::Strong<Buffer> descriptor_heap) noexcept;
+    std::optional<detail::Work_recorder_descriptor_info> const
+      &descriptor_info) noexcept;
 
   friend detail::Work_resource
   detail::release_work_recorder(Work_recorder recorder) noexcept;
@@ -153,9 +162,8 @@ private:
   vk::CommandBuffer get_command_buffer() const noexcept;
 
   detail::Work_resource _resource;
-  std::optional<Mapped_memory> _descriptor_heap_memory{};
-  std::uint64_t _descriptor_heap_capacity{};
-  std::uint32_t _descriptor_heap_offset{};
+  std::byte *_descriptor_data{};
+  u32 _descriptor_count{};
 };
 } // namespace fpsparty::graphics
 

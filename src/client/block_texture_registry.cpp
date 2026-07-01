@@ -5,7 +5,7 @@ namespace fpsparty::client {
 Block_texture_registry::Block_texture_registry(
   Block_texture_registry_create_info const &info)
     : _graphics{info.graphics} {
-  create_descriptor_index_buffer(1024);
+  create_buffer(1024);
 }
 
 u32 Block_texture_registry::add(rc::Strong<graphics::Image> image) {
@@ -14,9 +14,9 @@ u32 Block_texture_registry::add(rc::Strong<graphics::Image> image) {
     return static_cast<u32>(it - _images.begin());
   } else {
     auto const retval = static_cast<u32>(_images.size());
-    auto const capacity = get_descriptor_index_buffer_capacity();
+    auto const capacity = get_buffer_capacity();
     if (retval + 1 > capacity) {
-      create_descriptor_index_buffer(capacity * 2);
+      create_buffer(capacity * 2);
     }
     _images.push_back(std::move(image));
     return retval;
@@ -37,16 +37,16 @@ void Block_texture_registry::upload_descriptors(
 }
 
 rc::Strong<graphics::Buffer>
-Block_texture_registry::get_descriptor_index_buffer() const noexcept {
+Block_texture_registry::get_buffer() const noexcept {
   return _descriptor_index_buffer;
 }
 
-u32 Block_texture_registry::get_descriptor_index_buffer_capacity() const noexcept {
+u32 Block_texture_registry::get_buffer_capacity() const noexcept {
   assert(_descriptor_index_buffer);
   return _descriptor_index_buffer->get_size() / sizeof(u32);
 }
 
-void Block_texture_registry::create_descriptor_index_buffer(u32 capacity) {
+void Block_texture_registry::create_buffer(u32 capacity) {
   _descriptor_index_buffer = _graphics->create_buffer({
     .size = sizeof(u32) * capacity,
     .usage = graphics::Buffer_usage_flag_bits::shader_device_address,

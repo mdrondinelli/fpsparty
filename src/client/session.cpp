@@ -110,6 +110,7 @@ void Session::on_world_snapshot(
     .grid = game::Grid{{}},
     .cameras = {},
     .mesh_instances = {},
+    .sun_direction = math::vec3::Zero(),
   };
   keyframe.grid.load(grid_state_reader);
   load_player_state(player_entity_state_reader);
@@ -220,6 +221,12 @@ void Session::load_public_state(
       return;
     }
   }
+  auto const sun_direction = deserialize<math::vec3>(reader);
+  if (!sun_direction) {
+    std::cerr << "Failed to deserialize sun direction.\n";
+    return;
+  }
+  keyframe.sun_direction = *sun_direction;
 }
 
 scene::Scene &Session::get_scene() noexcept { return _scene; }
