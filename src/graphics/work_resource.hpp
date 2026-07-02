@@ -26,6 +26,8 @@ struct Work_resource {
   std::vector<rc::Strong<Image const>> images{};
   std::vector<rc::Strong<Pipeline const>> pipelines{};
   std::vector<rc::Strong<Compute_pipeline const>> compute_pipelines{};
+  rc::Strong<Descriptor_heap const> descriptor_heap{};
+  vk::PipelineLayout pipeline_layout{};
   std::vector<Work_done_callback *> done_callbacks{};
 };
 

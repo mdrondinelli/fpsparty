@@ -57,48 +57,6 @@ Image::Image(Image_create_info const &info) {
   auto vk_image_view = Global_vulkan_state::get()
                          .device()
                          .createImageViewUnique(image_view_create_info);
-  auto const descriptor_info = vk::ImageDescriptorInfoEXT{
-    .pView = &image_view_create_info,
-    .layout = vk::ImageLayout::eGeneral,
-  };
-  if (info.usage & Image_usage_flag_bits::sampled) {
-    _sampled_image_descriptor.resize(
-      Global_vulkan_state::get()
-        .descriptor_heap_properties()
-        .imageDescriptorSize);
-    Global_vulkan_state::get().device().writeResourceDescriptorsEXT(
-      {
-        vk::ResourceDescriptorInfoEXT{
-          .type = vk::DescriptorType::eSampledImage,
-          .data = &descriptor_info,
-        },
-      },
-      {
-        vk::HostAddressRangeEXT{
-          .address = _sampled_image_descriptor.data(),
-          .size = _sampled_image_descriptor.size(),
-        },
-      });
-  }
-  if (info.usage & Image_usage_flag_bits::storage) {
-    _storage_image_descriptor.resize(
-      Global_vulkan_state::get()
-        .descriptor_heap_properties()
-        .imageDescriptorSize);
-    Global_vulkan_state::get().device().writeResourceDescriptorsEXT(
-      {
-        vk::ResourceDescriptorInfoEXT{
-          .type = vk::DescriptorType::eStorageImage,
-          .data = &descriptor_info,
-        },
-      },
-      {
-        vk::HostAddressRangeEXT{
-          .address = _storage_image_descriptor.data(),
-          .size = _storage_image_descriptor.size(),
-        },
-      });
-  }
   _vk_image = vk_image.release();
   _vk_image_view = vk_image_view.release();
   _format = info.format;

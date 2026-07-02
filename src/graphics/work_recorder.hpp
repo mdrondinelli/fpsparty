@@ -24,8 +24,8 @@ class Work_recorder;
 namespace detail {
 
 struct Work_recorder_descriptor_info {
-  rc::Strong<Buffer> sampler_heap;
-  rc::Strong<Buffer> resource_heap;
+  rc::Strong<Descriptor_heap const> descriptor_heap;
+  vk::PipelineLayout pipeline_layout{};
 };
 
 Work_recorder acquire_work_recorder(

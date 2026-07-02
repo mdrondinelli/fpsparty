@@ -3,18 +3,15 @@
 
 #include <cstdint>
 #include <mutex>
-#include <span>
 #include <vector>
 
 #include <rc.hpp>
 
-#include "buffer.hpp"
-#include "mapped_memory.hpp"
+#include "image.hpp"
 
 namespace fpsparty::graphics::detail {
 
 struct Descriptor_heap_create_info {
-  rc::Factory<Buffer> *buffer_factory;
   std::uint32_t capacity{};
 };
 
@@ -28,22 +25,34 @@ public:
 
   Descriptor_heap &operator=(Descriptor_heap const &other) = delete;
 
-  rc::Strong<Buffer> const &buffer() const noexcept { return _buffer; }
-
-  std::byte *data() noexcept;
-
   std::uint32_t alloc();
 
   void free(std::uint32_t index) noexcept;
 
-  void write(std::uint32_t index, std::span<std::byte const> descriptor);
+  void write_sampled_image(std::uint32_t index, Image const &image);
+
+  void write_storage_image(std::uint32_t index, Image const &image);
 
 private:
-  rc::Strong<Buffer> _buffer{};
-  Mapped_memory _memory{};
+  friend vk::DescriptorSetLayout get_descriptor_heap_vk_descriptor_set_layout(
+    Descriptor_heap const &descriptor_heap) noexcept;
+
+  friend vk::DescriptorSet get_descriptor_heap_vk_descriptor_set(
+    Descriptor_heap const &descriptor_heap) noexcept;
+
+  vk::UniqueDescriptorSetLayout _vk_descriptor_set_layout{};
+  vk::UniqueDescriptorPool _vk_descriptor_pool{};
+  vk::DescriptorSet _vk_descriptor_set{};
+  std::vector<vk::UniqueSampler> _vk_samplers{};
   std::vector<std::uint32_t> _free_list{};
   std::mutex _mutex;
 };
+
+vk::DescriptorSetLayout get_descriptor_heap_vk_descriptor_set_layout(
+  Descriptor_heap const &descriptor_heap) noexcept;
+
+vk::DescriptorSet get_descriptor_heap_vk_descriptor_set(
+  Descriptor_heap const &descriptor_heap) noexcept;
 
 } // namespace fpsparty::graphics::detail
 

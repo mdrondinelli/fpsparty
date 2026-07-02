@@ -3,24 +3,26 @@
 
 #include "extensions.glsl"
 
-layout(descriptor_heap) uniform sampler samplers[];
+layout(set = 0, binding = 0) uniform sampler samplers[];
 
 #define FPSPARTY_SAMPLER_NEAREST samplers[0]
 #define FPSPARTY_SAMPLER_NEAREST_CLAMP samplers[1]
 #define FPSPARTY_SAMPLER_LINEAR samplers[2]
 #define FPSPARTY_SAMPLER_LINEAR_CLAMP samplers[3]
 
-layout(descriptor_heap) uniform texture2D sampled_images[];
+layout(set = 0, binding = 1) uniform texture2D sampled_images[];
 
-#define FPSPARTY_SAMPLE(index, sampler, texcoord) \
-  texture(sampler2D(sampled_images[index], FPSPARTY_SAMPLER_##sampler), texcoord)
+#define FPSPARTY_SAMPLE(index, sampler, texcoord)                              \
+  texture(                                                                     \
+    sampler2D(sampled_images[index], FPSPARTY_SAMPLER_##sampler), texcoord)
 
-#define DEFINE_STORAGE_IMAGE_ARRAY(format) \
-  layout(format, descriptor_heap) restrict uniform image2D format##_storage_images[];
+#define DEFINE_STORAGE_IMAGE_ARRAY(format, binding_index)                      \
+  layout(set = 0, binding = binding_index, format) restrict uniform image2D    \
+    format##_storage_images[];
 
-DEFINE_STORAGE_IMAGE_ARRAY(rgba8)
-DEFINE_STORAGE_IMAGE_ARRAY(rgba16f)
-DEFINE_STORAGE_IMAGE_ARRAY(rgba32f)
+DEFINE_STORAGE_IMAGE_ARRAY(rgba8, 2)
+DEFINE_STORAGE_IMAGE_ARRAY(rgba16f, 3)
+DEFINE_STORAGE_IMAGE_ARRAY(rgba32f, 4)
 
 #undef DEFINE_STORAGE_IMAGE_ARRAY
 

@@ -318,18 +318,6 @@ std::vector<std::byte> load_file(char const *path) {
   return data;
 }
 
-void assert_push_constant_range_size(
-  [[maybe_unused]] graphics::Pipeline const &pipeline,
-  [[maybe_unused]] u64 expected_size) {
-  assert(pipeline.get_push_constant_range_size() == expected_size);
-}
-
-void assert_push_constant_range_size(
-  [[maybe_unused]] graphics::Compute_pipeline const &pipeline,
-  [[maybe_unused]] u64 expected_size) {
-  assert(pipeline.get_push_constant_range_size() == expected_size);
-}
-
 } // namespace
 
 class Application::Impl : public glfw::Key_callback,
@@ -836,7 +824,6 @@ private:
       "./assets/shaders/atmosphere/transmittance.comp.spv");
     auto transmittance_pipeline =
       _graphics.create_compute_pipeline({.shader = &transmittance_shader});
-    assert_push_constant_range_size(*transmittance_pipeline, 4);
     _transmittance_lut = _graphics.create_image({
       .dimensionality = 2,
       .format = graphics::Image_format::r16g16b16a16_sfloat,
@@ -1077,7 +1064,6 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
-    assert_push_constant_range_size(*pipeline, 36);
     return pipeline;
   }
 
@@ -1110,7 +1096,6 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
-    assert_push_constant_range_size(*pipeline, 80);
     return pipeline;
   }
 
@@ -1142,7 +1127,6 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
-    assert_push_constant_range_size(*pipeline, 8);
     return pipeline;
   }
 
@@ -1175,7 +1159,6 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
-    assert_push_constant_range_size(*pipeline, 104);
     return pipeline;
   }
 
@@ -1208,7 +1191,6 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
-    assert_push_constant_range_size(*pipeline, 20);
     return pipeline;
   }
 

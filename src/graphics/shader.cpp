@@ -12,6 +12,8 @@ namespace fpsparty::graphics {
 
 namespace {
 
+constexpr auto max_push_constant_range_size = std::uint64_t{128};
+
 class Reflected_shader_module {
 public:
   explicit Reflected_shader_module(std::span<std::uint32_t const> code) {
@@ -23,6 +25,7 @@ public:
   }
 
   Reflected_shader_module(Reflected_shader_module const &) = delete;
+
   Reflected_shader_module &operator=(Reflected_shader_module const &) = delete;
 
   ~Reflected_shader_module() { spvReflectDestroyShaderModule(&_module); }
@@ -41,39 +44,30 @@ void check_spv_reflect_result(SpvReflectResult result) {
 
 } // namespace
 
-Shader::Shader(Shader_create_info const &info)
-    : _vk_shader_module{Global_vulkan_state::get()
-                          .device()
-                          .createShaderModuleUnique({
-                            .codeSize = static_cast<std::uint32_t>(
-                              info.code.size_bytes()),
-                            .pCode = info.code.data(),
-                          })},
-      _push_constant_block_size{[&] {
-        auto const module = Reflected_shader_module{info.code};
-        auto block_count = std::uint32_t{};
-        check_spv_reflect_result(
-          spvReflectEnumerateEntryPointPushConstantBlocks(
-            &module.get(), "main", &block_count, nullptr));
-        if (block_count == 0) {
-          return u64{};
-        }
-        if (block_count > 1) {
-          throw std::runtime_error{
-            "Shaders may only use one push constant block."};
-        }
-        auto blocks = std::vector<SpvReflectBlockVariable *>{};
-        blocks.resize(block_count);
-        check_spv_reflect_result(
-          spvReflectEnumerateEntryPointPushConstantBlocks(
-            &module.get(), "main", &block_count, blocks.data()));
-        auto const &block = *blocks[0];
-        if (block.offset != 0) {
-          throw std::runtime_error{
-            "Shader push constant blocks must start at offset 0."};
-        }
-        return static_cast<u64>(block.size);
-      }()} {}
+Shader::Shader(Shader_create_info const &info) {
+  auto const module = Reflected_shader_module{info.code};
+  auto block_count = std::uint32_t{};
+  check_spv_reflect_result(spvReflectEnumerateEntryPointPushConstantBlocks(
+    &module.get(), "main", &block_count, nullptr));
+  auto blocks = std::vector<SpvReflectBlockVariable *>{};
+  blocks.resize(block_count);
+  check_spv_reflect_result(spvReflectEnumerateEntryPointPushConstantBlocks(
+    &module.get(), "main", &block_count, blocks.data()));
+  for (auto const *block : blocks) {
+    auto const block_end = static_cast<std::uint64_t>(block->offset) +
+                           static_cast<std::uint64_t>(block->size);
+    if (block_end > max_push_constant_range_size) {
+      throw std::runtime_error{
+        "Shader push constant block exceeds the pipeline layout push constant "
+        "range."};
+    }
+  }
+  _vk_shader_module =
+    Global_vulkan_state::get().device().createShaderModuleUnique({
+      .codeSize = static_cast<std::uint32_t>(info.code.size_bytes()),
+      .pCode = info.code.data(),
+    });
+}
 
 Shader load_shader(char const *path) {
   auto input_stream = std::ifstream{};

@@ -114,8 +114,8 @@ private:
   std::vector<vk::UniqueImageView> _vk_swapchain_image_views{};
   std::vector<rc::Strong<Image>> _swapchain_images{};
   std::vector<vk::UniqueSemaphore> _swapchain_image_release_semaphores{};
-  rc::Strong<Buffer> _sampler_heap{};
   rc::Strong<detail::Descriptor_heap> _descriptor_heap{};
+  vk::UniquePipelineLayout _pipeline_layout{};
   detail::Work_resource_pool _work_resources{};
   detail::Work_queue _works{};
   std::vector<Frame_resource> _frame_resources{};
