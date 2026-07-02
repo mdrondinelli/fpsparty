@@ -324,6 +324,12 @@ void assert_push_constant_range_size(
   assert(pipeline.get_push_constant_range_size() == expected_size);
 }
 
+void assert_push_constant_range_size(
+  [[maybe_unused]] graphics::Compute_pipeline const &pipeline,
+  [[maybe_unused]] u64 expected_size) {
+  assert(pipeline.get_push_constant_range_size() == expected_size);
+}
+
 } // namespace
 
 class Application::Impl : public glfw::Key_callback,
@@ -830,6 +836,7 @@ private:
       "./assets/shaders/atmosphere/transmittance.comp.spv");
     auto transmittance_pipeline =
       _graphics.create_compute_pipeline({.shader = &transmittance_shader});
+    assert_push_constant_range_size(*transmittance_pipeline, 4);
     _transmittance_lut = _graphics.create_image({
       .dimensionality = 2,
       .format = graphics::Image_format::r16g16b16a16_sfloat,
