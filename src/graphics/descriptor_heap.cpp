@@ -20,8 +20,6 @@ constexpr auto sampler_descriptor_count = std::uint32_t{4};
 
 std::uint32_t get_storage_image_binding(Image_format format) {
   switch (format) {
-  case Image_format::b8g8r8a8_srgb:
-    return rgba8_storage_image_binding;
   case Image_format::r16g16b16a16_sfloat:
     return rgba16f_storage_image_binding;
   case Image_format::r32g32b32a32_sfloat:
