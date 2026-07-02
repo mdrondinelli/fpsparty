@@ -319,8 +319,8 @@ std::vector<std::byte> load_file(char const *path) {
 }
 
 void assert_push_constant_range_size(
-  graphics::Pipeline const &pipeline,
-  u64 expected_size) {
+  [[maybe_unused]] graphics::Pipeline const &pipeline,
+  [[maybe_unused]] u64 expected_size) {
   assert(pipeline.get_push_constant_range_size() == expected_size);
 }
 
