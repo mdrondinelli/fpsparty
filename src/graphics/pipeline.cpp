@@ -1,10 +1,38 @@
 #include "pipeline.hpp"
+
 #include "global_vulkan_state.hpp"
+
+#include <stdexcept>
 #include <vector>
 #include <vulkan/vulkan.hpp>
 
 namespace fpsparty::graphics {
+namespace {
+
+u64 get_pipeline_push_constant_range_size(
+  std::span<Pipeline_shader_stage_create_info const> shader_stages) {
+  auto size = u64{};
+  for (auto const &shader_stage : shader_stages) {
+    auto const shader_size =
+      shader_stage.shader->get_push_constant_range_size();
+    if (shader_size == 0) {
+      continue;
+    }
+    if (size != 0 && size != shader_size) {
+      throw std::runtime_error{
+        "All pipeline shader push constant blocks must have the same size."};
+    }
+    size = shader_size;
+  }
+  return size;
+}
+
+} // namespace
+
 Pipeline::Pipeline(Pipeline_create_info const &info) {
+  _push_constant_range_size =
+    get_pipeline_push_constant_range_size(info.shader_stages);
+
   auto vk_shader_stages = std::vector<vk::PipelineShaderStageCreateInfo>{};
   vk_shader_stages.reserve(info.shader_stages.size());
   for (auto const &shader_stage : info.shader_stages) {

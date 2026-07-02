@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -315,6 +316,12 @@ std::vector<std::byte> load_file(char const *path) {
     throw std::runtime_error{std::string{"Failed to read file: "} + path};
   }
   return data;
+}
+
+void assert_push_constant_range_size(
+  graphics::Pipeline const &pipeline,
+  u64 expected_size) {
+  assert(pipeline.get_push_constant_range_size() == expected_size);
 }
 
 } // namespace
@@ -1048,7 +1055,7 @@ private:
       };
     auto const color_attachment_format =
       graphics::Image_format::r16g16b16a16_sfloat;
-    return _graphics.create_pipeline({
+    auto pipeline = _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
         {
@@ -1063,6 +1070,8 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
+    assert_push_constant_range_size(*pipeline, 36);
+    return pipeline;
   }
 
   rc::Strong<graphics::Pipeline> make_mesh_pipeline() {
@@ -1079,7 +1088,7 @@ private:
       };
     auto const color_attachment_format =
       graphics::Image_format::r16g16b16a16_sfloat;
-    return _graphics.create_pipeline({
+    auto pipeline = _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
         {
@@ -1094,6 +1103,8 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
+    assert_push_constant_range_size(*pipeline, 80);
+    return pipeline;
   }
 
   rc::Strong<graphics::Pipeline> make_crosshair_pipeline() {
@@ -1109,7 +1120,7 @@ private:
         },
       };
     auto const color_attachment_format = graphics::Image_format::r8_unorm;
-    return _graphics.create_pipeline({
+    auto pipeline = _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
         {
@@ -1124,6 +1135,8 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
+    assert_push_constant_range_size(*pipeline, 8);
+    return pipeline;
   }
 
   rc::Strong<graphics::Pipeline> make_sky_pipeline() {
@@ -1140,7 +1153,7 @@ private:
       };
     auto const color_attachment_format =
       graphics::Image_format::r16g16b16a16_sfloat;
-    return _graphics.create_pipeline({
+    auto pipeline = _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
         {
@@ -1155,6 +1168,8 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
+    assert_push_constant_range_size(*pipeline, 104);
+    return pipeline;
   }
 
   rc::Strong<graphics::Pipeline>
@@ -1171,7 +1186,7 @@ private:
         },
       };
     auto const color_attachment_format = swapchain_image_format;
-    return _graphics.create_pipeline({
+    auto pipeline = _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
         {
@@ -1186,6 +1201,8 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
+    assert_push_constant_range_size(*pipeline, 20);
+    return pipeline;
   }
 
   static auto constexpr sampled_image_scope = graphics::Synchronization_scope{
