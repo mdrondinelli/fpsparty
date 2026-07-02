@@ -16,6 +16,16 @@ add_library(
   tracy
   extern/tracy-0.13.1/public/TracyClient.cpp
 )
+add_library(
+  spirv-reflect
+  extern/SPIRV-Reflect/spirv_reflect.cpp
+)
+target_include_directories(
+  spirv-reflect
+  SYSTEM
+  PUBLIC
+  ${CMAKE_SOURCE_DIR}/extern/SPIRV-Reflect
+)
 
 # libnet
 add_library(
@@ -246,6 +256,7 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/extern/tracy-0.13.1/public
 )
 target_link_libraries(graphics glfw volk GPUOpen::VulkanMemoryAllocator)
+target_link_libraries(graphics spirv-reflect)
 
 # client
 add_executable(
@@ -294,6 +305,7 @@ if (MSVC)
 else()
   set(extern_compile_options -stdlib=libc++ -O3)
   target_compile_options(tracy PRIVATE ${extern_compile_options})
+  target_compile_options(spirv-reflect PRIVATE ${extern_compile_options})
   target_compile_options(Catch2 PRIVATE ${extern_compile_options})
   target_compile_options(Catch2WithMain PRIVATE ${extern_compile_options})
   set(fpsparty_compile_options -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
@@ -302,6 +314,7 @@ else()
   endforeach()
   set(extern_link_options -stdlib=libc++ -lc++abi)
   target_link_options(tracy PRIVATE ${extern_link_options})
+  target_link_options(spirv-reflect PRIVATE ${extern_link_options})
   target_link_options(Catch2 PRIVATE ${extern_link_options})
   target_link_options(Catch2WithMain PRIVATE ${extern_link_options})
   set(fpsparty_link_options -stdlib=libc++ -lc++abi)

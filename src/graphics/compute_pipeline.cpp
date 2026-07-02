@@ -3,7 +3,9 @@
 #include "global_vulkan_state.hpp"
 
 namespace fpsparty::graphics {
-Compute_pipeline::Compute_pipeline(Compute_pipeline_create_info const &info) {
+
+Compute_pipeline::Compute_pipeline(Compute_pipeline_create_info const &info)
+    : _push_constant_range_size{info.shader->get_push_constant_range_size()} {
   auto const shader_stage = vk::PipelineShaderStageCreateInfo{
     .stage = vk::ShaderStageFlagBits::eCompute,
     .module = detail::get_shader_vk_shader_module(*info.shader),
@@ -24,4 +26,5 @@ Compute_pipeline::Compute_pipeline(Compute_pipeline_create_info const &info) {
         }})
       .value[0]);
 }
+
 } // namespace fpsparty::graphics

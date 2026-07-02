@@ -5,6 +5,7 @@
 #include "graphics/primitive_topology.hpp"
 #include "graphics/shader.hpp"
 #include "graphics/shader_stage.hpp"
+#include "int.hpp"
 #include "rc.hpp"
 #include <span>
 #include <vulkan/vulkan.hpp>
@@ -44,11 +45,16 @@ class Pipeline {
 public:
   explicit Pipeline(Pipeline_create_info const &info);
 
+  u64 get_push_constant_range_size() const noexcept {
+    return _push_constant_range_size;
+  }
+
 private:
   friend vk::Pipeline
   detail::get_pipeline_vk_pipeline(Pipeline const &pipeline) noexcept;
 
   vk::UniquePipeline _vk_pipeline;
+  u64 _push_constant_range_size{};
 };
 
 namespace detail {
