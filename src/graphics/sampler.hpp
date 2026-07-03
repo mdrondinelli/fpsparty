@@ -3,8 +3,8 @@
 
 namespace fpsparty::graphics {
 
-// Fixed samplers baked into combined-image-sampler descriptors at creation time.
-// Order must match make_samplers() in descriptor_heap.cpp.
+// Fixed samplers baked into combined-image-sampler descriptors at creation
+// time. Order must match make_samplers() in descriptor_heap.cpp.
 enum class Sampler {
   nearest,
   nearest_clamp,

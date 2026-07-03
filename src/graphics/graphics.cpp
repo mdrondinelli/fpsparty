@@ -142,13 +142,10 @@ Graphics::Graphics(Graphics_create_info const &info)
                                .physical_device()
                                .getSurfacePresentModesKHR(_surface)},
       _vsync_preferred{info.vsync_preferred},
-      _descriptor_heap{_descriptor_heap_factory.create(
-        detail::Descriptor_heap_create_info{
-          .capacity = info.descriptor_capacity,
-        })},
+      _descriptor_heap{{}},
       _pipeline_layout{make_pipeline_layout(
         detail::get_descriptor_heap_vk_descriptor_set_layout(
-          *_descriptor_heap))} {
+          _descriptor_heap))} {
   init_swapchain(select_swapchain_present_mode());
   for (auto i = std::size_t{}; i != info.max_frames_in_flight; ++i) {
     auto const swapchain_image_acquire_semaphore_name =
@@ -221,24 +218,24 @@ rc::Strong<Image> Graphics::create_image(Image_create_info const &info) {
 
 rc::Strong<Descriptor> Graphics::create_sampled_image_descriptor(
   rc::Strong<Image const> image, Sampler sampler) {
-  auto const handle = _descriptor_heap->alloc();
-  _descriptor_heap->write_sampled_image(handle, *image, sampler);
+  auto const handle = _descriptor_heap.alloc_sampled_image(*image, sampler);
   return _descriptor_factory.create(
     detail::Descriptor_create_info{
-      .heap = _descriptor_heap,
+      .heap = &_descriptor_heap,
       .image = std::move(image),
+      .type = Descriptor_type::sampled_image,
       .handle = handle,
     });
 }
 
 rc::Strong<Descriptor>
 Graphics::create_storage_image_descriptor(rc::Strong<Image> image) {
-  auto const handle = _descriptor_heap->alloc();
-  _descriptor_heap->write_storage_image(handle, *image);
+  auto const handle = _descriptor_heap.alloc_storage_image(*image);
   return _descriptor_factory.create(
     detail::Descriptor_create_info{
-      .heap = _descriptor_heap,
+      .heap = &_descriptor_heap,
       .image = std::move(image),
+      .type = Descriptor_type::storage_image,
       .handle = handle,
     });
 }
@@ -249,7 +246,7 @@ Work_recorder Graphics::record_transient_work() {
     std::move(resource),
     std::optional{detail::Work_recorder_descriptor_info{
       .descriptor_set =
-        detail::get_descriptor_heap_vk_descriptor_set(*_descriptor_heap),
+        detail::get_descriptor_heap_vk_descriptor_set(_descriptor_heap),
       .pipeline_layout = *_pipeline_layout,
     }});
 }
@@ -292,15 +289,14 @@ Graphics::try_record_frame_work() {
       std::move(resource),
       std::optional{detail::Work_recorder_descriptor_info{
         .descriptor_set =
-          detail::get_descriptor_heap_vk_descriptor_set(*_descriptor_heap),
+          detail::get_descriptor_heap_vk_descriptor_set(_descriptor_heap),
         .pipeline_layout = *_pipeline_layout,
       }}),
     _swapchain_images.at(frame_resource.swapchain_image_index),
   };
 }
 
-std::pair<Work_recorder, rc::Strong<Image>>
-Graphics::record_frame_work() {
+std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
   ZoneScoped;
   if (auto work = try_record_frame_work()) {
     return std::move(*work);

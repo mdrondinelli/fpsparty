@@ -10,23 +10,23 @@ namespace fpsparty::graphics::detail {
 
 namespace {
 
-constexpr auto combined_image_binding = std::uint32_t{0};
-constexpr auto storage_image_binding = std::uint32_t{1};
-constexpr auto sampler_count = std::size_t{4};
+auto constexpr combined_image_count = std::uint32_t{1024};
+auto constexpr storage_image_count = std::uint32_t{1024};
+auto constexpr combined_image_binding = std::uint32_t{0};
+auto constexpr storage_image_binding = std::uint32_t{1};
 
-vk::UniqueDescriptorSetLayout
-make_descriptor_set_layout(std::uint32_t capacity) {
+vk::UniqueDescriptorSetLayout make_descriptor_set_layout() {
   auto const bindings = std::array{
     vk::DescriptorSetLayoutBinding{
       .binding = combined_image_binding,
       .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-      .descriptorCount = capacity,
+      .descriptorCount = combined_image_count,
       .stageFlags = vk::ShaderStageFlagBits::eAll,
     },
     vk::DescriptorSetLayoutBinding{
       .binding = storage_image_binding,
       .descriptorType = vk::DescriptorType::eStorageImage,
-      .descriptorCount = capacity,
+      .descriptorCount = storage_image_count,
       .stageFlags = vk::ShaderStageFlagBits::eAll,
     },
   };
@@ -50,15 +50,15 @@ make_descriptor_set_layout(std::uint32_t capacity) {
   });
 }
 
-vk::UniqueDescriptorPool make_descriptor_pool(std::uint32_t capacity) {
+vk::UniqueDescriptorPool make_descriptor_pool() {
   auto const pool_sizes = std::array{
     vk::DescriptorPoolSize{
       .type = vk::DescriptorType::eCombinedImageSampler,
-      .descriptorCount = capacity,
+      .descriptorCount = combined_image_count,
     },
     vk::DescriptorPoolSize{
       .type = vk::DescriptorType::eStorageImage,
-      .descriptorCount = capacity,
+      .descriptorCount = storage_image_count,
     },
   };
   return Global_vulkan_state::get().device().createDescriptorPoolUnique({
@@ -124,59 +124,67 @@ void write_image(
 
 } // namespace
 
-Descriptor_heap::Descriptor_heap(Descriptor_heap_create_info const &info)
-    : _vk_descriptor_set_layout{make_descriptor_set_layout(info.capacity)},
+Descriptor_heap::Descriptor_heap(Descriptor_heap_create_info const &)
+    : _vk_descriptor_set_layout{make_descriptor_set_layout()},
       _vk_samplers{make_samplers()},
-      _vk_descriptor_pool{make_descriptor_pool(info.capacity)},
+      _vk_descriptor_pool{make_descriptor_pool()},
       _vk_descriptor_set{
         Global_vulkan_state::get().device().allocateDescriptorSets({
           .descriptorPool = *_vk_descriptor_pool,
           .descriptorSetCount = 1,
           .pSetLayouts = &*_vk_descriptor_set_layout,
         })[0]} {
-  _free_list.reserve(info.capacity);
-  for (auto i = info.capacity; i != 0; --i) {
-    _free_list.push_back(i - 1);
-  }
+  auto const fill_free_list =
+    [](std::vector<std::uint32_t> &free_list, std::uint32_t count) {
+      free_list.reserve(count);
+      for (auto i = count; i != 0; --i) {
+        free_list.push_back(i - 1);
+      }
+    };
+  fill_free_list(_combined_image_free_list, combined_image_count);
+  fill_free_list(_storage_image_free_list, storage_image_count);
 }
 
-std::uint32_t Descriptor_heap::alloc() {
-  auto const lock = std::scoped_lock{_mutex};
-  if (_free_list.empty()) {
+u32 Descriptor_heap::alloc_sampled_image(Image const &image, Sampler sampler) {
+  if (_combined_image_free_list.empty()) {
     throw std::runtime_error{"Descriptor heap is out of space"};
   }
-  auto const retval = _free_list.back();
-  _free_list.pop_back();
-  return retval;
-}
-
-void Descriptor_heap::free(std::uint32_t index) noexcept {
-  auto const lock = std::scoped_lock{_mutex};
-  _free_list.push_back(index);
-}
-
-void Descriptor_heap::write_sampled_image(
-  std::uint32_t index, Image const &image, Sampler sampler) {
-  auto const sampler_index = static_cast<std::size_t>(sampler);
-  assert(sampler_index < sampler_count);
+  auto const handle = _combined_image_free_list.back();
+  _combined_image_free_list.pop_back();
   write_image(
     _vk_descriptor_set,
     combined_image_binding,
-    index,
+    handle,
     vk::DescriptorType::eCombinedImageSampler,
     image,
-    *_vk_samplers[sampler_index]);
+    *_vk_samplers[static_cast<std::size_t>(sampler)]);
+  return handle;
 }
 
-void Descriptor_heap::write_storage_image(
-  std::uint32_t index, Image const &image) {
+void Descriptor_heap::free_sampled_image(u32 handle) noexcept {
+  auto const lock = std::scoped_lock{_mutex};
+  _combined_image_free_list.push_back(handle);
+}
+
+u32 Descriptor_heap::alloc_storage_image(Image const &image) {
+  if (_storage_image_free_list.empty()) {
+    throw std::runtime_error{"Descriptor heap is out of space"};
+  }
+  auto const handle = _storage_image_free_list.back();
+  _storage_image_free_list.pop_back();
   write_image(
     _vk_descriptor_set,
     storage_image_binding,
-    index,
+    handle,
     vk::DescriptorType::eStorageImage,
     image,
-    vk::Sampler{});
+    {});
+  return handle;
+}
+
+void Descriptor_heap::free_storage_image(u32 handle) noexcept {
+  auto const lock = std::scoped_lock{_mutex};
+  _storage_image_free_list.push_back(handle);
 }
 
 vk::DescriptorSetLayout get_descriptor_heap_vk_descriptor_set_layout(

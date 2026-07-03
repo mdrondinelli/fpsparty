@@ -1,10 +1,10 @@
 #ifndef FPSPARTY_GRAPHICS_DESCRIPTOR_HEAP_HPP
 #define FPSPARTY_GRAPHICS_DESCRIPTOR_HEAP_HPP
 
-#include <cstdint>
 #include <mutex>
 #include <vector>
 
+#include <int.hpp>
 #include <rc.hpp>
 
 #include "image.hpp"
@@ -12,9 +12,7 @@
 
 namespace fpsparty::graphics::detail {
 
-struct Descriptor_heap_create_info {
-  std::uint32_t capacity{};
-};
+struct Descriptor_heap_create_info {};
 
 class Descriptor_heap {
 public:
@@ -26,14 +24,13 @@ public:
 
   Descriptor_heap &operator=(Descriptor_heap const &other) = delete;
 
-  std::uint32_t alloc();
+  u32 alloc_sampled_image(Image const &image, Sampler sampler);
 
-  void free(std::uint32_t index) noexcept;
+  void free_sampled_image(u32 handle) noexcept;
 
-  void write_sampled_image(
-    std::uint32_t index, Image const &image, Sampler sampler);
+  u32 alloc_storage_image(Image const &image);
 
-  void write_storage_image(std::uint32_t index, Image const &image);
+  void free_storage_image(u32 handle) noexcept;
 
 private:
   friend vk::DescriptorSetLayout get_descriptor_heap_vk_descriptor_set_layout(
@@ -46,7 +43,8 @@ private:
   std::vector<vk::UniqueSampler> _vk_samplers{};
   vk::UniqueDescriptorPool _vk_descriptor_pool{};
   vk::DescriptorSet _vk_descriptor_set{};
-  std::vector<std::uint32_t> _free_list{};
+  std::vector<u32> _combined_image_free_list{};
+  std::vector<u32> _storage_image_free_list{};
   std::mutex _mutex;
 };
 

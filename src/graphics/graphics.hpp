@@ -30,7 +30,6 @@ struct Graphics_create_info {
   vk::SurfaceKHR surface;
   bool vsync_preferred{true};
   unsigned max_frames_in_flight{2};
-  u32 descriptor_capacity{4096u};
 };
 
 class Graphics {
@@ -75,8 +74,7 @@ public:
   std::optional<std::pair<Work_recorder, rc::Strong<Image>>>
   try_record_frame_work();
 
-  std::pair<Work_recorder, rc::Strong<Image>>
-  record_frame_work();
+  std::pair<Work_recorder, rc::Strong<Image>> record_frame_work();
 
   rc::Strong<Work> submit_frame_work(Work_recorder recorder);
 
@@ -106,7 +104,6 @@ private:
   rc::Factory<Buffer> _buffer_factory{};
   rc::Factory<Image> _image_factory{};
   rc::Factory<Descriptor> _descriptor_factory{};
-  rc::Factory<detail::Descriptor_heap> _descriptor_heap_factory{};
   vk::Format _swapchain_image_format{};
   vk::Extent2D _swapchain_image_extent{};
   vk::PresentModeKHR _swapchain_present_mode{};
@@ -115,7 +112,7 @@ private:
   std::vector<vk::UniqueImageView> _vk_swapchain_image_views{};
   std::vector<rc::Strong<Image>> _swapchain_images{};
   std::vector<vk::UniqueSemaphore> _swapchain_image_release_semaphores{};
-  rc::Strong<detail::Descriptor_heap> _descriptor_heap{};
+  detail::Descriptor_heap _descriptor_heap{};
   vk::UniquePipelineLayout _pipeline_layout{};
   detail::Work_resource_pool _work_resources{};
   detail::Work_queue _works{};
