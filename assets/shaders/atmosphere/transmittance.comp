@@ -46,7 +46,7 @@ vec3 ray_atmosphere(vec3 ro, vec3 rd) {
 shared vec3 shared_optical_depths[work_group_size];
 
 void main() {
-  const vec2 lut_size = imageSize(rgba16f_storage_images[push_constants.lut]);
+  const vec2 lut_size = imageSize(storage_images[push_constants.lut]);
   const vec2 min_lut_coords = vec2(gl_WorkGroupID.xy) / lut_size;
   const vec2 max_lut_coords = vec2(gl_WorkGroupID.xy + uvec2(1)) / lut_size;
   const vec2 lut_coords = vec2(
@@ -81,7 +81,7 @@ void main() {
   } while (stride < work_group_size);
   if (gl_LocalInvocationID.z == 0u) {
     imageStore(
-        rgba16f_storage_images[push_constants.lut],
+        storage_images[push_constants.lut],
         ivec2(gl_WorkGroupID.xy),
         vec4(exp(-shared_optical_depths[0]), 0.0f));
   }

@@ -154,6 +154,7 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
     .features =
       {
         .multiDrawIndirect = true,
+        .shaderStorageImageReadWithoutFormat = true,
       },
   };
   auto device = physical_device.createDeviceUnique({

@@ -1,7 +1,6 @@
 #include "descriptor_heap.hpp"
 
 #include "global_vulkan_state.hpp"
-#include "image_format.hpp"
 
 #include <array>
 #include <cassert>
@@ -12,21 +11,8 @@ namespace fpsparty::graphics::detail {
 namespace {
 
 constexpr auto combined_image_binding = std::uint32_t{0};
-constexpr auto rgba8_storage_image_binding = std::uint32_t{1};
-constexpr auto rgba16f_storage_image_binding = std::uint32_t{2};
-constexpr auto rgba32f_storage_image_binding = std::uint32_t{3};
+constexpr auto storage_image_binding = std::uint32_t{1};
 constexpr auto sampler_count = std::size_t{4};
-
-std::uint32_t get_storage_image_binding(Image_format format) {
-  switch (format) {
-  case Image_format::r16g16b16a16_sfloat:
-    return rgba16f_storage_image_binding;
-  case Image_format::r32g32b32a32_sfloat:
-    return rgba32f_storage_image_binding;
-  default:
-    throw std::runtime_error{"Unsupported storage image descriptor format."};
-  }
-}
 
 vk::UniqueDescriptorSetLayout
 make_descriptor_set_layout(std::uint32_t capacity) {
@@ -38,19 +24,7 @@ make_descriptor_set_layout(std::uint32_t capacity) {
       .stageFlags = vk::ShaderStageFlagBits::eAll,
     },
     vk::DescriptorSetLayoutBinding{
-      .binding = rgba8_storage_image_binding,
-      .descriptorType = vk::DescriptorType::eStorageImage,
-      .descriptorCount = capacity,
-      .stageFlags = vk::ShaderStageFlagBits::eAll,
-    },
-    vk::DescriptorSetLayoutBinding{
-      .binding = rgba16f_storage_image_binding,
-      .descriptorType = vk::DescriptorType::eStorageImage,
-      .descriptorCount = capacity,
-      .stageFlags = vk::ShaderStageFlagBits::eAll,
-    },
-    vk::DescriptorSetLayoutBinding{
-      .binding = rgba32f_storage_image_binding,
+      .binding = storage_image_binding,
       .descriptorType = vk::DescriptorType::eStorageImage,
       .descriptorCount = capacity,
       .stageFlags = vk::ShaderStageFlagBits::eAll,
@@ -61,8 +35,6 @@ make_descriptor_set_layout(std::uint32_t capacity) {
     // vk::DescriptorBindingFlagBits::eUpdateAfterBind |
     vk::DescriptorBindingFlagBits::eUpdateUnusedWhilePending;
   auto const binding_flags = std::array{
-    vk::DescriptorBindingFlags{image_binding_flags},
-    vk::DescriptorBindingFlags{image_binding_flags},
     vk::DescriptorBindingFlags{image_binding_flags},
     vk::DescriptorBindingFlags{image_binding_flags},
   };
@@ -86,7 +58,7 @@ vk::UniqueDescriptorPool make_descriptor_pool(std::uint32_t capacity) {
     },
     vk::DescriptorPoolSize{
       .type = vk::DescriptorType::eStorageImage,
-      .descriptorCount = capacity * 3,
+      .descriptorCount = capacity,
     },
   };
   return Global_vulkan_state::get().device().createDescriptorPoolUnique({
@@ -154,14 +126,14 @@ void write_image(
 
 Descriptor_heap::Descriptor_heap(Descriptor_heap_create_info const &info)
     : _vk_descriptor_set_layout{make_descriptor_set_layout(info.capacity)},
+      _vk_samplers{make_samplers()},
       _vk_descriptor_pool{make_descriptor_pool(info.capacity)},
       _vk_descriptor_set{
         Global_vulkan_state::get().device().allocateDescriptorSets({
           .descriptorPool = *_vk_descriptor_pool,
           .descriptorSetCount = 1,
           .pSetLayouts = &*_vk_descriptor_set_layout,
-        })[0]},
-      _vk_samplers{make_samplers()} {
+        })[0]} {
   _free_list.reserve(info.capacity);
   for (auto i = info.capacity; i != 0; --i) {
     _free_list.push_back(i - 1);
@@ -200,7 +172,7 @@ void Descriptor_heap::write_storage_image(
   std::uint32_t index, Image const &image) {
   write_image(
     _vk_descriptor_set,
-    get_storage_image_binding(image.get_format()),
+    storage_image_binding,
     index,
     vk::DescriptorType::eStorageImage,
     image,
