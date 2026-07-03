@@ -4,6 +4,8 @@
 
 #include <array>
 #include <cassert>
+#include <limits>
+#include <memory>
 #include <stdexcept>
 
 namespace fpsparty::graphics::detail {
@@ -31,8 +33,6 @@ vk::UniqueDescriptorSetLayout make_descriptor_set_layout() {
     },
   };
   constexpr auto image_binding_flags =
-    vk::DescriptorBindingFlagBits::ePartiallyBound |
-    // vk::DescriptorBindingFlagBits::eUpdateAfterBind |
     vk::DescriptorBindingFlagBits::eUpdateUnusedWhilePending;
   auto const binding_flags = std::array{
     vk::DescriptorBindingFlags{image_binding_flags},
@@ -99,6 +99,63 @@ std::vector<vk::UniqueSampler> make_samplers() {
   return retval;
 }
 
+std::unique_ptr<Image> make_null_image() {
+  auto retval = std::make_unique<Image>(Image_create_info{
+    .dimensionality = 2,
+    .format = Image_format::r32g32b32a32_sfloat,
+    .extent = {1, 1, 1},
+    .mip_level_count = 1,
+    .array_layer_count = 1,
+    .usage = Image_usage_flag_bits::sampled | Image_usage_flag_bits::storage,
+  });
+  auto const device = Global_vulkan_state::get().device();
+  auto command_pool = device.createCommandPoolUnique({
+    .flags = vk::CommandPoolCreateFlagBits::eTransient,
+    .queueFamilyIndex = Global_vulkan_state::get().queue_family_index(),
+  });
+  auto const command_buffer = device.allocateCommandBuffers({
+    .commandPool = *command_pool,
+    .level = vk::CommandBufferLevel::ePrimary,
+    .commandBufferCount = 1,
+  })[0];
+  command_buffer.begin({
+    .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+  });
+  auto const barrier = vk::ImageMemoryBarrier2{
+    .srcStageMask = vk::PipelineStageFlagBits2::eTopOfPipe,
+    .dstStageMask = vk::PipelineStageFlagBits2::eAllCommands,
+    .oldLayout = vk::ImageLayout::eUndefined,
+    .newLayout = vk::ImageLayout::eGeneral,
+    .srcQueueFamilyIndex = vk::QueueFamilyIgnored,
+    .dstQueueFamilyIndex = vk::QueueFamilyIgnored,
+    .image = get_image_vk_image(*retval),
+    .subresourceRange =
+      {
+        .aspectMask =
+          detail::get_image_format_vk_image_aspect_flags(retval->get_format()),
+        .baseMipLevel = 0,
+        .levelCount = static_cast<std::uint32_t>(retval->get_mip_level_count()),
+        .baseArrayLayer = 0,
+        .layerCount =
+          static_cast<std::uint32_t>(retval->get_array_layer_count()),
+      },
+  };
+  command_buffer.pipelineBarrier2({
+    .imageMemoryBarrierCount = 1,
+    .pImageMemoryBarriers = &barrier,
+  });
+  command_buffer.end();
+  auto const fence = device.createFenceUnique({});
+  auto const submit_info = vk::SubmitInfo{
+    .commandBufferCount = 1,
+    .pCommandBuffers = &command_buffer,
+  };
+  Global_vulkan_state::get().submit({submit_info}, *fence);
+  static_cast<void>(
+    device.waitForFences({*fence}, vk::True, std::numeric_limits<u64>::max()));
+  return retval;
+}
+
 void write_image(
   vk::DescriptorSet descriptor_set,
   std::uint32_t binding,
@@ -127,6 +184,7 @@ void write_image(
 Descriptor_heap::Descriptor_heap(Descriptor_heap_create_info const &)
     : _vk_descriptor_set_layout{make_descriptor_set_layout()},
       _vk_samplers{make_samplers()},
+      _null_image{make_null_image()},
       _vk_descriptor_pool{make_descriptor_pool()},
       _vk_descriptor_set{
         Global_vulkan_state::get().device().allocateDescriptorSets({
@@ -143,6 +201,24 @@ Descriptor_heap::Descriptor_heap(Descriptor_heap_create_info const &)
     };
   fill_free_list(_combined_image_free_list, combined_image_count);
   fill_free_list(_storage_image_free_list, storage_image_count);
+  for (auto i = std::uint32_t{}; i != combined_image_count; ++i) {
+    write_image(
+      _vk_descriptor_set,
+      combined_image_binding,
+      i,
+      vk::DescriptorType::eCombinedImageSampler,
+      *_null_image,
+      *_vk_samplers[static_cast<std::size_t>(Sampler::nearest)]);
+  }
+  for (auto i = std::uint32_t{}; i != storage_image_count; ++i) {
+    write_image(
+      _vk_descriptor_set,
+      storage_image_binding,
+      i,
+      vk::DescriptorType::eStorageImage,
+      *_null_image,
+      {});
+  }
 }
 
 u32 Descriptor_heap::alloc_sampled_image(Image const &image, Sampler sampler) {
@@ -163,6 +239,13 @@ u32 Descriptor_heap::alloc_sampled_image(Image const &image, Sampler sampler) {
 
 void Descriptor_heap::free_sampled_image(u32 handle) noexcept {
   auto const lock = std::scoped_lock{_mutex};
+  write_image(
+    _vk_descriptor_set,
+    combined_image_binding,
+    handle,
+    vk::DescriptorType::eCombinedImageSampler,
+    *_null_image,
+    *_vk_samplers[static_cast<std::size_t>(Sampler::nearest)]);
   _combined_image_free_list.push_back(handle);
 }
 
@@ -184,6 +267,13 @@ u32 Descriptor_heap::alloc_storage_image(Image const &image) {
 
 void Descriptor_heap::free_storage_image(u32 handle) noexcept {
   auto const lock = std::scoped_lock{_mutex};
+  write_image(
+    _vk_descriptor_set,
+    storage_image_binding,
+    handle,
+    vk::DescriptorType::eStorageImage,
+    *_null_image,
+    {});
   _storage_image_free_list.push_back(handle);
 }
 

@@ -2,6 +2,7 @@
 #define FPSPARTY_GRAPHICS_DESCRIPTOR_HEAP_HPP
 
 #include <mutex>
+#include <memory>
 #include <vector>
 
 #include <int.hpp>
@@ -41,6 +42,7 @@ private:
 
   vk::UniqueDescriptorSetLayout _vk_descriptor_set_layout{};
   std::vector<vk::UniqueSampler> _vk_samplers{};
+  std::unique_ptr<Image> _null_image{};
   vk::UniqueDescriptorPool _vk_descriptor_pool{};
   vk::DescriptorSet _vk_descriptor_set{};
   std::vector<u32> _combined_image_free_list{};

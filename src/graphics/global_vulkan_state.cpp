@@ -145,7 +145,6 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
     .shaderSampledImageArrayNonUniformIndexing = true,
     .shaderStorageImageArrayNonUniformIndexing = true,
     .descriptorBindingUpdateUnusedWhilePending = true,
-    .descriptorBindingPartiallyBound = true,
     .bufferDeviceAddress = true,
   };
   auto const features = vk::PhysicalDeviceFeatures2{
