@@ -439,6 +439,10 @@ public:
     return true;
   }
 
+  void exit() {
+    _graphics.wait_idle();
+  }
+
 private:
   enum class State {
     // Initial state: issues connect and switches to connecting.
@@ -1274,4 +1278,6 @@ Application::Application(Application_create_info const &create_info)
 Application::~Application() = default;
 
 bool Application::update(float duration) { return _impl->update(duration); }
+
+void Application::exit() { _impl->exit(); _impl.reset(); }
 } // namespace fpsparty::client

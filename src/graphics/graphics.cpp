@@ -165,6 +165,12 @@ void Graphics::poll_works() {
   _works.poll(_work_resources);
 }
 
+void Graphics::wait_idle() {
+  ZoneScoped;
+  graphics::Global_vulkan_state::get().device().waitIdle();
+  _works.poll(_work_resources);
+}
+
 rc::Strong<Pipeline>
 Graphics::create_pipeline(Pipeline_create_info const &info) {
   auto create_info = info;
@@ -242,7 +248,8 @@ Work_recorder Graphics::record_transient_work() {
   return detail::acquire_work_recorder(
     std::move(resource),
     std::optional{detail::Work_recorder_descriptor_info{
-      .descriptor_heap = _descriptor_heap,
+      .descriptor_set =
+        detail::get_descriptor_heap_vk_descriptor_set(*_descriptor_heap),
       .pipeline_layout = *_pipeline_layout,
     }});
 }
@@ -284,7 +291,8 @@ Graphics::try_record_frame_work() {
     detail::acquire_work_recorder(
       std::move(resource),
       std::optional{detail::Work_recorder_descriptor_info{
-        .descriptor_heap = _descriptor_heap,
+        .descriptor_set =
+          detail::get_descriptor_heap_vk_descriptor_set(*_descriptor_heap),
         .pipeline_layout = *_pipeline_layout,
       }}),
     _swapchain_images.at(frame_resource.swapchain_image_index),

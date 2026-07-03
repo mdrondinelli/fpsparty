@@ -29,7 +29,7 @@ void reset_work_resource(Work_resource &resource) {
   resource.images.clear();
   resource.pipelines.clear();
   resource.compute_pipelines.clear();
-  resource.descriptor_heap = nullptr;
+  resource.descriptor_set = nullptr;
   resource.pipeline_layout = nullptr;
 }
 } // namespace fpsparty::graphics::detail

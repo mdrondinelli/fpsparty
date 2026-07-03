@@ -43,9 +43,9 @@ private:
     Descriptor_heap const &descriptor_heap) noexcept;
 
   vk::UniqueDescriptorSetLayout _vk_descriptor_set_layout{};
+  std::vector<vk::UniqueSampler> _vk_samplers{};
   vk::UniqueDescriptorPool _vk_descriptor_pool{};
   vk::DescriptorSet _vk_descriptor_set{};
-  std::vector<vk::UniqueSampler> _vk_samplers{};
   std::vector<std::uint32_t> _free_list{};
   std::mutex _mutex;
 };

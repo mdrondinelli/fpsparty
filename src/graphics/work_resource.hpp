@@ -10,7 +10,6 @@
 #include "buffer.hpp"
 #include "compute_pipeline.hpp"
 #include "descriptor.hpp"
-#include "descriptor_heap.hpp"
 #include "image.hpp"
 #include "pipeline.hpp"
 #include "work_done_callback.hpp"
@@ -26,7 +25,7 @@ struct Work_resource {
   std::vector<rc::Strong<Image const>> images{};
   std::vector<rc::Strong<Pipeline const>> pipelines{};
   std::vector<rc::Strong<Compute_pipeline const>> compute_pipelines{};
-  rc::Strong<Descriptor_heap const> descriptor_heap{};
+  vk::DescriptorSet descriptor_set{};
   vk::PipelineLayout pipeline_layout{};
   std::vector<Work_done_callback *> done_callbacks{};
 };

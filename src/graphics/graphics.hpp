@@ -45,6 +45,8 @@ public:
 
   void poll_works();
 
+  void wait_idle();
+
   rc::Strong<Pipeline> create_pipeline(Pipeline_create_info const &info);
 
   rc::Strong<Compute_pipeline>

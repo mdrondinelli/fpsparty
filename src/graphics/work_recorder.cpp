@@ -3,7 +3,6 @@
 #include <cassert>
 
 #include "buffer.hpp"
-#include "descriptor_heap.hpp"
 #include "global_vulkan_state.hpp"
 #include "image.hpp"
 
@@ -19,7 +18,7 @@ Work_recorder acquire_work_recorder(
     .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
   });
   if (descriptor_info) {
-    resource.descriptor_heap = descriptor_info->descriptor_heap;
+    resource.descriptor_set = descriptor_info->descriptor_set;
     resource.pipeline_layout = descriptor_info->pipeline_layout;
   }
   auto recorder = Work_recorder{std::move(resource)};
@@ -178,14 +177,12 @@ void Work_recorder::bind_pipeline(rc::Strong<Pipeline const> pipeline) {
   get_command_buffer().bindPipeline(
     vk::PipelineBindPoint::eGraphics,
     detail::get_pipeline_vk_pipeline(*pipeline));
-  if (_resource.descriptor_heap) {
-    auto const descriptor_set =
-      detail::get_descriptor_heap_vk_descriptor_set(*_resource.descriptor_heap);
+  if (_resource.descriptor_set) {
     get_command_buffer().bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics,
       _resource.pipeline_layout,
       0,
-      {descriptor_set},
+      {_resource.descriptor_set},
       {});
   }
   add_reference(std::move(pipeline));
@@ -196,14 +193,12 @@ void Work_recorder::bind_compute_pipeline(
   get_command_buffer().bindPipeline(
     vk::PipelineBindPoint::eCompute,
     detail::get_compute_pipeline_vk_pipeline(*pipeline));
-  if (_resource.descriptor_heap) {
-    auto const descriptor_set =
-      detail::get_descriptor_heap_vk_descriptor_set(*_resource.descriptor_heap);
+  if (_resource.descriptor_set) {
     get_command_buffer().bindDescriptorSets(
       vk::PipelineBindPoint::eCompute,
       _resource.pipeline_layout,
       0,
-      {descriptor_set},
+      {_resource.descriptor_set},
       {});
   }
   add_reference(std::move(pipeline));
