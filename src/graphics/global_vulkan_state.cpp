@@ -127,7 +127,7 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
   auto shader_untyped_pointers_features =
     vk::PhysicalDeviceShaderUntypedPointersFeaturesKHR{
       .pNext = nullptr,
-      .shaderUntypedPointers = true,
+      // .shaderUntypedPointers = true,
     };
   auto extended_dynamic_state_features =
     vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT{
