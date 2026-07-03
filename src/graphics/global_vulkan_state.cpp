@@ -7,7 +7,9 @@
 #include <vulkan/vulkan_handles.hpp>
 
 namespace fpsparty::graphics {
+
 namespace {
+
 auto const vk_device_extensions = std::array{
   vk::KHRSwapchainExtensionName,
   vk::KHRShaderUntypedPointersExtensionName,
