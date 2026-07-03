@@ -8,6 +8,7 @@
 #include <rc.hpp>
 
 #include "image.hpp"
+#include "sampler.hpp"
 
 namespace fpsparty::graphics::detail {
 
@@ -29,7 +30,8 @@ public:
 
   void free(std::uint32_t index) noexcept;
 
-  void write_sampled_image(std::uint32_t index, Image const &image);
+  void write_sampled_image(
+    std::uint32_t index, Image const &image, Sampler sampler);
 
   void write_storage_image(std::uint32_t index, Image const &image);
 

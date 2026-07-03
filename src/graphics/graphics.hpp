@@ -17,6 +17,7 @@
 #include "descriptor_heap.hpp"
 #include "image.hpp"
 #include "pipeline.hpp"
+#include "sampler.hpp"
 #include "work.hpp"
 #include "work_queue.hpp"
 #include "work_recorder.hpp"
@@ -31,8 +32,6 @@ struct Graphics_create_info {
   unsigned max_frames_in_flight{2};
   u32 descriptor_capacity{4096u};
 };
-
-struct Work_record_info {};
 
 class Graphics {
 public:
@@ -61,21 +60,21 @@ public:
 
   rc::Strong<Image> create_image(Image_create_info const &info);
 
-  rc::Strong<Descriptor>
-  create_sampled_image_descriptor(rc::Strong<Image const> image);
+  rc::Strong<Descriptor> create_sampled_image_descriptor(
+    rc::Strong<Image const> image, Sampler sampler = Sampler::nearest);
 
   rc::Strong<Descriptor>
   create_storage_image_descriptor(rc::Strong<Image> image);
 
-  Work_recorder record_transient_work(Work_record_info const &info);
+  Work_recorder record_transient_work();
 
   rc::Strong<Work> submit_transient_work(Work_recorder recorder);
 
   std::optional<std::pair<Work_recorder, rc::Strong<Image>>>
-  try_record_frame_work(Work_record_info const &info);
+  try_record_frame_work();
 
   std::pair<Work_recorder, rc::Strong<Image>>
-  record_frame_work(Work_record_info const &info);
+  record_frame_work();
 
   rc::Strong<Work> submit_frame_work(Work_recorder recorder);
 

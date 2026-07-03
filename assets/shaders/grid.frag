@@ -17,13 +17,12 @@ vec3 transmittance_along_ray(vec3 ro, vec3 rd) {
   const vec2 lut_texcoord = pack_transmittance_lut_params(h, cos_zenith);
   return FPSPARTY_SAMPLE(
       push_constants.scene.transmittance_texture,
-      LINEAR_CLAMP,
       lut_texcoord).rgb;
 }
 
 void main() {
   const vec3 base_color =
-    FPSPARTY_SAMPLE(nonuniformEXT(in_texture), NEAREST, in_texcoord).rgb;
+    FPSPARTY_SAMPLE(nonuniformEXT(in_texture), in_texcoord).rgb;
   const vec3 n = vec3(
     push_constants.normal_x,
     push_constants.normal_y,

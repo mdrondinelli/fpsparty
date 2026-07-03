@@ -213,10 +213,10 @@ rc::Strong<Image> Graphics::create_image(Image_create_info const &info) {
   return _image_factory.create(info);
 }
 
-rc::Strong<Descriptor>
-Graphics::create_sampled_image_descriptor(rc::Strong<Image const> image) {
+rc::Strong<Descriptor> Graphics::create_sampled_image_descriptor(
+  rc::Strong<Image const> image, Sampler sampler) {
   auto const handle = _descriptor_heap->alloc();
-  _descriptor_heap->write_sampled_image(handle, *image);
+  _descriptor_heap->write_sampled_image(handle, *image, sampler);
   return _descriptor_factory.create(
     detail::Descriptor_create_info{
       .heap = _descriptor_heap,
@@ -237,8 +237,7 @@ Graphics::create_storage_image_descriptor(rc::Strong<Image> image) {
     });
 }
 
-Work_recorder Graphics::record_transient_work(Work_record_info const &info) {
-  static_cast<void>(info);
+Work_recorder Graphics::record_transient_work() {
   auto resource = _work_resources.pop();
   return detail::acquire_work_recorder(
     std::move(resource),
@@ -254,8 +253,7 @@ rc::Strong<Work> Graphics::submit_transient_work(Work_recorder recorder) {
 }
 
 std::optional<std::pair<Work_recorder, rc::Strong<Image>>>
-Graphics::try_record_frame_work(Work_record_info const &info) {
-  static_cast<void>(info);
+Graphics::try_record_frame_work() {
   ZoneScoped;
   auto &frame_resource = _frame_resources[_frame_resource_index];
   if (frame_resource.pending_work) {
@@ -294,8 +292,9 @@ Graphics::try_record_frame_work(Work_record_info const &info) {
 }
 
 std::pair<Work_recorder, rc::Strong<Image>>
-Graphics::record_frame_work(Work_record_info const &info) {
-  if (auto work = try_record_frame_work(info)) {
+Graphics::record_frame_work() {
+  ZoneScoped;
+  if (auto work = try_record_frame_work()) {
     return std::move(*work);
   }
   auto &frame_resource = _frame_resources[_frame_resource_index];
@@ -303,7 +302,7 @@ Graphics::record_frame_work(Work_record_info const &info) {
     frame_resource.pending_work->await();
     frame_resource.pending_work = nullptr;
   }
-  return *try_record_frame_work(info);
+  return *try_record_frame_work();
 }
 
 rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {
