@@ -88,6 +88,13 @@ std::vector<vk::UniqueSampler> make_samplers() {
       .addressModeV = vk::SamplerAddressMode::eClampToEdge,
       .addressModeW = vk::SamplerAddressMode::eClampToEdge,
     },
+    vk::SamplerCreateInfo{
+      .magFilter = vk::Filter::eLinear,
+      .minFilter = vk::Filter::eLinear,
+      .addressModeU = vk::SamplerAddressMode::eRepeat,
+      .addressModeV = vk::SamplerAddressMode::eClampToEdge,
+      .addressModeW = vk::SamplerAddressMode::eClampToEdge,
+    },
   };
   auto retval = std::vector<vk::UniqueSampler>{};
   retval.reserve(sampler_create_infos.size());

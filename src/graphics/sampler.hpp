@@ -10,6 +10,7 @@ enum class Sampler {
   nearest_clamp,
   linear,
   linear_clamp,
+  lat_long,
 };
 
 } // namespace fpsparty::graphics
