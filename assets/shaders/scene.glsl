@@ -12,6 +12,11 @@ restrict readonly buffer Scene {
   uint transmittance_texture;
   float animation_time;
   float sky_irradiance[18];
+  mat4 shadow_view_projection_matrices[3];
+  uint shadow_map_textures[3];
+  vec2 shadow_cascade_split_depths;
+  vec3 camera_position;
+  vec3 camera_forward;
 };
 
 vec3 sample_sky_irradiance(Scene scene, vec3 direction) {

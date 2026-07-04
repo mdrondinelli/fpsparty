@@ -27,7 +27,8 @@ fi
 
 shaders=(
   grid.vert
-  grid.frag
+  grid-radiance.frag
+  grid-shadow.frag
   shader.vert
   shader.frag
   crosshair.vert

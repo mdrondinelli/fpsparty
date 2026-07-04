@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <numbers>
 #include <optional>
@@ -23,6 +24,7 @@
 #include <graphics/shader_stage.hpp>
 #include <graphics/synchronization_scope.hpp>
 #include <graphics/work_done_callback.hpp>
+#include <math/box.hpp>
 #include <math/transforms.hpp>
 #include <math/vec.hpp>
 #include <ppm/ppm.hpp>
@@ -284,16 +286,25 @@ auto const crosshair_indices =
 auto const composite_indices = std::array<std::uint16_t, 3>{0, 1, 2};
 auto const sky_color = math::vec4{0.4196f, 0.6196f, 0.7451f, 1.0f};
 auto constexpr z_near = 0.1f;
+auto constexpr shadow_near_cascade_far_depth = 8.0f;
+auto constexpr shadow_middle_cascade_far_depth = 16.0f;
+auto constexpr shadow_far_depth = 32.0f;
 auto const transmittance_lut_size = math::ivec2{256, 128};
 auto const sky_view_lut_size = math::ivec2{256, 256};
+auto const shadow_map_size = math::ivec2{2048, 2048};
 
-auto constexpr scene_uniform_data_size = std::size_t{176};
+auto constexpr scene_uniform_data_size = std::size_t{432};
 auto constexpr scene_view_projection_matrix_offset = std::size_t{0};
 auto constexpr scene_sun_irradiance_offset = std::size_t{64};
 auto constexpr scene_sun_direction_offset = std::size_t{80};
 auto constexpr scene_transmittance_lut_offset = std::size_t{92};
 auto constexpr scene_animation_time_offset = std::size_t{96};
 auto constexpr scene_sky_irradiance_offset = std::size_t{100};
+auto constexpr scene_shadow_view_projection_matrices_offset = std::size_t{176};
+auto constexpr scene_shadow_map_textures_offset = std::size_t{368};
+auto constexpr scene_shadow_cascade_split_depths_offset = std::size_t{384};
+auto constexpr scene_camera_position_offset = std::size_t{400};
+auto constexpr scene_camera_forward_offset = std::size_t{416};
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
@@ -319,6 +330,77 @@ std::vector<std::byte> load_file(char const *path) {
   return data;
 }
 
+math::mat4 make_shadow_view_projection_matrix(
+  math::mat4 camera_basis,
+  math::box3 grid_bounds,
+  math::vec2 zoom,
+  math::vec3 sun_direction,
+  float near_depth,
+  float far_depth) {
+  auto const light_z = sun_direction.normalized();
+  auto const helper =
+    std::abs(light_z.y()) < 0.999f ? math::vec3{0.0f, 1.0f, 0.0f}
+                                   : math::vec3{1.0f, 0.0f, 0.0f};
+  auto const light_x = helper.cross(light_z).normalized();
+  auto const light_y = light_z.cross(light_x).normalized();
+  auto min_bounds =
+    math::vec3::Constant(std::numeric_limits<float>::max()).eval();
+  auto max_bounds =
+    math::vec3::Constant(std::numeric_limits<float>::lowest()).eval();
+  for (auto const depth : {near_depth, far_depth}) {
+    for (auto const x_sign : {-1.0f, 1.0f}) {
+      for (auto const y_sign : {-1.0f, 1.0f}) {
+        auto const camera_space = math::vec4{
+          x_sign * zoom.x() * depth,
+          y_sign * zoom.y() * depth,
+          depth,
+          1.0f,
+        };
+        auto const world_position = (camera_basis * camera_space).head<3>();
+        auto const light_position = math::vec3{
+          light_x.dot(world_position),
+          light_y.dot(world_position),
+          light_z.dot(world_position),
+        };
+        min_bounds = min_bounds.cwiseMin(light_position);
+        max_bounds = max_bounds.cwiseMax(light_position);
+      }
+    }
+  }
+  auto min_light_z = std::numeric_limits<float>::max();
+  auto max_light_z = std::numeric_limits<float>::lowest();
+  for (auto const x : {grid_bounds.min().x(), grid_bounds.max().x()}) {
+    for (auto const y : {grid_bounds.min().y(), grid_bounds.max().y()}) {
+      for (auto const z : {grid_bounds.min().z(), grid_bounds.max().z()}) {
+        auto const world_position = math::vec3{x, y, z};
+        auto const light_position_z = light_z.dot(world_position);
+        min_light_z = std::min(min_light_z, light_position_z);
+        max_light_z = std::max(max_light_z, light_position_z);
+      }
+    }
+  }
+  min_bounds.z() = min_light_z;
+  max_bounds.z() = max_light_z;
+  auto const extent =
+    (max_bounds - min_bounds).cwiseMax(math::vec3::Constant(1.0e-3f));
+  auto retval = math::mat4{math::mat4::Zero()};
+  retval.block<1, 3>(0, 0) = (2.0f / extent.x()) * light_x.transpose();
+  retval.block<1, 3>(1, 0) = (2.0f / extent.y()) * light_y.transpose();
+  retval.block<1, 3>(2, 0) = (1.0f / extent.z()) * light_z.transpose();
+  retval(0, 3) = -(max_bounds.x() + min_bounds.x()) / extent.x();
+  retval(1, 3) = -(max_bounds.y() + min_bounds.y()) / extent.y();
+  retval(2, 3) = -min_bounds.z() / extent.z();
+  retval(3, 3) = 1.0f;
+  return retval;
+}
+
+math::box3 grid_world_bounds(game::Grid const &grid) {
+  auto const &cell_bounds = grid.get_cell_bounds();
+  return math::box3{
+    cell_bounds.min().cast<float>(),
+    (cell_bounds.max() + math::ivec3::Ones()).cast<float>()};
+}
+
 auto constexpr max_frames_in_flight = 2;
 
 } // namespace
@@ -341,7 +423,9 @@ public:
         _grid_vertex_shader{
           graphics::load_shader("./assets/shaders/grid.vert.spv")},
         _grid_fragment_shader{
-          graphics::load_shader("./assets/shaders/grid.frag.spv")},
+          graphics::load_shader("./assets/shaders/grid-radiance.frag.spv")},
+        _grid_shadow_fragment_shader{
+          graphics::load_shader("./assets/shaders/grid-shadow.frag.spv")},
         _mesh_vertex_shader{
           graphics::load_shader("./assets/shaders/shader.vert.spv")},
         _mesh_fragment_shader{
@@ -363,6 +447,7 @@ public:
         _sky_fragment_shader{
           graphics::load_shader("./assets/shaders/atmosphere/sky.frag.spv")},
         _grid_pipeline{make_grid_pipeline()},
+        _grid_shadow_pipeline{make_grid_shadow_pipeline()},
         _mesh_pipeline{make_mesh_pipeline()},
         _crosshair_pipeline{make_crosshair_pipeline()},
         _sky_pipeline{make_sky_pipeline()},
@@ -385,6 +470,7 @@ public:
     _glfw_window->set_cursor_pos_callback(this);
     init_transmittance_lut();
     init_sky_view_lut();
+    init_shadow_maps();
     _cube_vertex_buffer =
       upload_vertices(std::as_bytes(std::span{cube_mesh_vertices}));
     std::cout << "Uploaded cube vertex buffer.\n";
@@ -550,8 +636,174 @@ private:
       compute_shader_storage_write_scope, fragment_shader_storage_read_scope);
   }
 
+  void record_shadow_pass(
+    graphics::Work_recorder &work_recorder,
+    std::size_t scene_uniform_offset,
+    rc::Strong<graphics::Image> const &shadow_map,
+    u32 view_projection_index) {
+    work_recorder.barrier(
+      fragment_shader_sampled_read_scope, depth_attachment_scope);
+    work_recorder.begin_rendering({
+      .color_image = {},
+      .depth_image = shadow_map,
+    });
+    work_recorder.set_viewport(shadow_map_size);
+    work_recorder.set_scissor(shadow_map_size);
+    work_recorder.set_depth_test_enabled(true);
+    work_recorder.set_depth_write_enabled(true);
+    work_recorder.set_depth_compare_op(graphics::Compare_op::greater);
+    work_recorder.set_cull_mode(graphics::Cull_mode::none);
+    work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
+    if (_grid_mesh && _grid_mesh->is_uploaded()) {
+      work_recorder.bind_pipeline(_grid_shadow_pipeline);
+      work_recorder.bind_index_buffer(
+        _grid_mesh->get_index_buffer(), graphics::Index_type::u32);
+      work_recorder.push_buffer_reference(
+        0, _scene_uniform_buffer, scene_uniform_offset);
+      work_recorder.push_buffer_reference(8, _grid_mesh->get_vertex_buffer());
+      work_recorder
+        .push_buffer_reference(16, _block_texture_registry.get_buffer());
+      _block_texture_registry.add_references(work_recorder);
+      work_recorder.push_data(
+        36, std::as_bytes(std::span{&view_projection_index, 1}));
+      _grid_mesh->record_draws(work_recorder, +math::axis3::x);
+      _grid_mesh->record_draws(work_recorder, -math::axis3::x);
+      _grid_mesh->record_draws(work_recorder, +math::axis3::y);
+      _grid_mesh->record_draws(work_recorder, -math::axis3::y);
+      _grid_mesh->record_draws(work_recorder, +math::axis3::z);
+      _grid_mesh->record_draws(work_recorder, -math::axis3::z);
+    }
+    work_recorder.end_rendering();
+    work_recorder
+      .barrier(depth_attachment_scope, fragment_shader_sampled_read_scope);
+  }
+
   void record_forward_pass(
     graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
+    auto const &session = _client.get_session();
+    auto const camera =
+      session && _local_player && _local_player->player_entity_id &&
+          _local_player->humanoid_entity_id
+        ? session->get_scene()
+            .get_interpolated_camera(*_local_player->player_entity_id)
+        : nullptr;
+    if (!camera) {
+      work_recorder.barrier(
+        fragment_shader_sampled_read_scope,
+        color_attachment_scope | depth_attachment_scope);
+      work_recorder.begin_rendering({
+        .color_image = _radiance_render_target,
+        .depth_image = _depth_render_target,
+        .color_clear_value = sky_color,
+      });
+      work_recorder.end_rendering();
+      return;
+    }
+    auto constexpr zoom = 1.25f;
+    auto const aspect_ratio = static_cast<float>(framebuffer_size.x()) /
+                              static_cast<float>(framebuffer_size.y());
+    auto const zoom_vec = math::vec2{
+      aspect_ratio > 1.0f ? zoom : zoom * aspect_ratio,
+      aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
+    };
+    auto const camera_basis =
+      (math::translation_matrix(camera->position) *
+       math::y_rotation_matrix(_local_player->input_state.yaw) *
+       math::x_rotation_matrix(_local_player->input_state.pitch))
+        .eval();
+    auto const view_matrix =
+      (math::x_rotation_matrix(-_local_player->input_state.pitch) *
+       math::y_rotation_matrix(-_local_player->input_state.yaw) *
+       math::translation_matrix(-camera->position))
+        .eval();
+    auto const projection_matrix = math::perspective_projection_matrix(
+      zoom_vec.x(), zoom_vec.y(), z_near);
+    auto const view_projection_matrix =
+      (projection_matrix * view_matrix).eval();
+    auto const sun_direction =
+      session->get_scene().get_interpolated_sun_direction();
+    auto const grid_bounds = grid_world_bounds(session->get_scene().get_grid());
+    auto const near_shadow_view_projection_matrix =
+      make_shadow_view_projection_matrix(
+        camera_basis,
+        grid_bounds,
+        zoom_vec,
+        sun_direction,
+        z_near,
+        shadow_near_cascade_far_depth);
+    auto const middle_shadow_view_projection_matrix =
+      make_shadow_view_projection_matrix(
+        camera_basis,
+        grid_bounds,
+        zoom_vec,
+        sun_direction,
+        shadow_near_cascade_far_depth,
+        shadow_middle_cascade_far_depth);
+    auto const far_shadow_view_projection_matrix =
+      make_shadow_view_projection_matrix(
+        camera_basis,
+        grid_bounds,
+        zoom_vec,
+        sun_direction,
+        shadow_middle_cascade_far_depth,
+        shadow_far_depth);
+    auto const camera_forward = camera_basis.block<3, 1>(0, 2).eval();
+    auto const scene_uniform_memory = _scene_uniform_buffer->map();
+    auto const scene_uniform_offset =
+      (_frame_number % max_frames_in_flight) * scene_uniform_data_size;
+    auto const write_scene_uniform =
+      [&]<typename T>(std::size_t offset, T const &value) {
+        std::memcpy(
+          scene_uniform_memory.get().data() + scene_uniform_offset + offset,
+          &value,
+          sizeof(value));
+      };
+    auto const sun_irradiance = math::vec3::Constant(1300.0f).eval();
+    write_scene_uniform(
+      scene_view_projection_matrix_offset, view_projection_matrix);
+    write_scene_uniform(scene_sun_irradiance_offset, sun_irradiance);
+    write_scene_uniform(scene_sun_direction_offset, sun_direction);
+    auto const transmittance_lut_handle =
+      _transmittance_lut_sampled_descriptor->get_handle();
+    write_scene_uniform(
+      scene_transmittance_lut_offset, transmittance_lut_handle);
+    write_scene_uniform(scene_animation_time_offset, _animation_time);
+    write_scene_uniform(
+      scene_shadow_view_projection_matrices_offset,
+      near_shadow_view_projection_matrix);
+    write_scene_uniform(
+      scene_shadow_view_projection_matrices_offset + sizeof(math::mat4),
+      middle_shadow_view_projection_matrix);
+    write_scene_uniform(
+      scene_shadow_view_projection_matrices_offset + 2 * sizeof(math::mat4),
+      far_shadow_view_projection_matrix);
+    auto const near_shadow_map_texture_handle =
+      _near_shadow_map_sampled_descriptor->get_handle();
+    auto const middle_shadow_map_texture_handle =
+      _middle_shadow_map_sampled_descriptor->get_handle();
+    auto const far_shadow_map_texture_handle =
+      _far_shadow_map_sampled_descriptor->get_handle();
+    write_scene_uniform(
+      scene_shadow_map_textures_offset, near_shadow_map_texture_handle);
+    write_scene_uniform(
+      scene_shadow_map_textures_offset + sizeof(u32),
+      middle_shadow_map_texture_handle);
+    write_scene_uniform(
+      scene_shadow_map_textures_offset + 2 * sizeof(u32),
+      far_shadow_map_texture_handle);
+    auto const shadow_cascade_split_depths = math::vec2{
+      shadow_near_cascade_far_depth,
+      shadow_middle_cascade_far_depth,
+    };
+    write_scene_uniform(
+      scene_shadow_cascade_split_depths_offset, shadow_cascade_split_depths);
+    write_scene_uniform(scene_camera_position_offset, camera->position);
+    write_scene_uniform(scene_camera_forward_offset, camera_forward);
+    record_shadow_pass(
+      work_recorder, scene_uniform_offset, _near_shadow_map, 1);
+    record_shadow_pass(
+      work_recorder, scene_uniform_offset, _middle_shadow_map, 2);
+    record_shadow_pass(work_recorder, scene_uniform_offset, _far_shadow_map, 3);
     work_recorder.barrier(
       fragment_shader_sampled_read_scope,
       color_attachment_scope | depth_attachment_scope);
@@ -562,83 +814,45 @@ private:
     });
     work_recorder.set_viewport(framebuffer_size);
     work_recorder.set_scissor(framebuffer_size);
-    auto const &session = _client.get_session();
-    auto const camera =
-      session && _local_player && _local_player->player_entity_id &&
-          _local_player->humanoid_entity_id
-        ? session->get_scene()
-            .get_interpolated_camera(*_local_player->player_entity_id)
-        : nullptr;
     work_recorder.set_depth_test_enabled(true);
     work_recorder.set_depth_write_enabled(true);
     work_recorder.set_depth_compare_op(graphics::Compare_op::greater);
-    if (camera) {
-      auto const view_matrix =
-        (math::x_rotation_matrix(-_local_player->input_state.pitch) *
-         math::y_rotation_matrix(-_local_player->input_state.yaw) *
-         math::translation_matrix(-camera->position))
-          .eval();
-      auto const zoom = 1.25f;
-      auto const aspect_ratio = static_cast<float>(framebuffer_size.x()) /
-                                static_cast<float>(framebuffer_size.y());
-      auto const projection_matrix = math::perspective_projection_matrix(
-        aspect_ratio > 1.0f ? zoom : zoom * aspect_ratio,
-        aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
-        z_near);
-      auto const view_projection_matrix =
-        (projection_matrix * view_matrix).eval();
-      auto const sun_direction =
-        session->get_scene().get_interpolated_sun_direction();
-      auto const scene_uniform_memory = _scene_uniform_buffer->map();
-      auto const scene_uniform_offset =
-        (_frame_number % max_frames_in_flight) * scene_uniform_data_size;
-      auto const write_scene_uniform =
-        [&]<typename T>(std::size_t offset, T const &value) {
-          std::memcpy(
-            scene_uniform_memory.get().data() + scene_uniform_offset + offset,
-            &value,
-            sizeof(value));
-        };
-      auto const sun_irradiance = math::vec3::Constant(1300.0f).eval();
-      write_scene_uniform(
-        scene_view_projection_matrix_offset, view_projection_matrix);
-      write_scene_uniform(scene_sun_irradiance_offset, sun_irradiance);
-      write_scene_uniform(scene_sun_direction_offset, sun_direction);
-      auto const transmittance_lut_handle =
-        _transmittance_lut_sampled_descriptor->get_handle();
-      write_scene_uniform(
-        scene_transmittance_lut_offset, transmittance_lut_handle);
-      write_scene_uniform(scene_animation_time_offset, _animation_time);
-      work_recorder.add_reference(_transmittance_lut_sampled_descriptor);
-      // draw grid
-      if (_grid_mesh && _grid_mesh->is_uploaded()) {
-        work_recorder.bind_pipeline(_grid_pipeline);
-        work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
-        work_recorder.set_cull_mode(graphics::Cull_mode::back);
-        work_recorder.bind_index_buffer(
-          _grid_mesh->get_index_buffer(), graphics::Index_type::u32);
-        work_recorder.push_buffer_reference(
-          0, _scene_uniform_buffer, scene_uniform_offset);
-        work_recorder.push_buffer_reference(8, _grid_mesh->get_vertex_buffer());
-        work_recorder
-          .push_buffer_reference(16, _block_texture_registry.get_buffer());
-        _block_texture_registry.add_references(work_recorder);
-        auto push_normal = [&](math::vec3 const &value) {
-          work_recorder.push_data(24, std::as_bytes(std::span{&value, 1}));
-        };
-        push_normal({1.0f, 0.0f, 0.0f});
-        _grid_mesh->record_draws(work_recorder, +math::axis3::x);
-        push_normal({-1.0f, 0.0f, 0.0f});
-        _grid_mesh->record_draws(work_recorder, -math::axis3::x);
-        push_normal({0.0f, 1.0f, 0.0f});
-        _grid_mesh->record_draws(work_recorder, +math::axis3::y);
-        push_normal({0.0f, -1.0f, 0.0f});
-        _grid_mesh->record_draws(work_recorder, -math::axis3::y);
-        push_normal({0.0f, 0.0f, 1.0f});
-        _grid_mesh->record_draws(work_recorder, +math::axis3::z);
-        push_normal({0.0f, 0.0f, -1.0f});
-        _grid_mesh->record_draws(work_recorder, -math::axis3::z);
-      }
+    work_recorder.add_reference(_transmittance_lut_sampled_descriptor);
+    work_recorder.add_reference(_near_shadow_map_sampled_descriptor);
+    work_recorder.add_reference(_middle_shadow_map_sampled_descriptor);
+    work_recorder.add_reference(_far_shadow_map_sampled_descriptor);
+    // draw grid
+    if (_grid_mesh && _grid_mesh->is_uploaded()) {
+      work_recorder.bind_pipeline(_grid_pipeline);
+      work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
+      work_recorder.set_cull_mode(graphics::Cull_mode::back);
+      work_recorder.bind_index_buffer(
+        _grid_mesh->get_index_buffer(), graphics::Index_type::u32);
+      work_recorder.push_buffer_reference(
+        0, _scene_uniform_buffer, scene_uniform_offset);
+      work_recorder.push_buffer_reference(8, _grid_mesh->get_vertex_buffer());
+      work_recorder
+        .push_buffer_reference(16, _block_texture_registry.get_buffer());
+      _block_texture_registry.add_references(work_recorder);
+      auto const camera_view_projection_index = u32{0};
+      work_recorder.push_data(
+        36, std::as_bytes(std::span{&camera_view_projection_index, 1}));
+      auto push_normal = [&](math::vec3 const &value) {
+        work_recorder.push_data(24, std::as_bytes(std::span{&value, 1}));
+      };
+      push_normal({1.0f, 0.0f, 0.0f});
+      _grid_mesh->record_draws(work_recorder, +math::axis3::x);
+      push_normal({-1.0f, 0.0f, 0.0f});
+      _grid_mesh->record_draws(work_recorder, -math::axis3::x);
+      push_normal({0.0f, 1.0f, 0.0f});
+      _grid_mesh->record_draws(work_recorder, +math::axis3::y);
+      push_normal({0.0f, -1.0f, 0.0f});
+      _grid_mesh->record_draws(work_recorder, -math::axis3::y);
+      push_normal({0.0f, 0.0f, 1.0f});
+      _grid_mesh->record_draws(work_recorder, +math::axis3::z);
+      push_normal({0.0f, 0.0f, -1.0f});
+      _grid_mesh->record_draws(work_recorder, -math::axis3::z);
+    }
       // draw cubes
       work_recorder.bind_pipeline(_mesh_pipeline);
       work_recorder.set_cull_mode(graphics::Cull_mode::back);
@@ -671,7 +885,6 @@ private:
         framebuffer_size,
         camera->position,
         session->get_scene().get_interpolated_sun_direction());
-    }
     work_recorder.end_rendering();
   }
 
@@ -943,6 +1156,54 @@ private:
     work->await();
   }
 
+  rc::Strong<graphics::Image> create_shadow_map() {
+    return _graphics.create_image({
+      .dimensionality = 2,
+      .format = graphics::Image_format::d32_sfloat,
+      .extent = {shadow_map_size.x(), shadow_map_size.y(), 1},
+      .mip_level_count = 1,
+      .array_layer_count = 1,
+      .usage = graphics::Image_usage_flag_bits::sampled |
+               graphics::Image_usage_flag_bits::depth_attachment,
+    });
+  }
+
+  void init_shadow_maps() {
+    _near_shadow_map = create_shadow_map();
+    _middle_shadow_map = create_shadow_map();
+    _far_shadow_map = create_shadow_map();
+    _near_shadow_map_sampled_descriptor =
+      _graphics.create_sampled_image_descriptor(
+        _near_shadow_map, graphics::Sampler::nearest_clamp);
+    _middle_shadow_map_sampled_descriptor =
+      _graphics.create_sampled_image_descriptor(
+        _middle_shadow_map, graphics::Sampler::nearest_clamp);
+    _far_shadow_map_sampled_descriptor =
+      _graphics.create_sampled_image_descriptor(
+        _far_shadow_map, graphics::Sampler::nearest_clamp);
+    auto work_recorder = _graphics.record_transient_work();
+    work_recorder.transition_image_layout(
+      {},
+      depth_attachment_scope,
+      graphics::Image_layout::undefined,
+      graphics::Image_layout::general,
+      _near_shadow_map);
+    work_recorder.transition_image_layout(
+      {},
+      depth_attachment_scope,
+      graphics::Image_layout::undefined,
+      graphics::Image_layout::general,
+      _middle_shadow_map);
+    work_recorder.transition_image_layout(
+      {},
+      depth_attachment_scope,
+      graphics::Image_layout::undefined,
+      graphics::Image_layout::general,
+      _far_shadow_map);
+    auto work = _graphics.submit_transient_work(std::move(work_recorder));
+    work->await();
+  }
+
   void get_color_render_target(
     graphics::Work_recorder &work_recorder,
     rc::Strong<graphics::Image> &image,
@@ -1156,6 +1417,36 @@ private:
     return pipeline;
   }
 
+  rc::Strong<graphics::Pipeline> make_grid_shadow_pipeline() {
+    auto const shader_stages =
+      std::vector<graphics::Pipeline_shader_stage_create_info>{
+        {
+          .stage = graphics::Shader_stage_flag_bits::vertex,
+          .shader = &_grid_vertex_shader,
+        },
+        {
+          .stage = graphics::Shader_stage_flag_bits::fragment,
+          .shader = &_grid_shadow_fragment_shader,
+        },
+      };
+    auto pipeline = _graphics.create_pipeline({
+      .shader_stages = std::span{shader_stages},
+      .input_assembly_state =
+        {
+          .primitive_topology = graphics::Primitive_topology::triangle_list,
+        },
+      .depth_state =
+        {
+          .depth_attachment_enabled = true,
+        },
+      .color_state =
+        {
+          .color_attachment_formats = {},
+        },
+    });
+    return pipeline;
+  }
+
   rc::Strong<graphics::Pipeline> make_mesh_pipeline() {
     auto const shader_stages =
       std::vector<graphics::Pipeline_shader_stage_create_info>{
@@ -1336,6 +1627,7 @@ private:
   rc::Strong<graphics::Descriptor> _crosshair_mask_render_target_descriptor{};
   graphics::Shader _grid_vertex_shader;
   graphics::Shader _grid_fragment_shader;
+  graphics::Shader _grid_shadow_fragment_shader;
   graphics::Shader _mesh_vertex_shader;
   graphics::Shader _mesh_fragment_shader;
   graphics::Shader _crosshair_vertex_shader;
@@ -1347,6 +1639,7 @@ private:
   graphics::Shader _sky_vertex_shader;
   graphics::Shader _sky_fragment_shader;
   rc::Strong<graphics::Pipeline> _grid_pipeline{};
+  rc::Strong<graphics::Pipeline> _grid_shadow_pipeline{};
   rc::Strong<graphics::Pipeline> _mesh_pipeline{};
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
   rc::Strong<graphics::Pipeline> _sky_pipeline{};
@@ -1359,6 +1652,12 @@ private:
   rc::Strong<graphics::Image> _sky_view_lut{};
   rc::Strong<graphics::Descriptor> _sky_view_lut_sampled_descriptor{};
   rc::Strong<graphics::Descriptor> _sky_view_lut_storage_descriptor{};
+  rc::Strong<graphics::Image> _near_shadow_map{};
+  rc::Strong<graphics::Image> _middle_shadow_map{};
+  rc::Strong<graphics::Image> _far_shadow_map{};
+  rc::Strong<graphics::Descriptor> _near_shadow_map_sampled_descriptor{};
+  rc::Strong<graphics::Descriptor> _middle_shadow_map_sampled_descriptor{};
+  rc::Strong<graphics::Descriptor> _far_shadow_map_sampled_descriptor{};
   Texture_manager _texture_manager;
   Block_texture_registry _block_texture_registry;
   Block_model_registry _block_model_registry;

@@ -10,9 +10,14 @@ void main() {
   Vertex vertex = push_constants.vertex_buffer.vertices[gl_VertexIndex];
   const vec3 position =
     vec3(vertex.position[0], vertex.position[1], vertex.position[2]);
+  const mat4 view_projection_matrix =
+    push_constants.view_projection_index == 0u
+      ? push_constants.scene.view_projection_matrix
+      : push_constants.scene
+          .shadow_view_projection_matrices[
+            push_constants.view_projection_index - 1u];
   out_position = position;
-  gl_Position = 
-    push_constants.scene.view_projection_matrix * vec4(position, 1.0);
+  gl_Position = view_projection_matrix * vec4(position, 1.0);
   if (vertex.texture_index == 3) {
     vertex.texcoord[1] += push_constants.scene.animation_time * 0.5;
   }
