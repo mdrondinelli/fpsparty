@@ -1,0 +1,116 @@
+#version 450
+
+#include "../descriptors.glsl"
+#include "../numbers.glsl"
+#include "atmosphere.glsl"
+
+const int work_group_size = 64;
+const int sample_width = 8;
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = work_group_size) in;
+
+layout(std430, buffer_reference, buffer_reference_align = 4)
+restrict buffer Sky_irradiance {
+  float irradiance[18];
+};
+
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) uint sky_view_lut;
+  layout(offset = 4) float camera_altitude;
+  layout(offset = 8) Sky_irradiance sky_irradiance;
+} push_constants;
+
+shared vec3 shared_irradiance[work_group_size];
+
+vec3 normal_for_index(uint i) {
+  switch (i) {
+  case 0:
+    return vec3(1.0, 0.0, 0.0);
+  case 1:
+    return vec3(-1.0, 0.0, 0.0);
+  case 2:
+    return vec3(0.0, 1.0, 0.0);
+  case 3:
+    return vec3(0.0, -1.0, 0.0);
+  case 4:
+    return vec3(0.0, 0.0, 1.0);
+  default:
+    return vec3(0.0, 0.0, -1.0);
+  }
+}
+
+vec2 concentric_disk(vec2 u) {
+  const vec2 p = 2.0 * u - vec2(1.0);
+  if (p.x == 0.0 && p.y == 0.0) {
+    return vec2(0.0);
+  }
+  float r;
+  float theta;
+  if (p.x * p.x > p.y * p.y) {
+    r = p.x;
+    theta = pi / 4.0 * (p.y / p.x);
+  } else {
+    r = p.y;
+    theta = pi / 2.0 - pi / 4.0 * (p.x / p.y);
+  }
+  return r * vec2(cos(theta), sin(theta));
+}
+
+vec3 cosine_weighted_hemisphere(uint i) {
+  const vec2 u = vec2(
+    (float(i % sample_width) + 0.5) / float(sample_width),
+    (float(i / sample_width) + 0.5) / float(sample_width));
+  const vec2 disk = concentric_disk(u);
+  return vec3(disk.x, disk.y, sqrt(max(0.0, 1.0 - dot(disk, disk))));
+}
+
+mat3 basis_from_normal(vec3 n) {
+  const vec3 helper =
+    abs(n.x) < abs(n.y) ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+  const vec3 tangent = normalize(cross(helper, n));
+  const vec3 bitangent = cross(n, tangent);
+  return mat3(tangent, bitangent, n);
+}
+
+vec2 sky_view_texcoord(vec3 rd) {
+  const vec3 horizontal = vec3(rd.x, 0.0, rd.z);
+  float longitude = 0.0;
+  const float len = length(horizontal);
+  if (len >= 1.0e-6) {
+    const vec3 normalized_horizontal = horizontal / len;
+    longitude = atan(normalized_horizontal.z, normalized_horizontal.x);
+  }
+  const float zenith = acos(clamp(rd.y, -1.0, 1.0));
+  return pack_sky_view_lut_params(
+      longitude, push_constants.camera_altitude, zenith);
+}
+
+void main() {
+  const uint normal_index = gl_WorkGroupID.x;
+  const uint sample_index = gl_LocalInvocationID.z;
+  const vec3 n = normal_for_index(normal_index);
+  const vec3 local_dir = cosine_weighted_hemisphere(sample_index);
+  const vec3 rd = basis_from_normal(n) * local_dir;
+  shared_irradiance[sample_index] =
+    pi *
+    FPSPARTY_SAMPLE(push_constants.sky_view_lut, sky_view_texcoord(rd)).rgb /
+    float(work_group_size);
+  uint stride = 1;
+  do {
+    barrier();
+    if ((sample_index & (stride * 2u - 1u)) == 0u) {
+      shared_irradiance[sample_index] +=
+        shared_irradiance[sample_index + stride];
+    }
+    stride <<= 1;
+  } while (stride < work_group_size);
+  if (sample_index == 0u) {
+    const uint offset = normal_index * 3u;
+    push_constants.sky_irradiance.irradiance[offset + 0u] =
+      shared_irradiance[0].x;
+    push_constants.sky_irradiance.irradiance[offset + 1u] =
+      shared_irradiance[0].y;
+    push_constants.sky_irradiance.irradiance[offset + 2u] =
+      shared_irradiance[0].z;
+  }
+}

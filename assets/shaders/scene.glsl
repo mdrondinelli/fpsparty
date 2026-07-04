@@ -11,6 +11,7 @@ restrict readonly buffer Scene {
   vec3 sun_direction;
   uint transmittance_texture;
   float animation_time;
+  float sky_irradiance[18];
 };
 
 #endif

@@ -58,7 +58,7 @@ void main() {
     sampled_images[albedo_texture_index],
     pixel,
     0).rgb;
-  color *= 1.0f / 512.0f; // exposure 
+  color *= 1.0f / 256.0f; // exposure 
   color /= color + vec3(1.0f); // tonemap
   color = apply_noise(color, pixel_noise);
   const float mask = texelFetch(

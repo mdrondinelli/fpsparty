@@ -36,6 +36,7 @@ shaders=(
   composite.frag
   atmosphere/transmittance.comp
   atmosphere/sky_view.comp
+  atmosphere/sky_irradiance.comp
   atmosphere/sky.vert
   atmosphere/sky.frag
 )
