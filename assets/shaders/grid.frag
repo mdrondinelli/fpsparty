@@ -20,12 +20,8 @@ vec3 transmittance_along_ray(vec3 ro, vec3 rd) {
       lut_texcoord).rgb;
 }
 
-vec3 sky_irradiance() {
-  const uint i = push_constants.sky_irradiance_index * 3u;
-  return vec3(
-    push_constants.scene.sky_irradiance[i + 0u],
-    push_constants.scene.sky_irradiance[i + 1u],
-    push_constants.scene.sky_irradiance[i + 2u]);
+vec3 sky_irradiance(vec3 n) {
+  return sample_sky_irradiance(push_constants.scene, n);
 }
 
 void main() {
@@ -42,6 +38,6 @@ void main() {
     E_top *
     transmittance_along_ray(vec3(0.0, r_ground + in_position.y, 0.0f), l) *
     n_dot_l;
-  const vec3 L = base_color / pi * (E + sky_irradiance());
+  const vec3 L = base_color / pi * (E + sky_irradiance(n));
   out_color = vec4(L, 1.0f);
 }

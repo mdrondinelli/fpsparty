@@ -552,7 +552,6 @@ private:
 
   void record_forward_pass(
     graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
-    ZoneScoped;
     work_recorder.barrier(
       fragment_shader_sampled_read_scope,
       color_attachment_scope | depth_attachment_scope);
@@ -624,21 +623,20 @@ private:
         work_recorder
           .push_buffer_reference(16, _block_texture_registry.get_buffer());
         _block_texture_registry.add_references(work_recorder);
-        auto push_normal = [&](math::vec3 const &value, u32 sky_index) {
+        auto push_normal = [&](math::vec3 const &value) {
           work_recorder.push_data(24, std::as_bytes(std::span{&value, 1}));
-          work_recorder.push_data(36, std::as_bytes(std::span{&sky_index, 1}));
         };
-        push_normal({1.0f, 0.0f, 0.0f}, 0);
+        push_normal({1.0f, 0.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, +math::axis3::x);
-        push_normal({-1.0f, 0.0f, 0.0f}, 1);
+        push_normal({-1.0f, 0.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, -math::axis3::x);
-        push_normal({0.0f, 1.0f, 0.0f}, 2);
+        push_normal({0.0f, 1.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, +math::axis3::y);
-        push_normal({0.0f, -1.0f, 0.0f}, 3);
+        push_normal({0.0f, -1.0f, 0.0f});
         _grid_mesh->record_draws(work_recorder, -math::axis3::y);
-        push_normal({0.0f, 0.0f, 1.0f}, 4);
+        push_normal({0.0f, 0.0f, 1.0f});
         _grid_mesh->record_draws(work_recorder, +math::axis3::z);
-        push_normal({0.0f, 0.0f, -1.0f}, 5);
+        push_normal({0.0f, 0.0f, -1.0f});
         _grid_mesh->record_draws(work_recorder, -math::axis3::z);
       }
       // draw cubes

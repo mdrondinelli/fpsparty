@@ -26,8 +26,10 @@ void main() {
     transmittance_along_ray(
       vec3(0.0, r_ground + in_world_position.y, 0.0),
       push_constants.scene.sun_direction);
-  const float n_dot_l =
-    max(dot(in_world_normal, push_constants.scene.sun_direction), 0.0);
-  const vec3 L = in_albedo / pi * E * n_dot_l;
+  const vec3 n = normalize(in_world_normal);
+  const float n_dot_l = max(dot(n, push_constants.scene.sun_direction), 0.0);
+  const vec3 L =
+    in_albedo / pi *
+    (E * n_dot_l + sample_sky_irradiance(push_constants.scene, n));
   out_color = vec4(L, 1.0);
 }
