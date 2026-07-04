@@ -132,7 +132,9 @@ void Work_recorder::transition_image_layout(
 
 void Work_recorder::begin_rendering(Rendering_begin_info const &info) {
   auto const color_attachment = vk::RenderingAttachmentInfo{
-    .imageView = detail::get_image_vk_image_view(*info.color_image),
+    .imageView = info.color_image
+                   ? detail::get_image_vk_image_view(*info.color_image)
+                   : vk::ImageView{},
     .imageLayout = vk::ImageLayout::eGeneral,
     .loadOp = vk::AttachmentLoadOp::eClear,
     .storeOp = vk::AttachmentStoreOp::eStore,
@@ -143,6 +145,9 @@ void Work_recorder::begin_rendering(Rendering_begin_info const &info) {
       info.color_clear_value.w(),
     }},
   };
+  auto const render_extent =
+    info.color_image ? info.color_image->get_extent()
+                     : info.depth_image->get_extent();
   auto const depth_attachment = vk::RenderingAttachmentInfo{
     .imageView = info.depth_image
                    ? detail::get_image_vk_image_view(*info.depth_image)
@@ -157,15 +162,17 @@ void Work_recorder::begin_rendering(Rendering_begin_info const &info) {
       {.offset = {0, 0},
        .extent =
          {
-           static_cast<std::uint32_t>(info.color_image->get_extent().x()),
-           static_cast<std::uint32_t>(info.color_image->get_extent().y()),
+           static_cast<std::uint32_t>(render_extent.x()),
+           static_cast<std::uint32_t>(render_extent.y()),
          }},
     .layerCount = 1,
-    .colorAttachmentCount = 1,
-    .pColorAttachments = &color_attachment,
+    .colorAttachmentCount = info.color_image ? 1u : 0u,
+    .pColorAttachments = info.color_image ? &color_attachment : nullptr,
     .pDepthAttachment = info.depth_image ? &depth_attachment : nullptr,
   });
-  add_reference(info.color_image);
+  if (info.color_image) {
+    add_reference(info.color_image);
+  }
   if (info.depth_image) {
     add_reference(info.depth_image);
   }
