@@ -1,0 +1,141 @@
+#version 450
+
+#include "../descriptors.glsl"
+#include "../numbers.glsl"
+#include "atmosphere.glsl"
+
+const int work_group_size = 64;
+const int ray_step_count = work_group_size;
+
+layout(
+  local_size_x = 1,
+  local_size_y = 1,
+  local_size_z = work_group_size
+) in;
+
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) uint transmittance_texture;
+  layout(offset = 4) uint sky_view_image;
+  layout(offset = 8) float camera_altitude;
+  layout(offset = 16) vec3 sun_direction;
+  layout(offset = 32) vec3 sun_irradiance;
+} push_constants;
+
+// ro must be inside the atmosphere
+float ray_atmosphere(vec3 ro, vec3 rd) {
+  const float b = dot(ro, rd);
+  const float c = dot(ro, ro) - r_atmosphere * r_atmosphere;
+  const float h = b * b - c;
+  const float t = -b + sqrt(max(h, 0.0));
+  return t;
+}
+
+// ro must be outside the planet
+float ray_planet(vec3 ro, vec3 rd) {
+  const float r_min = r_ground - 400.0;
+  const float b = dot(ro, rd);
+  const float c = dot(ro, ro) - r_min * r_min;
+  const float h = b * b - c;
+  if (h < 0.0) {
+    return -1.0 / 0.0;
+  }
+  return -b - sqrt(h);
+}
+
+vec3 transmittance_along_ray(vec3 ro, vec3 rd) {
+  const float h = altitude(ro);
+  const float cos_zenith = dot(normalize(ro), rd);
+  const vec2 lut_texcoord = pack_transmittance_lut_params(h, cos_zenith);
+  return FPSPARTY_SAMPLE(
+    push_constants.transmittance_texture,
+    lut_texcoord).rgb;
+}
+
+vec3 transmittance_ratio(vec3 numerator, vec3 denominator) {
+  return numerator / max(denominator, vec3(1.0e-6));
+}
+
+vec3 ray_direction(float longitude, float zenith) {
+  const vec3 up = vec3(0.0, 1.0, 0.0);
+  const vec3 forward = vec3(1.0, 0.0, 0.0);
+  const vec3 right = vec3(0.0, 0.0, 1.0);
+  return
+    cos(zenith) * up +
+    sin(zenith) * (cos(longitude) * forward + sin(longitude) * right);
+}
+
+vec3 sample_in_scattering(vec3 x_0, vec3 x_1, vec3 d, int i) {
+  const vec3 transmittance_numer = transmittance_along_ray(x_0, d);
+  const float cos_theta = dot(d, push_constants.sun_direction);
+  const float step_size = length(x_0 - x_1) / ray_step_count;
+  const vec3 x_i = mix(x_0, x_1, (i + 0.5) / ray_step_count);
+  const float h = altitude(x_i);
+  const vec3 rayleigh_scattering_coeff =
+    rayleigh_scattering * rayleigh_phase(cos_theta) * rayleigh_density(h);
+  const float mie_scattering_coeff =
+    mie_scattering * mie_phase(cos_theta) * mie_density(h);
+  const vec3 irradiance =
+    transmittance_along_ray(x_i, push_constants.sun_direction) *
+    push_constants.sun_irradiance;
+  const vec3 transmittance_denom = transmittance_along_ray(x_i, d);
+  const vec3 transmittance_to_sample =
+    transmittance_ratio(transmittance_numer, transmittance_denom);
+  return
+    (rayleigh_scattering_coeff + vec3(mie_scattering_coeff)) * irradiance *
+    transmittance_to_sample * step_size;
+}
+
+shared vec3 shared_in_scattering[work_group_size];
+
+void main() {
+  const ivec2 pixel = ivec2(gl_WorkGroupID.xy);
+  const ivec2 lut_size =
+    imageSize(storage_images[push_constants.sky_view_image]);
+  const vec2 lut_coords = (vec2(pixel) + vec2(0.5)) / vec2(lut_size);
+  const vec2 params =
+    unpack_sky_view_lut_params(lut_coords, push_constants.camera_altitude);
+  const float longitude = params.x;
+  const float zenith = params.y;
+  const vec3 ro = vec3(0.0, r_ground + push_constants.camera_altitude, 0.0);
+  const vec3 rd = ray_direction(longitude, zenith);
+  const float t_atmosphere = ray_atmosphere(ro, rd);
+  const float t_planet = ray_planet(ro, rd);
+  const bool hit_planet = t_planet >= 0.0;
+  const float t = hit_planet ? t_planet : t_atmosphere;
+  const vec3 p = ro + t * rd;
+  const vec3 x_0 = hit_planet ? p : ro;
+  const vec3 x_1 = hit_planet ? ro : p;
+  const vec3 d = hit_planet ? -rd : rd;
+  shared_in_scattering[gl_LocalInvocationID.z] =
+    sample_in_scattering(x_0, x_1, d, int(gl_LocalInvocationID.z));
+  uint stride = 1;
+  do {
+    barrier();
+    if ((gl_LocalInvocationID.z & (stride * 2u - 1u)) == 0u) {
+      shared_in_scattering[gl_LocalInvocationID.z] +=
+        shared_in_scattering[gl_LocalInvocationID.z + stride];
+    }
+    stride <<= 1;
+  } while (stride < work_group_size);
+  if (gl_LocalInvocationID.z == 0u) {
+    vec3 radiance = shared_in_scattering[0];
+    if (hit_planet) {
+      const vec3 n = normalize(p);
+      const float n_dot_l = max(dot(n, push_constants.sun_direction), 0.0);
+      const vec3 arriving_irradiance =
+        transmittance_along_ray(p, push_constants.sun_direction) *
+        push_constants.sun_irradiance;
+      const vec3 reflected_radiance =
+        planet_albedo / pi * arriving_irradiance * n_dot_l;
+      radiance +=
+        transmittance_ratio(
+          transmittance_along_ray(p, -rd),
+          transmittance_along_ray(ro, -rd)) *
+        reflected_radiance;
+    }
+    imageStore(
+      storage_images[push_constants.sky_view_image],
+      pixel,
+      vec4(radiance, 1.0));
+  }
+}

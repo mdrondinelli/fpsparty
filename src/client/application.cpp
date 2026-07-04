@@ -353,6 +353,8 @@ public:
           graphics::load_shader("./assets/shaders/composite.vert.spv")},
         _composite_fragment_shader{
           graphics::load_shader("./assets/shaders/composite.frag.spv")},
+        _sky_view_compute_shader{graphics::load_shader(
+          "./assets/shaders/atmosphere/sky_view.comp.spv")},
         _sky_vertex_shader{
           graphics::load_shader("./assets/shaders/atmosphere/sky.vert.spv")},
         _sky_fragment_shader{
@@ -361,6 +363,8 @@ public:
         _mesh_pipeline{make_mesh_pipeline()},
         _crosshair_pipeline{make_crosshair_pipeline()},
         _sky_pipeline{make_sky_pipeline()},
+        _sky_view_pipeline{_graphics.create_compute_pipeline(
+          {.shader = &_sky_view_compute_shader})},
         _texture_manager{{.graphics = &_graphics}},
         _block_texture_registry{{.graphics = &_graphics}},
         _scene_uniform_buffer{_graphics.create_buffer({
@@ -375,6 +379,7 @@ public:
     _glfw_window->set_mouse_button_callback(this);
     _glfw_window->set_cursor_pos_callback(this);
     init_transmittance_lut();
+    init_sky_view_lut();
     _cube_vertex_buffer =
       upload_vertices(std::as_bytes(std::span{cube_mesh_vertices}));
     std::cout << "Uploaded cube vertex buffer.\n";
@@ -439,9 +444,7 @@ public:
     return true;
   }
 
-  void exit() {
-    _graphics.wait_idle();
-  }
+  void exit() { _graphics.wait_idle(); }
 
 private:
   enum class State {
@@ -483,10 +486,42 @@ private:
       _depth_render_target,
       _depth_render_target_descriptor,
       framebuffer_extent);
+    auto const &session = _client.get_session();
+    auto const camera =
+      session && _local_player && _local_player->player_entity_id &&
+          _local_player->humanoid_entity_id
+        ? session->get_scene()
+            .get_interpolated_camera(*_local_player->player_entity_id)
+        : nullptr;
+    if (camera) {
+      record_sky_view_pass(
+        work_recorder,
+        camera->position,
+        session->get_scene().get_interpolated_sun_direction(),
+        math::vec3::Constant(1300.0f));
+    }
     record_forward_pass(work_recorder, framebuffer_size);
     record_crosshair_pass(work_recorder, framebuffer_size);
     record_composite_pass(work_recorder, swapchain_image, framebuffer_size);
     _graphics.submit_frame_work(std::move(work_recorder));
+  }
+
+  void record_sky_view_pass(
+    graphics::Work_recorder &work_recorder,
+    math::vec3 camera_position,
+    math::vec3 sun_direction,
+    math::vec3 sun_irradiance) {
+    ZoneScoped;
+    auto const camera_altitude = camera_position.y();
+    work_recorder.bind_compute_pipeline(_sky_view_pipeline);
+    work_recorder.push_descriptor(0, _transmittance_lut_sampled_descriptor);
+    work_recorder.push_descriptor(4, _sky_view_lut_storage_descriptor);
+    work_recorder.push_data(8, std::as_bytes(std::span{&camera_altitude, 1}));
+    work_recorder.push_data(16, std::as_bytes(std::span{&sun_direction, 1}));
+    work_recorder.push_data(32, std::as_bytes(std::span{&sun_irradiance, 1}));
+    work_recorder.dispatch(sky_view_lut_size.x(), sky_view_lut_size.y(), 1);
+    work_recorder
+      .barrier(compute_shader_storage_write_scope, sampled_image_scope);
   }
 
   void record_forward_pass(
@@ -609,8 +644,7 @@ private:
         work_recorder,
         framebuffer_size,
         camera->position,
-        session->get_scene().get_interpolated_sun_direction(),
-        math::vec3::Constant(1300.0f));
+        session->get_scene().get_interpolated_sun_direction());
     }
     work_recorder.end_rendering();
   }
@@ -619,8 +653,7 @@ private:
     graphics::Work_recorder &work_recorder,
     math::ivec2 framebuffer_size,
     math::vec3 camera_position,
-    math::vec3 sun_direction,
-    math::vec3 sun_irradiance) {
+    math::vec3 sun_direction) {
     ZoneScoped;
     auto constexpr zoom = 1.25f;
     auto const aspect_ratio = static_cast<f32>(framebuffer_size.x()) /
@@ -645,10 +678,8 @@ private:
     work_recorder
       .bind_index_buffer(_composite_index_buffer, graphics::Index_type::u16);
     work_recorder.push_data(0, std::as_bytes(std::span{&camera_basis, 1}));
-    work_recorder.push_data(64, std::as_bytes(std::span{&sun_direction, 1}));
-    work_recorder.push_data(76, std::array<std::byte, 4>{});
-    work_recorder.push_data(80, std::as_bytes(std::span{&sun_irradiance, 1}));
-    work_recorder.push_descriptor(92, _transmittance_lut_sampled_descriptor);
+    work_recorder.push_descriptor(64, _sky_view_lut_sampled_descriptor);
+    work_recorder.push_data(80, std::as_bytes(std::span{&sun_direction, 1}));
     work_recorder.push_data(96, std::as_bytes(std::span{&zoom_vec, 1}));
     work_recorder.draw_indexed({
       .index_count = static_cast<u32>(composite_indices.size()),
@@ -826,7 +857,6 @@ private:
   }
 
   void init_transmittance_lut() {
-    ZoneScoped;
     auto transmittance_shader = graphics::load_shader(
       "./assets/shaders/atmosphere/transmittance.comp.spv");
     auto transmittance_pipeline =
@@ -858,6 +888,32 @@ private:
       .dispatch(transmittance_lut_size.x(), transmittance_lut_size.y(), 1);
     work_recorder
       .barrier(compute_shader_storage_write_scope, sampled_image_scope);
+    auto work = _graphics.submit_transient_work(std::move(work_recorder));
+    work->await();
+  }
+
+  void init_sky_view_lut() {
+    _sky_view_lut = _graphics.create_image({
+      .dimensionality = 2,
+      .format = graphics::Image_format::r16g16b16a16_sfloat,
+      .extent = {sky_view_lut_size.x(), sky_view_lut_size.y(), 1},
+      .mip_level_count = 1,
+      .array_layer_count = 1,
+      .usage = graphics::Image_usage_flag_bits::sampled |
+               graphics::Image_usage_flag_bits::storage,
+    });
+    _sky_view_lut_sampled_descriptor =
+      _graphics.create_sampled_image_descriptor(
+        _sky_view_lut, graphics::Sampler::lat_long);
+    _sky_view_lut_storage_descriptor =
+      _graphics.create_storage_image_descriptor(_sky_view_lut);
+    auto work_recorder = _graphics.record_transient_work();
+    work_recorder.transition_image_layout(
+      {},
+      compute_shader_storage_write_scope,
+      graphics::Image_layout::undefined,
+      graphics::Image_layout::general,
+      _sky_view_lut);
     auto work = _graphics.submit_transient_work(std::move(work_recorder));
     work->await();
   }
@@ -1248,16 +1304,21 @@ private:
   graphics::Shader _crosshair_fragment_shader;
   graphics::Shader _composite_vertex_shader;
   graphics::Shader _composite_fragment_shader;
+  graphics::Shader _sky_view_compute_shader;
   graphics::Shader _sky_vertex_shader;
   graphics::Shader _sky_fragment_shader;
   rc::Strong<graphics::Pipeline> _grid_pipeline{};
   rc::Strong<graphics::Pipeline> _mesh_pipeline{};
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
   rc::Strong<graphics::Pipeline> _sky_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _sky_view_pipeline{};
   rc::Strong<graphics::Pipeline> _composite_pipeline{};
   std::optional<graphics::Image_format> _composite_pipeline_color_format{};
   rc::Strong<graphics::Image> _transmittance_lut{};
   rc::Strong<graphics::Descriptor> _transmittance_lut_sampled_descriptor{};
+  rc::Strong<graphics::Image> _sky_view_lut{};
+  rc::Strong<graphics::Descriptor> _sky_view_lut_sampled_descriptor{};
+  rc::Strong<graphics::Descriptor> _sky_view_lut_storage_descriptor{};
   Texture_manager _texture_manager;
   Block_texture_registry _block_texture_registry;
   Block_model_registry _block_model_registry;
@@ -1279,5 +1340,8 @@ Application::~Application() = default;
 
 bool Application::update(float duration) { return _impl->update(duration); }
 
-void Application::exit() { _impl->exit(); _impl.reset(); }
+void Application::exit() {
+  _impl->exit();
+  _impl.reset();
+}
 } // namespace fpsparty::client
