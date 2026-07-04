@@ -2,9 +2,14 @@
 
 #include "octahedral.glsl"
 #include "scene.glsl"
+#include "shadow_grid.glsl"
 #include "atmosphere/atmosphere.glsl"
 
 layout(local_size_x = 8, local_size_y = 8) in;
+
+const int shadow_max_steps = 256;
+const float shadow_max_distance = 64.0;
+const float shadow_bias = 1.0 / 128.0;
 
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) mat4 camera_basis;
@@ -16,7 +21,82 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 96) uint depth_texture;
   layout(offset = 100) uint sky_view_lut;
   layout(offset = 104) uint radiance_image;
+  layout(offset = 112) Shadow_grid shadow_grid;
 } push_constants;
+
+float ray_aabb(
+    in vec3 ro,
+    in vec3 inv_rd,
+    in vec3 aabb_center,
+    in vec3 aabb_half_extents) {
+  const vec3 n = inv_rd * (ro - aabb_center);
+  const vec3 k = abs(inv_rd) * aabb_half_extents;
+  const vec3 t1 = -n - k;
+  const vec3 t2 = -n + k;
+  const float tN = max(max(t1.x, t1.y), t1.z);
+  const float tF = min(min(t2.x, t2.y), t2.z);
+  if (tN > tF || tF < 0.0) {
+    return 1.0 / 0.0;
+  }
+  return tN >= 0.0 ? tN : tF;
+}
+
+bool trace_shadow_ray(Shadow_grid grid, vec3 origin, vec3 dir) {
+  ivec3 cell_coords = ivec3(floor(origin));
+  const vec3 cell_offset = origin - vec3(cell_coords);
+  const vec3 inv_dir = 1.0 / dir;
+  ivec3 step_dir;
+  vec3 t_max;
+  vec3 t_delta;
+  for (int axis = 0; axis < 3; ++axis) {
+    if (dir[axis] > 0.0) {
+      step_dir[axis] = 1;
+      t_delta[axis] = inv_dir[axis];
+      t_max[axis] = (1.0 - cell_offset[axis]) * t_delta[axis];
+    } else if (dir[axis] < 0.0) {
+      step_dir[axis] = -1;
+      t_delta[axis] = -inv_dir[axis];
+      t_max[axis] = cell_offset[axis] * t_delta[axis];
+    } else {
+      step_dir[axis] = 0;
+      t_delta[axis] = 1.0e30;
+      t_max[axis] = 1.0e30;
+    }
+  }
+  for (int i = 0; i < shadow_max_steps; ++i) {
+    const uint model_index = get_shadow_block_model_index(grid, cell_coords);
+    if (model_index == 1) {
+      return true;
+    } else if (model_index > 1) {
+      const Shadow_block_model model = shadow_block_models[model_index];
+      const vec3 model_space_center = mix(model.min, model.max, 0.5);
+      const vec3 world_space_center = cell_coords + model_space_center;
+      const vec3 half_extents = (model.max - model.min) * 0.5;
+      const float t_hit =
+        ray_aabb(origin, inv_dir, world_space_center, half_extents);
+      if (!isinf(t_hit)) {
+        return true;
+      }
+    }
+    const float next_t = min(t_max.x, min(t_max.y, t_max.z));
+    if (next_t > shadow_max_distance) {
+      return false;
+    }
+    if (t_max.x == next_t) {
+      cell_coords.x += step_dir.x;
+      t_max.x += t_delta.x;
+    }
+    if (t_max.y == next_t) {
+      cell_coords.y += step_dir.y;
+      t_max.y += t_delta.y;
+    }
+    if (t_max.z == next_t) {
+      cell_coords.z += step_dir.z;
+      t_max.z += t_delta.z;
+    }
+  }
+  return false;
+}
 
 vec3 transmittance_along_ray(vec3 ro, vec3 rd) {
   const float h = altitude(ro);
@@ -73,11 +153,17 @@ void main() {
   const vec3 sun_direction = push_constants.scene.sun_direction;
   const float n_dot_l = max(dot(n, sun_direction), 0.0);
   const vec3 E_top = push_constants.scene.sun_irradiance;
+  const bool occluded = trace_shadow_ray(
+    push_constants.shadow_grid,
+    world_position + n * shadow_bias,
+    sun_direction);
+  const float visibility = occluded ? 0.0 : 1.0;
   const vec3 E =
     E_top *
     transmittance_along_ray(
       vec3(0.0, r_ground + world_position.y, 0.0),
-      sun_direction);
+      sun_direction) *
+    visibility;
   const vec3 L =
     albedo / pi *
     (E * n_dot_l + sample_sky_irradiance(push_constants.scene, n));

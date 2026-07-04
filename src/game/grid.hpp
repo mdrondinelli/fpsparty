@@ -235,6 +235,8 @@ public:
 
   math::ivec3 get_cell_counts() const noexcept;
 
+  std::size_t get_chunk_index(math::ivec3 chunk_coords) const noexcept;
+
   math::ibox3 get_chunk_bounds() const noexcept;
 
   math::ibox3 const &get_cell_bounds() const noexcept;

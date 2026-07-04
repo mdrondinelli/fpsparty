@@ -24,7 +24,15 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
   auto indices = std::vector<std::uint32_t>{};
   auto draw_infos =
     std::array<std::array<std::vector<graphics::Indexed_draw_info>, 2>, 3>{};
+  auto const grid_empty = info.grid->empty();
+  auto const chunk_counts =
+    grid_empty ? math::ivec3::Zero().eval() : info.grid->get_chunk_counts();
+  auto shadow_buffer_chunks = std::vector<std::array<u8, 64>>(
+    static_cast<std::size_t>(chunk_counts.x()) *
+    static_cast<std::size_t>(chunk_counts.y()) *
+    static_cast<std::size_t>(chunk_counts.z()));
   for (auto const &[chunk_coords, chunk] : info.grid->get_chunks()) {
+    auto const chunk_index = info.grid->get_chunk_index(chunk_coords);
     auto chunk_vertices =
       std::array<std::array<std::vector<Grid_vertex>, 2>, 3>{};
     auto chunk_indices = std::array<std::array<std::vector<u32>, 2>, 3>{};
@@ -74,6 +82,18 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
               }
             }
           }
+          if (chunk->is_solid({rel_x, rel_y, rel_z})) {
+            auto const block_index =
+              game::Chunk::get_block_index({rel_x, rel_y, rel_z});
+            switch (block) {
+            default:
+              shadow_buffer_chunks[chunk_index][block_index] = 1;
+              break;
+            case game::Block::conveyor:
+              shadow_buffer_chunks[chunk_index][block_index] = 2;
+              break;
+            }
+          }
         }
       }
     }
@@ -105,9 +125,23 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
   auto const index_buffer_size = indices.size() * sizeof(std::uint32_t);
   auto const draw_buffer_size =
     draw_count * sizeof(graphics::Indexed_draw_info);
+  auto const chunk_min = grid_empty ? math::ivec3::Zero().eval()
+                                    : info.grid->get_chunk_bounds().min();
+  auto const shadow_buffer_header = std::array<std::int32_t, 6>{
+    chunk_min.x(),
+    chunk_min.y(),
+    chunk_min.z(),
+    chunk_counts.x(),
+    chunk_counts.y(),
+    chunk_counts.z(),
+  };
+  auto const shadow_buffer_size =
+    sizeof(shadow_buffer_header) +
+    shadow_buffer_chunks.size() * 64;
   if (vertex_buffer_size > 0 && index_buffer_size > 0 && draw_buffer_size > 0) {
     auto const staging_buffer = info.graphics->create_staging_buffer(
-      vertex_buffer_size + index_buffer_size + draw_buffer_size);
+      vertex_buffer_size + index_buffer_size + draw_buffer_size +
+      shadow_buffer_size);
     auto const staging_buffer_memory = staging_buffer->map();
     auto staging_buffer_writer =
       serial::Span_writer{staging_buffer_memory.get()};
@@ -125,6 +159,11 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
           .write(std::as_bytes(std::span{draw_infos[axis][sign]}));
       }
     }
+    auto const shadow_buffer_offset = staging_buffer_writer.offset();
+    staging_buffer_writer
+      .write(std::as_bytes(std::span{shadow_buffer_header}));
+    staging_buffer_writer
+      .write(std::as_bytes(std::span{shadow_buffer_chunks}));
     _vertex_buffer = info.graphics->create_buffer({
       .size = vertex_buffer_size,
       .usage = graphics::Buffer_usage_flag_bits::transfer_dst |
@@ -135,6 +174,11 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
       .size = draw_buffer_size,
       .usage = graphics::Buffer_usage_flag_bits::transfer_dst |
                graphics::Buffer_usage_flag_bits::indirect_buffer,
+    });
+    _shadow_buffer = info.graphics->create_buffer({
+      .size = shadow_buffer_size,
+      .usage = graphics::Buffer_usage_flag_bits::transfer_dst |
+               graphics::Buffer_usage_flag_bits::shader_device_address,
     });
     auto recorder = info.graphics->record_transient_work();
     recorder.copy_buffer(
@@ -161,6 +205,14 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
         .dst_offset = 0,
         .size = draw_buffer_size,
       });
+    recorder.copy_buffer(
+      staging_buffer,
+      _shadow_buffer,
+      {
+        .src_offset = shadow_buffer_offset,
+        .dst_offset = 0,
+        .size = shadow_buffer_size,
+      });
     recorder.barrier(
       {
         .stage_mask = graphics::Pipeline_stage_flag_bits::transfer,
@@ -169,7 +221,8 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
       {
         .stage_mask = graphics::Pipeline_stage_flag_bits::draw_indirect |
                       graphics::Pipeline_stage_flag_bits::index_input |
-                      graphics::Pipeline_stage_flag_bits::vertex_shader,
+                      graphics::Pipeline_stage_flag_bits::vertex_shader |
+                      graphics::Pipeline_stage_flag_bits::compute_shader,
         .access_mask = graphics::Access_flag_bits::indirect_command_read |
                        graphics::Access_flag_bits::index_read |
                        graphics::Access_flag_bits::shader_storage_read,
@@ -210,6 +263,11 @@ Grid_mesh::get_vertex_buffer() const noexcept {
 rc::Strong<graphics::Buffer> const &
 Grid_mesh::get_index_buffer() const noexcept {
   return _index_buffer;
+}
+
+rc::Strong<graphics::Buffer> const &
+Grid_mesh::get_shadow_buffer() const noexcept {
+  return _shadow_buffer;
 }
 
 void Grid_mesh::on_work_done(graphics::Work const &) { _upload_work = nullptr; }

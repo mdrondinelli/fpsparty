@@ -692,12 +692,14 @@ private:
         ? session->get_scene()
             .get_interpolated_camera(*_local_player->player_entity_id)
         : nullptr;
-    if (!camera) {
-      // No camera yet (e.g. still connecting): nothing was rasterized into
-      // the G-buffer this frame, so just clear the radiance target directly
-      // instead of dispatching a lighting pass with no valid view to light.
-      work_recorder.barrier(
-        compute_shader_storage_write_scope, color_attachment_scope);
+    if (!camera || !_grid_mesh || !_grid_mesh->is_uploaded()) {
+      // No camera yet, or the grid mesh (and its shadow voxel buffer the
+      // shadow raymarch depends on) hasn't finished uploading: nothing was
+      // rasterized into the G-buffer this frame, so just clear the radiance
+      // target directly instead of dispatching a lighting pass with no
+      // valid view or grid to light with.
+      work_recorder
+        .barrier(compute_shader_storage_write_scope, color_attachment_scope);
       auto const radiance_color_attachments = std::array{
         graphics::Color_attachment_info{
           .image = _radiance_render_target, .clear_value = sky_color},
@@ -706,8 +708,8 @@ private:
         .color_attachments = radiance_color_attachments,
       });
       work_recorder.end_rendering();
-      work_recorder.barrier(
-        color_attachment_scope, fragment_shader_sampled_read_scope);
+      work_recorder
+        .barrier(color_attachment_scope, fragment_shader_sampled_read_scope);
       return;
     }
     auto constexpr zoom = 1.25f;
@@ -726,18 +728,18 @@ private:
     work_recorder.push_data(0, std::as_bytes(std::span{&camera_basis, 1}));
     work_recorder.push_data(64, std::as_bytes(std::span{&zoom_vec, 1}));
     work_recorder.push_data(72, std::as_bytes(std::span{&z_near, 1}));
-    work_recorder.push_buffer_reference(
-      80, _scene_uniform_buffer, scene_uniform_offset);
+    work_recorder
+      .push_buffer_reference(80, _scene_uniform_buffer, scene_uniform_offset);
     work_recorder.push_descriptor(88, _albedo_render_target_descriptor);
     work_recorder.push_descriptor(92, _normal_render_target_descriptor);
     work_recorder.push_descriptor(96, _depth_render_target_descriptor);
     work_recorder.push_descriptor(100, _sky_view_lut_sampled_descriptor);
-    work_recorder.push_descriptor(
-      104, _radiance_render_target_storage_descriptor);
-    auto const group_count_x =
-      static_cast<u32>((framebuffer_size.x() + 7) / 8);
-    auto const group_count_y =
-      static_cast<u32>((framebuffer_size.y() + 7) / 8);
+    work_recorder
+      .push_descriptor(104, _radiance_render_target_storage_descriptor);
+    work_recorder
+      .push_buffer_reference(112, _grid_mesh->get_shadow_buffer());
+    auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
+    auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
     work_recorder.dispatch(group_count_x, group_count_y, 1);
     work_recorder.barrier(
       compute_shader_storage_write_scope, fragment_shader_sampled_read_scope);
@@ -1032,7 +1034,7 @@ private:
   void get_radiance_render_target(
     graphics::Work_recorder &work_recorder, math::ivec3 extent) {
     auto const create_image = !_radiance_render_target ||
-                               _radiance_render_target->get_extent() != extent;
+                              _radiance_render_target->get_extent() != extent;
     if (create_image) {
       _radiance_render_target = _graphics.create_image({
         .dimensionality = 2,

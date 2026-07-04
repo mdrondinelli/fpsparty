@@ -464,6 +464,10 @@ std::size_t Grid::linearize_chunk_index(math::ivec3 indices) const noexcept {
   return detail::linearize_chunk_index(get_chunk_counts(), indices);
 }
 
+std::size_t Grid::get_chunk_index(math::ivec3 chunk_coords) const noexcept {
+  return linearize_chunk_index((chunk_coords - get_chunk_bounds().min()).eval());
+}
+
 Chunk_span Grid::get_chunks() noexcept {
   return {
     _chunks.data(),
