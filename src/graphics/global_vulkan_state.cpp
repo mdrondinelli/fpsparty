@@ -7,11 +7,12 @@
 #include <vulkan/vulkan_handles.hpp>
 
 namespace fpsparty::graphics {
+
 namespace {
+
 auto const vk_device_extensions = std::array{
   vk::KHRSwapchainExtensionName,
   vk::KHRShaderUntypedPointersExtensionName,
-  vk::EXTDescriptorHeapExtensionName,
 };
 
 vk::UniqueInstance make_vk_instance() {
@@ -123,17 +124,8 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
     .queueCount = 1,
     .pQueuePriorities = &queue_priority,
   };
-  auto descriptor_heap_features = vk::PhysicalDeviceDescriptorHeapFeaturesEXT{
-    .descriptorHeap = true,
-  };
-  auto shader_untyped_pointers_features =
-    vk::PhysicalDeviceShaderUntypedPointersFeaturesKHR{
-      .pNext = &descriptor_heap_features,
-      .shaderUntypedPointers = true,
-    };
   auto extended_dynamic_state_features =
     vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT{
-      .pNext = &shader_untyped_pointers_features,
       .extendedDynamicState = true,
     };
   auto vulkan_1_3_features = vk::PhysicalDeviceVulkan13Features{
@@ -143,7 +135,10 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
   };
   auto vulkan_1_2_features = vk::PhysicalDeviceVulkan12Features{
     .pNext = &vulkan_1_3_features,
+    .descriptorIndexing = true,
     .shaderSampledImageArrayNonUniformIndexing = true,
+    .shaderStorageImageArrayNonUniformIndexing = true,
+    .descriptorBindingUpdateUnusedWhilePending = true,
     .bufferDeviceAddress = true,
   };
   auto const features = vk::PhysicalDeviceFeatures2{
@@ -151,6 +146,7 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
     .features =
       {
         .multiDrawIndirect = true,
+        .shaderStorageImageReadWithoutFormat = true,
       },
   };
   auto device = physical_device.createDeviceUnique({
@@ -238,7 +234,6 @@ Global_vulkan_state::Global_vulkan_state() {
   std::tie(_device, _queue) =
     make_vk_device(_physical_device, _queue_family_index);
   _allocator = make_vma_allocator(*_instance, _physical_device, *_device);
-  _physical_device_properties.pNext = &_descriptor_heap_properties;
   _physical_device.getProperties2(&_physical_device_properties);
 }
 

@@ -318,17 +318,7 @@ std::vector<std::byte> load_file(char const *path) {
   return data;
 }
 
-void assert_push_constant_range_size(
-  [[maybe_unused]] graphics::Pipeline const &pipeline,
-  [[maybe_unused]] u64 expected_size) {
-  assert(pipeline.get_push_constant_range_size() == expected_size);
-}
-
-void assert_push_constant_range_size(
-  [[maybe_unused]] graphics::Compute_pipeline const &pipeline,
-  [[maybe_unused]] u64 expected_size) {
-  assert(pipeline.get_push_constant_range_size() == expected_size);
-}
+auto constexpr max_frames_in_flight = 2;
 
 } // namespace
 
@@ -345,6 +335,7 @@ public:
           .window = *_glfw_window,
           .surface = *_vk_surface,
           .vsync_preferred = true,
+          .max_frames_in_flight = max_frames_in_flight,
         }},
         _grid_vertex_shader{
           graphics::load_shader("./assets/shaders/grid.vert.spv")},
@@ -373,7 +364,7 @@ public:
         _texture_manager{{.graphics = &_graphics}},
         _block_texture_registry{{.graphics = &_graphics}},
         _scene_uniform_buffer{_graphics.create_buffer({
-          .size = 2 * scene_uniform_data_size,
+          .size = max_frames_in_flight * scene_uniform_data_size,
           .usage = graphics::Buffer_usage_flag_bits::shader_device_address,
           .mapping_mode = graphics::Mapping_mode::write_only,
           .min_alignment = 16,
@@ -448,6 +439,10 @@ public:
     return true;
   }
 
+  void exit() {
+    _graphics.wait_idle();
+  }
+
 private:
   enum class State {
     // Initial state: issues connect and switches to connecting.
@@ -468,7 +463,7 @@ private:
     if (_pending_grid_mesh && _pending_grid_mesh->is_uploaded()) {
       _grid_mesh = std::move(_pending_grid_mesh);
     }
-    auto [work_recorder, swapchain_image] = _graphics.record_frame_work({});
+    auto [work_recorder, swapchain_image] = _graphics.record_frame_work();
     auto const framebuffer_extent = swapchain_image->get_extent().eval();
     auto const framebuffer_size = framebuffer_extent.head<2>().eval();
     get_color_render_target(
@@ -535,7 +530,7 @@ private:
         session->get_scene().get_interpolated_sun_direction();
       auto const scene_uniform_memory = _scene_uniform_buffer->map();
       auto const scene_uniform_offset =
-        (_frame_number % 2) * scene_uniform_data_size;
+        (_frame_number % max_frames_in_flight) * scene_uniform_data_size;
       auto const write_scene_uniform =
         [&]<typename T>(std::size_t offset, T const &value) {
           std::memcpy(
@@ -836,7 +831,6 @@ private:
       "./assets/shaders/atmosphere/transmittance.comp.spv");
     auto transmittance_pipeline =
       _graphics.create_compute_pipeline({.shader = &transmittance_shader});
-    assert_push_constant_range_size(*transmittance_pipeline, 4);
     _transmittance_lut = _graphics.create_image({
       .dimensionality = 2,
       .format = graphics::Image_format::r16g16b16a16_sfloat,
@@ -847,10 +841,11 @@ private:
                graphics::Image_usage_flag_bits::storage,
     });
     _transmittance_lut_sampled_descriptor =
-      _graphics.create_sampled_image_descriptor(_transmittance_lut);
+      _graphics.create_sampled_image_descriptor(
+        _transmittance_lut, graphics::Sampler::linear_clamp);
     auto const transmittance_lut_storage_descriptor =
       _graphics.create_storage_image_descriptor(_transmittance_lut);
-    auto work_recorder = _graphics.record_transient_work({});
+    auto work_recorder = _graphics.record_transient_work();
     work_recorder.transition_image_layout(
       {},
       compute_shader_storage_write_scope,
@@ -928,7 +923,7 @@ private:
       .usage = graphics::Buffer_usage_flag_bits::transfer_dst |
                graphics::Buffer_usage_flag_bits::shader_device_address,
     });
-    auto work_recorder = _graphics.record_transient_work({});
+    auto work_recorder = _graphics.record_transient_work();
     work_recorder.copy_buffer(
       staging_buffer,
       vertex_buffer,
@@ -954,7 +949,7 @@ private:
   rc::Strong<graphics::Buffer> upload_indices(std::span<std::byte const> data) {
     auto const staging_buffer = _graphics.create_staging_buffer(data);
     auto index_buffer = _graphics.create_index_buffer(data.size());
-    auto work_recorder = _graphics.record_transient_work({});
+    auto work_recorder = _graphics.record_transient_work();
     work_recorder.copy_buffer(
       staging_buffer,
       index_buffer,
@@ -1002,7 +997,7 @@ private:
                graphics::Image_usage_flag_bits::transfer_dst,
     });
     auto const staging_buffer = _graphics.create_staging_buffer(pixels);
-    auto work_recorder = _graphics.record_transient_work({});
+    auto work_recorder = _graphics.record_transient_work();
     work_recorder.transition_image_layout(
       {},
       {
@@ -1077,7 +1072,6 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
-    assert_push_constant_range_size(*pipeline, 36);
     return pipeline;
   }
 
@@ -1110,7 +1104,6 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
-    assert_push_constant_range_size(*pipeline, 80);
     return pipeline;
   }
 
@@ -1142,7 +1135,6 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
-    assert_push_constant_range_size(*pipeline, 8);
     return pipeline;
   }
 
@@ -1175,7 +1167,6 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
-    assert_push_constant_range_size(*pipeline, 104);
     return pipeline;
   }
 
@@ -1208,7 +1199,6 @@ private:
           .color_attachment_formats = {&color_attachment_format, 1},
         },
     });
-    assert_push_constant_range_size(*pipeline, 20);
     return pipeline;
   }
 
@@ -1288,4 +1278,6 @@ Application::Application(Application_create_info const &create_info)
 Application::~Application() = default;
 
 bool Application::update(float duration) { return _impl->update(duration); }
+
+void Application::exit() { _impl->exit(); _impl.reset(); }
 } // namespace fpsparty::client

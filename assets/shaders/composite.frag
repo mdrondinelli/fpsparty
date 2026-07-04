@@ -55,14 +55,14 @@ void main() {
   const uint depth_texture_index =
     push_constants.depth_texture_index;
   vec3 color = texelFetch(
-    sampler2D(sampled_images[albedo_texture_index], FPSPARTY_SAMPLER_NEAREST),
+    sampled_images[albedo_texture_index],
     pixel,
     0).rgb;
   color *= 1.0f / 512.0f; // exposure 
   color /= color + vec3(1.0f); // tonemap
   color = apply_noise(color, pixel_noise);
   const float mask = texelFetch(
-    sampler2D(sampled_images[mask_texture_index], FPSPARTY_SAMPLER_NEAREST),
+    sampled_images[mask_texture_index],
     pixel,
     0).r;
   if (mask > 0.5f) {

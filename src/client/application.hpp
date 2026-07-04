@@ -23,7 +23,12 @@ public:
 
   Application &operator=(Application const &other) = delete;
 
+  // You have to call this as time passes.
+  // Returns true if the application should exit.
   bool update(float duration);
+
+  // Call this when the application is about to exit.
+  void exit();
 
 private:
   class Impl;

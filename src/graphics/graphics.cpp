@@ -1,6 +1,5 @@
 #include "graphics.hpp"
 #include "glfw.hpp"
-#include "graphics/buffer_usage.hpp"
 #include "graphics/global_vulkan_state.hpp"
 #include "graphics/image.hpp"
 #include "graphics/work_recorder.hpp"
@@ -119,7 +118,20 @@ vk::UniqueSemaphore make_semaphore(
   return retval;
 }
 
-constexpr auto sampler_descriptor_count = 4;
+vk::UniquePipelineLayout
+make_pipeline_layout(vk::DescriptorSetLayout descriptor_set_layout) {
+  auto const push_constant_range = vk::PushConstantRange{
+    .stageFlags = vk::ShaderStageFlagBits::eAll,
+    .offset = 0,
+    .size = 128,
+  };
+  return Global_vulkan_state::get().device().createPipelineLayoutUnique({
+    .setLayoutCount = 1,
+    .pSetLayouts = &descriptor_set_layout,
+    .pushConstantRangeCount = 1,
+    .pPushConstantRanges = &push_constant_range,
+  });
+}
 
 } // namespace
 
@@ -130,25 +142,10 @@ Graphics::Graphics(Graphics_create_info const &info)
                                .physical_device()
                                .getSurfacePresentModesKHR(_surface)},
       _vsync_preferred{info.vsync_preferred},
-      _sampler_heap{create_buffer({
-        .size = sampler_descriptor_count * Global_vulkan_state::get()
-                                             .descriptor_heap_properties()
-                                             .samplerDescriptorSize +
-                Global_vulkan_state::get()
-                  .descriptor_heap_properties()
-                  .minSamplerHeapReservedRange,
-        .usage = Buffer_usage_flag_bits::shader_device_address |
-                 Buffer_usage_flag_bits::descriptor_heap,
-        .mapping_mode = Mapping_mode::write_only,
-        .min_alignment = Global_vulkan_state::get()
-                           .descriptor_heap_properties()
-                           .samplerHeapAlignment,
-      })},
-      _descriptor_heap{_descriptor_heap_factory.create(
-        detail::Descriptor_heap_create_info{
-          .buffer_factory = &_buffer_factory,
-          .capacity = info.descriptor_capacity,
-        })} {
+      _descriptor_heap{{}},
+      _pipeline_layout{make_pipeline_layout(
+        detail::get_descriptor_heap_vk_descriptor_set_layout(
+          _descriptor_heap))} {
   init_swapchain(select_swapchain_present_mode());
   for (auto i = std::size_t{}; i != info.max_frames_in_flight; ++i) {
     auto const swapchain_image_acquire_semaphore_name =
@@ -158,52 +155,6 @@ Graphics::Graphics(Graphics_create_info const &info)
         make_semaphore(swapchain_image_acquire_semaphore_name.c_str()),
     });
   }
-  auto const sampler_descriptor_size = Global_vulkan_state::get()
-                                         .descriptor_heap_properties()
-                                         .samplerDescriptorSize;
-  auto const sampler_heap_memory = _sampler_heap->map();
-  auto const nearest_sampler_create_info = vk::SamplerCreateInfo{};
-  auto const nearest_clamp_sampler_create_info = vk::SamplerCreateInfo{
-    .addressModeU = vk::SamplerAddressMode::eClampToEdge,
-    .addressModeV = vk::SamplerAddressMode::eClampToEdge,
-    .addressModeW = vk::SamplerAddressMode::eClampToEdge,
-  };
-  auto const linear_sampler_create_info = vk::SamplerCreateInfo{
-    .magFilter = vk::Filter::eLinear,
-    .minFilter = vk::Filter::eLinear,
-  };
-  auto const linear_clamp_sampler_create_info = vk::SamplerCreateInfo{
-    .magFilter = vk::Filter::eLinear,
-    .minFilter = vk::Filter::eLinear,
-    .addressModeU = vk::SamplerAddressMode::eClampToEdge,
-    .addressModeV = vk::SamplerAddressMode::eClampToEdge,
-    .addressModeW = vk::SamplerAddressMode::eClampToEdge,
-  };
-  Global_vulkan_state::get().device().writeSamplerDescriptorsEXT(
-    {
-      nearest_sampler_create_info,
-      nearest_clamp_sampler_create_info,
-      linear_sampler_create_info,
-      linear_clamp_sampler_create_info,
-    },
-    {
-      {
-        sampler_heap_memory.get().data() + 0 * sampler_descriptor_size,
-        sampler_descriptor_size,
-      },
-      {
-        sampler_heap_memory.get().data() + 1 * sampler_descriptor_size,
-        sampler_descriptor_size,
-      },
-      {
-        sampler_heap_memory.get().data() + 2 * sampler_descriptor_size,
-        sampler_descriptor_size,
-      },
-      {
-        sampler_heap_memory.get().data() + 3 * sampler_descriptor_size,
-        sampler_descriptor_size,
-      },
-    });
 }
 
 void Graphics::poll_works() {
@@ -211,14 +162,24 @@ void Graphics::poll_works() {
   _works.poll(_work_resources);
 }
 
+void Graphics::wait_idle() {
+  ZoneScoped;
+  graphics::Global_vulkan_state::get().device().waitIdle();
+  _works.poll(_work_resources);
+}
+
 rc::Strong<Pipeline>
 Graphics::create_pipeline(Pipeline_create_info const &info) {
-  return _pipeline_factory.create(info);
+  auto create_info = info;
+  create_info.layout = *_pipeline_layout;
+  return _pipeline_factory.create(create_info);
 }
 
 rc::Strong<Compute_pipeline>
 Graphics::create_compute_pipeline(Compute_pipeline_create_info const &info) {
-  return _compute_pipeline_factory.create(info);
+  auto create_info = info;
+  create_info.layout = *_pipeline_layout;
+  return _compute_pipeline_factory.create(create_info);
 }
 
 rc::Strong<Buffer> Graphics::create_buffer(Buffer_create_info const &info) {
@@ -255,38 +216,38 @@ rc::Strong<Image> Graphics::create_image(Image_create_info const &info) {
   return _image_factory.create(info);
 }
 
-rc::Strong<Descriptor>
-Graphics::create_sampled_image_descriptor(rc::Strong<Image const> image) {
-  auto const handle = _descriptor_heap->alloc();
-  _descriptor_heap->write(handle, image->get_sampled_image_descriptor());
+rc::Strong<Descriptor> Graphics::create_sampled_image_descriptor(
+  rc::Strong<Image const> image, Sampler sampler) {
+  auto const handle = _descriptor_heap.alloc_sampled_image(*image, sampler);
   return _descriptor_factory.create(
     detail::Descriptor_create_info{
-      .heap = _descriptor_heap,
+      .heap = &_descriptor_heap,
       .image = std::move(image),
+      .type = Descriptor_type::sampled_image,
       .handle = handle,
     });
 }
 
 rc::Strong<Descriptor>
 Graphics::create_storage_image_descriptor(rc::Strong<Image> image) {
-  auto const handle = _descriptor_heap->alloc();
-  _descriptor_heap->write(handle, image->get_storage_image_descriptor());
+  auto const handle = _descriptor_heap.alloc_storage_image(*image);
   return _descriptor_factory.create(
     detail::Descriptor_create_info{
-      .heap = _descriptor_heap,
+      .heap = &_descriptor_heap,
       .image = std::move(image),
+      .type = Descriptor_type::storage_image,
       .handle = handle,
     });
 }
 
-Work_recorder Graphics::record_transient_work(Work_record_info const &info) {
-  static_cast<void>(info);
+Work_recorder Graphics::record_transient_work() {
   auto resource = _work_resources.pop();
   return detail::acquire_work_recorder(
     std::move(resource),
     std::optional{detail::Work_recorder_descriptor_info{
-      .sampler_heap = _sampler_heap,
-      .resource_heap = _descriptor_heap->buffer(),
+      .descriptor_set =
+        detail::get_descriptor_heap_vk_descriptor_set(_descriptor_heap),
+      .pipeline_layout = *_pipeline_layout,
     }});
 }
 
@@ -296,8 +257,7 @@ rc::Strong<Work> Graphics::submit_transient_work(Work_recorder recorder) {
 }
 
 std::optional<std::pair<Work_recorder, rc::Strong<Image>>>
-Graphics::try_record_frame_work(Work_record_info const &info) {
-  static_cast<void>(info);
+Graphics::try_record_frame_work() {
   ZoneScoped;
   auto &frame_resource = _frame_resources[_frame_resource_index];
   if (frame_resource.pending_work) {
@@ -328,16 +288,17 @@ Graphics::try_record_frame_work(Work_record_info const &info) {
     detail::acquire_work_recorder(
       std::move(resource),
       std::optional{detail::Work_recorder_descriptor_info{
-        .sampler_heap = _sampler_heap,
-        .resource_heap = _descriptor_heap->buffer(),
+        .descriptor_set =
+          detail::get_descriptor_heap_vk_descriptor_set(_descriptor_heap),
+        .pipeline_layout = *_pipeline_layout,
       }}),
     _swapchain_images.at(frame_resource.swapchain_image_index),
   };
 }
 
-std::pair<Work_recorder, rc::Strong<Image>>
-Graphics::record_frame_work(Work_record_info const &info) {
-  if (auto work = try_record_frame_work(info)) {
+std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
+  ZoneScoped;
+  if (auto work = try_record_frame_work()) {
     return std::move(*work);
   }
   auto &frame_resource = _frame_resources[_frame_resource_index];
@@ -345,7 +306,7 @@ Graphics::record_frame_work(Work_record_info const &info) {
     frame_resource.pending_work->await();
     frame_resource.pending_work = nullptr;
   }
-  return *try_record_frame_work(info);
+  return *try_record_frame_work();
 }
 
 rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {

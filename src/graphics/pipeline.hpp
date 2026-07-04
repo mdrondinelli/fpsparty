@@ -39,22 +39,18 @@ struct Pipeline_create_info {
   Pipeline_input_assembly_state_create_info input_assembly_state;
   Pipeline_depth_state_create_info depth_state;
   Pipeline_color_state_create_info color_state;
+  vk::PipelineLayout layout{};
 };
 
 class Pipeline {
 public:
   explicit Pipeline(Pipeline_create_info const &info);
 
-  u64 get_push_constant_range_size() const noexcept {
-    return _push_constant_range_size;
-  }
-
 private:
   friend vk::Pipeline
   detail::get_pipeline_vk_pipeline(Pipeline const &pipeline) noexcept;
 
   vk::UniquePipeline _vk_pipeline;
-  u64 _push_constant_range_size{};
 };
 
 namespace detail {

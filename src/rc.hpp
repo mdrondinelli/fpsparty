@@ -274,6 +274,7 @@ public:
       while (old_count != 0) {
         if (_header->strong_reference_count
               .compare_exchange_weak(old_count, old_count + 1)) {
+          ++_header->weak_reference_count;
           return detail::construct_strong<T>(_header, _object);
         }
       }

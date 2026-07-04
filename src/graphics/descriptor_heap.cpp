@@ -1,80 +1,290 @@
 #include "descriptor_heap.hpp"
-#include "buffer_usage.hpp"
+
 #include "global_vulkan_state.hpp"
+
+#include <array>
 #include <cassert>
-#include <cstring>
-#include <numeric>
+#include <limits>
+#include <memory>
 #include <stdexcept>
 
 namespace fpsparty::graphics::detail {
 
 namespace {
 
-constexpr std::uint64_t
-align_up(std::uint64_t value, std::uint64_t alignment) noexcept {
-  return (value + alignment - 1) / alignment * alignment;
+auto constexpr combined_image_count = std::uint32_t{1024};
+auto constexpr storage_image_count = std::uint32_t{1024};
+auto constexpr combined_image_binding = std::uint32_t{0};
+auto constexpr storage_image_binding = std::uint32_t{1};
+
+vk::UniqueDescriptorSetLayout make_descriptor_set_layout() {
+  auto const bindings = std::array{
+    vk::DescriptorSetLayoutBinding{
+      .binding = combined_image_binding,
+      .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+      .descriptorCount = combined_image_count,
+      .stageFlags = vk::ShaderStageFlagBits::eAll,
+    },
+    vk::DescriptorSetLayoutBinding{
+      .binding = storage_image_binding,
+      .descriptorType = vk::DescriptorType::eStorageImage,
+      .descriptorCount = storage_image_count,
+      .stageFlags = vk::ShaderStageFlagBits::eAll,
+    },
+  };
+  constexpr auto image_binding_flags =
+    vk::DescriptorBindingFlagBits::eUpdateUnusedWhilePending;
+  auto const binding_flags = std::array{
+    vk::DescriptorBindingFlags{image_binding_flags},
+    vk::DescriptorBindingFlags{image_binding_flags},
+  };
+  auto const binding_flags_info = vk::DescriptorSetLayoutBindingFlagsCreateInfo{
+    .bindingCount = static_cast<std::uint32_t>(binding_flags.size()),
+    .pBindingFlags = binding_flags.data(),
+  };
+  return Global_vulkan_state::get().device().createDescriptorSetLayoutUnique({
+    .pNext = &binding_flags_info,
+    // .flags = vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool,
+    .bindingCount = static_cast<std::uint32_t>(bindings.size()),
+    .pBindings = bindings.data(),
+  });
+}
+
+vk::UniqueDescriptorPool make_descriptor_pool() {
+  auto const pool_sizes = std::array{
+    vk::DescriptorPoolSize{
+      .type = vk::DescriptorType::eCombinedImageSampler,
+      .descriptorCount = combined_image_count,
+    },
+    vk::DescriptorPoolSize{
+      .type = vk::DescriptorType::eStorageImage,
+      .descriptorCount = storage_image_count,
+    },
+  };
+  return Global_vulkan_state::get().device().createDescriptorPoolUnique({
+    // .flags = vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind,
+    .maxSets = 1,
+    .poolSizeCount = static_cast<std::uint32_t>(pool_sizes.size()),
+    .pPoolSizes = pool_sizes.data(),
+  });
+}
+
+std::vector<vk::UniqueSampler> make_samplers() {
+  auto const sampler_create_infos = std::array{
+    vk::SamplerCreateInfo{},
+    vk::SamplerCreateInfo{
+      .addressModeU = vk::SamplerAddressMode::eClampToEdge,
+      .addressModeV = vk::SamplerAddressMode::eClampToEdge,
+      .addressModeW = vk::SamplerAddressMode::eClampToEdge,
+    },
+    vk::SamplerCreateInfo{
+      .magFilter = vk::Filter::eLinear,
+      .minFilter = vk::Filter::eLinear,
+    },
+    vk::SamplerCreateInfo{
+      .magFilter = vk::Filter::eLinear,
+      .minFilter = vk::Filter::eLinear,
+      .addressModeU = vk::SamplerAddressMode::eClampToEdge,
+      .addressModeV = vk::SamplerAddressMode::eClampToEdge,
+      .addressModeW = vk::SamplerAddressMode::eClampToEdge,
+    },
+  };
+  auto retval = std::vector<vk::UniqueSampler>{};
+  retval.reserve(sampler_create_infos.size());
+  for (auto const &sampler_create_info : sampler_create_infos) {
+    retval.emplace_back(
+      Global_vulkan_state::get().device().createSamplerUnique(
+        sampler_create_info));
+  }
+  return retval;
+}
+
+std::unique_ptr<Image> make_null_image() {
+  auto retval = std::make_unique<Image>(Image_create_info{
+    .dimensionality = 2,
+    .format = Image_format::r32g32b32a32_sfloat,
+    .extent = {1, 1, 1},
+    .mip_level_count = 1,
+    .array_layer_count = 1,
+    .usage = Image_usage_flag_bits::sampled | Image_usage_flag_bits::storage,
+  });
+  auto const device = Global_vulkan_state::get().device();
+  auto command_pool = device.createCommandPoolUnique({
+    .flags = vk::CommandPoolCreateFlagBits::eTransient,
+    .queueFamilyIndex = Global_vulkan_state::get().queue_family_index(),
+  });
+  auto const command_buffer = device.allocateCommandBuffers({
+    .commandPool = *command_pool,
+    .level = vk::CommandBufferLevel::ePrimary,
+    .commandBufferCount = 1,
+  })[0];
+  command_buffer.begin({
+    .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+  });
+  auto const barrier = vk::ImageMemoryBarrier2{
+    .srcStageMask = vk::PipelineStageFlagBits2::eTopOfPipe,
+    .dstStageMask = vk::PipelineStageFlagBits2::eAllCommands,
+    .oldLayout = vk::ImageLayout::eUndefined,
+    .newLayout = vk::ImageLayout::eGeneral,
+    .srcQueueFamilyIndex = vk::QueueFamilyIgnored,
+    .dstQueueFamilyIndex = vk::QueueFamilyIgnored,
+    .image = get_image_vk_image(*retval),
+    .subresourceRange =
+      {
+        .aspectMask =
+          detail::get_image_format_vk_image_aspect_flags(retval->get_format()),
+        .baseMipLevel = 0,
+        .levelCount = static_cast<std::uint32_t>(retval->get_mip_level_count()),
+        .baseArrayLayer = 0,
+        .layerCount =
+          static_cast<std::uint32_t>(retval->get_array_layer_count()),
+      },
+  };
+  command_buffer.pipelineBarrier2({
+    .imageMemoryBarrierCount = 1,
+    .pImageMemoryBarriers = &barrier,
+  });
+  command_buffer.end();
+  auto const fence = device.createFenceUnique({});
+  auto const submit_info = vk::SubmitInfo{
+    .commandBufferCount = 1,
+    .pCommandBuffers = &command_buffer,
+  };
+  Global_vulkan_state::get().submit({submit_info}, *fence);
+  static_cast<void>(
+    device.waitForFences({*fence}, vk::True, std::numeric_limits<u64>::max()));
+  return retval;
+}
+
+void write_image(
+  vk::DescriptorSet descriptor_set,
+  std::uint32_t binding,
+  std::uint32_t index,
+  vk::DescriptorType descriptor_type,
+  Image const &image,
+  vk::Sampler sampler) {
+  auto const image_info = vk::DescriptorImageInfo{
+    .sampler = sampler,
+    .imageView = get_image_vk_image_view(image),
+    .imageLayout = vk::ImageLayout::eGeneral,
+  };
+  auto const write = vk::WriteDescriptorSet{
+    .dstSet = descriptor_set,
+    .dstBinding = binding,
+    .dstArrayElement = index,
+    .descriptorCount = 1,
+    .descriptorType = descriptor_type,
+    .pImageInfo = &image_info,
+  };
+  Global_vulkan_state::get().device().updateDescriptorSets({write}, {});
 }
 
 } // namespace
 
-Descriptor_heap::Descriptor_heap(Descriptor_heap_create_info const &info)
-    : _buffer{[&] {
-        auto const &properties =
-          Global_vulkan_state::get().descriptor_heap_properties();
-        assert(
-          properties.imageDescriptorSize % properties
-                                             .imageDescriptorAlignment ==
-          0);
-        auto const descriptor_alignment = std::lcm(
-          properties.imageDescriptorAlignment,
-          properties.bufferDescriptorAlignment);
-        auto const reserved_range_offset = align_up(
-          static_cast<std::uint64_t>(info.capacity) * properties
-                                                        .imageDescriptorSize,
-          descriptor_alignment);
-        return info.buffer_factory->create(
-          Buffer_create_info{
-            .size =
-              reserved_range_offset + properties.minResourceHeapReservedRange,
-            .usage = Buffer_usage_flag_bits::shader_device_address |
-                     Buffer_usage_flag_bits::descriptor_heap,
-            .mapping_mode = Mapping_mode::write_only,
-            .min_alignment = properties.resourceHeapAlignment,
-          });
-      }()},
-      _memory{_buffer->map()} {
-  _free_list.reserve(info.capacity);
-  for (auto i = info.capacity; i != 0; --i) {
-    _free_list.push_back(i - 1);
+Descriptor_heap::Descriptor_heap(Descriptor_heap_create_info const &)
+    : _vk_descriptor_set_layout{make_descriptor_set_layout()},
+      _vk_samplers{make_samplers()},
+      _null_image{make_null_image()},
+      _vk_descriptor_pool{make_descriptor_pool()},
+      _vk_descriptor_set{
+        Global_vulkan_state::get().device().allocateDescriptorSets({
+          .descriptorPool = *_vk_descriptor_pool,
+          .descriptorSetCount = 1,
+          .pSetLayouts = &*_vk_descriptor_set_layout,
+        })[0]} {
+  auto const fill_free_list =
+    [](std::vector<std::uint32_t> &free_list, std::uint32_t count) {
+      free_list.reserve(count);
+      for (auto i = count; i != 0; --i) {
+        free_list.push_back(i - 1);
+      }
+    };
+  fill_free_list(_combined_image_free_list, combined_image_count);
+  fill_free_list(_storage_image_free_list, storage_image_count);
+  for (auto i = std::uint32_t{}; i != combined_image_count; ++i) {
+    write_image(
+      _vk_descriptor_set,
+      combined_image_binding,
+      i,
+      vk::DescriptorType::eCombinedImageSampler,
+      *_null_image,
+      *_vk_samplers[static_cast<std::size_t>(Sampler::nearest)]);
+  }
+  for (auto i = std::uint32_t{}; i != storage_image_count; ++i) {
+    write_image(
+      _vk_descriptor_set,
+      storage_image_binding,
+      i,
+      vk::DescriptorType::eStorageImage,
+      *_null_image,
+      {});
   }
 }
 
-std::byte *Descriptor_heap::data() noexcept { return _memory.get().data(); }
-
-std::uint32_t Descriptor_heap::alloc() {
-  auto const lock = std::scoped_lock{_mutex};
-  if (_free_list.empty()) {
+u32 Descriptor_heap::alloc_sampled_image(Image const &image, Sampler sampler) {
+  if (_combined_image_free_list.empty()) {
     throw std::runtime_error{"Descriptor heap is out of space"};
   }
-  auto const retval = _free_list.back();
-  _free_list.pop_back();
-  return retval;
+  auto const handle = _combined_image_free_list.back();
+  _combined_image_free_list.pop_back();
+  write_image(
+    _vk_descriptor_set,
+    combined_image_binding,
+    handle,
+    vk::DescriptorType::eCombinedImageSampler,
+    image,
+    *_vk_samplers[static_cast<std::size_t>(sampler)]);
+  return handle;
 }
 
-void Descriptor_heap::free(std::uint32_t index) noexcept {
+void Descriptor_heap::free_sampled_image(u32 handle) noexcept {
   auto const lock = std::scoped_lock{_mutex};
-  _free_list.push_back(index);
+  write_image(
+    _vk_descriptor_set,
+    combined_image_binding,
+    handle,
+    vk::DescriptorType::eCombinedImageSampler,
+    *_null_image,
+    *_vk_samplers[static_cast<std::size_t>(Sampler::nearest)]);
+  _combined_image_free_list.push_back(handle);
 }
 
-void Descriptor_heap::write(
-  std::uint32_t index, std::span<std::byte const> descriptor) {
-  auto const descriptor_size =
-    Global_vulkan_state::get().descriptor_heap_properties().imageDescriptorSize;
-  assert(descriptor.size() == descriptor_size);
-  std::memcpy(
-    data() + static_cast<std::size_t>(index) * descriptor_size,
-    descriptor.data(),
-    descriptor.size());
+u32 Descriptor_heap::alloc_storage_image(Image const &image) {
+  if (_storage_image_free_list.empty()) {
+    throw std::runtime_error{"Descriptor heap is out of space"};
+  }
+  auto const handle = _storage_image_free_list.back();
+  _storage_image_free_list.pop_back();
+  write_image(
+    _vk_descriptor_set,
+    storage_image_binding,
+    handle,
+    vk::DescriptorType::eStorageImage,
+    image,
+    {});
+  return handle;
+}
+
+void Descriptor_heap::free_storage_image(u32 handle) noexcept {
+  auto const lock = std::scoped_lock{_mutex};
+  write_image(
+    _vk_descriptor_set,
+    storage_image_binding,
+    handle,
+    vk::DescriptorType::eStorageImage,
+    *_null_image,
+    {});
+  _storage_image_free_list.push_back(handle);
+}
+
+vk::DescriptorSetLayout get_descriptor_heap_vk_descriptor_set_layout(
+  Descriptor_heap const &descriptor_heap) noexcept {
+  return *descriptor_heap._vk_descriptor_set_layout;
+}
+
+vk::DescriptorSet get_descriptor_heap_vk_descriptor_set(
+  Descriptor_heap const &descriptor_heap) noexcept {
+  return descriptor_heap._vk_descriptor_set;
 }
 
 } // namespace fpsparty::graphics::detail

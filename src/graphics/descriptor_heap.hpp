@@ -1,22 +1,19 @@
 #ifndef FPSPARTY_GRAPHICS_DESCRIPTOR_HEAP_HPP
 #define FPSPARTY_GRAPHICS_DESCRIPTOR_HEAP_HPP
 
-#include <cstdint>
 #include <mutex>
-#include <span>
+#include <memory>
 #include <vector>
 
+#include <int.hpp>
 #include <rc.hpp>
 
-#include "buffer.hpp"
-#include "mapped_memory.hpp"
+#include "image.hpp"
+#include "sampler.hpp"
 
 namespace fpsparty::graphics::detail {
 
-struct Descriptor_heap_create_info {
-  rc::Factory<Buffer> *buffer_factory;
-  std::uint32_t capacity{};
-};
+struct Descriptor_heap_create_info {};
 
 class Descriptor_heap {
 public:
@@ -28,22 +25,36 @@ public:
 
   Descriptor_heap &operator=(Descriptor_heap const &other) = delete;
 
-  rc::Strong<Buffer> const &buffer() const noexcept { return _buffer; }
+  u32 alloc_sampled_image(Image const &image, Sampler sampler);
 
-  std::byte *data() noexcept;
+  void free_sampled_image(u32 handle) noexcept;
 
-  std::uint32_t alloc();
+  u32 alloc_storage_image(Image const &image);
 
-  void free(std::uint32_t index) noexcept;
-
-  void write(std::uint32_t index, std::span<std::byte const> descriptor);
+  void free_storage_image(u32 handle) noexcept;
 
 private:
-  rc::Strong<Buffer> _buffer{};
-  Mapped_memory _memory{};
-  std::vector<std::uint32_t> _free_list{};
+  friend vk::DescriptorSetLayout get_descriptor_heap_vk_descriptor_set_layout(
+    Descriptor_heap const &descriptor_heap) noexcept;
+
+  friend vk::DescriptorSet get_descriptor_heap_vk_descriptor_set(
+    Descriptor_heap const &descriptor_heap) noexcept;
+
+  vk::UniqueDescriptorSetLayout _vk_descriptor_set_layout{};
+  std::vector<vk::UniqueSampler> _vk_samplers{};
+  std::unique_ptr<Image> _null_image{};
+  vk::UniqueDescriptorPool _vk_descriptor_pool{};
+  vk::DescriptorSet _vk_descriptor_set{};
+  std::vector<u32> _combined_image_free_list{};
+  std::vector<u32> _storage_image_free_list{};
   std::mutex _mutex;
 };
+
+vk::DescriptorSetLayout get_descriptor_heap_vk_descriptor_set_layout(
+  Descriptor_heap const &descriptor_heap) noexcept;
+
+vk::DescriptorSet get_descriptor_heap_vk_descriptor_set(
+  Descriptor_heap const &descriptor_heap) noexcept;
 
 } // namespace fpsparty::graphics::detail
 

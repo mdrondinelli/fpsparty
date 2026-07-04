@@ -43,7 +43,6 @@ vec3 transmittance_along_ray(vec3 ro, vec3 rd) {
   const vec2 lut_texcoord = pack_transmittance_lut_params(h, cos_zenith);
   return FPSPARTY_SAMPLE(
     push_constants.transmittance_lut,
-    LINEAR_CLAMP,
     lut_texcoord).rgb;
 }
 
@@ -53,13 +52,13 @@ vec3 transmittance_ratio(vec3 numerator, vec3 denominator) {
 
 vec3 integrate_in_scattering(vec3 x_0, vec3 x_1, vec3 d) {
   const vec3 transmittance_numer = transmittance_along_ray(x_0, d);
+  const float cos_theta = dot(d, push_constants.sun_direction);
   const int step_count = 32;
   const float step_size = length(x_0 - x_1) / step_count;
   vec3 radiance = vec3(0.0);
   for (int i = 0; i < step_count; ++i) {
     const vec3 x_i = mix(x_0, x_1, (i + 0.5) / step_count);
     const float h = altitude(x_i);
-    const float cos_theta = dot(d, push_constants.sun_direction);
     const vec3 rayleigh_scattering_coeff =
       rayleigh_scattering * rayleigh_phase(cos_theta) * rayleigh_density(h);
     const float mie_scattering_coeff =

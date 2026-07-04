@@ -10,48 +10,6 @@ namespace fpsparty::graphics {
 
 namespace detail {
 
-namespace {
-
-void bind_sampler_heap(
-  Work_resource &resource, rc::Strong<Buffer> sampler_heap) {
-  resource.vk_command_buffer.bindSamplerHeapEXT({
-    .heapRange =
-      {
-        .address = sampler_heap->get_device_address(),
-        .size = sampler_heap->get_size(),
-      },
-    .reservedRangeOffset =
-      sampler_heap->get_size() - Global_vulkan_state::get()
-                                   .descriptor_heap_properties()
-                                   .minSamplerHeapReservedRange,
-    .reservedRangeSize = Global_vulkan_state::get()
-                           .descriptor_heap_properties()
-                           .minSamplerHeapReservedRange,
-  });
-  resource.buffers.emplace_back(std::move(sampler_heap));
-}
-
-void bind_resource_heap(
-  Work_resource &resource, rc::Strong<Buffer> resource_heap) {
-  resource.vk_command_buffer.bindResourceHeapEXT({
-    .heapRange =
-      {
-        .address = resource_heap->get_device_address(),
-        .size = resource_heap->get_size(),
-      },
-    .reservedRangeOffset =
-      resource_heap->get_size() - Global_vulkan_state::get()
-                                    .descriptor_heap_properties()
-                                    .minResourceHeapReservedRange,
-    .reservedRangeSize = Global_vulkan_state::get()
-                           .descriptor_heap_properties()
-                           .minResourceHeapReservedRange,
-  });
-  resource.buffers.emplace_back(std::move(resource_heap));
-}
-
-} // namespace
-
 Work_recorder acquire_work_recorder(
   Work_resource resource,
   std::optional<Work_recorder_descriptor_info> const
@@ -60,8 +18,8 @@ Work_recorder acquire_work_recorder(
     .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
   });
   if (descriptor_info) {
-    bind_sampler_heap(resource, descriptor_info->sampler_heap);
-    bind_resource_heap(resource, descriptor_info->resource_heap);
+    resource.descriptor_set = descriptor_info->descriptor_set;
+    resource.pipeline_layout = descriptor_info->pipeline_layout;
   }
   auto recorder = Work_recorder{std::move(resource)};
   return recorder;
@@ -219,6 +177,14 @@ void Work_recorder::bind_pipeline(rc::Strong<Pipeline const> pipeline) {
   get_command_buffer().bindPipeline(
     vk::PipelineBindPoint::eGraphics,
     detail::get_pipeline_vk_pipeline(*pipeline));
+  if (_resource.descriptor_set) {
+    get_command_buffer().bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics,
+      _resource.pipeline_layout,
+      0,
+      {_resource.descriptor_set},
+      {});
+  }
   add_reference(std::move(pipeline));
 }
 
@@ -227,6 +193,14 @@ void Work_recorder::bind_compute_pipeline(
   get_command_buffer().bindPipeline(
     vk::PipelineBindPoint::eCompute,
     detail::get_compute_pipeline_vk_pipeline(*pipeline));
+  if (_resource.descriptor_set) {
+    get_command_buffer().bindDescriptorSets(
+      vk::PipelineBindPoint::eCompute,
+      _resource.pipeline_layout,
+      0,
+      {_resource.descriptor_set},
+      {});
+  }
   add_reference(std::move(pipeline));
 }
 
@@ -309,14 +283,13 @@ void Work_recorder::dispatch(
 
 void Work_recorder::push_data(
   std::uint32_t push_offset, std::span<std::byte const> data) noexcept {
-  get_command_buffer().pushDataEXT({
-    .offset = push_offset,
-    .data =
-      {
-        .address = data.data(),
-        .size = data.size(),
-      },
-  });
+  assert(_resource.pipeline_layout);
+  get_command_buffer().pushConstants(
+    _resource.pipeline_layout,
+    vk::ShaderStageFlagBits::eAll,
+    push_offset,
+    static_cast<std::uint32_t>(data.size()),
+    data.data());
 }
 
 void Work_recorder::push_descriptor(

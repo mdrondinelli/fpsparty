@@ -66,7 +66,7 @@ int main() {
     loop_duration = now - loop_time;
     loop_time = now;
   }
-  graphics::Global_vulkan_state::get().device().waitIdle();
   std::cout << "Exiting.\n";
+  application.exit();
   return 0;
 }

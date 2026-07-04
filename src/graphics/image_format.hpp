@@ -8,10 +8,8 @@ namespace fpsparty::graphics {
 enum class Image_format {
   r8_unorm = static_cast<int>(vk::Format::eR8Unorm),
   b8g8r8a8_srgb = static_cast<int>(vk::Format::eB8G8R8A8Srgb),
-  r16g16b16a16_sfloat =
-    static_cast<int>(vk::Format::eR16G16B16A16Sfloat),
-  r32g32b32a32_sfloat =
-    static_cast<int>(vk::Format::eR32G32B32A32Sfloat),
+  r16g16b16a16_sfloat = static_cast<int>(vk::Format::eR16G16B16A16Sfloat),
+  r32g32b32a32_sfloat = static_cast<int>(vk::Format::eR32G32B32A32Sfloat),
   d32_sfloat = static_cast<int>(vk::Format::eD32Sfloat),
 };
 
