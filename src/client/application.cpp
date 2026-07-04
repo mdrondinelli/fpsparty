@@ -358,18 +358,17 @@ public:
           "./assets/shaders/atmosphere/sky_view.comp.spv")},
         _sky_irradiance_compute_shader{graphics::load_shader(
           "./assets/shaders/atmosphere/sky_irradiance.comp.spv")},
-        _sky_vertex_shader{
-          graphics::load_shader("./assets/shaders/atmosphere/sky.vert.spv")},
-        _sky_fragment_shader{
-          graphics::load_shader("./assets/shaders/atmosphere/sky.frag.spv")},
+        _radiance_compute_shader{
+          graphics::load_shader("./assets/shaders/radiance.comp.spv")},
         _grid_pipeline{make_grid_pipeline()},
         _mesh_pipeline{make_mesh_pipeline()},
         _crosshair_pipeline{make_crosshair_pipeline()},
-        _sky_pipeline{make_sky_pipeline()},
         _sky_view_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_sky_view_compute_shader})},
         _sky_irradiance_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_sky_irradiance_compute_shader})},
+        _radiance_pipeline{_graphics.create_compute_pipeline(
+          {.shader = &_radiance_compute_shader})},
         _texture_manager{{.graphics = &_graphics}},
         _block_texture_registry{{.graphics = &_graphics}},
         _scene_uniform_buffer{_graphics.create_buffer({
@@ -476,10 +475,17 @@ private:
     auto const framebuffer_size = framebuffer_extent.head<2>().eval();
     get_color_render_target(
       work_recorder,
-      _radiance_render_target,
-      _radiance_render_target_descriptor,
-      graphics::Image_format::r16g16b16a16_sfloat,
+      _albedo_render_target,
+      _albedo_render_target_descriptor,
+      graphics::Image_format::b8g8r8a8_srgb,
       framebuffer_extent);
+    get_color_render_target(
+      work_recorder,
+      _normal_render_target,
+      _normal_render_target_descriptor,
+      graphics::Image_format::r16g16_snorm,
+      framebuffer_extent);
+    get_radiance_render_target(work_recorder, framebuffer_extent);
     get_color_render_target(
       work_recorder,
       _crosshair_mask_render_target,
@@ -498,9 +504,9 @@ private:
         ? session->get_scene()
             .get_interpolated_camera(*_local_player->player_entity_id)
         : nullptr;
+    auto const scene_uniform_offset =
+      (_frame_number % max_frames_in_flight) * scene_uniform_data_size;
     if (camera) {
-      auto const scene_uniform_offset =
-        (_frame_number % max_frames_in_flight) * scene_uniform_data_size;
       record_sky_view_pass(
         work_recorder,
         camera->position,
@@ -509,7 +515,8 @@ private:
       record_sky_irradiance_pass(
         work_recorder, camera->position, scene_uniform_offset);
     }
-    record_forward_pass(work_recorder, framebuffer_size);
+    record_gbuffer_pass(work_recorder, framebuffer_size, scene_uniform_offset);
+    record_radiance_pass(work_recorder, framebuffer_size, scene_uniform_offset);
     record_crosshair_pass(work_recorder, framebuffer_size);
     record_composite_pass(work_recorder, swapchain_image, framebuffer_size);
     _graphics.submit_frame_work(std::move(work_recorder));
@@ -547,18 +554,23 @@ private:
       scene_uniform_offset + scene_sky_irradiance_offset);
     work_recorder.dispatch(6, 1, 1);
     work_recorder.barrier(
-      compute_shader_storage_write_scope, fragment_shader_storage_read_scope);
+      compute_shader_storage_write_scope, compute_shader_storage_read_scope);
   }
 
-  void record_forward_pass(
-    graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
+  void record_gbuffer_pass(
+    graphics::Work_recorder &work_recorder,
+    math::ivec2 framebuffer_size,
+    std::size_t scene_uniform_offset) {
     work_recorder.barrier(
-      fragment_shader_sampled_read_scope,
+      compute_shader_sampled_read_scope,
       color_attachment_scope | depth_attachment_scope);
+    auto const gbuffer_color_attachments = std::array{
+      graphics::Color_attachment_info{.image = _albedo_render_target},
+      graphics::Color_attachment_info{.image = _normal_render_target},
+    };
     work_recorder.begin_rendering({
-      .color_image = _radiance_render_target,
+      .color_attachments = gbuffer_color_attachments,
       .depth_image = _depth_render_target,
-      .color_clear_value = sky_color,
     });
     work_recorder.set_viewport(framebuffer_size);
     work_recorder.set_scissor(framebuffer_size);
@@ -590,8 +602,6 @@ private:
       auto const sun_direction =
         session->get_scene().get_interpolated_sun_direction();
       auto const scene_uniform_memory = _scene_uniform_buffer->map();
-      auto const scene_uniform_offset =
-        (_frame_number % max_frames_in_flight) * scene_uniform_data_size;
       auto const write_scene_uniform =
         [&]<typename T>(std::size_t offset, T const &value) {
           std::memcpy(
@@ -666,21 +676,40 @@ private:
           .first_instance = 0,
         });
       }
-      record_sky_draw(
-        work_recorder,
-        framebuffer_size,
-        camera->position,
-        session->get_scene().get_interpolated_sun_direction());
     }
     work_recorder.end_rendering();
   }
 
-  void record_sky_draw(
+  void record_radiance_pass(
     graphics::Work_recorder &work_recorder,
     math::ivec2 framebuffer_size,
-    math::vec3 camera_position,
-    math::vec3 sun_direction) {
+    std::size_t scene_uniform_offset) {
     ZoneScoped;
+    auto const &session = _client.get_session();
+    auto const camera =
+      session && _local_player && _local_player->player_entity_id &&
+          _local_player->humanoid_entity_id
+        ? session->get_scene()
+            .get_interpolated_camera(*_local_player->player_entity_id)
+        : nullptr;
+    if (!camera) {
+      // No camera yet (e.g. still connecting): nothing was rasterized into
+      // the G-buffer this frame, so just clear the radiance target directly
+      // instead of dispatching a lighting pass with no valid view to light.
+      work_recorder.barrier(
+        compute_shader_storage_write_scope, color_attachment_scope);
+      auto const radiance_color_attachments = std::array{
+        graphics::Color_attachment_info{
+          .image = _radiance_render_target, .clear_value = sky_color},
+      };
+      work_recorder.begin_rendering({
+        .color_attachments = radiance_color_attachments,
+      });
+      work_recorder.end_rendering();
+      work_recorder.barrier(
+        color_attachment_scope, fragment_shader_sampled_read_scope);
+      return;
+    }
     auto constexpr zoom = 1.25f;
     auto const aspect_ratio = static_cast<f32>(framebuffer_size.x()) /
                               static_cast<f32>(framebuffer_size.y());
@@ -689,37 +718,38 @@ private:
       aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
     };
     auto const camera_basis =
-      (math::translation_matrix(camera_position) *
+      (math::translation_matrix(camera->position) *
        math::y_rotation_matrix(_local_player->input_state.yaw) *
        math::x_rotation_matrix(_local_player->input_state.pitch))
         .eval();
-    work_recorder.bind_pipeline(_sky_pipeline);
-    work_recorder.set_viewport(framebuffer_size);
-    work_recorder.set_scissor(framebuffer_size);
-    work_recorder.set_cull_mode(graphics::Cull_mode::none);
-    work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
-    work_recorder.set_depth_test_enabled(true);
-    work_recorder.set_depth_write_enabled(false);
-    work_recorder.set_depth_compare_op(graphics::Compare_op::equal);
-    work_recorder
-      .bind_index_buffer(_composite_index_buffer, graphics::Index_type::u16);
+    work_recorder.bind_compute_pipeline(_radiance_pipeline);
     work_recorder.push_data(0, std::as_bytes(std::span{&camera_basis, 1}));
-    work_recorder.push_descriptor(64, _sky_view_lut_sampled_descriptor);
-    work_recorder.push_data(80, std::as_bytes(std::span{&sun_direction, 1}));
-    work_recorder.push_data(96, std::as_bytes(std::span{&zoom_vec, 1}));
-    work_recorder.draw_indexed({
-      .index_count = static_cast<u32>(composite_indices.size()),
-      .instance_count = 1,
-      .first_index = 0,
-      .vertex_offset = 0,
-      .first_instance = 0,
-    });
+    work_recorder.push_data(64, std::as_bytes(std::span{&zoom_vec, 1}));
+    work_recorder.push_data(72, std::as_bytes(std::span{&z_near, 1}));
+    work_recorder.push_buffer_reference(
+      80, _scene_uniform_buffer, scene_uniform_offset);
+    work_recorder.push_descriptor(88, _albedo_render_target_descriptor);
+    work_recorder.push_descriptor(92, _normal_render_target_descriptor);
+    work_recorder.push_descriptor(96, _depth_render_target_descriptor);
+    work_recorder.push_descriptor(100, _sky_view_lut_sampled_descriptor);
+    work_recorder.push_descriptor(
+      104, _radiance_render_target_storage_descriptor);
+    auto const group_count_x =
+      static_cast<u32>((framebuffer_size.x() + 7) / 8);
+    auto const group_count_y =
+      static_cast<u32>((framebuffer_size.y() + 7) / 8);
+    work_recorder.dispatch(group_count_x, group_count_y, 1);
+    work_recorder.barrier(
+      compute_shader_storage_write_scope, fragment_shader_sampled_read_scope);
   }
 
   void record_crosshair_pass(
     graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
+    auto const color_attachments = std::array{
+      graphics::Color_attachment_info{.image = _crosshair_mask_render_target},
+    };
     work_recorder.begin_rendering({
-      .color_image = _crosshair_mask_render_target,
+      .color_attachments = color_attachments,
     });
     work_recorder.set_viewport(framebuffer_size);
     work_recorder.set_scissor(framebuffer_size);
@@ -752,8 +782,11 @@ private:
       graphics::Image_layout::undefined,
       graphics::Image_layout::general,
       swapchain_image);
+    auto const color_attachments = std::array{
+      graphics::Color_attachment_info{.image = swapchain_image},
+    };
     work_recorder.begin_rendering({
-      .color_image = swapchain_image,
+      .color_attachments = color_attachments,
     });
     work_recorder.set_viewport(framebuffer_size);
     work_recorder.set_scissor(framebuffer_size);
@@ -996,6 +1029,34 @@ private:
     }
   }
 
+  void get_radiance_render_target(
+    graphics::Work_recorder &work_recorder, math::ivec3 extent) {
+    auto const create_image = !_radiance_render_target ||
+                               _radiance_render_target->get_extent() != extent;
+    if (create_image) {
+      _radiance_render_target = _graphics.create_image({
+        .dimensionality = 2,
+        .format = graphics::Image_format::r16g16b16a16_sfloat,
+        .extent = extent,
+        .mip_level_count = 1,
+        .array_layer_count = 1,
+        .usage = graphics::Image_usage_flag_bits::sampled |
+                 graphics::Image_usage_flag_bits::storage |
+                 graphics::Image_usage_flag_bits::color_attachment,
+      });
+      work_recorder.transition_image_layout(
+        {},
+        compute_shader_storage_write_scope,
+        graphics::Image_layout::undefined,
+        graphics::Image_layout::general,
+        _radiance_render_target);
+      _radiance_render_target_descriptor =
+        _graphics.create_sampled_image_descriptor(_radiance_render_target);
+      _radiance_render_target_storage_descriptor =
+        _graphics.create_storage_image_descriptor(_radiance_render_target);
+    }
+  }
+
   rc::Strong<graphics::Buffer>
   upload_vertices(std::span<std::byte const> data) {
     auto const staging_buffer = _graphics.create_staging_buffer(data);
@@ -1136,8 +1197,10 @@ private:
           .shader = &_grid_fragment_shader,
         },
       };
-    auto const color_attachment_format =
-      graphics::Image_format::r16g16b16a16_sfloat;
+    auto const color_attachment_formats = std::array{
+      graphics::Image_format::b8g8r8a8_srgb,
+      graphics::Image_format::r16g16_snorm,
+    };
     auto pipeline = _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
@@ -1150,7 +1213,7 @@ private:
         },
       .color_state =
         {
-          .color_attachment_formats = {&color_attachment_format, 1},
+          .color_attachment_formats = color_attachment_formats,
         },
     });
     return pipeline;
@@ -1168,8 +1231,10 @@ private:
           .shader = &_mesh_fragment_shader,
         },
       };
-    auto const color_attachment_format =
-      graphics::Image_format::r16g16b16a16_sfloat;
+    auto const color_attachment_formats = std::array{
+      graphics::Image_format::b8g8r8a8_srgb,
+      graphics::Image_format::r16g16_snorm,
+    };
     auto pipeline = _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
       .input_assembly_state =
@@ -1182,7 +1247,7 @@ private:
         },
       .color_state =
         {
-          .color_attachment_formats = {&color_attachment_format, 1},
+          .color_attachment_formats = color_attachment_formats,
         },
     });
     return pipeline;
@@ -1210,38 +1275,6 @@ private:
       .depth_state =
         {
           .depth_attachment_enabled = false,
-        },
-      .color_state =
-        {
-          .color_attachment_formats = {&color_attachment_format, 1},
-        },
-    });
-    return pipeline;
-  }
-
-  rc::Strong<graphics::Pipeline> make_sky_pipeline() {
-    auto const shader_stages =
-      std::vector<graphics::Pipeline_shader_stage_create_info>{
-        {
-          .stage = graphics::Shader_stage_flag_bits::vertex,
-          .shader = &_sky_vertex_shader,
-        },
-        {
-          .stage = graphics::Shader_stage_flag_bits::fragment,
-          .shader = &_sky_fragment_shader,
-        },
-      };
-    auto const color_attachment_format =
-      graphics::Image_format::r16g16b16a16_sfloat;
-    auto pipeline = _graphics.create_pipeline({
-      .shader_stages = std::span{shader_stages},
-      .input_assembly_state =
-        {
-          .primitive_topology = graphics::Primitive_topology::triangle_list,
-        },
-      .depth_state =
-        {
-          .depth_attachment_enabled = true,
         },
       .color_state =
         {
@@ -1289,12 +1322,6 @@ private:
       .access_mask = graphics::Access_flag_bits::shader_sampled_read,
     };
 
-  static auto constexpr fragment_shader_storage_read_scope =
-    graphics::Synchronization_scope{
-      .stage_mask = graphics::Pipeline_stage_flag_bits::fragment_shader,
-      .access_mask = graphics::Access_flag_bits::shader_storage_read,
-    };
-
   static auto constexpr compute_shader_sampled_read_scope =
     graphics::Synchronization_scope{
       .stage_mask = graphics::Pipeline_stage_flag_bits::compute_shader,
@@ -1305,6 +1332,12 @@ private:
     graphics::Synchronization_scope{
       .stage_mask = graphics::Pipeline_stage_flag_bits::compute_shader,
       .access_mask = graphics::Access_flag_bits::shader_storage_write,
+    };
+
+  static auto constexpr compute_shader_storage_read_scope =
+    graphics::Synchronization_scope{
+      .stage_mask = graphics::Pipeline_stage_flag_bits::compute_shader,
+      .access_mask = graphics::Access_flag_bits::shader_storage_read,
     };
 
   static auto constexpr color_attachment_scope =
@@ -1330,8 +1363,13 @@ private:
   graphics::Graphics _graphics{};
   rc::Strong<graphics::Image> _depth_render_target{};
   rc::Strong<graphics::Descriptor> _depth_render_target_descriptor{};
+  rc::Strong<graphics::Image> _albedo_render_target{};
+  rc::Strong<graphics::Descriptor> _albedo_render_target_descriptor{};
+  rc::Strong<graphics::Image> _normal_render_target{};
+  rc::Strong<graphics::Descriptor> _normal_render_target_descriptor{};
   rc::Strong<graphics::Image> _radiance_render_target{};
   rc::Strong<graphics::Descriptor> _radiance_render_target_descriptor{};
+  rc::Strong<graphics::Descriptor> _radiance_render_target_storage_descriptor{};
   rc::Strong<graphics::Image> _crosshair_mask_render_target{};
   rc::Strong<graphics::Descriptor> _crosshair_mask_render_target_descriptor{};
   graphics::Shader _grid_vertex_shader;
@@ -1344,14 +1382,13 @@ private:
   graphics::Shader _composite_fragment_shader;
   graphics::Shader _sky_view_compute_shader;
   graphics::Shader _sky_irradiance_compute_shader;
-  graphics::Shader _sky_vertex_shader;
-  graphics::Shader _sky_fragment_shader;
+  graphics::Shader _radiance_compute_shader;
   rc::Strong<graphics::Pipeline> _grid_pipeline{};
   rc::Strong<graphics::Pipeline> _mesh_pipeline{};
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
-  rc::Strong<graphics::Pipeline> _sky_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _sky_view_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _sky_irradiance_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _radiance_pipeline{};
   rc::Strong<graphics::Pipeline> _composite_pipeline{};
   std::optional<graphics::Image_format> _composite_pipeline_color_format{};
   rc::Strong<graphics::Image> _transmittance_lut{};

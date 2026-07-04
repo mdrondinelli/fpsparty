@@ -1,28 +1,13 @@
 #version 450
 
-#include "numbers.glsl"
 #include "grid.glsl"
+#include "octahedral.glsl"
 
-#include "atmosphere/atmosphere.glsl"
+layout(location = 0) in vec2 in_texcoord;
+layout(location = 1) flat in uint in_texture;
 
-layout(location = 0) in vec3 in_position;
-layout(location = 1) in vec2 in_texcoord;
-layout(location = 2) flat in uint in_texture;
-
-layout(location = 0) out vec4 out_color;
-
-vec3 transmittance_along_ray(vec3 ro, vec3 rd) {
-  const float h = altitude(ro);
-  const float cos_zenith = dot(normalize(ro), rd);
-  const vec2 lut_texcoord = pack_transmittance_lut_params(h, cos_zenith);
-  return FPSPARTY_SAMPLE(
-      push_constants.scene.transmittance_texture,
-      lut_texcoord).rgb;
-}
-
-vec3 sky_irradiance(vec3 n) {
-  return sample_sky_irradiance(push_constants.scene, n);
-}
+layout(location = 0) out vec4 out_albedo;
+layout(location = 1) out vec2 out_normal;
 
 void main() {
   const vec3 base_color =
@@ -31,13 +16,6 @@ void main() {
     push_constants.normal_x,
     push_constants.normal_y,
     push_constants.normal_z);
-  const vec3 l = push_constants.scene.sun_direction;
-  const float n_dot_l = max(dot(n, l), 0.0); 
-  const vec3 E_top = push_constants.scene.sun_irradiance;
-  const vec3 E =
-    E_top *
-    transmittance_along_ray(vec3(0.0, r_ground + in_position.y, 0.0f), l) *
-    n_dot_l;
-  const vec3 L = base_color / pi * (E + sky_irradiance(n));
-  out_color = vec4(L, 1.0f);
+  out_albedo = vec4(base_color, 1.0);
+  out_normal = oct_encode(n);
 }
