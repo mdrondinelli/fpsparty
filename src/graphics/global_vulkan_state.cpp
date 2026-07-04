@@ -124,14 +124,8 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
     .queueCount = 1,
     .pQueuePriorities = &queue_priority,
   };
-  auto shader_untyped_pointers_features =
-    vk::PhysicalDeviceShaderUntypedPointersFeaturesKHR{
-      .pNext = nullptr,
-      // .shaderUntypedPointers = true,
-    };
   auto extended_dynamic_state_features =
     vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT{
-      .pNext = &shader_untyped_pointers_features,
       .extendedDynamicState = true,
     };
   auto vulkan_1_3_features = vk::PhysicalDeviceVulkan13Features{
