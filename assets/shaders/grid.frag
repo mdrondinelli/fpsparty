@@ -20,6 +20,10 @@ vec3 transmittance_along_ray(vec3 ro, vec3 rd) {
       lut_texcoord).rgb;
 }
 
+vec3 sky_irradiance(vec3 n) {
+  return sample_sky_irradiance(push_constants.scene, n);
+}
+
 void main() {
   const vec3 base_color =
     FPSPARTY_SAMPLE(nonuniformEXT(in_texture), in_texcoord).rgb;
@@ -32,7 +36,8 @@ void main() {
   const vec3 E_top = push_constants.scene.sun_irradiance;
   const vec3 E =
     E_top *
-    transmittance_along_ray(vec3(0.0, r_ground + in_position.y, 0.0f), l);
-  const vec3 L = base_color / pi * E * n_dot_l;
+    transmittance_along_ray(vec3(0.0, r_ground + in_position.y, 0.0f), l) *
+    n_dot_l;
+  const vec3 L = base_color / pi * (E + sky_irradiance(n));
   out_color = vec4(L, 1.0f);
 }

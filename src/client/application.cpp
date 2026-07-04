@@ -287,12 +287,13 @@ auto constexpr z_near = 0.1f;
 auto const transmittance_lut_size = math::ivec2{256, 128};
 auto const sky_view_lut_size = math::ivec2{256, 256};
 
-auto constexpr scene_uniform_data_size = std::size_t{112};
+auto constexpr scene_uniform_data_size = std::size_t{176};
 auto constexpr scene_view_projection_matrix_offset = std::size_t{0};
 auto constexpr scene_sun_irradiance_offset = std::size_t{64};
 auto constexpr scene_sun_direction_offset = std::size_t{80};
 auto constexpr scene_transmittance_lut_offset = std::size_t{92};
 auto constexpr scene_animation_time_offset = std::size_t{96};
+auto constexpr scene_sky_irradiance_offset = std::size_t{100};
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
@@ -355,6 +356,8 @@ public:
           graphics::load_shader("./assets/shaders/composite.frag.spv")},
         _sky_view_compute_shader{graphics::load_shader(
           "./assets/shaders/atmosphere/sky_view.comp.spv")},
+        _sky_irradiance_compute_shader{graphics::load_shader(
+          "./assets/shaders/atmosphere/sky_irradiance.comp.spv")},
         _sky_vertex_shader{
           graphics::load_shader("./assets/shaders/atmosphere/sky.vert.spv")},
         _sky_fragment_shader{
@@ -365,6 +368,8 @@ public:
         _sky_pipeline{make_sky_pipeline()},
         _sky_view_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_sky_view_compute_shader})},
+        _sky_irradiance_pipeline{_graphics.create_compute_pipeline(
+          {.shader = &_sky_irradiance_compute_shader})},
         _texture_manager{{.graphics = &_graphics}},
         _block_texture_registry{{.graphics = &_graphics}},
         _scene_uniform_buffer{_graphics.create_buffer({
@@ -494,11 +499,15 @@ private:
             .get_interpolated_camera(*_local_player->player_entity_id)
         : nullptr;
     if (camera) {
+      auto const scene_uniform_offset =
+        (_frame_number % max_frames_in_flight) * scene_uniform_data_size;
       record_sky_view_pass(
         work_recorder,
         camera->position,
         session->get_scene().get_interpolated_sun_direction(),
         math::vec3::Constant(1300.0f));
+      record_sky_irradiance_pass(
+        work_recorder, camera->position, scene_uniform_offset);
     }
     record_forward_pass(work_recorder, framebuffer_size);
     record_crosshair_pass(work_recorder, framebuffer_size);
@@ -511,7 +520,6 @@ private:
     math::vec3 camera_position,
     math::vec3 sun_direction,
     math::vec3 sun_irradiance) {
-    ZoneScoped;
     auto const camera_altitude = camera_position.y();
     work_recorder.bind_compute_pipeline(_sky_view_pipeline);
     work_recorder.push_descriptor(0, _transmittance_lut_sampled_descriptor);
@@ -520,15 +528,33 @@ private:
     work_recorder.push_data(16, std::as_bytes(std::span{&sun_direction, 1}));
     work_recorder.push_data(32, std::as_bytes(std::span{&sun_irradiance, 1}));
     work_recorder.dispatch(sky_view_lut_size.x(), sky_view_lut_size.y(), 1);
-    work_recorder
-      .barrier(compute_shader_storage_write_scope, sampled_image_scope);
+    work_recorder.barrier(
+      compute_shader_storage_write_scope,
+      compute_shader_sampled_read_scope | fragment_shader_sampled_read_scope);
+  }
+
+  void record_sky_irradiance_pass(
+    graphics::Work_recorder &work_recorder,
+    math::vec3 camera_position,
+    std::size_t scene_uniform_offset) {
+    auto const camera_altitude = camera_position.y();
+    work_recorder.bind_compute_pipeline(_sky_irradiance_pipeline);
+    work_recorder.push_descriptor(0, _sky_view_lut_sampled_descriptor);
+    work_recorder.push_data(4, std::as_bytes(std::span{&camera_altitude, 1}));
+    work_recorder.push_buffer_reference(
+      8,
+      _scene_uniform_buffer,
+      scene_uniform_offset + scene_sky_irradiance_offset);
+    work_recorder.dispatch(6, 1, 1);
+    work_recorder.barrier(
+      compute_shader_storage_write_scope, fragment_shader_storage_read_scope);
   }
 
   void record_forward_pass(
     graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
-    ZoneScoped;
     work_recorder.barrier(
-      sampled_image_scope, color_attachment_scope | depth_attachment_scope);
+      fragment_shader_sampled_read_scope,
+      color_attachment_scope | depth_attachment_scope);
     work_recorder.begin_rendering({
       .color_image = _radiance_render_target,
       .depth_image = _depth_render_target,
@@ -692,7 +718,6 @@ private:
 
   void record_crosshair_pass(
     graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
-    ZoneScoped;
     work_recorder.begin_rendering({
       .color_image = _crosshair_mask_render_target,
     });
@@ -718,9 +743,9 @@ private:
     graphics::Work_recorder &work_recorder,
     rc::Strong<graphics::Image> const &swapchain_image,
     math::ivec2 framebuffer_size) {
-    ZoneScoped;
     work_recorder.barrier(
-      color_attachment_scope | depth_attachment_scope, sampled_image_scope);
+      color_attachment_scope | depth_attachment_scope,
+      fragment_shader_sampled_read_scope);
     work_recorder.transition_image_layout(
       {},
       color_attachment_scope,
@@ -886,8 +911,8 @@ private:
     work_recorder.push_descriptor(0, transmittance_lut_storage_descriptor);
     work_recorder
       .dispatch(transmittance_lut_size.x(), transmittance_lut_size.y(), 1);
-    work_recorder
-      .barrier(compute_shader_storage_write_scope, sampled_image_scope);
+    work_recorder.barrier(
+      compute_shader_storage_write_scope, fragment_shader_sampled_read_scope);
     auto work = _graphics.submit_transient_work(std::move(work_recorder));
     work->await();
   }
@@ -1258,10 +1283,23 @@ private:
     return pipeline;
   }
 
-  static auto constexpr sampled_image_scope = graphics::Synchronization_scope{
-    .stage_mask = graphics::Pipeline_stage_flag_bits::fragment_shader,
-    .access_mask = graphics::Access_flag_bits::shader_sampled_read,
-  };
+  static auto constexpr fragment_shader_sampled_read_scope =
+    graphics::Synchronization_scope{
+      .stage_mask = graphics::Pipeline_stage_flag_bits::fragment_shader,
+      .access_mask = graphics::Access_flag_bits::shader_sampled_read,
+    };
+
+  static auto constexpr fragment_shader_storage_read_scope =
+    graphics::Synchronization_scope{
+      .stage_mask = graphics::Pipeline_stage_flag_bits::fragment_shader,
+      .access_mask = graphics::Access_flag_bits::shader_storage_read,
+    };
+
+  static auto constexpr compute_shader_sampled_read_scope =
+    graphics::Synchronization_scope{
+      .stage_mask = graphics::Pipeline_stage_flag_bits::compute_shader,
+      .access_mask = graphics::Access_flag_bits::shader_sampled_read,
+    };
 
   static auto constexpr compute_shader_storage_write_scope =
     graphics::Synchronization_scope{
@@ -1305,6 +1343,7 @@ private:
   graphics::Shader _composite_vertex_shader;
   graphics::Shader _composite_fragment_shader;
   graphics::Shader _sky_view_compute_shader;
+  graphics::Shader _sky_irradiance_compute_shader;
   graphics::Shader _sky_vertex_shader;
   graphics::Shader _sky_fragment_shader;
   rc::Strong<graphics::Pipeline> _grid_pipeline{};
@@ -1312,6 +1351,7 @@ private:
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
   rc::Strong<graphics::Pipeline> _sky_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _sky_view_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _sky_irradiance_pipeline{};
   rc::Strong<graphics::Pipeline> _composite_pipeline{};
   std::optional<graphics::Image_format> _composite_pipeline_color_format{};
   rc::Strong<graphics::Image> _transmittance_lut{};
