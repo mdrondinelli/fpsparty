@@ -29,8 +29,10 @@ restrict readonly buffer Shadow_grid {
   Shadow_chunk chunks[];
 };
 
-uint get_shadow_block_model_index(Shadow_grid grid, ivec3 cell) {
-  const ivec3 chunk_coords = cell >> 2;
+
+bool shadow_grid_get_cell(
+    Shadow_grid grid, ivec3 cell_coords, out Shadow_cell out_cell) {
+  const ivec3 chunk_coords = cell_coords >> 2;
   const ivec3 local_chunk =
     chunk_coords - ivec3(grid.min_chunk_x, grid.min_chunk_y, grid.min_chunk_z);
   const ivec3 chunk_counts =
@@ -38,15 +40,16 @@ uint get_shadow_block_model_index(Shadow_grid grid, ivec3 cell) {
   if (
       any(lessThan(local_chunk, ivec3(0))) ||
       any(greaterThanEqual(local_chunk, chunk_counts))) {
-    return 0;
+    return false;
   }
   const uint chunk_index = uint(
     local_chunk.x + local_chunk.y * chunk_counts.x +
     local_chunk.z * chunk_counts.x * chunk_counts.y);
-  const ivec3 local_cell = cell - (chunk_coords << 2);
+  const ivec3 local_cell = cell_coords - (chunk_coords << 2);
   const uint cell_index =
     uint(local_cell.z * 16 + local_cell.y * 4 + local_cell.x);
-  return grid.chunks[chunk_index].cells[cell_index].model_index;
+  out_cell = grid.chunks[chunk_index].cells[cell_index];
+  return true;
 }
 
 #endif

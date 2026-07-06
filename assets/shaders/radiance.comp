@@ -41,7 +41,7 @@ float ray_aabb(
   return tN >= 0.0 ? tN : tF;
 }
 
-bool trace_shadow_ray(Shadow_grid grid, vec3 origin, vec3 dir) {
+bool trace_any_hit(Shadow_grid grid, vec3 origin, vec3 dir) {
   ivec3 cell_coords = ivec3(floor(origin));
   const vec3 cell_offset = origin - vec3(cell_coords);
   const vec3 inv_dir = 1.0 / dir;
@@ -64,11 +64,16 @@ bool trace_shadow_ray(Shadow_grid grid, vec3 origin, vec3 dir) {
     }
   }
   for (int i = 0; i < shadow_max_steps; ++i) {
-    const uint model_index = get_shadow_block_model_index(grid, cell_coords);
-    if (model_index == 1) {
+    Shadow_cell shadow_cell;
+    if (!shadow_grid_get_cell(grid, cell_coords, shadow_cell)) {
+      // oob -> terminate ray
+      return false;
+    }
+    if (shadow_cell.model_index == 1) {
       return true;
-    } else if (model_index > 1) {
-      const Shadow_block_model model = shadow_block_models[model_index];
+    } else if (shadow_cell.model_index > 1) {
+      const Shadow_block_model model =
+        shadow_block_models[shadow_cell.model_index];
       const vec3 model_space_center = mix(model.min, model.max, 0.5);
       const vec3 world_space_center = cell_coords + model_space_center;
       const vec3 half_extents = (model.max - model.min) * 0.5;
@@ -153,7 +158,7 @@ void main() {
   const vec3 sun_direction = push_constants.scene.sun_direction;
   const float n_dot_l = max(dot(n, sun_direction), 0.0);
   const vec3 E_top = push_constants.scene.sun_irradiance;
-  const bool occluded = trace_shadow_ray(
+  const bool occluded = trace_any_hit(
     push_constants.shadow_grid,
     world_position + n * shadow_bias,
     sun_direction);
