@@ -1,6 +1,7 @@
 #include "work_recorder.hpp"
 
 #include <cassert>
+#include <vector>
 
 #include "buffer.hpp"
 #include "global_vulkan_state.hpp"
@@ -131,23 +132,25 @@ void Work_recorder::transition_image_layout(
 }
 
 void Work_recorder::begin_rendering(Rendering_begin_info const &info) {
-  auto const color_attachment = vk::RenderingAttachmentInfo{
-    .imageView = info.color_image
-                   ? detail::get_image_vk_image_view(*info.color_image)
-                   : vk::ImageView{},
-    .imageLayout = vk::ImageLayout::eGeneral,
-    .loadOp = vk::AttachmentLoadOp::eClear,
-    .storeOp = vk::AttachmentStoreOp::eStore,
-    .clearValue = {{
-      info.color_clear_value.x(),
-      info.color_clear_value.y(),
-      info.color_clear_value.z(),
-      info.color_clear_value.w(),
-    }},
-  };
-  auto const render_extent =
-    info.color_image ? info.color_image->get_extent()
-                     : info.depth_image->get_extent();
+  auto vk_color_attachments = std::vector<vk::RenderingAttachmentInfo>{};
+  vk_color_attachments.reserve(info.color_attachments.size());
+  for (auto const &color_attachment : info.color_attachments) {
+    vk_color_attachments.push_back({
+      .imageView = detail::get_image_vk_image_view(*color_attachment.image),
+      .imageLayout = vk::ImageLayout::eGeneral,
+      .loadOp = vk::AttachmentLoadOp::eClear,
+      .storeOp = vk::AttachmentStoreOp::eStore,
+      .clearValue = {{
+        color_attachment.clear_value.x(),
+        color_attachment.clear_value.y(),
+        color_attachment.clear_value.z(),
+        color_attachment.clear_value.w(),
+      }},
+    });
+  }
+  auto const render_extent = !info.color_attachments.empty()
+                                ? info.color_attachments[0].image->get_extent()
+                                : info.depth_image->get_extent();
   auto const depth_attachment = vk::RenderingAttachmentInfo{
     .imageView = info.depth_image
                    ? detail::get_image_vk_image_view(*info.depth_image)
@@ -166,12 +169,13 @@ void Work_recorder::begin_rendering(Rendering_begin_info const &info) {
            static_cast<std::uint32_t>(render_extent.y()),
          }},
     .layerCount = 1,
-    .colorAttachmentCount = info.color_image ? 1u : 0u,
-    .pColorAttachments = info.color_image ? &color_attachment : nullptr,
+    .colorAttachmentCount =
+      static_cast<std::uint32_t>(vk_color_attachments.size()),
+    .pColorAttachments = vk_color_attachments.data(),
     .pDepthAttachment = info.depth_image ? &depth_attachment : nullptr,
   });
-  if (info.color_image) {
-    add_reference(info.color_image);
+  for (auto const &color_attachment : info.color_attachments) {
+    add_reference(color_attachment.image);
   }
   if (info.depth_image) {
     add_reference(info.depth_image);

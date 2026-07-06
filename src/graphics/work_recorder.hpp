@@ -51,10 +51,14 @@ struct Buffer_image_copy_info {
   math::ivec3 dst_extent;
 };
 
+struct Color_attachment_info {
+  rc::Strong<Image> image;
+  math::vec4 clear_value{0.0f, 0.0f, 0.0f, 1.0f};
+};
+
 struct Rendering_begin_info {
-  rc::Strong<Image> color_image;
+  std::span<Color_attachment_info const> color_attachments{};
   rc::Strong<Image> depth_image{};
-  math::vec4 color_clear_value{0.0f, 0.0f, 0.0f, 1.0f};
 };
 
 struct Indexed_draw_info {

@@ -15,6 +15,7 @@
 #include "block_model_registry.hpp"
 
 namespace fpsparty::client {
+
 struct Grid_mesh_create_info {
   graphics::Graphics *graphics;
   game::Grid const *grid;
@@ -37,6 +38,8 @@ public:
 
   rc::Strong<graphics::Buffer> const &get_index_buffer() const noexcept;
 
+  rc::Strong<graphics::Buffer> const &get_shadow_buffer() const noexcept;
+
 private:
   struct Indirect_draw_info {
     std::uint64_t offset;
@@ -48,9 +51,11 @@ private:
   rc::Strong<graphics::Buffer> _vertex_buffer{};
   rc::Strong<graphics::Buffer> _index_buffer{};
   rc::Strong<graphics::Buffer> _draw_buffer{};
+  rc::Strong<graphics::Buffer> _shadow_buffer{};
   rc::Strong<graphics::Work> _upload_work{};
   std::array<std::array<Indirect_draw_info, 2>, 3> _draw_infos;
 };
+
 } // namespace fpsparty::client
 
 #endif
