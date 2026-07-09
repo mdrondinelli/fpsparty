@@ -1,6 +1,7 @@
 #ifndef FPSPARTY_SCENE_GLSL
 #define FPSPARTY_SCENE_GLSL
 
+#include "atmosphere/atmosphere.glsl"
 #include "descriptors.glsl"
 #include "extensions.glsl"
 
@@ -13,6 +14,13 @@ restrict readonly buffer Scene {
   float animation_time;
   float sky_irradiance[18];
 };
+
+vec3 transmittance_along_ray(Scene scene, vec3 ro, vec3 rd) {
+  const float h = altitude(ro);
+  const float cos_zenith = dot(normalize(ro), rd);
+  const vec2 lut_texcoord = pack_transmittance_lut_params(h, cos_zenith);
+  return FPSPARTY_SAMPLE(scene.transmittance_texture, lut_texcoord).rgb;
+}
 
 vec3 sample_sky_irradiance(Scene scene, vec3 direction) {
   const vec3 pos_x = vec3(

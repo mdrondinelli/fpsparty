@@ -16,4 +16,7 @@ const int storage_image_count = 1024;
 layout(set = 0, binding = 1)
 restrict uniform image2D storage_images[storage_image_count];
 
+layout(set = 0, binding = 1)
+restrict uniform uimage2D storage_uimages[storage_image_count];
+
 #endif

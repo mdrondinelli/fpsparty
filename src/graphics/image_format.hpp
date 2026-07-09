@@ -13,6 +13,7 @@ enum class Image_format {
   r32g32_sfloat = static_cast<int>(vk::Format::eR32G32Sfloat),
   r16g16b16a16_sfloat = static_cast<int>(vk::Format::eR16G16B16A16Sfloat),
   r32g32b32a32_sfloat = static_cast<int>(vk::Format::eR32G32B32A32Sfloat),
+  r32_uint = static_cast<int>(vk::Format::eR32Uint),
   d32_sfloat = static_cast<int>(vk::Format::eD32Sfloat),
 };
 
@@ -28,6 +29,7 @@ get_image_format_vk_image_aspect_flags(Image_format format) {
   case Image_format::r32g32_sfloat:
   case Image_format::r16g16b16a16_sfloat:
   case Image_format::r32g32b32a32_sfloat:
+  case Image_format::r32_uint:
     return vk::ImageAspectFlagBits::eColor;
   case Image_format::d32_sfloat:
     return vk::ImageAspectFlagBits::eDepth;

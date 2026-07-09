@@ -38,6 +38,7 @@ shaders=(
   atmosphere/sky_view.comp
   atmosphere/sky_irradiance.comp
   radiance.comp
+  irradiance.comp
 )
 
 for shader in "${shaders[@]}"; do

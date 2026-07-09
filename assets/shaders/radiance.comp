@@ -2,12 +2,12 @@
 
 #include "octahedral.glsl"
 #include "scene.glsl"
-#include "shadow_grid.glsl"
+#include "random.glsl"
+#include "rt_grid.glsl"
+#include "sampling.glsl"
 #include "atmosphere/atmosphere.glsl"
 
 layout(local_size_x = 8, local_size_y = 8) in;
-
-const float shadow_bias = 1.0 / 128.0;
 
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) mat4 camera_basis;
@@ -20,17 +20,9 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 100) uint sky_view_lut;
   layout(offset = 104) uint radiance_image;
   layout(offset = 108) uint irradiance_texture;
-  layout(offset = 112) Shadow_grid shadow_grid;
+  layout(offset = 112) Rt_grid rt_grid;
+  layout(offset = 120) uint rng_state_image;
 } push_constants;
-
-vec3 transmittance_along_ray(vec3 ro, vec3 rd) {
-  const float h = altitude(ro);
-  const float cos_zenith = dot(normalize(ro), rd);
-  const vec2 lut_texcoord = pack_transmittance_lut_params(h, cos_zenith);
-  return FPSPARTY_SAMPLE(
-      push_constants.scene.transmittance_texture,
-      lut_texcoord).rgb;
-}
 
 vec2 sky_view_texcoord(vec3 rd, float camera_altitude) {
   const vec3 horizontal = vec3(rd.x, 0.0, rd.z);
@@ -43,6 +35,10 @@ vec2 sky_view_texcoord(vec3 rd, float camera_altitude) {
   const float zenith = acos(clamp(rd.y, -1.0, 1.0));
   return pack_sky_view_lut_params(longitude, camera_altitude, zenith);
 }
+
+const float sun_angular_diameter = 0.0093;
+const float sun_angular_radius = sun_angular_diameter / 2.0;
+const float cos_sun_angular_radius = cos(sun_angular_radius);
 
 void main() {
   const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
@@ -76,16 +72,28 @@ void main() {
     texelFetch(sampled_images[push_constants.normal_texture], pixel, 0).rg;
   const vec3 n = oct_decode(oct);
   const vec3 sun_direction = push_constants.scene.sun_direction;
+  Random random;
+  random.state = imageLoad(
+    storage_uimages[push_constants.rng_state_image], pixel).x;
+  const vec3 l =
+    make_basis(sun_direction) *
+    square_to_cone(
+      vec2(random_float(random), random_float(random)),
+      cos_sun_angular_radius);
   const float n_dot_l = max(dot(n, sun_direction), 0.0);
-  const vec3 E_top = push_constants.scene.sun_irradiance;
-  const bool occluded = shadow_grid_trace(
-    push_constants.shadow_grid,
-    world_position + n * shadow_bias,
-    sun_direction);
+  const bool occluded =
+    n_dot_l > 0.0
+      ? rt_grid_trace(
+          push_constants.rt_grid,
+          offset_ray_origin(world_position, n),
+          l)
+      : true;
   const float visibility = occluded ? 0.0 : 1.0;
+  const vec3 E_top = push_constants.scene.sun_irradiance;
   const vec3 E =
     E_top *
     transmittance_along_ray(
+      push_constants.scene,
       vec3(0.0, r_ground + world_position.y, 0.0),
       sun_direction) *
     visibility;
@@ -96,4 +104,8 @@ void main() {
     (E * n_dot_l + sky_radiance);
   imageStore(
     storage_images[push_constants.radiance_image], pixel, vec4(L, 1.0));
+  imageStore(
+    storage_uimages[push_constants.rng_state_image],
+    pixel,
+    uvec4(random.state));
 }
