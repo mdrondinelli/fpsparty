@@ -4,6 +4,8 @@
 #include <bit>
 #include <cassert>
 
+#include <rc.hpp>
+
 #include "keyframe.hpp"
 
 namespace fpsparty::scene {
@@ -65,21 +67,31 @@ public:
   void reset_grid_remesh_flag() noexcept;
 
   /*
-   * Returns the cached interpolated cameras from the last advance_time call.
+   * Returns the cached interpolated cameras from the last play call.
    *
    * UB if empty.
    */
   std::span<Identified<Camera> const> get_interpolated_cameras() const noexcept;
 
-  /**
-   * Returns the cached interpolated cameras from the last advance_time call.
+  /*
+   * Returns the cached interpolated camera identified by id from the last play
+   * call.
    *
    * UB if empty.
    */
   Camera const *get_interpolated_camera(std::uint64_t id) const noexcept;
 
   /*
-   * Returns the cached interpolated mesh instances from the last advance_time
+   * Returns the cached interpolated camera identified by id from the play call
+   * before last.
+   *
+   * UB if empty.
+   */
+  Camera const *
+  get_previous_interpolated_camera(std::uint64_t id) const noexcept;
+
+  /*
+   * Returns the cached interpolated mesh instances from the last play
    * call.
    *
    * UB if empty.
@@ -88,13 +100,30 @@ public:
   get_interpolated_mesh_instances() const noexcept;
 
   /*
-   * Returns the cached interpolated sun direction from the last advance_time
+   * Returns the cached interpolated mesh instance identified by id from the
+   * last play call.
+   *
+   * UB if empty.
+   */
+  Mesh_instance const *
+  get_interpolated_mesh_instance(std::uint64_t id) const noexcept;
+
+  /*
+   * Returns the cached interpolated mesh instance identified by id from the
+   * play call before last.
+   *
+   * UB if empty.
+   */
+  Mesh_instance const *
+  get_previous_interpolated_mesh_instance(std::uint64_t id) const noexcept;
+
+  /*
+   * Returns the cached interpolated sun direction from the last play
    * call.
    *
    * UB if empty.
    */
-  math::vec3 
-  get_interpolated_sun_direction() const noexcept;
+  math::vec3 get_interpolated_sun_direction() const noexcept;
 
   /*
    * Returns the number of keyframes stored.
@@ -241,15 +270,19 @@ private:
 
   struct Interpolation {
     void clear() {
+      indexed_keyframe = nullptr;
       cameras.clear();
       mesh_instances.clear();
-      valid = false;
     }
 
+    bool valid() const noexcept { return indexed_keyframe.get() != nullptr; }
+
+    // The keyframe this interpolation was built from. Its index tables map
+    // object ids to indices into cameras and mesh_instances.
+    rc::Strong<Indexed_keyframe const> indexed_keyframe{};
     std::vector<Identified<Camera>> cameras{};
     std::vector<Identified<Mesh_instance>> mesh_instances{};
     math::vec3 sun_direction{};
-    bool valid{};
   };
 
   static constexpr std::uint32_t
@@ -266,8 +299,10 @@ private:
   bool interpolate();
 
   float _keyframe_duration;
-  std::vector<Indexed_keyframe> _indexed_keyframes{};
-  Interpolation _interpolation{};
+  rc::Factory<Indexed_keyframe> _indexed_keyframe_factory{};
+  std::vector<rc::Strong<Indexed_keyframe const>> _indexed_keyframes{};
+  Interpolation _previous_interpolation{};
+  Interpolation _current_interpolation{};
   std::uint64_t _keyframe_number{};
   float _inter_keyframe_time{};
   bool _grid_remesh_flag{};

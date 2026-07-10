@@ -28,14 +28,30 @@ constexpr float kd = 0.1f;
 
 scene::Scene make_scene() { return scene::Scene{{.keyframe_duration = kd}}; }
 
-scene::Keyframe make_keyframe(std::uint64_t number) {
+scene::Keyframe make_keyframe(
+  std::uint64_t number,
+  std::vector<scene::Identified<scene::Camera>> cameras = {},
+  std::vector<scene::Identified<scene::Mesh_instance>> mesh_instances = {}) {
   return scene::Keyframe{
     .number = number,
     .grid = game::Grid{{}},
-    .cameras = {},
-    .mesh_instances = {},
+    .cameras = std::move(cameras),
+    .mesh_instances = std::move(mesh_instances),
     .sun_direction = {},
   };
+}
+
+scene::Identified<scene::Camera> camera_at(std::uint64_t id, float x) {
+  return {id, scene::Camera{.position = {x, 0.0f, 0.0f}}};
+}
+
+scene::Identified<scene::Mesh_instance> instance_at(std::uint64_t id, float x) {
+  return {
+    id,
+    scene::Mesh_instance{
+      .mesh = scene::Mesh::cube,
+      .position = {x, 0.0f, 0.0f},
+    }};
 }
 } // namespace
 
@@ -93,4 +109,52 @@ TEST_CASE("Scene play trims keyframes behind the playback point") {
   REQUIRE(scene.get_keyframe_count() == 4);
   scene.play(2.5f * kd); // playback -> 12, keeping 12 as the interpolation base
   CHECK(scene.get_keyframe_count() == 2); // 12 (base) and 13
+}
+
+TEST_CASE("Scene interpolated lookup by id") {
+  auto scene = make_scene();
+  scene.push(make_keyframe(10, {camera_at(1, 0.0f)}, {instance_at(1, 0.0f)}));
+  scene.push(make_keyframe(11, {camera_at(1, 1.0f)}, {instance_at(1, 1.0f)}));
+  scene.play(0.5f * kd); // t = 0.5 between keyframes 10 and 11
+  auto const camera = scene.get_interpolated_camera(1);
+  REQUIRE(camera != nullptr);
+  CHECK(camera->position.x() == Approx(0.5f));
+  auto const instance = scene.get_interpolated_mesh_instance(1);
+  REQUIRE(instance != nullptr);
+  CHECK(instance->position.x() == Approx(0.5f));
+  CHECK(scene.get_interpolated_camera(2) == nullptr);
+  CHECK(scene.get_interpolated_mesh_instance(2) == nullptr);
+}
+
+TEST_CASE("Scene previous interpolation lags current by one play") {
+  auto scene = make_scene();
+  scene.push(make_keyframe(10, {}, {instance_at(1, 0.0f)}));
+  scene.push(make_keyframe(11, {}, {instance_at(1, 1.0f)}));
+  scene.push(make_keyframe(12, {}, {instance_at(1, 2.0f)}));
+  scene.play(0.5f * kd); // current: t = 0.5; no previous yet
+  CHECK(scene.get_previous_interpolated_mesh_instance(1) == nullptr);
+  scene.play(0.5f * kd); // current: exactly keyframe 11
+  auto const curr = scene.get_interpolated_mesh_instance(1);
+  auto const prev = scene.get_previous_interpolated_mesh_instance(1);
+  REQUIRE(curr != nullptr);
+  REQUIRE(prev != nullptr);
+  CHECK(curr->position.x() == Approx(1.0f));
+  CHECK(prev->position.x() == Approx(0.5f));
+}
+
+TEST_CASE("Scene previous lookup outlives trimmed keyframes") {
+  auto scene = make_scene();
+  scene.push(make_keyframe(10, {camera_at(7, 3.0f)}, {instance_at(2, 5.0f)}));
+  scene.push(make_keyframe(11));
+  scene.push(make_keyframe(12));
+  scene.play(0.5f * kd); // interpolation carries ids forward from keyframe 10
+  scene.play(0.5f * kd); // keyframe 10 trimmed; previous still references it
+  CHECK(scene.get_interpolated_camera(7) == nullptr);
+  CHECK(scene.get_interpolated_mesh_instance(2) == nullptr);
+  auto const prev_camera = scene.get_previous_interpolated_camera(7);
+  REQUIRE(prev_camera != nullptr);
+  CHECK(prev_camera->position.x() == Approx(3.0f));
+  auto const prev_instance = scene.get_previous_interpolated_mesh_instance(2);
+  REQUIRE(prev_instance != nullptr);
+  CHECK(prev_instance->position.x() == Approx(5.0f));
 }

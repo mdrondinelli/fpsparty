@@ -15,7 +15,7 @@ Scene::Scene(Scene_create_info const &info)
 
 void Scene::push(Keyframe &&keyframe) {
   assert(
-    empty() || keyframe.number > _indexed_keyframes.back().keyframe.number);
+    empty() || keyframe.number > _indexed_keyframes.back()->keyframe.number);
   if (empty()) {
     _keyframe_number = keyframe.number;
     _inter_keyframe_time = 0.0f;
@@ -23,25 +23,26 @@ void Scene::push(Keyframe &&keyframe) {
   }
   auto const camera_count = keyframe.cameras.size();
   auto const mesh_instance_count = keyframe.mesh_instances.size();
-  auto indexed_keyframe = Indexed_keyframe{
-    .keyframe = std::move(keyframe),
-    .camera_indices =
-      Hash_table{
-        object_count_to_bucket_count(camera_count),
-      },
-    .mesh_instance_indices =
-      Hash_table{
-        object_count_to_bucket_count(mesh_instance_count),
-      },
-  };
-  for (auto const &camera : indexed_keyframe.keyframe.cameras) {
-    indexed_keyframe.camera_indices
-      .insert(camera.id, &camera - &indexed_keyframe.keyframe.cameras[0]);
+  auto indexed_keyframe = _indexed_keyframe_factory.create(
+    Indexed_keyframe{
+      .keyframe = std::move(keyframe),
+      .camera_indices =
+        Hash_table{
+          object_count_to_bucket_count(camera_count),
+        },
+      .mesh_instance_indices =
+        Hash_table{
+          object_count_to_bucket_count(mesh_instance_count),
+        },
+    });
+  for (auto const &camera : indexed_keyframe->keyframe.cameras) {
+    indexed_keyframe->camera_indices
+      .insert(camera.id, &camera - &indexed_keyframe->keyframe.cameras[0]);
   }
-  for (auto const &mesh_instance : indexed_keyframe.keyframe.mesh_instances) {
-    indexed_keyframe.mesh_instance_indices.insert(
+  for (auto const &mesh_instance : indexed_keyframe->keyframe.mesh_instances) {
+    indexed_keyframe->mesh_instance_indices.insert(
       mesh_instance.id,
-      &mesh_instance - &indexed_keyframe.keyframe.mesh_instances[0]);
+      &mesh_instance - &indexed_keyframe->keyframe.mesh_instances[0]);
   }
   _indexed_keyframes.emplace_back(std::move(indexed_keyframe));
 }
@@ -55,8 +56,8 @@ bool Scene::play(float duration) {
     _keyframe_number += increment;
     _inter_keyframe_time -= increment;
   }
-  if (_keyframe_number >= _indexed_keyframes.back().keyframe.number) {
-    _keyframe_number = _indexed_keyframes.back().keyframe.number;
+  if (_keyframe_number >= _indexed_keyframes.back()->keyframe.number) {
+    _keyframe_number = _indexed_keyframes.back()->keyframe.number;
     _inter_keyframe_time = 0.0f;
   }
   bool keep_playing = false;
@@ -79,7 +80,7 @@ float Scene::set_latency(float seconds) noexcept {
   auto const keyframes = seconds / _keyframe_duration;
   auto const whole_keyframes = static_cast<std::uint64_t>(std::ceil(keyframes));
   _keyframe_number =
-    _indexed_keyframes.back().keyframe.number - whole_keyframes;
+    _indexed_keyframes.back()->keyframe.number - whole_keyframes;
   _inter_keyframe_time = whole_keyframes - keyframes;
   trim_old_keyframes();
   interpolate();
@@ -88,7 +89,7 @@ float Scene::set_latency(float seconds) noexcept {
 
 float Scene::get_latency() const noexcept {
   assert(!empty());
-  return (_indexed_keyframes.back().keyframe.number - _keyframe_number -
+  return (_indexed_keyframes.back()->keyframe.number - _keyframe_number -
           _inter_keyframe_time) *
          _keyframe_duration;
 }
@@ -97,7 +98,7 @@ bool Scene::trim_old_keyframes() noexcept {
   auto const old_keyframe_count = count_old_keyframes();
   auto const erase_count = old_keyframe_count > 0 ? old_keyframe_count - 1 : 0;
   auto const &curr_grid = get_grid();
-  auto const &next_grid = _indexed_keyframes[erase_count].keyframe.grid;
+  auto const &next_grid = _indexed_keyframes[erase_count]->keyframe.grid;
   if (game::Grid::diff(curr_grid, next_grid)) {
     _grid_remesh_flag = true;
   }
@@ -110,7 +111,7 @@ std::size_t Scene::count_old_keyframes() const noexcept {
   auto old_keyframe_count = std::size_t{};
   while (old_keyframe_count < _indexed_keyframes.size()) {
     if (
-      _indexed_keyframes[old_keyframe_count].keyframe.number <=
+      _indexed_keyframes[old_keyframe_count]->keyframe.number <=
       _keyframe_number) {
       ++old_keyframe_count;
     } else {
@@ -123,18 +124,20 @@ std::size_t Scene::count_old_keyframes() const noexcept {
 bool Scene::interpolate() {
   // Note: keeps objects even if they're not in the next keyframe
   // Reason: we can reuse front keyframes index map for interpolated objects.
-  _interpolation.clear();
+  _previous_interpolation = std::move(_current_interpolation);
+  _current_interpolation.clear();
   if (_indexed_keyframes.size() < 2) {
     return false;
   }
-  auto const a = _indexed_keyframes[0].keyframe.number;
-  auto const b = _indexed_keyframes[1].keyframe.number;
+  auto const a = _indexed_keyframes[0]->keyframe.number;
+  auto const b = _indexed_keyframes[1]->keyframe.number;
   auto const t = (_keyframe_number - a + _inter_keyframe_time) / (b - a);
-  for (auto const &[id, curr_camera] : _indexed_keyframes[0].keyframe.cameras) {
-    if (auto const idx = _indexed_keyframes[1].camera_indices.get(id)) {
+  for (auto const &[id, curr_camera] :
+       _indexed_keyframes[0]->keyframe.cameras) {
+    if (auto const idx = _indexed_keyframes[1]->camera_indices.get(id)) {
       auto const &next_camera =
-        _indexed_keyframes[1].keyframe.cameras[*idx].value;
-      _interpolation.cameras.emplace_back(
+        _indexed_keyframes[1]->keyframe.cameras[*idx].value;
+      _current_interpolation.cameras.emplace_back(
         id,
         Camera{
           .position =
@@ -143,15 +146,15 @@ bool Scene::interpolate() {
           .pitch = std::lerp(curr_camera.pitch, next_camera.pitch, t),
         });
     } else {
-      _interpolation.cameras.emplace_back(id, curr_camera);
+      _current_interpolation.cameras.emplace_back(id, curr_camera);
     }
   }
   for (auto const &[id, curr_mesh_instance] :
-       _indexed_keyframes[0].keyframe.mesh_instances) {
-    if (auto const idx = _indexed_keyframes[1].mesh_instance_indices.get(id)) {
+       _indexed_keyframes[0]->keyframe.mesh_instances) {
+    if (auto const idx = _indexed_keyframes[1]->mesh_instance_indices.get(id)) {
       auto const &next_mesh_instance =
-        _indexed_keyframes[1].keyframe.mesh_instances[*idx].value;
-      _interpolation.mesh_instances.emplace_back(
+        _indexed_keyframes[1]->keyframe.mesh_instances[*idx].value;
+      _current_interpolation.mesh_instances.emplace_back(
         id,
         Mesh_instance{
           .mesh = curr_mesh_instance.mesh,
@@ -163,21 +166,22 @@ bool Scene::interpolate() {
                    t * next_mesh_instance.scale,
         });
     } else {
-      _interpolation.mesh_instances.emplace_back(id, curr_mesh_instance);
+      _current_interpolation.mesh_instances
+        .emplace_back(id, curr_mesh_instance);
     }
   }
-  _interpolation.sun_direction =
-    ((1.0f - t) * _indexed_keyframes[0].keyframe.sun_direction +
-     t * _indexed_keyframes[1].keyframe.sun_direction)
+  _current_interpolation.sun_direction =
+    ((1.0f - t) * _indexed_keyframes[0]->keyframe.sun_direction +
+     t * _indexed_keyframes[1]->keyframe.sun_direction)
       .normalized()
       .eval();
-  _interpolation.valid = true;
+  _current_interpolation.indexed_keyframe = _indexed_keyframes[0];
   return true;
 }
 
 game::Grid const &Scene::get_grid() const noexcept {
   assert(!empty());
-  return _indexed_keyframes.front().keyframe.grid;
+  return _indexed_keyframes.front()->keyframe.grid;
 }
 
 bool Scene::get_grid_remesh_flag() const noexcept { return _grid_remesh_flag; }
@@ -187,43 +191,80 @@ void Scene::reset_grid_remesh_flag() noexcept { _grid_remesh_flag = false; }
 std::span<Identified<Camera> const>
 Scene::get_interpolated_cameras() const noexcept {
   assert(!empty());
-  if (_interpolation.valid) {
-    return _interpolation.cameras;
+  if (_current_interpolation.valid()) {
+    return _current_interpolation.cameras;
   } else {
-    return _indexed_keyframes.front().keyframe.cameras;
+    return _indexed_keyframes.front()->keyframe.cameras;
   }
 }
 
 Camera const *Scene::get_interpolated_camera(std::uint64_t id) const noexcept {
   assert(!empty());
-  auto const index = _indexed_keyframes.front().camera_indices.get(id);
-  if (index) {
-    if (_interpolation.valid) {
-      return &_interpolation.cameras[*index].value;
-    } else {
-      return &_indexed_keyframes.front().keyframe.cameras[*index].value;
+  if (_current_interpolation.valid()) {
+    auto const index =
+      _current_interpolation.indexed_keyframe->camera_indices.get(id);
+    if (index) {
+      return &_current_interpolation.cameras[*index].value;
     }
-  } else {
-    return nullptr;
   }
+  return nullptr;
+}
+
+Camera const *
+Scene::get_previous_interpolated_camera(std::uint64_t id) const noexcept {
+  assert(!empty());
+  if (_previous_interpolation.valid()) {
+    auto const index =
+      _previous_interpolation.indexed_keyframe->camera_indices.get(id);
+    if (index) {
+      return &_previous_interpolation.cameras[*index].value;
+    }
+  }
+  return nullptr;
 }
 
 std::span<Identified<Mesh_instance> const>
 Scene::get_interpolated_mesh_instances() const noexcept {
   assert(!empty());
-  if (_interpolation.valid) {
-    return _interpolation.mesh_instances;
+  if (_current_interpolation.valid()) {
+    return _current_interpolation.mesh_instances;
   } else {
-    return _indexed_keyframes.front().keyframe.mesh_instances;
+    return _indexed_keyframes.front()->keyframe.mesh_instances;
   }
+}
+
+Mesh_instance const *
+Scene::get_interpolated_mesh_instance(std::uint64_t id) const noexcept {
+  assert(!empty());
+  if (_current_interpolation.valid()) {
+    auto const index =
+      _current_interpolation.indexed_keyframe->mesh_instance_indices.get(id);
+    if (index) {
+      return &_current_interpolation.mesh_instances[*index].value;
+    }
+  }
+  return nullptr;
+}
+
+Mesh_instance const *Scene::get_previous_interpolated_mesh_instance(
+  std::uint64_t id) const noexcept {
+  assert(!empty());
+  if (_previous_interpolation.valid()) {
+    auto const index =
+      _previous_interpolation.indexed_keyframe->mesh_instance_indices.get(id);
+    if (index) {
+      return &_previous_interpolation.mesh_instances[*index].value;
+    }
+  }
+  return nullptr;
 }
 
 math::vec3 Scene::get_interpolated_sun_direction() const noexcept {
   assert(!empty());
-  if (_interpolation.valid) {
-    return _interpolation.sun_direction;
+  if (_current_interpolation.valid()) {
+    return _current_interpolation.sun_direction;
   } else {
-    return _indexed_keyframes.front().keyframe.sun_direction;
+    return _indexed_keyframes.front()->keyframe.sun_direction;
   }
 }
 
