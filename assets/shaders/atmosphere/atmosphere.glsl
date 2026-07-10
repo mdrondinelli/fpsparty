@@ -22,6 +22,20 @@ float altitude(vec3 position) {
   return length(position) - r_ground;
 }
 
+float longitude(vec3 direction) {
+  const vec3 horizontal = vec3(direction.x, 0.0, direction.z);
+  const float len = length(horizontal);
+  if (len < 1.0e-6) {
+    return 0.0;
+  }
+  const vec3 normalized_horizontal = horizontal / len;
+  return atan(normalized_horizontal.z, normalized_horizontal.x);
+}
+
+float zenith(vec3 direction) {
+  return acos(clamp(direction.y, -1.0, 1.0));
+}
+
 float rayleigh_phase(float cos_theta) {
   return 3.0 / (16.0 * pi) * (1.0 + cos_theta * cos_theta);
 }

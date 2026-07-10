@@ -105,6 +105,7 @@ bool rt_grid_trace(
       hit.t = entry_t;
       // ties between axes can leave a diagonal entry normal
       hit.normal = normalize(entry_normal);
+      hit.albedo = rt_albedo_palette[rt_cell.albedo_index];
       return true;
     } else if (rt_cell.model_index > 1) {
       const Rt_block_model model =

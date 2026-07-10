@@ -1,0 +1,115 @@
+#version 450
+
+#include "descriptors.glsl"
+#include "octahedral.glsl"
+#include "random.glsl"
+#include "sampling.glsl"
+#include "scene.glsl"
+#include "rt_grid.glsl"
+#include "atmosphere/atmosphere.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) mat4 camera_basis;
+  layout(offset = 64) vec2 zoom;
+  layout(offset = 72) float z_near;
+  layout(offset = 76) uint normal_texture;
+  layout(offset = 80) uint depth_texture;
+  layout(offset = 84) uint sky_view_lut;
+  layout(offset = 88) uint indirect_radiance_image;
+  layout(offset = 92) uint indirect_radiance_direction_image;
+  layout(offset = 96) uint rng_state_image;
+  layout(offset = 104) Rt_grid rt_grid;
+  layout(offset = 112) Scene scene;
+  layout(offset = 120) uvec2 stratum_permutation;
+} push_constants;
+
+const int bounce_count = 2;
+
+void main() {
+  const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  const ivec2 size =
+    imageSize(storage_images[push_constants.indirect_radiance_image]);
+  if (pixel.x >= size.x || pixel.y >= size.y) {
+    return;
+  }
+  const float depth =
+    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
+  if (depth == 0.0) {
+    return;
+  }
+  const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
+  const vec3 view_ray = vec3(
+    -ndc.x * push_constants.zoom.x, -ndc.y * push_constants.zoom.y, 1.0);
+  const vec3 camera_position = push_constants.camera_basis[3].xyz;
+  const float view_z = push_constants.z_near / depth;
+  const vec3 world_position =
+    camera_position + mat3(push_constants.camera_basis) * (view_ray * view_z);
+  const vec3 n =
+    oct_decode(
+      texelFetch(sampled_images[push_constants.normal_texture], pixel, 0).rg);
+  // Assume that sun transmittance is constant around the shaded surface.
+  const vec3 sun_direction = push_constants.scene.sun_direction;
+  const vec3 E_sun =
+    push_constants.scene.sun_irradiance *
+    transmittance_along_ray(
+      push_constants.scene,
+      vec3(0.0, r_ground + world_position.y, 0.0),
+      sun_direction);
+  const int unscrambled_stratum = pixel.x % 3 + 3 * (pixel.y % 3);
+  const int scrambled_stratum =
+    0xf & (unscrambled_stratum == 0
+      ? push_constants.stratum_permutation.y
+      : push_constants.stratum_permutation.x >> (4 * unscrambled_stratum - 4));
+  Random random;
+  random.state = imageLoad(
+    storage_uimages[push_constants.rng_state_image], pixel).x;
+  const vec2 u =
+    (vec2(scrambled_stratum % 3, scrambled_stratum / 3) +
+     vec2(random_float(random), random_float(random))) / 3.0;
+  vec3 rd = make_basis(n) * square_to_cosine_hemisphere(u);
+  imageStore(
+    storage_images[push_constants.indirect_radiance_direction_image],
+    pixel,
+    vec4(oct_encode(rd), 0.0, 0.0));
+  vec3 ro = offset_ray_origin(world_position, n);
+  vec3 radiance = vec3(0.0);
+  vec3 radiance_multiplier = vec3(1.0);
+  for (int bounce = 0; bounce < bounce_count; ++bounce) {
+    Rt_grid_hit hit;
+    if (rt_grid_trace(push_constants.rt_grid, ro, rd, hit)) {
+      const vec3 hit_position = ro + hit.t * rd;
+      const vec3 new_ro = offset_ray_origin(hit_position, hit.normal);
+      const float sun_visibility =
+        rt_grid_trace(push_constants.rt_grid, new_ro, sun_direction)
+          ? 0.0
+          : 1.0;
+      radiance +=
+        radiance_multiplier * hit.albedo / pi * E_sun * sun_visibility *
+        max(dot(hit.normal, sun_direction), 0.0);
+      if (bounce + 1 < bounce_count) {
+        ro = new_ro;
+        rd =
+          make_basis(hit.normal) *
+          square_to_cosine_hemisphere(
+            vec2(random_float(random), random_float(random)));
+        radiance_multiplier *= hit.albedo;
+      }
+    } else {
+      radiance += radiance_multiplier * FPSPARTY_SAMPLE(
+        push_constants.sky_view_lut,
+        pack_sky_view_lut_params(
+          longitude(rd), push_constants.camera_basis[3][1], zenith(rd))).rgb;
+      break;
+    }
+  }
+  imageStore(
+    storage_images[push_constants.indirect_radiance_image],
+    pixel,
+    vec4(radiance, 1.0));
+  imageStore(
+    storage_uimages[push_constants.rng_state_image],
+    pixel,
+    uvec4(random.state));
+}

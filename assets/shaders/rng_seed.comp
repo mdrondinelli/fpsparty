@@ -1,0 +1,27 @@
+#version 450
+
+#include "descriptors.glsl"
+#include "random.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) uint rng_state_image;
+  layout(offset = 4) uint frame_number;
+} push_constants;
+
+void main() {
+  const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  const ivec2 size =
+    imageSize(storage_uimages[push_constants.rng_state_image]);
+  if (pixel.x >= size.x || pixel.y >= size.y) {
+    return;
+  }
+  const uint pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
+  const uint seed =
+    lowbias32((pixel_index << 8) | (push_constants.frame_number & 0xff));
+  imageStore(
+    storage_uimages[push_constants.rng_state_image],
+    pixel,
+    uvec4(seed));
+}

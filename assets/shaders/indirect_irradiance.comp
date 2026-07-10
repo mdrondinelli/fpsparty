@@ -1,0 +1,109 @@
+#version 450
+
+#include "descriptors.glsl"
+#include "numbers.glsl"
+#include "octahedral.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) uint normal_texture;
+  layout(offset = 4) uint depth_texture;
+  layout(offset = 8) uint indirect_radiance_texture;
+  layout(offset = 12) uint indirect_radiance_direction_texture;
+  layout(offset = 16) uint indirect_irradiance_image;
+} push_constants;
+
+const int sample_count = 9;
+
+// Center first so samples[0] is this pixel's own sample.
+const ivec2 sample_offsets[sample_count] = {
+  ivec2(0, 0),
+  ivec2(-1, -1),
+  ivec2(-1, 0),
+  ivec2(-1, 1),
+  ivec2(0, -1),
+  ivec2(0, 1),
+  ivec2(1, -1),
+  ivec2(1, 0),
+  ivec2(1, 1),
+};
+
+void main() {
+  const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  const ivec2 size =
+    imageSize(storage_images[push_constants.indirect_irradiance_image]);
+  if (pixel.x >= size.x || pixel.y >= size.y) {
+    return;
+  }
+  const float depth =
+    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
+  if (depth == 0.0) {
+    return;
+  }
+  bool valid[sample_count];
+  vec3 directions[sample_count];
+  float pdf_sums[sample_count];
+  for (int i = 0; i < sample_count; ++i) {
+    const ivec2 sample_pixel = pixel + sample_offsets[i];
+    valid[i] =
+      sample_pixel.x >= 0 && sample_pixel.y >= 0 &&
+      sample_pixel.x < size.x && sample_pixel.y < size.y &&
+      texelFetch(
+        sampled_images[push_constants.depth_texture], sample_pixel, 0).r != 0.0;
+    if (!valid[i]) {
+      continue;
+    }
+    directions[i] = oct_decode(
+      texelFetch(
+        sampled_images[push_constants.indirect_radiance_direction_texture],
+        sample_pixel,
+        0).rg);
+    pdf_sums[i] = 0.0;
+  }
+  const vec3 center_normal =
+    oct_decode(
+      texelFetch(
+        sampled_images[push_constants.normal_texture],
+        pixel + sample_offsets[j],
+        0).rg);
+  for (int i = 0; i < sample_count; ++i) {
+    if (valid[i]) {
+      pdf_sums[i] += max(dot(center_normal, directions[i]), 0.0) / pi;
+    }
+  }
+  for (int j = 1; j < sample_count; ++j) {
+    if (!valid[j]) {
+      continue;
+    }
+    const vec3 normal = oct_decode(
+      texelFetch(
+        sampled_images[push_constants.normal_texture],
+        pixel + sample_offsets[j],
+        0).rg);
+    for (int i = 0; i < sample_count; ++i) {
+      if (valid[i]) {
+        pdf_sums[i] += max(dot(normal, directions[i]), 0.0) / pi;
+      }
+    }
+  }
+  vec3 irradiance = vec3(0.0);
+  for (int i = 0; i < sample_count; ++i) {
+    if (!valid[i]) {
+      continue;
+    }
+    const float cos_theta = max(dot(center_normal, directions[i]), 0.0);
+    if (cos_theta <= 0.0) {
+      continue;
+    }
+    const vec3 radiance = texelFetch(
+      sampled_images[push_constants.indirect_radiance_texture],
+      pixel + sample_offsets[i],
+      0).rgb;
+    irradiance += radiance * cos_theta / pdf_sums[i];
+  }
+  imageStore(
+    storage_images[push_constants.indirect_irradiance_image],
+    pixel,
+    vec4(irradiance, 1.0));
+}
