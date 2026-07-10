@@ -59,9 +59,9 @@ void main() {
       sun_direction);
   const int unscrambled_stratum = pixel.x % 3 + 3 * (pixel.y % 3);
   const int scrambled_stratum =
-    0xf & (unscrambled_stratum == 0
+    int(0xfu & (unscrambled_stratum == 0
       ? push_constants.stratum_permutation.y
-      : push_constants.stratum_permutation.x >> (4 * unscrambled_stratum - 4));
+      : push_constants.stratum_permutation.x >> (4 * unscrambled_stratum - 4)));
   Random random;
   random.state = imageLoad(
     storage_uimages[push_constants.rng_state_image], pixel).x;
