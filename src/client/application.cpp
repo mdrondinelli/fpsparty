@@ -908,6 +908,23 @@ private:
       *_last_indirect_irradiance_frame + 1 == _frame_number};
     work_recorder.push_data(20, std::as_bytes(std::span{&history_valid, 1}));
     work_recorder.push_data(24, std::as_bytes(std::span{&z_near, 1}));
+    auto constexpr zoom = 1.25f;
+    auto const aspect_ratio = static_cast<f32>(framebuffer_size.x()) /
+                              static_cast<f32>(framebuffer_size.y());
+    auto const zoom_vec = math::vec2{
+      aspect_ratio > 1.0f ? zoom : zoom * aspect_ratio,
+      aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
+    };
+    auto const camera_basis =
+      (math::translation_matrix(camera->position) *
+       math::y_rotation_matrix(_local_player->input_state.yaw) *
+       math::x_rotation_matrix(_local_player->input_state.pitch))
+        .eval();
+    auto const camera_basis_rows =
+      Eigen::Matrix<float, 3, 4, Eigen::RowMajor>{camera_basis.topRows<3>()};
+    work_recorder
+      .push_data(32, std::as_bytes(std::span{&camera_basis_rows, 1}));
+    work_recorder.push_data(80, std::as_bytes(std::span{&zoom_vec, 1}));
     _last_indirect_irradiance_frame = _frame_number;
     auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
     auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);

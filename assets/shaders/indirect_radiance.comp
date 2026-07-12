@@ -87,9 +87,13 @@ void main() {
   vec3 ro = offset_ray_origin(world_position, n);
   vec3 radiance = vec3(0.0);
   vec3 radiance_multiplier = vec3(1.0);
+  float ray_length = 0.0;
   for (int bounce = 0; bounce < bounce_count; ++bounce) {
     Rt_grid_hit hit;
     if (rt_grid_trace(push_constants.rt_grid, ro, rd, hit)) {
+      if (bounce == 0) {
+        ray_length = hit.t;
+      }
       const vec3 hit_position = ro + hit.t * rd;
       const vec3 new_ro = offset_ray_origin(hit_position, hit.normal);
       const float sun_visibility =
@@ -120,7 +124,7 @@ void main() {
   imageStore(
     storage_images[push_constants.indirect_radiance_image],
     pixel,
-    vec4(radiance, 1.0));
+    vec4(radiance, ray_length));
   imageStore(
     storage_uimages[push_constants.rng_state_image],
     pixel,

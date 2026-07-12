@@ -18,6 +18,8 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 16) uint16_t motion_vector_texture;
   layout(offset = 20) uint history_valid;
   layout(offset = 24) float z_near;
+  layout(offset = 32, row_major) mat4x3 camera_basis;
+  layout(offset = 80) vec2 zoom;
 } push_constants;
 
 const int sample_count = 9;
@@ -35,6 +37,16 @@ const ivec2 sample_offsets[sample_count] = {
   ivec2(1, 1),
 };
 
+vec3 world_position(ivec2 pixel, ivec2 size, float depth) {
+  const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
+  const vec3 view_ray = vec3(
+    -ndc.x * push_constants.zoom.x, -ndc.y * push_constants.zoom.y, 1.0);
+  const float view_z = push_constants.z_near / depth;
+  return
+    push_constants.camera_basis[3].xyz +
+    mat3(push_constants.camera_basis) * (view_ray * view_z);
+}
+
 void main() {
   const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
   const ivec2 size =
@@ -47,21 +59,22 @@ void main() {
   const float center_depth =
     texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
   if (center_depth != 0.0) {
-    bool valid[sample_count];
+    float depths[sample_count];
     vec3 directions[sample_count];
     float pdf_sums[sample_count];
     for (int i = 0; i < sample_count; ++i) {
       const ivec2 sample_pixel = pixel + sample_offsets[i];
-      valid[i] =
+      const bool in_bounds =
         sample_pixel.x >= 0 && sample_pixel.y >= 0 &&
-        sample_pixel.x < size.x && sample_pixel.y < size.y &&
-        texelFetch(
-          sampled_images[push_constants.depth_texture],
-          sample_pixel,
-          0).r != 0.0;
-      if (!valid[i]) {
+        sample_pixel.x < size.x && sample_pixel.y < size.y;
+      if (!in_bounds) {
+        depths[i] = 0.0;
         continue;
       }
+      depths[i] = texelFetch(
+          sampled_images[push_constants.depth_texture],
+          sample_pixel,
+          0).r;
       directions[i] =
         oct_decode(
           texelFetch(
@@ -70,6 +83,8 @@ void main() {
             0).rg);
       pdf_sums[i] = 0.0;
     }
+    const vec3 center_position = 
+      world_position(pixel, size, center_depth);
     const vec3 center_normal =
       oct_decode(
         texelFetch(
@@ -77,38 +92,44 @@ void main() {
           pixel,
           0).rg);
     for (int i = 0; i < sample_count; ++i) {
-      if (valid[i]) {
+      if (depths[i] != 0.0) {
         pdf_sums[i] += max(dot(center_normal, directions[i]), 0.0) / pi;
       }
     }
     for (int j = 1; j < sample_count; ++j) {
-      if (!valid[j]) {
-        continue;
-      }
-      const vec3 normal = oct_decode(
-        texelFetch(
-          sampled_images[push_constants.normal_texture],
-          pixel + sample_offsets[j],
-          0).rg);
-      for (int i = 0; i < sample_count; ++i) {
-        if (valid[i]) {
-          pdf_sums[i] += max(dot(normal, directions[i]), 0.0) / pi;
+      if (depths[j] != 0.0) {
+        const vec3 normal = oct_decode(
+          texelFetch(
+            sampled_images[push_constants.normal_texture],
+            pixel + sample_offsets[j],
+            0).rg);
+        for (int i = 0; i < sample_count; ++i) {
+          if (depths[i] != 0.0) {
+            pdf_sums[i] += max(dot(normal, directions[i]), 0.0) / pi;
+          }
         }
       }
     }
     for (int i = 0; i < sample_count; ++i) {
-      if (!valid[i]) {
-        continue;
+      if (depths[i] != 0.0) {
+        const vec3 position =
+          world_position(pixel + sample_offsets[i], size, depths[i]);
+        const vec4 radiance_and_distance = texelFetch(
+          sampled_images[push_constants.indirect_radiance_texture],
+          pixel + sample_offsets[i],
+          0);
+        const vec3 radiance = radiance_and_distance.rgb;
+        const float hit_distance = radiance_and_distance.a;
+        const vec3 hit_displacement = hit_distance * directions[i];
+        const vec3 direction =
+          hit_distance > 0.0 
+            ? normalize(hit_displacement + position - center_position)
+            : directions[i];
+        const float cos_theta = max(dot(center_normal, direction), 0.0);
+        if (pdf_sums[i] > 0.0) {
+          irradiance += radiance * cos_theta / pdf_sums[i];
+        }
       }
-      const float cos_theta = max(dot(center_normal, directions[i]), 0.0);
-      if (cos_theta <= 0.0) {
-        continue;
-      }
-      const vec3 radiance = texelFetch(
-        sampled_images[push_constants.indirect_radiance_texture],
-        pixel + sample_offsets[i],
-        0).rgb;
-      irradiance += radiance * cos_theta / pdf_sums[i];
     }
     // Temporal accumulation
     if (push_constants.history_valid != 0) {
