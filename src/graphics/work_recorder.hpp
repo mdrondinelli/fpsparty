@@ -132,8 +132,12 @@ public:
 
   void push_data(u32 push_offset, std::span<std::byte const> data) noexcept;
 
-  void push_descriptor(
-    u32 push_offset, rc::Strong<Descriptor const> descriptor) noexcept;
+  // Packs the descriptors' handles as contiguous 16-bit indices starting at
+  // push_offset, zero-padded to the 4-byte push granularity. push_offset must
+  // be 4-aligned and the pad bytes must not overlap a used field.
+  void push_descriptors(
+    u32 push_offset,
+    std::initializer_list<rc::Strong<Descriptor const>> descriptors) noexcept;
 
   void push_buffer_reference(
     u32 push_offset, rc::Strong<Buffer> base, u64 offset = 0) noexcept;

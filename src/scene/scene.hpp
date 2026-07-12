@@ -75,7 +75,8 @@ public:
 
   /*
    * Returns the cached interpolated camera identified by id from the last play
-   * call.
+   * call. Null if id is unknown or nothing has been interpolated yet. Starved
+   * play calls keep the last interpolation.
    *
    * UB if empty.
    */
@@ -101,7 +102,8 @@ public:
 
   /*
    * Returns the cached interpolated mesh instance identified by id from the
-   * last play call.
+   * last play call. Null if id is unknown or nothing has been interpolated
+   * yet. Starved play calls keep the last interpolation.
    *
    * UB if empty.
    */

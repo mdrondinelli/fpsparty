@@ -7,11 +7,17 @@
 layout(local_size_x = 8, local_size_y = 8) in;
 
 layout(push_constant) uniform Push_constants {
-  layout(offset = 0) uint normal_texture;
-  layout(offset = 4) uint depth_texture;
-  layout(offset = 8) uint indirect_radiance_texture;
-  layout(offset = 12) uint indirect_radiance_direction_texture;
-  layout(offset = 16) uint indirect_irradiance_image;
+  layout(offset = 0) uint16_t depth_texture;
+  layout(offset = 2) uint16_t previous_depth_texture;
+  layout(offset = 4) uint16_t normal_texture;
+  layout(offset = 6) uint16_t previous_normal_texture;
+  layout(offset = 8) uint16_t indirect_radiance_texture;
+  layout(offset = 10) uint16_t indirect_radiance_direction_texture;
+  layout(offset = 12) uint16_t indirect_irradiance_image;
+  layout(offset = 14) uint16_t previous_indirect_irradiance_texture;
+  layout(offset = 16) uint16_t motion_vector_texture;
+  layout(offset = 20) uint history_valid;
+  layout(offset = 24) float z_near;
 } push_constants;
 
 const int sample_count = 9;
@@ -36,74 +42,122 @@ void main() {
   if (pixel.x >= size.x || pixel.y >= size.y) {
     return;
   }
-  const float depth =
+  vec3 irradiance = vec3(0.0);
+  float accumulated_frames = 0.0;
+  const float center_depth =
     texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
-  if (depth == 0.0) {
-    return;
-  }
-  bool valid[sample_count];
-  vec3 directions[sample_count];
-  float pdf_sums[sample_count];
-  for (int i = 0; i < sample_count; ++i) {
-    const ivec2 sample_pixel = pixel + sample_offsets[i];
-    valid[i] =
-      sample_pixel.x >= 0 && sample_pixel.y >= 0 &&
-      sample_pixel.x < size.x && sample_pixel.y < size.y &&
-      texelFetch(
-        sampled_images[push_constants.depth_texture], sample_pixel, 0).r != 0.0;
-    if (!valid[i]) {
-      continue;
+  if (center_depth != 0.0) {
+    bool valid[sample_count];
+    vec3 directions[sample_count];
+    float pdf_sums[sample_count];
+    for (int i = 0; i < sample_count; ++i) {
+      const ivec2 sample_pixel = pixel + sample_offsets[i];
+      valid[i] =
+        sample_pixel.x >= 0 && sample_pixel.y >= 0 &&
+        sample_pixel.x < size.x && sample_pixel.y < size.y &&
+        texelFetch(
+          sampled_images[push_constants.depth_texture],
+          sample_pixel,
+          0).r != 0.0;
+      if (!valid[i]) {
+        continue;
+      }
+      directions[i] =
+        oct_decode(
+          texelFetch(
+            sampled_images[push_constants.indirect_radiance_direction_texture],
+            sample_pixel,
+            0).rg);
+      pdf_sums[i] = 0.0;
     }
-    directions[i] = oct_decode(
-      texelFetch(
-        sampled_images[push_constants.indirect_radiance_direction_texture],
-        sample_pixel,
-        0).rg);
-    pdf_sums[i] = 0.0;
-  }
-  const vec3 center_normal =
-    oct_decode(
-      texelFetch(
-        sampled_images[push_constants.normal_texture],
-        pixel,
-        0).rg);
-  for (int i = 0; i < sample_count; ++i) {
-    if (valid[i]) {
-      pdf_sums[i] += max(dot(center_normal, directions[i]), 0.0) / pi;
-    }
-  }
-  for (int j = 1; j < sample_count; ++j) {
-    if (!valid[j]) {
-      continue;
-    }
-    const vec3 normal = oct_decode(
-      texelFetch(
-        sampled_images[push_constants.normal_texture],
-        pixel + sample_offsets[j],
-        0).rg);
+    const vec3 center_normal =
+      oct_decode(
+        texelFetch(
+          sampled_images[push_constants.normal_texture],
+          pixel,
+          0).rg);
     for (int i = 0; i < sample_count; ++i) {
       if (valid[i]) {
-        pdf_sums[i] += max(dot(normal, directions[i]), 0.0) / pi;
+        pdf_sums[i] += max(dot(center_normal, directions[i]), 0.0) / pi;
       }
     }
-  }
-  vec3 irradiance = vec3(0.0);
-  for (int i = 0; i < sample_count; ++i) {
-    if (!valid[i]) {
-      continue;
+    for (int j = 1; j < sample_count; ++j) {
+      if (!valid[j]) {
+        continue;
+      }
+      const vec3 normal = oct_decode(
+        texelFetch(
+          sampled_images[push_constants.normal_texture],
+          pixel + sample_offsets[j],
+          0).rg);
+      for (int i = 0; i < sample_count; ++i) {
+        if (valid[i]) {
+          pdf_sums[i] += max(dot(normal, directions[i]), 0.0) / pi;
+        }
+      }
     }
-    const float cos_theta = max(dot(center_normal, directions[i]), 0.0);
-    if (cos_theta <= 0.0) {
-      continue;
+    for (int i = 0; i < sample_count; ++i) {
+      if (!valid[i]) {
+        continue;
+      }
+      const float cos_theta = max(dot(center_normal, directions[i]), 0.0);
+      if (cos_theta <= 0.0) {
+        continue;
+      }
+      const vec3 radiance = texelFetch(
+        sampled_images[push_constants.indirect_radiance_texture],
+        pixel + sample_offsets[i],
+        0).rgb;
+      irradiance += radiance * cos_theta / pdf_sums[i];
     }
-    const vec3 radiance = texelFetch(
-      sampled_images[push_constants.indirect_radiance_texture],
-      pixel + sample_offsets[i],
-      0).rgb;
-    irradiance += radiance * cos_theta / pdf_sums[i];
+    // Temporal accumulation
+    if (push_constants.history_valid != 0) {
+      const vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
+      const vec2 previous_uv =
+        uv +
+        texelFetch(
+          sampled_images[push_constants.motion_vector_texture],
+          pixel,
+          0).rg;
+      if (all(greaterThanEqual(previous_uv, vec2(0.0))) &&
+          all(lessThanEqual(previous_uv, vec2(1.0)))) {
+        const vec4 history = texture(
+          sampled_images
+            [push_constants.previous_indirect_irradiance_texture],
+          previous_uv);
+        const vec3 history_irradiance = history.rgb;
+        const float history_accumulated_frames = history.a;
+        const float history_depth =
+          texture(
+            sampled_images[push_constants.previous_depth_texture],
+            previous_uv).r;
+        const float zn = push_constants.z_near;
+        const float center_linear_depth = zn / center_depth;
+        const float history_linear_depth = zn / history_depth;
+        const float depth_weight =
+          exp(-abs(center_linear_depth - history_linear_depth));
+        const vec3 history_normal =
+          oct_decode(
+            texture(
+              sampled_images[push_constants.previous_normal_texture],
+              previous_uv).rg);
+        const float normal_weight =
+          pow(max(dot(center_normal, history_normal), 0.0), 32.0);
+        const float accumulation_weight =
+          min(
+            history_accumulated_frames / (history_accumulated_frames + 1.0),
+            19.0 / 20.0);
+        const float edge_weight = depth_weight * normal_weight;
+        const float gamma = edge_weight * accumulation_weight;
+        irradiance = mix(irradiance, history_irradiance, gamma);
+        accumulated_frames = edge_weight * history_accumulated_frames + 1.0;
+      }
+    } else {
+      accumulated_frames = 1.0;
+    }
   }
   imageStore(
     storage_images[push_constants.indirect_irradiance_image],
     pixel,
-    vec4(irradiance, 1.0));
+    vec4(irradiance, accumulated_frames));
 }

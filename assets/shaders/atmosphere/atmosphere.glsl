@@ -1,6 +1,7 @@
 #ifndef FPSPARTY_ATMOSPHERE_ATMOSPHERE_GLSL
 #define FPSPARTY_ATMOSPHERE_ATMOSPHERE_GLSL
 
+#include "../descriptors.glsl"
 #include "../numbers.glsl"
 
 const float r_ground = 6360000.0;
@@ -107,6 +108,13 @@ vec2 unpack_sky_view_lut_params(vec2 packed, float altitude) {
     const float zenith = mix(horizon_zenith, pi, -linear_y);
     return vec2(longitude, zenith);
   }
+}
+
+vec3 transmittance_along_ray(uint transmittance_texture, vec3 ro, vec3 rd) {
+  const float h = altitude(ro);
+  const float cos_zenith = dot(normalize(ro), rd);
+  const vec2 lut_texcoord = pack_transmittance_lut_params(h, cos_zenith);
+  return FPSPARTY_SAMPLE(transmittance_texture, lut_texcoord).rgb;
 }
 
 #endif

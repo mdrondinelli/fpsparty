@@ -36,8 +36,8 @@ shaders=(
   composite.frag
   atmosphere/transmittance.comp
   atmosphere/sky_view.comp
-  atmosphere/sky_irradiance.comp
   radiance.comp
+  direct_radiance.comp
   indirect_irradiance.comp
   indirect_radiance.comp
   rng_seed.comp

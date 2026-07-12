@@ -124,11 +124,12 @@ std::size_t Scene::count_old_keyframes() const noexcept {
 bool Scene::interpolate() {
   // Note: keeps objects even if they're not in the next keyframe
   // Reason: we can reuse front keyframes index map for interpolated objects.
-  _previous_interpolation = std::move(_current_interpolation);
-  _current_interpolation.clear();
   if (_indexed_keyframes.size() < 2) {
+    _previous_interpolation = _current_interpolation;
     return false;
   }
+  _previous_interpolation = std::move(_current_interpolation);
+  _current_interpolation.clear();
   auto const a = _indexed_keyframes[0]->keyframe.number;
   auto const b = _indexed_keyframes[1]->keyframe.number;
   auto const t = (_keyframe_number - a + _inter_keyframe_time) / (b - a);

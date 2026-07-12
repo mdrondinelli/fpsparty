@@ -142,6 +142,20 @@ TEST_CASE("Scene previous interpolation lags current by one play") {
   CHECK(prev->position.x() == Approx(0.5f));
 }
 
+TEST_CASE("Scene keeps the last interpolation when starved") {
+  auto scene = make_scene();
+  scene.push(make_keyframe(10, {}, {instance_at(1, 0.0f)}));
+  scene.push(make_keyframe(11, {}, {instance_at(1, 1.0f)}));
+  scene.play(0.5f * kd); // t = 0.5
+  scene.play(kd);        // clamps at keyframe 11 and starves
+  auto const curr = scene.get_interpolated_mesh_instance(1);
+  auto const prev = scene.get_previous_interpolated_mesh_instance(1);
+  REQUIRE(curr != nullptr);
+  REQUIRE(prev != nullptr);
+  CHECK(curr->position.x() == Approx(0.5f)); // frozen at the last sample
+  CHECK(prev->position.x() == Approx(0.5f)); // previous == current: no motion
+}
+
 TEST_CASE("Scene previous lookup outlives trimmed keyframes") {
   auto scene = make_scene();
   scene.push(make_keyframe(10, {camera_at(7, 3.0f)}, {instance_at(2, 5.0f)}));

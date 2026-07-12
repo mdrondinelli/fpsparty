@@ -1,0 +1,97 @@
+#version 450
+
+#include "octahedral.glsl"
+#include "random.glsl"
+#include "rt_grid.glsl"
+#include "sampling.glsl"
+#include "atmosphere/atmosphere.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0, row_major) mat4x3 camera_basis;
+  layout(offset = 48) vec2 zoom;
+  layout(offset = 56) float z_near;
+  layout(offset = 60) uint16_t normal_texture;
+  layout(offset = 62) uint16_t depth_texture;
+  layout(offset = 64) uint16_t direct_radiance_image;
+  layout(offset = 66) uint16_t rng_state_image;
+  layout(offset = 68) uint16_t transmittance_texture;
+  layout(offset = 72) Rt_grid rt_grid;
+  layout(offset = 80) float sun_direction_x;
+  layout(offset = 84) float sun_direction_y;
+  layout(offset = 88) float sun_direction_z;
+  layout(offset = 92) float sun_irradiance_r;
+  layout(offset = 96) float sun_irradiance_g;
+  layout(offset = 100) float sun_irradiance_b;
+} push_constants;
+
+const float sun_angular_diameter = 0.0093;
+const float sun_angular_radius = sun_angular_diameter / 2.0;
+const float cos_sun_angular_radius = cos(sun_angular_radius);
+
+void main() {
+  const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  const ivec2 size =
+    imageSize(storage_images[push_constants.direct_radiance_image]);
+  if (pixel.x >= size.x || pixel.y >= size.y) {
+    return;
+  }
+  const float depth =
+    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
+  if (depth == 0.0) {
+    return;
+  }
+  const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
+  const vec3 view_ray = vec3(
+    -ndc.x * push_constants.zoom.x,
+    -ndc.y * push_constants.zoom.y,
+    1.0);
+  const vec3 camera_position = push_constants.camera_basis[3].xyz;
+  const float view_z = push_constants.z_near / depth;
+  const vec3 world_position =
+    camera_position + mat3(push_constants.camera_basis) * (view_ray * view_z);
+  const vec3 n = oct_decode(
+    texelFetch(
+      sampled_images[push_constants.normal_texture], pixel, 0).rg);
+  const vec3 sun_direction = vec3(
+    push_constants.sun_direction_x,
+    push_constants.sun_direction_y,
+    push_constants.sun_direction_z);
+  Random random;
+  random.state = imageLoad(
+    storage_uimages[push_constants.rng_state_image], pixel).x;
+  const vec3 l =
+    make_basis(sun_direction) *
+    square_to_cone(
+      vec2(random_float(random), random_float(random)),
+      cos_sun_angular_radius);
+  const float n_dot_l = max(dot(n, sun_direction), 0.0);
+  const bool occluded =
+    n_dot_l > 0.0
+      ? rt_grid_trace(
+          push_constants.rt_grid,
+          offset_ray_origin(world_position, n),
+          l)
+      : true;
+  const float visibility = occluded ? 0.0 : 1.0;
+  const vec3 E_top = vec3(
+    push_constants.sun_irradiance_r,
+    push_constants.sun_irradiance_g,
+    push_constants.sun_irradiance_b);
+  const vec3 E =
+    E_top *
+    transmittance_along_ray(
+      push_constants.transmittance_texture,
+      vec3(0.0, r_ground + world_position.y, 0.0),
+      sun_direction) *
+    visibility;
+  imageStore(
+    storage_images[push_constants.direct_radiance_image],
+    pixel,
+    vec4(E * n_dot_l, 1.0));
+  imageStore(
+    storage_uimages[push_constants.rng_state_image],
+    pixel,
+    uvec4(random.state));
+}
