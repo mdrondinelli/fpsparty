@@ -38,7 +38,10 @@ public:
 
   rc::Strong<graphics::Buffer> const &get_index_buffer() const noexcept;
 
-  rc::Strong<graphics::Buffer> const &get_rt_buffer() const noexcept;
+  rc::Strong<graphics::Buffer> const &
+  get_rt_block_grid_buffer() const noexcept;
+
+  u32 get_rt_chunk_count() const noexcept;
 
 private:
   struct Indirect_draw_info {
@@ -51,7 +54,8 @@ private:
   rc::Strong<graphics::Buffer> _vertex_buffer{};
   rc::Strong<graphics::Buffer> _index_buffer{};
   rc::Strong<graphics::Buffer> _draw_buffer{};
-  rc::Strong<graphics::Buffer> _rt_buffer{};
+  rc::Strong<graphics::Buffer> _rt_block_grid_buffer{};
+  u32 _rt_block_grid_chunk_count{};
   rc::Strong<graphics::Work> _upload_work{};
   std::array<std::array<Indirect_draw_info, 2>, 3> _draw_infos;
 };

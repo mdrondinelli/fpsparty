@@ -18,7 +18,7 @@ void main() {
     vec3(vertex.normal[0], vertex.normal[1], vertex.normal[2]);
   const vec3 world_normal = mat3(push_constants.model_matrix) * model_normal;
   out_world_normal = world_normal;
-  out_albedo = vec3(vertex.color[0], vertex.color[1], vertex.color[2]);
+  out_albedo = vec3(0.3);
   gl_Position = push_constants.scene.view_projection_matrix *
                 vec4(world_position, 1.0);
   out_current_clip = gl_Position;

@@ -4,30 +4,26 @@
 #include "octahedral.glsl"
 #include "random.glsl"
 #include "sampling.glsl"
-#include "rt_grid.glsl"
+#include "rt.glsl"
+#include "scene.glsl"
 #include "atmosphere/atmosphere.glsl"
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
 layout(push_constant) uniform Push_constants {
-  layout(offset = 0, row_major) mat4x3 camera_basis;
-  layout(offset = 48) vec2 zoom;
-  layout(offset = 56) float z_near;
-  layout(offset = 60) uint16_t normal_texture;
-  layout(offset = 62) uint16_t depth_texture;
-  layout(offset = 64) uint16_t sky_view_lut;
-  layout(offset = 66) uint16_t transmittance_texture;
-  layout(offset = 68) uint16_t indirect_radiance_image;
-  layout(offset = 70) uint16_t indirect_radiance_direction_image;
-  layout(offset = 72) uint16_t rng_state_image;
-  layout(offset = 80) Rt_grid rt_grid;
-  layout(offset = 88) uvec2 stratum_permutation;
-  layout(offset = 96) float sun_direction_x;
-  layout(offset = 100) float sun_direction_y;
-  layout(offset = 104) float sun_direction_z;
-  layout(offset = 108) float sun_irradiance_r;
-  layout(offset = 112) float sun_irradiance_g;
-  layout(offset = 116) float sun_irradiance_b;
+  layout(offset = 0) Scene scene;
+  layout(offset = 8) uint16_t normal_texture;
+  layout(offset = 10) uint16_t depth_texture;
+  layout(offset = 12) uint16_t sky_view_lut;
+  layout(offset = 14) uint16_t transmittance_texture;
+  layout(offset = 16) uint16_t indirect_radiance_image;
+  layout(offset = 18) uint16_t indirect_radiance_direction_image;
+  layout(offset = 20) uint16_t rng_state_image;
+  layout(offset = 24) Rt_block_grid rt_block_grid;
+  layout(offset = 32) Rt_entities entities;
+  layout(offset = 40) Rt_entity_grid entity_grid;
+  layout(offset = 48) Rt_entity_nodes entity_nodes;
+  layout(offset = 56) uvec2 stratum_permutation;
 } push_constants;
 
 const int bounce_count = 2;
@@ -46,24 +42,21 @@ void main() {
   }
   const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
   const vec3 view_ray = vec3(
-    -ndc.x * push_constants.zoom.x, -ndc.y * push_constants.zoom.y, 1.0);
-  const vec3 camera_position = push_constants.camera_basis[3].xyz;
-  const float view_z = push_constants.z_near / depth;
+    -ndc.x * push_constants.scene.zoom.x,
+    -ndc.y * push_constants.scene.zoom.y,
+    1.0);
+  const vec3 camera_position = push_constants.scene.camera_basis[3].xyz;
+  const float view_z = push_constants.scene.z_near / depth;
   const vec3 world_position =
-    camera_position + mat3(push_constants.camera_basis) * (view_ray * view_z);
+    camera_position +
+    mat3(push_constants.scene.camera_basis) * (view_ray * view_z);
   const vec3 n =
     oct_decode(
       texelFetch(sampled_images[push_constants.normal_texture], pixel, 0).rg);
   // Assume that sun transmittance is constant around the shaded surface.
-  const vec3 sun_direction = vec3(
-    push_constants.sun_direction_x,
-    push_constants.sun_direction_y,
-    push_constants.sun_direction_z);
+  const vec3 sun_direction = push_constants.scene.sun_direction;
   const vec3 E_sun =
-    vec3(
-      push_constants.sun_irradiance_r,
-      push_constants.sun_irradiance_g,
-      push_constants.sun_irradiance_b) *
+    push_constants.scene.sun_irradiance *
     transmittance_along_ray(
       push_constants.transmittance_texture,
       vec3(0.0, r_ground + world_position.y, 0.0),
@@ -89,15 +82,30 @@ void main() {
   vec3 radiance_multiplier = vec3(1.0);
   float ray_length = 0.0;
   for (int bounce = 0; bounce < bounce_count; ++bounce) {
-    Rt_grid_hit hit;
-    if (rt_grid_trace(push_constants.rt_grid, ro, rd, hit)) {
+    Rt_hit hit;
+    if (trace_ray(
+        push_constants.rt_block_grid,
+        push_constants.entities,
+        push_constants.entity_grid,
+        push_constants.entity_nodes,
+        ro,
+        rd,
+        false,
+        hit)) {
       if (bounce == 0) {
         ray_length = hit.t;
       }
       const vec3 hit_position = ro + hit.t * rd;
       const vec3 new_ro = offset_ray_origin(hit_position, hit.normal);
       const float sun_visibility =
-        rt_grid_trace(push_constants.rt_grid, new_ro, sun_direction)
+        trace_ray(
+          push_constants.rt_block_grid,
+          push_constants.entities,
+          push_constants.entity_grid,
+          push_constants.entity_nodes,
+          new_ro,
+          sun_direction,
+          true)
           ? 0.0
           : 1.0;
       radiance +=
@@ -117,7 +125,9 @@ void main() {
         FPSPARTY_SAMPLE(
           push_constants.sky_view_lut,
           pack_sky_view_lut_params(
-            longitude(rd), push_constants.camera_basis[3][1], zenith(rd))).rgb;
+            longitude(rd),
+            push_constants.scene.camera_basis[3][1],
+            zenith(rd))).rgb;
       break;
     }
   }

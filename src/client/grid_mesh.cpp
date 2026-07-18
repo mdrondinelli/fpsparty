@@ -16,13 +16,15 @@ namespace fpsparty::client {
 
 namespace {
 
-struct Rt_buffer_cell {
+struct Rt_block_grid_cell {
   std::uint8_t model_index;
   std::uint8_t albedo_index;
 };
 
-struct Rt_buffer_chunk {
-  std::array<Rt_buffer_cell, 64> cells;
+static_assert(sizeof(Rt_block_grid_cell) == 2);
+
+struct Rt_block_grid_chunk {
+  std::array<Rt_block_grid_cell, 64> cells;
 };
 
 } // namespace
@@ -40,7 +42,7 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
   auto const grid_empty = info.grid->empty();
   auto const chunk_counts =
     grid_empty ? math::ivec3::Zero().eval() : info.grid->get_chunk_counts();
-  auto rt_chunks = std::vector<Rt_buffer_chunk>(
+  auto rt_block_grid_chunks = std::vector<Rt_block_grid_chunk>(
     static_cast<std::size_t>(chunk_counts.x()) *
     static_cast<std::size_t>(chunk_counts.y()) *
     static_cast<std::size_t>(chunk_counts.z()));
@@ -100,18 +102,26 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
               game::Chunk::get_block_index({rel_x, rel_y, rel_z});
             switch (block) {
             default:
-              rt_chunks[chunk_index].cells[block_index].model_index = 1;
+              rt_block_grid_chunks[chunk_index]
+                .cells[block_index]
+                .model_index = 1;
               break;
             case game::Block::conveyor:
-              rt_chunks[chunk_index].cells[block_index].model_index = 2;
+              rt_block_grid_chunks[chunk_index]
+                .cells[block_index]
+                .model_index = 2;
               break;
             }
             switch (block) {
             default:
-              rt_chunks[chunk_index].cells[block_index].albedo_index = 0;
+              rt_block_grid_chunks[chunk_index]
+                .cells[block_index]
+                .albedo_index = 0;
               break;
             case game::Block::dirt:
-              rt_chunks[chunk_index].cells[block_index].albedo_index = 1;
+              rt_block_grid_chunks[chunk_index]
+                .cells[block_index]
+                .albedo_index = 1;
               break;
             }
           }
@@ -148,7 +158,7 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
     draw_count * sizeof(graphics::Indexed_draw_info);
   auto const chunk_min = grid_empty ? math::ivec3::Zero().eval()
                                     : info.grid->get_chunk_bounds().min();
-  auto const rt_header = std::array<std::int32_t, 6>{
+  auto const rt_block_grid_header = std::array<std::int32_t, 6>{
     chunk_min.x(),
     chunk_min.y(),
     chunk_min.z(),
@@ -156,11 +166,15 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
     chunk_counts.y(),
     chunk_counts.z(),
   };
-  auto const shadow_buffer_size = sizeof(rt_header) * rt_chunks.size() * 64;
+  static_assert(sizeof(rt_block_grid_header) == 24);
+  _rt_block_grid_chunk_count =
+    static_cast<std::uint32_t>(rt_block_grid_chunks.size());
+  auto const rt_block_grid_buffer_size = sizeof(rt_block_grid_header) +
+    sizeof(Rt_block_grid_chunk) * rt_block_grid_chunks.size();
   if (vertex_buffer_size > 0 && index_buffer_size > 0 && draw_buffer_size > 0) {
     auto const staging_buffer = info.graphics->create_staging_buffer(
       vertex_buffer_size + index_buffer_size + draw_buffer_size +
-      shadow_buffer_size);
+      rt_block_grid_buffer_size);
     auto const staging_buffer_memory = staging_buffer->map();
     auto staging_buffer_writer =
       serial::Span_writer{staging_buffer_memory.get()};
@@ -178,9 +192,11 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
           .write(std::as_bytes(std::span{draw_infos[axis][sign]}));
       }
     }
-    auto const rt_buffer_offset = staging_buffer_writer.offset();
-    staging_buffer_writer.write(std::as_bytes(std::span{rt_header}));
-    staging_buffer_writer.write(std::as_bytes(std::span{rt_chunks}));
+    auto const rt_block_grid_buffer_offset = staging_buffer_writer.offset();
+    staging_buffer_writer
+      .write(std::as_bytes(std::span{rt_block_grid_header}));
+    staging_buffer_writer
+      .write(std::as_bytes(std::span{rt_block_grid_chunks}));
     _vertex_buffer = info.graphics->create_buffer({
       .size = vertex_buffer_size,
       .usage = graphics::Buffer_usage_flag_bits::transfer_dst |
@@ -192,8 +208,8 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
       .usage = graphics::Buffer_usage_flag_bits::transfer_dst |
                graphics::Buffer_usage_flag_bits::indirect_buffer,
     });
-    _rt_buffer = info.graphics->create_buffer({
-      .size = shadow_buffer_size,
+    _rt_block_grid_buffer = info.graphics->create_buffer({
+      .size = rt_block_grid_buffer_size,
       .usage = graphics::Buffer_usage_flag_bits::transfer_dst |
                graphics::Buffer_usage_flag_bits::shader_device_address,
     });
@@ -224,11 +240,11 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
       });
     recorder.copy_buffer(
       staging_buffer,
-      _rt_buffer,
+      _rt_block_grid_buffer,
       {
-        .src_offset = rt_buffer_offset,
+        .src_offset = rt_block_grid_buffer_offset,
         .dst_offset = 0,
-        .size = shadow_buffer_size,
+        .size = rt_block_grid_buffer_size,
       });
     recorder.barrier(
       {
@@ -283,8 +299,12 @@ Grid_mesh::get_index_buffer() const noexcept {
 }
 
 rc::Strong<graphics::Buffer> const &
-Grid_mesh::get_rt_buffer() const noexcept {
-  return _rt_buffer;
+Grid_mesh::get_rt_block_grid_buffer() const noexcept {
+  return _rt_block_grid_buffer;
+}
+
+std::uint32_t Grid_mesh::get_rt_chunk_count() const noexcept {
+  return _rt_block_grid_chunk_count;
 }
 
 void Grid_mesh::on_work_done(graphics::Work const &) { _upload_work = nullptr; }

@@ -76,6 +76,8 @@ target_link_libraries(game net)
 # libscene
 add_library(
   scene
+  src/scene/component_frame.cpp
+  src/scene/element_frame.cpp
   src/scene/scene.cpp
 )
 target_include_directories(
@@ -188,6 +190,18 @@ add_executable(
 target_link_libraries(ppm-tests ppm Catch2::Catch2WithMain)
 add_test(NAME ppm-tests COMMAND ppm-tests)
 
+add_executable(
+  int-map-tests
+  tests/int_map.cpp
+)
+target_include_directories(
+  int-map-tests
+  PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(int-map-tests Catch2::Catch2WithMain)
+add_test(NAME int-map-tests COMMAND int-map-tests)
+
 # server
 add_executable(
   server
@@ -291,6 +305,7 @@ set(fpsparty_targets
   server-tests
   ppm
   ppm-tests
+  int-map-tests
   server
   graphics
   client-app

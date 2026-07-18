@@ -27,7 +27,7 @@ public:
 private:
   u32 get_buffer_capacity() const noexcept;
 
-  void create_buffer(u32 capacity);
+  void reserve(u32 capacity);
 
   graphics::Graphics *_graphics;
   rc::Strong<graphics::Buffer> _descriptor_index_buffer;

@@ -40,6 +40,7 @@ shaders=(
   direct_radiance.comp
   indirect_irradiance.comp
   indirect_radiance.comp
+  bin_rt_grid_entities.comp
   rng_seed.comp
 )
 

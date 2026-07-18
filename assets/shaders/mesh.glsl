@@ -6,7 +6,6 @@
 struct Vertex {
   float position[3];
   float normal[3];
-  float color[3];
 };
 
 layout(std430, buffer_reference, buffer_reference_align = 4)

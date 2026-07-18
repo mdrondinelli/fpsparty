@@ -2,28 +2,24 @@
 
 #include "octahedral.glsl"
 #include "random.glsl"
-#include "rt_grid.glsl"
+#include "rt.glsl"
 #include "sampling.glsl"
+#include "scene.glsl"
 #include "atmosphere/atmosphere.glsl"
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
 layout(push_constant) uniform Push_constants {
-  layout(offset = 0, row_major) mat4x3 camera_basis;
-  layout(offset = 48) vec2 zoom;
-  layout(offset = 56) float z_near;
-  layout(offset = 60) uint16_t normal_texture;
-  layout(offset = 62) uint16_t depth_texture;
-  layout(offset = 64) uint16_t direct_radiance_image;
-  layout(offset = 66) uint16_t rng_state_image;
-  layout(offset = 68) uint16_t transmittance_texture;
-  layout(offset = 72) Rt_grid rt_grid;
-  layout(offset = 80) float sun_direction_x;
-  layout(offset = 84) float sun_direction_y;
-  layout(offset = 88) float sun_direction_z;
-  layout(offset = 92) float sun_irradiance_r;
-  layout(offset = 96) float sun_irradiance_g;
-  layout(offset = 100) float sun_irradiance_b;
+  layout(offset = 0) Scene scene;
+  layout(offset = 8) uint16_t normal_texture;
+  layout(offset = 10) uint16_t depth_texture;
+  layout(offset = 12) uint16_t direct_radiance_image;
+  layout(offset = 14) uint16_t rng_state_image;
+  layout(offset = 16) uint16_t transmittance_texture;
+  layout(offset = 24) Rt_block_grid rt_block_grid;
+  layout(offset = 32) Rt_entities entities;
+  layout(offset = 40) Rt_entity_grid entity_grid;
+  layout(offset = 48) Rt_entity_nodes entity_nodes;
 } push_constants;
 
 const float sun_angular_diameter = 0.0093;
@@ -44,20 +40,18 @@ void main() {
   }
   const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
   const vec3 view_ray = vec3(
-    -ndc.x * push_constants.zoom.x,
-    -ndc.y * push_constants.zoom.y,
+    -ndc.x * push_constants.scene.zoom.x,
+    -ndc.y * push_constants.scene.zoom.y,
     1.0);
-  const vec3 camera_position = push_constants.camera_basis[3].xyz;
-  const float view_z = push_constants.z_near / depth;
+  const vec3 camera_position = push_constants.scene.camera_basis[3].xyz;
+  const float view_z = push_constants.scene.z_near / depth;
   const vec3 world_position =
-    camera_position + mat3(push_constants.camera_basis) * (view_ray * view_z);
+    camera_position +
+    mat3(push_constants.scene.camera_basis) * (view_ray * view_z);
   const vec3 n = oct_decode(
     texelFetch(
       sampled_images[push_constants.normal_texture], pixel, 0).rg);
-  const vec3 sun_direction = vec3(
-    push_constants.sun_direction_x,
-    push_constants.sun_direction_y,
-    push_constants.sun_direction_z);
+  const vec3 sun_direction = push_constants.scene.sun_direction;
   Random random;
   random.state = imageLoad(
     storage_uimages[push_constants.rng_state_image], pixel).x;
@@ -69,16 +63,17 @@ void main() {
   const float n_dot_l = max(dot(n, sun_direction), 0.0);
   const bool occluded =
     n_dot_l > 0.0
-      ? rt_grid_trace(
-          push_constants.rt_grid,
+      ? trace_ray(
+          push_constants.rt_block_grid,
+          push_constants.entities,
+          push_constants.entity_grid,
+          push_constants.entity_nodes,
           offset_ray_origin(world_position, n),
-          l)
+          l,
+          true)
       : true;
   const float visibility = occluded ? 0.0 : 1.0;
-  const vec3 E_top = vec3(
-    push_constants.sun_irradiance_r,
-    push_constants.sun_irradiance_g,
-    push_constants.sun_irradiance_b);
+  const vec3 E_top = push_constants.scene.sun_irradiance;
   const vec3 E =
     E_top *
     transmittance_along_ray(

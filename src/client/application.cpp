@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cassert>
 #include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -53,186 +55,39 @@ struct Vertex {
   float nx{};
   float ny{};
   float nz{};
-  float r;
-  float g;
-  float b;
 };
 
 auto const cube_mesh_vertices = std::vector<Vertex>{
   // +x face
-  {.px = 0.5f,
-   .py = 0.5f,
-   .pz = 0.5f,
-   .nx = 1.0f,
-   .r = 1.0f,
-   .g = 0.0f,
-   .b = 0.0f}, // 1
-  {.px = 0.5f,
-   .py = -0.5f,
-   .pz = 0.5f,
-   .nx = 1.0f,
-   .r = 0.0f,
-   .g = 0.0f,
-   .b = 1.0f}, // 2
-  {.px = 0.5f,
-   .py = 0.5f,
-   .pz = -0.5f,
-   .nx = 1.0f,
-   .r = 0.0f,
-   .g = 1.0f,
-   .b = 0.0f}, // 3
-  {.px = 0.5f,
-   .py = -0.5f,
-   .pz = -0.5f,
-   .nx = 1.0f,
-   .r = 1.0f,
-   .g = 1.0f,
-   .b = 0.0f}, // 4
+  {.px = 0.5f, .py = 0.5f, .pz = 0.5f, .nx = 1.0f},   // 1
+  {.px = 0.5f, .py = -0.5f, .pz = 0.5f, .nx = 1.0f},  // 2
+  {.px = 0.5f, .py = 0.5f, .pz = -0.5f, .nx = 1.0f},  // 3
+  {.px = 0.5f, .py = -0.5f, .pz = -0.5f, .nx = 1.0f}, // 4
   // -x face
-  {.px = -0.5f,
-   .py = 0.5f,
-   .pz = -0.5f,
-   .nx = -1.0f,
-   .r = 1.0f,
-   .g = 0.0f,
-   .b = 0.0f}, // 1
-  {.px = -0.5f,
-   .py = -0.5f,
-   .pz = -0.5f,
-   .nx = -1.0f,
-   .r = 0.0f,
-   .g = 0.0f,
-   .b = 1.0f}, // 2
-  {.px = -0.5f,
-   .py = 0.5f,
-   .pz = 0.5f,
-   .nx = -1.0f,
-   .r = 0.0f,
-   .g = 1.0f,
-   .b = 0.0f}, // 3
-  {.px = -0.5f,
-   .py = -0.5f,
-   .pz = 0.5f,
-   .nx = -1.0f,
-   .r = 1.0f,
-   .g = 1.0f,
-   .b = 0.0f}, // 4
+  {.px = -0.5f, .py = 0.5f, .pz = -0.5f, .nx = -1.0f},  // 1
+  {.px = -0.5f, .py = -0.5f, .pz = -0.5f, .nx = -1.0f}, // 2
+  {.px = -0.5f, .py = 0.5f, .pz = 0.5f, .nx = -1.0f},   // 3
+  {.px = -0.5f, .py = -0.5f, .pz = 0.5f, .nx = -1.0f},  // 4
   // +y face
-  {.px = 0.5f,
-   .py = 0.5f,
-   .pz = 0.5f,
-   .ny = 1.0f,
-   .r = 1.0f,
-   .g = 0.0f,
-   .b = 0.0f}, // 1
-  {.px = 0.5f,
-   .py = 0.5f,
-   .pz = -0.5f,
-   .ny = 1.0f,
-   .r = 0.0f,
-   .g = 0.0f,
-   .b = 1.0f}, // 2
-  {.px = -0.5f,
-   .py = 0.5f,
-   .pz = 0.5f,
-   .ny = 1.0f,
-   .r = 0.0f,
-   .g = 1.0f,
-   .b = 0.0f}, // 3
-  {.px = -0.5f,
-   .py = 0.5f,
-   .pz = -0.5f,
-   .ny = 1.0f,
-   .r = 1.0f,
-   .g = 1.0f,
-   .b = 0.0f}, // 4
+  {.px = 0.5f, .py = 0.5f, .pz = 0.5f, .ny = 1.0f},   // 1
+  {.px = 0.5f, .py = 0.5f, .pz = -0.5f, .ny = 1.0f},  // 2
+  {.px = -0.5f, .py = 0.5f, .pz = 0.5f, .ny = 1.0f},  // 3
+  {.px = -0.5f, .py = 0.5f, .pz = -0.5f, .ny = 1.0f}, // 4
   // -y face
-  {.px = 0.5f,
-   .py = -0.5f,
-   .pz = -0.5f,
-   .ny = -1.0f,
-   .r = 0.0f,
-   .g = 0.0f,
-   .b = 1.0f}, // 2
-  {.px = 0.5f,
-   .py = -0.5f,
-   .pz = 0.5f,
-   .ny = -1.0f,
-   .r = 1.0f,
-   .g = 0.0f,
-   .b = 0.0f}, // 1
-  {.px = -0.5f,
-   .py = -0.5f,
-   .pz = -0.5f,
-   .ny = -1.0f,
-   .r = 1.0f,
-   .g = 1.0f,
-   .b = 0.0f}, // 4
-  {.px = -0.5f,
-   .py = -0.5f,
-   .pz = 0.5f,
-   .ny = -1.0f,
-   .r = 0.0f,
-   .g = 1.0f,
-   .b = 0.0f}, // 3
+  {.px = 0.5f, .py = -0.5f, .pz = -0.5f, .ny = -1.0f},  // 2
+  {.px = 0.5f, .py = -0.5f, .pz = 0.5f, .ny = -1.0f},   // 1
+  {.px = -0.5f, .py = -0.5f, .pz = -0.5f, .ny = -1.0f}, // 4
+  {.px = -0.5f, .py = -0.5f, .pz = 0.5f, .ny = -1.0f},  // 3
   // +z face
-  {.px = -0.5f,
-   .py = 0.5f,
-   .pz = 0.5f,
-   .nz = 1.0f,
-   .r = 1.0f,
-   .g = 1.0f,
-   .b = 0.0f}, // 3
-  {.px = -0.5f,
-   .py = -0.5f,
-   .pz = 0.5f,
-   .nz = 1.0f,
-   .r = 0.0f,
-   .g = 1.0f,
-   .b = 0.0f}, // 4
-  {.px = 0.5f,
-   .py = 0.5f,
-   .pz = 0.5f,
-   .nz = 1.0f,
-   .r = 0.0f,
-   .g = 0.0f,
-   .b = 1.0f}, // 1
-  {.px = 0.5f,
-   .py = -0.5f,
-   .pz = 0.5f,
-   .nz = 1.0f,
-   .r = 1.0f,
-   .g = 0.0f,
-   .b = 0.0f}, // 2
+  {.px = -0.5f, .py = 0.5f, .pz = 0.5f, .nz = 1.0f},  // 3
+  {.px = -0.5f, .py = -0.5f, .pz = 0.5f, .nz = 1.0f}, // 4
+  {.px = 0.5f, .py = 0.5f, .pz = 0.5f, .nz = 1.0f},   // 1
+  {.px = 0.5f, .py = -0.5f, .pz = 0.5f, .nz = 1.0f},  // 2
   // -z face
-  {.px = 0.5f,
-   .py = 0.5f,
-   .pz = -0.5f,
-   .nz = -1.0f,
-   .r = 0.0f,
-   .g = 0.0f,
-   .b = 1.0f}, // 1
-  {.px = 0.5f,
-   .py = -0.5f,
-   .pz = -0.5f,
-   .nz = -1.0f,
-   .r = 1.0f,
-   .g = 0.0f,
-   .b = 0.0f}, // 2
-  {.px = -0.5f,
-   .py = 0.5f,
-   .pz = -0.5f,
-   .nz = -1.0f,
-   .r = 1.0f,
-   .g = 1.0f,
-   .b = 0.0f}, // 3
-  {.px = -0.5f,
-   .py = -0.5f,
-   .pz = -0.5f,
-   .nz = -1.0f,
-   .r = 0.0f,
-   .g = 1.0f,
-   .b = 0.0f}, // 4
+  {.px = 0.5f, .py = 0.5f, .pz = -0.5f, .nz = -1.0f},   // 1
+  {.px = 0.5f, .py = -0.5f, .pz = -0.5f, .nz = -1.0f},  // 2
+  {.px = -0.5f, .py = 0.5f, .pz = -0.5f, .nz = -1.0f},  // 3
+  {.px = -0.5f, .py = -0.5f, .pz = -0.5f, .nz = -1.0f}, // 4
 };
 
 auto const cube_mesh_indices = std::vector<std::uint16_t>{
@@ -285,14 +140,18 @@ auto const crosshair_indices =
 auto const composite_indices = std::array<std::uint16_t, 3>{0, 1, 2};
 auto const sky_color = math::vec4{0.4196f, 0.6196f, 0.7451f, 1.0f};
 auto constexpr z_near = 0.1f;
-auto const sun_irradiance = math::vec3::Constant(1300.0f).eval();
 auto const transmittance_lut_size = math::ivec2{256, 128};
 auto const sky_view_lut_size = math::ivec2{256, 256};
 
-auto constexpr scene_uniform_data_size = std::size_t{144};
+auto constexpr scene_uniform_data_size = std::size_t{240};
 auto constexpr scene_view_projection_matrix_offset = std::size_t{0};
 auto constexpr scene_previous_view_projection_matrix_offset = std::size_t{64};
 auto constexpr scene_animation_time_offset = std::size_t{128};
+auto constexpr scene_camera_basis_offset = std::size_t{144};
+auto constexpr scene_sun_direction_offset = std::size_t{192};
+auto constexpr scene_sun_irradiance_offset = std::size_t{208};
+auto constexpr scene_zoom_offset = std::size_t{224};
+auto constexpr scene_z_near_offset = std::size_t{232};
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
@@ -319,6 +178,62 @@ std::vector<std::byte> load_file(char const *path) {
 }
 
 auto constexpr max_frames_in_flight = 2;
+auto constexpr rt_entity_node_size = 2 * sizeof(std::uint32_t);
+auto constexpr rt_entity_nodes_per_chunk = std::size_t{1000};
+auto constexpr rt_cells_per_chunk = std::size_t{64};
+
+struct alignas(16) Rt_entity {
+  std::array<float, 12> model;
+  std::array<float, 12> inverse_model;
+  math::vec4 half_extents;
+  math::vec4 albedo;
+};
+
+struct Rt_entity_binning_buffer_layout {
+  std::size_t grid_offset;
+  std::size_t nodes_offset;
+  std::size_t size;
+};
+
+Rt_entity_binning_buffer_layout
+make_rt_entity_binning_buffer_layout(std::size_t chunk_count) {
+  auto const grid_offset = std::size_t{};
+  auto const grid_size =
+    chunk_count * rt_cells_per_chunk * sizeof(std::int32_t);
+  auto const nodes_offset = grid_offset + grid_size;
+  assert(nodes_offset % 8 == 0);
+  auto const nodes_size = sizeof(std::uint32_t) + chunk_count *
+                                                    rt_entity_nodes_per_chunk *
+                                                    rt_entity_node_size;
+  return {
+    .grid_offset = grid_offset,
+    .nodes_offset = nodes_offset,
+    .size = nodes_offset + nodes_size,
+  };
+}
+
+static_assert(sizeof(Rt_entity) == 128);
+static_assert(offsetof(Rt_entity, inverse_model) == 48);
+static_assert(offsetof(Rt_entity, half_extents) == 96);
+static_assert(offsetof(Rt_entity, albedo) == 112);
+
+auto make_rt_matrix_rows(math::mat4 const &matrix) {
+  auto rows = std::array<float, 12>{};
+  for (auto row = 0; row != 3; ++row) {
+    for (auto column = 0; column != 4; ++column) {
+      rows[static_cast<std::size_t>(row * 4 + column)] = matrix(row, column);
+    }
+  }
+  return rows;
+}
+
+math::mat4 make_model_matrix(scene::elements::Box const &box) {
+  auto rotation = math::mat4::Identity().eval();
+  rotation.block<3, 3>(0, 0) = box.orientation.toRotationMatrix();
+  return (math::translation_matrix(box.position) * rotation *
+          math::axis_aligned_scale_matrix(box.half_extents * 2.0f))
+    .eval();
+}
 
 } // namespace
 
@@ -355,16 +270,18 @@ public:
           graphics::load_shader("./assets/shaders/composite.frag.spv")},
         _sky_view_compute_shader{graphics::load_shader(
           "./assets/shaders/atmosphere/sky_view.comp.spv")},
-        _direct_radiance_compute_shader{graphics::load_shader(
-          "./assets/shaders/direct_radiance.comp.spv")},
+        _direct_radiance_compute_shader{
+          graphics::load_shader("./assets/shaders/direct_radiance.comp.spv")},
+        _rt_grid_entity_binning_compute_shader{graphics::load_shader(
+          "./assets/shaders/bin_rt_grid_entities.comp.spv")},
         _rng_seed_compute_shader{
           graphics::load_shader("./assets/shaders/rng_seed.comp.spv")},
         _radiance_compute_shader{
           graphics::load_shader("./assets/shaders/radiance.comp.spv")},
-        _indirect_radiance_compute_shader{graphics::load_shader(
-          "./assets/shaders/indirect_radiance.comp.spv")},
-        _indirect_irradiance_compute_shader{
-          graphics::load_shader("./assets/shaders/indirect_irradiance.comp.spv")},
+        _indirect_radiance_compute_shader{
+          graphics::load_shader("./assets/shaders/indirect_radiance.comp.spv")},
+        _indirect_irradiance_compute_shader{graphics::load_shader(
+          "./assets/shaders/indirect_irradiance.comp.spv")},
         _grid_pipeline{make_grid_pipeline()},
         _mesh_pipeline{make_mesh_pipeline()},
         _crosshair_pipeline{make_crosshair_pipeline()},
@@ -372,6 +289,8 @@ public:
           {.shader = &_sky_view_compute_shader})},
         _direct_radiance_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_direct_radiance_compute_shader})},
+        _rt_grid_entity_binning_pipeline{_graphics.create_compute_pipeline(
+          {.shader = &_rt_grid_entity_binning_compute_shader})},
         _rng_seed_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_rng_seed_compute_shader})},
         _radiance_pipeline{_graphics.create_compute_pipeline(
@@ -480,6 +399,7 @@ private:
     ZoneScoped;
     if (_pending_grid_mesh && _pending_grid_mesh->is_uploaded()) {
       _grid_mesh = std::move(_pending_grid_mesh);
+      reset_rt_entity_binning_buffers();
     }
     auto [work_recorder, swapchain_image] = _graphics.record_frame_work();
     auto const framebuffer_extent = swapchain_image->get_extent().eval();
@@ -536,17 +456,17 @@ private:
     auto const camera =
       session && _local_player && _local_player->player_entity_id &&
           _local_player->humanoid_entity_id
-        ? session->get_scene()
-            .get_interpolated_camera(*_local_player->player_entity_id)
+        ? session->get_scene().get_camera(*_local_player->player_entity_id)
+        : nullptr;
+    auto const sun =
+      session && !session->get_scene().empty()
+        ? session->get_scene().get_distant_light(scene::elements::sun_light_key)
         : nullptr;
     auto const scene_uniform_offset =
       (_frame_number % max_frames_in_flight) * scene_uniform_data_size;
-    if (camera) {
+    if (camera && sun) {
       record_sky_view_pass(
-        work_recorder,
-        camera->position,
-        session->get_scene().get_interpolated_sun_direction(),
-        sun_irradiance);
+        work_recorder, camera->position, sun->direction, sun->irradiance);
     }
     if (indirect_rng_state_image_created) {
       record_rng_seed_pass(
@@ -563,8 +483,11 @@ private:
         static_cast<u32>(_rng_engine()));
     }
     record_gbuffer_pass(work_recorder, framebuffer_size, scene_uniform_offset);
-    record_direct_radiance_pass(work_recorder, framebuffer_size);
-    record_indirect_radiance_pass(work_recorder, framebuffer_size);
+    record_rt_entity_binning_pass(work_recorder);
+    record_direct_radiance_pass(
+      work_recorder, framebuffer_size, scene_uniform_offset);
+    record_indirect_radiance_pass(
+      work_recorder, framebuffer_size, scene_uniform_offset);
     record_indirect_irradiance_pass(work_recorder, framebuffer_size);
     record_radiance_pass(work_recorder, framebuffer_size);
     record_crosshair_pass(work_recorder, framebuffer_size);
@@ -615,8 +538,7 @@ private:
     auto const camera =
       session && _local_player && _local_player->player_entity_id &&
           _local_player->humanoid_entity_id
-        ? session->get_scene()
-            .get_interpolated_camera(*_local_player->player_entity_id)
+        ? session->get_scene().get_camera(*_local_player->player_entity_id)
         : nullptr;
     work_recorder.set_depth_test_enabled(true);
     work_recorder.set_depth_write_enabled(true);
@@ -627,15 +549,23 @@ private:
          math::y_rotation_matrix(-_local_player->input_state.yaw) *
          math::translation_matrix(-camera->position))
           .eval();
-      auto const zoom = 1.25f;
+      auto const zoom = 1.125f;
       auto const aspect_ratio = static_cast<float>(framebuffer_size.x()) /
                                 static_cast<float>(framebuffer_size.y());
-      auto const projection_matrix = math::perspective_projection_matrix(
+      auto const zoom_vec = math::vec2{
         aspect_ratio > 1.0f ? zoom : zoom * aspect_ratio,
         aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
-        z_near);
+      };
+      auto const projection_matrix =
+        math::perspective_projection_matrix(zoom_vec.x(), zoom_vec.y(), z_near);
       auto const view_projection_matrix =
         (projection_matrix * view_matrix).eval();
+      auto const camera_basis =
+        (math::translation_matrix(camera->position) *
+         math::y_rotation_matrix(_local_player->input_state.yaw) *
+         math::x_rotation_matrix(_local_player->input_state.pitch))
+          .eval();
+      auto const camera_basis_rows = make_rt_matrix_rows(camera_basis);
       auto const scene_uniform_memory = _scene_uniform_buffer->map();
       auto const write_scene_uniform =
         [&]<typename T>(std::size_t offset, T const &value) {
@@ -653,6 +583,15 @@ private:
         scene_previous_view_projection_matrix_offset,
         previous_view_projection_matrix);
       write_scene_uniform(scene_animation_time_offset, _animation_time);
+      write_scene_uniform(scene_camera_basis_offset, camera_basis_rows);
+      write_scene_uniform(scene_zoom_offset, zoom_vec);
+      write_scene_uniform(scene_z_near_offset, z_near);
+      auto const sun =
+        session->get_scene().get_distant_light(scene::elements::sun_light_key);
+      if (sun) {
+        write_scene_uniform(scene_sun_direction_offset, sun->direction);
+        write_scene_uniform(scene_sun_irradiance_offset, sun->irradiance);
+      }
       // draw grid
       if (_grid_mesh && _grid_mesh->is_uploaded()) {
         work_recorder.bind_pipeline(_grid_pipeline);
@@ -691,28 +630,28 @@ private:
       work_recorder
         .push_buffer_reference(0, _scene_uniform_buffer, scene_uniform_offset);
       work_recorder.push_buffer_reference(8, _cube_vertex_buffer);
-      auto const make_model_matrix = [](scene::Mesh_instance const &instance) {
-        auto rotation_matrix = math::mat4::Identity().eval();
-        rotation_matrix.block<3, 3>(0, 0) =
-          instance.orientation.toRotationMatrix();
-        return (math::translation_matrix(instance.position) * rotation_matrix *
-                math::axis_aligned_scale_matrix(instance.scale))
-          .eval();
-      };
-      for (auto const &[id, instance] :
-           session->get_scene().get_interpolated_mesh_instances()) {
-        auto const model_matrix = make_model_matrix(instance);
-        auto const previous_instance =
-          session->get_scene().get_previous_interpolated_mesh_instance(id);
+      for (auto const &box : session->get_scene().get_current_frame().boxes) {
+        auto const local_body_key = _local_player->humanoid_entity_id
+                                      ? scene::elements::entity_part_key(
+                                          *_local_player->humanoid_entity_id, 0)
+                                      : 0;
+        auto const local_head_key = _local_player->humanoid_entity_id
+                                      ? scene::elements::entity_part_key(
+                                          *_local_player->humanoid_entity_id, 1)
+                                      : 0;
+        if (box.key == local_body_key || box.key == local_head_key) {
+          continue;
+        }
+        auto const previous_box =
+          session->get_scene().get_previous_box(box.key);
+        auto const model_matrix = make_model_matrix(box);
         auto const previous_model_matrix =
-          previous_instance ? make_model_matrix(*previous_instance)
-                            : model_matrix;
-        // Rows contiguous, matching the row_major mat4x3 push constants.
+          make_model_matrix(previous_box ? *previous_box : box);
         auto const model_rows = Eigen::Matrix<float, 3, 4, Eigen::RowMajor>{
           model_matrix.topRows<3>()};
         auto const previous_model_rows =
-          Eigen::Matrix<float, 3, 4, Eigen::RowMajor>{
-            previous_model_matrix.topRows<3>()};
+          Eigen::Matrix<float, 3, 4, Eigen::RowMajor>{previous_model_matrix
+                                                        .topRows<3>()};
         work_recorder.push_data(16, std::as_bytes(std::span{&model_rows, 1}));
         work_recorder
           .push_data(64, std::as_bytes(std::span{&previous_model_rows, 1}));
@@ -747,53 +686,133 @@ private:
       compute_shader_storage_read_scope | compute_shader_storage_write_scope);
   }
 
+  void ensure_rt_entity_capacity(std::size_t capacity) {
+    if (_rt_entity_capacity >= capacity) {
+      return;
+    }
+    _rt_entity_capacity = std::max(std::size_t{16}, std::bit_ceil(capacity));
+    auto const size = 16 + _rt_entity_capacity * sizeof(Rt_entity);
+    for (auto &buffer : _rt_entity_buffers) {
+      buffer = _graphics.create_buffer({
+        .size = size,
+        .usage = graphics::Buffer_usage_flag_bits::shader_device_address,
+        .mapping_mode = graphics::Mapping_mode::write_only,
+        .min_alignment = 16,
+      });
+    }
+  }
+
+  void reset_rt_entity_binning_buffers() {
+    auto const layout =
+      make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
+    for (auto i = std::size_t{}; i != max_frames_in_flight; ++i) {
+      _rt_entity_binning_buffers[i] = _graphics.create_buffer({
+        .size = layout.size,
+        .usage = graphics::Buffer_usage_flag_bits::shader_device_address,
+        .mapping_mode = graphics::Mapping_mode::write_only,
+        .min_alignment = 8,
+      });
+    }
+  }
+
+  void record_rt_entity_binning_pass(graphics::Work_recorder &work_recorder) {
+    auto const &session = _client.get_session();
+    if (!session || !_grid_mesh || !_grid_mesh->is_uploaded()) {
+      return;
+    }
+    auto const &boxes = session->get_scene().get_current_frame().boxes;
+    ensure_rt_entity_capacity(std::max(boxes.size(), std::size_t{1}));
+    auto entities = std::vector<Rt_entity>{};
+    entities.reserve(boxes.size());
+    for (auto const &box : boxes) {
+      auto rotation = math::mat4::Identity().eval();
+      rotation.block<3, 3>(0, 0) = box.orientation.toRotationMatrix();
+      auto const model =
+        (math::translation_matrix(box.position) * rotation).eval();
+      auto const inverse_model = model.inverse().eval();
+      auto const half_extents = box.half_extents.cwiseAbs().eval();
+      entities.push_back({
+        .model = make_rt_matrix_rows(model),
+        .inverse_model = make_rt_matrix_rows(inverse_model),
+        .half_extents =
+          math::vec4{
+            half_extents.x(), half_extents.y(), half_extents.z(), 0.0f},
+        .albedo = math::vec4{0.3f, 0.3f, 0.3f, 0.0f},
+      });
+    }
+    auto const frame = _frame_number % max_frames_in_flight;
+    auto const entity_memory = _rt_entity_buffers[frame]->map();
+    auto const entity_count = static_cast<std::uint32_t>(entities.size());
+    std::memcpy(
+      entity_memory.get().data(), &entity_count, sizeof(entity_count));
+    if (!entities.empty()) {
+      std::memcpy(
+        entity_memory.get().data() + 16,
+        entities.data(),
+        entities.size() * sizeof(Rt_entity));
+    }
+    auto const layout =
+      make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
+    auto const entity_grid_memory = _rt_entity_binning_buffers[frame]->map();
+    std::memset(
+      entity_grid_memory.get().data() + layout.nodes_offset,
+      0,
+      sizeof(std::uint32_t));
+
+    work_recorder.bind_compute_pipeline(_rt_grid_entity_binning_pipeline);
+    work_recorder
+      .push_buffer_reference(0, _grid_mesh->get_rt_block_grid_buffer());
+    work_recorder.push_buffer_reference(8, _rt_entity_buffers[frame]);
+    work_recorder.push_buffer_reference(
+      16, _rt_entity_binning_buffers[frame], layout.grid_offset);
+    work_recorder.push_buffer_reference(
+      24, _rt_entity_binning_buffers[frame], layout.nodes_offset);
+    work_recorder.dispatch(_grid_mesh->get_rt_chunk_count(), 1, 1);
+    work_recorder.barrier(
+      compute_shader_storage_write_scope, compute_shader_storage_read_scope);
+  }
+
   void record_direct_radiance_pass(
-    graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
+    graphics::Work_recorder &work_recorder,
+    math::ivec2 framebuffer_size,
+    std::size_t scene_uniform_offset) {
     ZoneScoped;
     auto const &session = _client.get_session();
     auto const camera =
       session && _local_player && _local_player->player_entity_id &&
           _local_player->humanoid_entity_id
-        ? session->get_scene()
-            .get_interpolated_camera(*_local_player->player_entity_id)
+        ? session->get_scene().get_camera(*_local_player->player_entity_id)
         : nullptr;
     if (!camera || !_grid_mesh || !_grid_mesh->is_uploaded()) {
       // Nothing was rasterized into the G-buffer this frame (see
       // record_radiance_pass for why): nothing to light.
       return;
     }
-    auto constexpr zoom = 1.25f;
-    auto const aspect_ratio = static_cast<f32>(framebuffer_size.x()) /
-                              static_cast<f32>(framebuffer_size.y());
-    auto const zoom_vec = math::vec2{
-      aspect_ratio > 1.0f ? zoom : zoom * aspect_ratio,
-      aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
-    };
-    auto const camera_basis =
-      (math::translation_matrix(camera->position) *
-       math::y_rotation_matrix(_local_player->input_state.yaw) *
-       math::x_rotation_matrix(_local_player->input_state.pitch))
-        .eval();
-    // Rows contiguous, matching the row_major mat4x3 push constants.
-    auto const camera_basis_rows =
-      Eigen::Matrix<float, 3, 4, Eigen::RowMajor>{camera_basis.topRows<3>()};
-    auto const sun_direction =
-      session->get_scene().get_interpolated_sun_direction();
+    auto const sun =
+      session->get_scene().get_distant_light(scene::elements::sun_light_key);
+    if (!sun) {
+      return;
+    }
     work_recorder.bind_compute_pipeline(_direct_radiance_pipeline);
     work_recorder
-      .push_data(0, std::as_bytes(std::span{&camera_basis_rows, 1}));
-    work_recorder.push_data(48, std::as_bytes(std::span{&zoom_vec, 1}));
-    work_recorder.push_data(56, std::as_bytes(std::span{&z_near, 1}));
+      .push_buffer_reference(0, _scene_uniform_buffer, scene_uniform_offset);
     work_recorder.push_descriptors(
-      60,
+      8,
       {_normal_render_target_descriptors[_frame_number % 2],
        _depth_render_target_descriptors[_frame_number % 2],
        _direct_radiance_render_target_storage_descriptor,
        _direct_rng_state_image_descriptor,
        _transmittance_lut_sampled_descriptor});
-    work_recorder.push_buffer_reference(72, _grid_mesh->get_rt_buffer());
-    work_recorder.push_data(80, std::as_bytes(std::span{&sun_direction, 1}));
-    work_recorder.push_data(92, std::as_bytes(std::span{&sun_irradiance, 1}));
+    auto const frame = _frame_number % max_frames_in_flight;
+    auto const layout =
+      make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
+    work_recorder
+      .push_buffer_reference(24, _grid_mesh->get_rt_block_grid_buffer());
+    work_recorder.push_buffer_reference(32, _rt_entity_buffers[frame]);
+    work_recorder.push_buffer_reference(
+      40, _rt_entity_binning_buffers[frame], layout.grid_offset);
+    work_recorder.push_buffer_reference(
+      48, _rt_entity_binning_buffers[frame], layout.nodes_offset);
     auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
     auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
     work_recorder.dispatch(group_count_x, group_count_y, 1);
@@ -803,44 +822,31 @@ private:
   }
 
   void record_indirect_radiance_pass(
-    graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
+    graphics::Work_recorder &work_recorder,
+    math::ivec2 framebuffer_size,
+    std::size_t scene_uniform_offset) {
     ZoneScoped;
     auto const &session = _client.get_session();
     auto const camera =
       session && _local_player && _local_player->player_entity_id &&
           _local_player->humanoid_entity_id
-        ? session->get_scene()
-            .get_interpolated_camera(*_local_player->player_entity_id)
+        ? session->get_scene().get_camera(*_local_player->player_entity_id)
         : nullptr;
     if (!camera || !_grid_mesh || !_grid_mesh->is_uploaded()) {
       // Nothing was rasterized into the G-buffer this frame (see
       // record_radiance_pass for why): nothing to trace paths for.
       return;
     }
-    auto constexpr zoom = 1.25f;
-    auto const aspect_ratio = static_cast<f32>(framebuffer_size.x()) /
-                              static_cast<f32>(framebuffer_size.y());
-    auto const zoom_vec = math::vec2{
-      aspect_ratio > 1.0f ? zoom : zoom * aspect_ratio,
-      aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
-    };
-    auto const camera_basis =
-      (math::translation_matrix(camera->position) *
-       math::y_rotation_matrix(_local_player->input_state.yaw) *
-       math::x_rotation_matrix(_local_player->input_state.pitch))
-        .eval();
-    // Rows contiguous, matching the row_major mat4x3 push constants.
-    auto const camera_basis_rows =
-      Eigen::Matrix<float, 3, 4, Eigen::RowMajor>{camera_basis.topRows<3>()};
-    auto const sun_direction =
-      session->get_scene().get_interpolated_sun_direction();
+    auto const sun =
+      session->get_scene().get_distant_light(scene::elements::sun_light_key);
+    if (!sun) {
+      return;
+    }
     work_recorder.bind_compute_pipeline(_indirect_radiance_pipeline);
     work_recorder
-      .push_data(0, std::as_bytes(std::span{&camera_basis_rows, 1}));
-    work_recorder.push_data(48, std::as_bytes(std::span{&zoom_vec, 1}));
-    work_recorder.push_data(56, std::as_bytes(std::span{&z_near, 1}));
+      .push_buffer_reference(0, _scene_uniform_buffer, scene_uniform_offset);
     work_recorder.push_descriptors(
-      60,
+      8,
       {_normal_render_target_descriptors[_frame_number % 2],
        _depth_render_target_descriptors[_frame_number % 2],
        _sky_view_lut_sampled_descriptor,
@@ -848,7 +854,16 @@ private:
        _indirect_radiance_render_target_storage_descriptor,
        _indirect_radiance_direction_render_target_storage_descriptor,
        _indirect_rng_state_image_descriptor});
-    work_recorder.push_buffer_reference(80, _grid_mesh->get_rt_buffer());
+    auto const frame = _frame_number % max_frames_in_flight;
+    auto const layout =
+      make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
+    work_recorder
+      .push_buffer_reference(24, _grid_mesh->get_rt_block_grid_buffer());
+    work_recorder.push_buffer_reference(32, _rt_entity_buffers[frame]);
+    work_recorder.push_buffer_reference(
+      40, _rt_entity_binning_buffers[frame], layout.grid_offset);
+    work_recorder.push_buffer_reference(
+      48, _rt_entity_binning_buffers[frame], layout.nodes_offset);
     auto stratum_permutation = std::array<u32, 9>{0, 1, 2, 3, 4, 5, 6, 7, 8};
     std::shuffle(
       stratum_permutation.begin(), stratum_permutation.end(), _rng_engine);
@@ -857,11 +872,8 @@ private:
       packed_stratum_permutation[0] |= stratum_permutation[i] << (4 * (i - 1));
     }
     packed_stratum_permutation[1] = stratum_permutation[0];
-    work_recorder.push_data(
-      88, std::as_bytes(std::span{packed_stratum_permutation}));
-    work_recorder.push_data(96, std::as_bytes(std::span{&sun_direction, 1}));
     work_recorder
-      .push_data(108, std::as_bytes(std::span{&sun_irradiance, 1}));
+      .push_data(56, std::as_bytes(std::span{packed_stratum_permutation}));
     auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
     auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
     work_recorder.dispatch(group_count_x, group_count_y, 1);
@@ -881,8 +893,7 @@ private:
     auto const camera =
       session && _local_player && _local_player->player_entity_id &&
           _local_player->humanoid_entity_id
-        ? session->get_scene()
-            .get_interpolated_camera(*_local_player->player_entity_id)
+        ? session->get_scene().get_camera(*_local_player->player_entity_id)
         : nullptr;
     if (!camera || !_grid_mesh || !_grid_mesh->is_uploaded()) {
       // No indirect radiance samples were traced this frame (see
@@ -908,7 +919,7 @@ private:
       *_last_indirect_irradiance_frame + 1 == _frame_number};
     work_recorder.push_data(20, std::as_bytes(std::span{&history_valid, 1}));
     work_recorder.push_data(24, std::as_bytes(std::span{&z_near, 1}));
-    auto constexpr zoom = 1.25f;
+    auto constexpr zoom = 1.125f;
     auto const aspect_ratio = static_cast<f32>(framebuffer_size.x()) /
                               static_cast<f32>(framebuffer_size.y());
     auto const zoom_vec = math::vec2{
@@ -940,8 +951,7 @@ private:
     auto const camera =
       session && _local_player && _local_player->player_entity_id &&
           _local_player->humanoid_entity_id
-        ? session->get_scene()
-            .get_interpolated_camera(*_local_player->player_entity_id)
+        ? session->get_scene().get_camera(*_local_player->player_entity_id)
         : nullptr;
     if (!camera || !_grid_mesh || !_grid_mesh->is_uploaded()) {
       // No camera yet, or the grid mesh (and its shadow voxel buffer the
@@ -963,7 +973,7 @@ private:
         .barrier(color_attachment_scope, fragment_shader_sampled_read_scope);
       return;
     }
-    auto constexpr zoom = 1.25f;
+    auto constexpr zoom = 1.125f;
     auto const aspect_ratio = static_cast<f32>(framebuffer_size.x()) /
                               static_cast<f32>(framebuffer_size.y());
     auto const zoom_vec = math::vec2{
@@ -979,8 +989,7 @@ private:
     auto const camera_basis_rows =
       Eigen::Matrix<float, 3, 4, Eigen::RowMajor>{camera_basis.topRows<3>()};
     work_recorder.bind_compute_pipeline(_radiance_pipeline);
-    work_recorder
-      .push_data(0, std::as_bytes(std::span{&camera_basis_rows, 1}));
+    work_recorder.push_data(0, std::as_bytes(std::span{&camera_basis_rows, 1}));
     work_recorder.push_data(48, std::as_bytes(std::span{&zoom_vec, 1}));
     work_recorder.push_descriptors(
       56,
@@ -1335,11 +1344,11 @@ private:
         graphics::Image_layout::general,
         _direct_radiance_render_target);
       _direct_radiance_render_target_descriptor =
-        _graphics.create_sampled_image_descriptor(
-          _direct_radiance_render_target);
+        _graphics
+          .create_sampled_image_descriptor(_direct_radiance_render_target);
       _direct_radiance_render_target_storage_descriptor =
-        _graphics.create_storage_image_descriptor(
-          _direct_radiance_render_target);
+        _graphics
+          .create_storage_image_descriptor(_direct_radiance_render_target);
     }
   }
 
@@ -1380,11 +1389,11 @@ private:
         graphics::Image_layout::general,
         _indirect_radiance_direction_render_target);
       _indirect_radiance_render_target_descriptor =
-        _graphics.create_sampled_image_descriptor(
-          _indirect_radiance_render_target);
+        _graphics
+          .create_sampled_image_descriptor(_indirect_radiance_render_target);
       _indirect_radiance_render_target_storage_descriptor =
-        _graphics.create_storage_image_descriptor(
-          _indirect_radiance_render_target);
+        _graphics
+          .create_storage_image_descriptor(_indirect_radiance_render_target);
       _indirect_radiance_direction_render_target_descriptor =
         _graphics.create_sampled_image_descriptor(
           _indirect_radiance_direction_render_target);
@@ -1788,7 +1797,8 @@ private:
   rc::Strong<graphics::Descriptor>
     _direct_radiance_render_target_storage_descriptor{};
   rc::Strong<graphics::Image> _indirect_radiance_render_target{};
-  rc::Strong<graphics::Descriptor> _indirect_radiance_render_target_descriptor{};
+  rc::Strong<graphics::Descriptor>
+    _indirect_radiance_render_target_descriptor{};
   rc::Strong<graphics::Descriptor>
     _indirect_radiance_render_target_storage_descriptor{};
   rc::Strong<graphics::Image> _indirect_radiance_direction_render_target{};
@@ -1822,6 +1832,7 @@ private:
   graphics::Shader _composite_fragment_shader;
   graphics::Shader _sky_view_compute_shader;
   graphics::Shader _direct_radiance_compute_shader;
+  graphics::Shader _rt_grid_entity_binning_compute_shader;
   graphics::Shader _rng_seed_compute_shader;
   graphics::Shader _radiance_compute_shader;
   graphics::Shader _indirect_radiance_compute_shader;
@@ -1831,6 +1842,7 @@ private:
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _sky_view_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _direct_radiance_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _rt_grid_entity_binning_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _rng_seed_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _radiance_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _indirect_radiance_pipeline{};
@@ -1848,6 +1860,11 @@ private:
   std::unique_ptr<Grid_mesh> _grid_mesh;
   std::unique_ptr<Grid_mesh> _pending_grid_mesh;
   rc::Strong<graphics::Buffer> _scene_uniform_buffer{};
+  std::array<rc::Strong<graphics::Buffer>, max_frames_in_flight>
+    _rt_entity_buffers{};
+  std::array<rc::Strong<graphics::Buffer>, max_frames_in_flight>
+    _rt_entity_binning_buffers{};
+  std::size_t _rt_entity_capacity{};
   rc::Strong<graphics::Buffer> _cube_vertex_buffer{};
   rc::Strong<graphics::Buffer> _cube_index_buffer{};
   rc::Strong<graphics::Buffer> _crosshair_index_buffer{};
