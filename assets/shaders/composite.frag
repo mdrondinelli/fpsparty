@@ -1,13 +1,12 @@
 #version 450
 
 #include "descriptors.glsl"
+#include "srgb.glsl"
 
 layout(push_constant) uniform Push_constants {
-  layout(offset = 0) uint albedo_texture_index;
-  layout(offset = 4) uint mask_texture_index;
-  layout(offset = 8) uint depth_texture_index;
-  layout(offset = 12) float z_near;
-  layout(offset = 16) uint frame_number;
+  layout(offset = 0) uint16_t albedo_texture_index;
+  layout(offset = 2) uint16_t mask_texture_index;
+  layout(offset = 4) uint frame_number;
 } push_constants;
 
 layout(location = 0) out vec4 out_color;
@@ -25,18 +24,6 @@ uvec3 pcg3d(uvec3 v)
   return v;
 }
 
-vec3 srgb_to_linear(vec3 srgb) {
-  const vec3 low = srgb / 12.92f;
-  const vec3 high = pow((srgb + vec3(0.055f)) / 1.055f, vec3(2.4f));
-  return mix(high, low, lessThanEqual(srgb, vec3(0.04045f)));
-}
-
-vec3 linear_to_srgb(vec3 linear) {
-  const vec3 low = linear * 12.92f;
-  const vec3 high = 1.055f * pow(linear, vec3(1.0f / 2.4f)) - 0.055f;
-  return mix(high, low, lessThanEqual(linear, vec3(0.0031308f)));
-}
-
 vec3 apply_noise(vec3 color, vec3 noise) {
   const float quantization = 1.0f / 256.0f;
   return srgb_to_linear(
@@ -49,11 +36,9 @@ void main() {
     pcg3d(uvec3(uvec2(pixel), uint(push_constants.frame_number)));
   const vec3 pixel_noise = vec3(pixel_hash) / 4294967296.0f - 0.5;
   const uint albedo_texture_index =
-    push_constants.albedo_texture_index;
+    uint(push_constants.albedo_texture_index);
   const uint mask_texture_index =
-    push_constants.mask_texture_index;
-  const uint depth_texture_index =
-    push_constants.depth_texture_index;
+    uint(push_constants.mask_texture_index);
   vec3 color = texelFetch(
     sampled_images[albedo_texture_index],
     pixel,

@@ -14,9 +14,9 @@ layout(
 ) in;
 
 layout(push_constant) uniform Push_constants {
-  layout(offset = 0) uint transmittance_texture;
-  layout(offset = 4) uint sky_view_image;
-  layout(offset = 8) float camera_altitude;
+  layout(offset = 0) uint16_t transmittance_texture;
+  layout(offset = 2) uint16_t sky_view_image;
+  layout(offset = 4) float camera_altitude;
   layout(offset = 16) vec3 sun_direction;
   layout(offset = 32) vec3 sun_irradiance;
 } push_constants;

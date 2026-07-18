@@ -143,12 +143,18 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
     .descriptorBindingUpdateUnusedWhilePending = true,
     .bufferDeviceAddress = true,
   };
-  auto const features = vk::PhysicalDeviceFeatures2{
+  auto vulkan_1_1_features = vk::PhysicalDeviceVulkan11Features{
     .pNext = &vulkan_1_2_features,
+    .storageBuffer16BitAccess = true,
+    .storagePushConstant16 = true,
+  };
+  auto const features = vk::PhysicalDeviceFeatures2{
+    .pNext = &vulkan_1_1_features,
     .features =
       {
         .multiDrawIndirect = true,
         .shaderStorageImageReadWithoutFormat = true,
+        .shaderInt16 = true,
       },
   };
   auto device = physical_device.createDeviceUnique({

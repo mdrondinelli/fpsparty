@@ -1,9 +1,14 @@
-#ifndef FPSPARTY_SCENE_TIMELINE_HPP
-#define FPSPARTY_SCENE_TIMELINE_HPP
+#ifndef FPSPARTY_SCENE_SCENE_HPP
+#define FPSPARTY_SCENE_SCENE_HPP
 
-#include <bit>
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <vector>
 
+#include "element_frame.hpp"
 #include "keyframe.hpp"
 
 namespace fpsparty::scene {
@@ -17,257 +22,161 @@ class Scene {
 public:
   explicit Scene(Scene_create_info const &info);
 
-  /*
+  /**
    * Appends a keyframe to the timeline.
    *
-   * After the first call, keyframe must have a frame number greater than any
-   * previous keyframe. Otherwise is UB.
+   * After the first call, the keyframe number must be greater than every
+   * previously pushed keyframe number.
    */
   void push(Keyframe &&keyframe);
 
-  /*
-   * Advances the timeline by the given duration.
+  /**
+   * Advances the timeline by the given positive duration.
    *
-   * Returns true while playback is not starved.
+   * Returns true when buffered playback can advance, or false when playback is
+   * already starved at the most recently pushed keyframe.
    *
-   * UB if empty.
+   * Requires a non-empty timeline.
    */
   bool play(float duration);
 
   /**
-   * Fast-forwards the timeline to the given latency.
+   * Fast-forwards the timeline to the given non-negative latency.
    *
-   * If latency is behind curent playback, has no effect.
+   * If the requested latency is greater than the current latency, the playback
+   * point is unchanged. Returns the effective latency after the call.
    *
-   * If latency is ahead of most recrently pushed keyframe, clamps.
-   *
-   * UB if empty.
-   *
-   * Returns latency after the effect of the call.
+   * Requires a non-empty timeline.
    */
   float set_latency(float seconds) noexcept;
 
   /**
-   * Returns the latency (positive) between the playback point and the
-   * most recently pushed keyframe.
+   * Returns the non-negative latency between the playback point and the most
+   * recently pushed keyframe.
    *
-   * UB if empty.
+   * Requires a non-empty timeline.
    */
   float get_latency() const noexcept;
 
-  /*
-   * Returns the grid state at the current frame.
+  /**
+   * Returns the discrete grid state at the playback point.
+   *
+   * Requires a non-empty timeline.
    */
   game::Grid const &get_grid() const noexcept;
 
+  /**
+   * Returns true when the grid may need remeshing.
+   *
+   * The flag is set by the first push and whenever advancing playback changes
+   * the grid returned by get_grid(). It remains set until reset.
+   */
   bool get_grid_remesh_flag() const noexcept;
 
+  /** Clears the grid-remesh flag. */
   void reset_grid_remesh_flag() noexcept;
 
-  /*
-   * Returns the cached interpolated cameras from the last advance_time call.
+  /**
+   * Returns the current rendered element frame.
    *
-   * UB if empty.
+   * Before the first playback update this is the first keyframe rendered
+   * without interpolation. Requires a non-empty timeline.
    */
-  std::span<Identified<Camera> const> get_interpolated_cameras() const noexcept;
+  Element_frame const &get_current_frame() const noexcept;
 
   /**
-   * Returns the cached interpolated cameras from the last advance_time call.
+   * Returns the rendered element frame from the preceding playback update, or
+   * null before one has been recorded.
    *
-   * UB if empty.
+   * A starved playback update freezes the current frame into this history.
    */
-  Camera const *get_interpolated_camera(std::uint64_t id) const noexcept;
+  Element_frame const *get_previous_frame() const noexcept;
 
-  /*
-   * Returns the cached interpolated mesh instances from the last advance_time
-   * call.
-   *
-   * UB if empty.
+  /**
+   * Returns the current camera with the given key, or null if unknown.
+   * Requires a non-empty timeline.
    */
-  std::span<Identified<Mesh_instance> const>
-  get_interpolated_mesh_instances() const noexcept;
+  elements::Camera const *get_camera(u64 key) const noexcept;
 
-  /*
-   * Returns the cached interpolated sun direction from the last advance_time
-   * call.
-   *
-   * UB if empty.
-   */
-  math::vec3 
-  get_interpolated_sun_direction() const noexcept;
+  /** Returns the previous camera with the given key, or null if unavailable. */
+  elements::Camera const *get_previous_camera(u64 key) const noexcept;
 
-  /*
-   * Returns the number of keyframes stored.
+  /**
+   * Returns the current distant light with the given key, or null if unknown.
+   * Requires a non-empty timeline.
    */
+  elements::Distant_light const *get_distant_light(u64 key) const noexcept;
+
+  /**
+   * Returns the previous distant light with the given key, or null if
+   * unavailable.
+   */
+  elements::Distant_light const *
+  get_previous_distant_light(u64 key) const noexcept;
+
+  /**
+   * Returns the current point light with the given key, or null if unknown.
+   * Requires a non-empty timeline.
+   */
+  elements::Point_light const *get_point_light(u64 key) const noexcept;
+
+  /**
+   * Returns the previous point light with the given key, or null if
+   * unavailable.
+   */
+  elements::Point_light const *
+  get_previous_point_light(u64 key) const noexcept;
+
+  /**
+   * Returns the current box with the given key, or null if unknown.
+   * Requires a non-empty timeline.
+   */
+  elements::Box const *get_box(u64 key) const noexcept;
+
+  /** Returns the previous box with the given key, or null if unavailable. */
+  elements::Box const *get_previous_box(u64 key) const noexcept;
+
+  /** Returns the number of keyframes currently stored. */
   std::size_t get_keyframe_count() const noexcept;
 
-  /*
-   * Returns the base frame number of the playback point.
-   */
+  /** Returns the integral keyframe number at the playback point. */
   std::uint64_t get_keyframe_number() const noexcept;
 
-  /*
-   * Returns the inter-keyframe time of the playback point.
-   * This is on a scale of [0, 1).
-   */
+  /** Returns the fractional playback position on a scale of [0, 1). */
   float get_inter_keyframe_time() const noexcept;
 
-  /*
-   * Returns the duration of a single keyframe.
-   * Passed in the constructor.
-   */
+  /** Returns the keyframe duration supplied at construction. */
   float get_keyframe_duration() const noexcept;
 
-  /*
-   * True until the first keyframe is pushed.
-   */
+  /** Returns true until the first keyframe is pushed. */
   bool empty() const noexcept;
 
 private:
-  class Hash_table {
-  public:
-    // Robin hood hashing
-    // No deletions
-    // No rehashing
-    // 64-bit keys, 32-bit values
-
-    struct Entry {
-      std::uint32_t key_hi{};
-      std::uint32_t key_lo{};
-      std::uint32_t value{};
-
-      Entry() noexcept = default;
-
-      explicit Entry(std::uint64_t key, std::uint32_t value) noexcept
-          : key_hi{static_cast<std::uint32_t>(key >> 32)},
-            key_lo{static_cast<std::uint32_t>(key)},
-            value{value} {
-        // if you're trying to construct the empty key, use the default ctor
-        assert(key != 0);
-      }
-
-      constexpr bool empty() const noexcept {
-        return key_hi == 0 && key_lo == 0;
-      }
-
-      constexpr std::uint64_t key() const noexcept {
-        return (static_cast<std::uint64_t>(key_hi) << 32) | key_lo;
-      }
-    };
-
-    explicit Hash_table(std::uint32_t bucket_count)
-        : _buckets(std::make_unique<Entry[]>(bucket_count)),
-          _bucket_count{bucket_count} {
-      assert(bucket_count >= min_bucket_count);
-      assert(bucket_count <= max_bucket_count);
-      assert(std::has_single_bit(bucket_count));
-    }
-
-    Hash_table(Hash_table &&other) noexcept
-        : _buckets{std::move(other._buckets)},
-          _bucket_count{std::exchange(other._bucket_count, 0)} {}
-
-    Hash_table &operator=(Hash_table &&other) noexcept {
-      _buckets = std::move(other._buckets);
-      _bucket_count = std::exchange(other._bucket_count, 0);
-      return *this;
-    }
-
-    std::optional<std::uint32_t> get(std::uint64_t key) const noexcept {
-      assert(key != 0 && "key must not be 0");
-      if (_bucket_count == 0) {
-        return std::nullopt;
-      }
-      auto const mask = _bucket_count - 1;
-      auto const bits = std::countr_one(mask);
-      auto i = hash(key, bits);
-      for (;;) {
-        auto const &entry = _buckets[i];
-        if (entry.empty()) {
-          return std::nullopt;
-        }
-        if (entry.key() == key) {
-          return entry.value;
-        }
-        i = (i + 1) & mask;
-      }
-    }
-
-    void insert(std::uint64_t key, std::uint32_t value) noexcept {
-      assert(key != 0 && "key must not be 0");
-      auto entry = Entry{key, value};
-      auto const mask = _bucket_count - 1;
-      auto const bits = std::countr_one(mask);
-      auto i = hash(key, bits);
-      auto distance = std::uint32_t{};
-      for (;;) {
-        auto &bucket = _buckets[i];
-        if (bucket.empty()) {
-          bucket = entry;
-          return;
-        }
-        assert(bucket.key() != entry.key() && "double inserts not allowed");
-        auto const bucket_hash = hash(bucket.key(), bits);
-        auto const bucket_distance = (i - bucket_hash) & mask;
-        if (bucket_distance < distance) {
-          std::swap(bucket, entry);
-          distance = bucket_distance;
-        }
-        i = (i + 1) & mask;
-        ++distance;
-        assert(distance < _bucket_count && "must not insert into full table");
-      }
-    }
-
-    static constexpr std::uint32_t min_bucket_count = 2;
-    static constexpr std::uint32_t max_bucket_count = 0x80000000u;
-
-  private:
-    static constexpr std::uint64_t hash(std::uint64_t key, int bits) noexcept {
-      auto const shift = 64 - bits;
-      key ^= key >> shift;
-      return (key * 11400714819323198485llu) >> shift;
-    }
-
-    std::unique_ptr<Entry[]> _buckets{};
-    std::uint32_t _bucket_count{};
-  };
-
   struct Indexed_keyframe {
+    explicit Indexed_keyframe(Keyframe &&value)
+        : keyframe{std::move(value)}, index{keyframe.components} {}
+
     Keyframe keyframe;
-    Hash_table camera_indices;
-    Hash_table mesh_instance_indices;
+    Component_frame_index index;
   };
 
-  struct Interpolation {
-    void clear() {
-      cameras.clear();
-      mesh_instances.clear();
-      valid = false;
-    }
+  struct Indexed_element_frame {
+    explicit Indexed_element_frame(Element_frame &&value)
+        : frame{std::move(value)}, index{frame} {}
 
-    std::vector<Identified<Camera>> cameras{};
-    std::vector<Identified<Mesh_instance>> mesh_instances{};
-    math::vec3 sun_direction{};
-    bool valid{};
+    Element_frame frame;
+    Element_frame_index index;
   };
-
-  static constexpr std::uint32_t
-  object_count_to_bucket_count(std::uint32_t n) noexcept {
-    return std::max(
-      std::bit_ceil(static_cast<std::uint32_t>(std::ceil(n / 0.85))),
-      Hash_table::min_bucket_count);
-  }
 
   bool trim_old_keyframes() noexcept;
-
   std::size_t count_old_keyframes() const noexcept;
-
-  bool interpolate();
+  bool interpolate_frames();
+  void freeze_previous_frame();
 
   float _keyframe_duration;
-  std::vector<Indexed_keyframe> _indexed_keyframes{};
-  Interpolation _interpolation{};
+  std::vector<std::unique_ptr<Indexed_keyframe>> _indexed_keyframes{};
+  std::optional<Indexed_element_frame> _previous_frame{};
+  std::optional<Indexed_element_frame> _current_frame{};
   std::uint64_t _keyframe_number{};
   float _inter_keyframe_time{};
   bool _grid_remesh_flag{};

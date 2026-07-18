@@ -44,9 +44,7 @@ scene::Keyframe make_keyframe(std::uint64_t number) {
   return scene::Keyframe{
     .number = number,
     .grid = game::Grid{{}},
-    .cameras = {},
-    .mesh_instances = {},
-    .sun_direction = {},
+    .components = {},
   };
 }
 

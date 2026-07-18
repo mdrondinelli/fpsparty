@@ -13,9 +13,7 @@ namespace fpsparty::client {
 
 namespace {
 
-Eigen::Quaternionf yaw_orientation(float yaw) {
-  return Eigen::Quaternionf{Eigen::AngleAxisf{yaw, Eigen::Vector3f::UnitY()}};
-}
+auto const sun_irradiance = math::vec3::Constant(1300.0f).eval();
 
 } // namespace
 
@@ -108,9 +106,7 @@ void Session::on_world_snapshot(
   auto keyframe = scene::Keyframe{
     .number = tick_number,
     .grid = game::Grid{{}},
-    .cameras = {},
-    .mesh_instances = {},
-    .sun_direction = math::vec3::Zero(),
+    .components = {},
   };
   keyframe.grid.load(grid_state_reader);
   load_player_state(player_entity_state_reader);
@@ -180,24 +176,21 @@ void Session::load_public_state(
                  *player->humanoid_entity_id == *entity_id;
         });
       if (player_it != _local_players.end()) {
-        keyframe.cameras.emplace_back(
-          *(*player_it)->player_entity_id,
-          scene::Camera{
+        keyframe.components.cameras.push_back(
+          scene::elements::Camera{
+            .key = *(*player_it)->player_entity_id,
             .position = *position + Eigen::Vector3f::UnitY() *
                                       game::Humanoid::eye_height,
-            .yaw = input_state->yaw,
             .pitch = input_state->pitch,
-          });
-      } else {
-        keyframe.mesh_instances.emplace_back(
-          *entity_id,
-          scene::Mesh_instance{
-            .mesh = scene::Mesh::cube,
-            .position = *position + Eigen::Vector3f::UnitY() * 0.9f,
-            .orientation = yaw_orientation(input_state->yaw),
-            .scale = {0.7f, 1.8f, 0.7f},
+            .yaw = input_state->yaw,
           });
       }
+      keyframe.components.humanoids.push_back({
+        .entity_id = *entity_id,
+        .position = *position,
+        .pitch = input_state->pitch,
+        .yaw = input_state->yaw,
+      });
       break;
     }
     case game::Entity_type::item: {
@@ -206,14 +199,10 @@ void Session::load_public_state(
         std::cerr << "Malformed item state.\n";
         return;
       }
-      keyframe.mesh_instances.emplace_back(
-        *entity_id,
-        scene::Mesh_instance{
-          .mesh = scene::Mesh::cube,
-          .position = *position,
-          .orientation = Eigen::Quaternionf::Identity(),
-          .scale = Eigen::Vector3f::Constant(0.25f),
-        });
+      keyframe.components.items.push_back({
+        .entity_id = *entity_id,
+        .position = *position,
+      });
       break;
     }
     case game::Entity_type::player:
@@ -226,7 +215,11 @@ void Session::load_public_state(
     std::cerr << "Failed to deserialize sun direction.\n";
     return;
   }
-  keyframe.sun_direction = *sun_direction;
+  keyframe.components.distant_lights.push_back({
+    .key = scene::elements::sun_light_key,
+    .direction = *sun_direction,
+    .irradiance = sun_irradiance,
+  });
 }
 
 scene::Scene &Session::get_scene() noexcept { return _scene; }

@@ -1,48 +1,21 @@
 #version 450
 
-#include "octahedral.glsl"
-#include "scene.glsl"
-#include "shadow_grid.glsl"
+#include "descriptors.glsl"
+#include "numbers.glsl"
 #include "atmosphere/atmosphere.glsl"
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
-const float shadow_bias = 1.0 / 128.0;
-
 layout(push_constant) uniform Push_constants {
-  layout(offset = 0) mat4 camera_basis;
-  layout(offset = 64) vec2 zoom;
-  layout(offset = 72) float z_near;
-  layout(offset = 80) Scene scene;
-  layout(offset = 88) uint albedo_texture;
-  layout(offset = 92) uint normal_texture;
-  layout(offset = 96) uint depth_texture;
-  layout(offset = 100) uint sky_view_lut;
-  layout(offset = 104) uint radiance_image;
-  layout(offset = 108) uint irradiance_texture;
-  layout(offset = 112) Shadow_grid shadow_grid;
+  layout(offset = 0, row_major) mat4x3 camera_basis;
+  layout(offset = 48) vec2 zoom;
+  layout(offset = 56) uint16_t albedo_texture;
+  layout(offset = 58) uint16_t depth_texture;
+  layout(offset = 60) uint16_t sky_view_lut;
+  layout(offset = 62) uint16_t radiance_image;
+  layout(offset = 64) uint16_t direct_irradiance_texture;
+  layout(offset = 66) uint16_t indirect_irradiance_texture;
 } push_constants;
-
-vec3 transmittance_along_ray(vec3 ro, vec3 rd) {
-  const float h = altitude(ro);
-  const float cos_zenith = dot(normalize(ro), rd);
-  const vec2 lut_texcoord = pack_transmittance_lut_params(h, cos_zenith);
-  return FPSPARTY_SAMPLE(
-      push_constants.scene.transmittance_texture,
-      lut_texcoord).rgb;
-}
-
-vec2 sky_view_texcoord(vec3 rd, float camera_altitude) {
-  const vec3 horizontal = vec3(rd.x, 0.0, rd.z);
-  float longitude = 0.0;
-  const float len = length(horizontal);
-  if (len >= 1.0e-6) {
-    const vec3 normalized_horizontal = horizontal / len;
-    longitude = atan(normalized_horizontal.z, normalized_horizontal.x);
-  }
-  const float zenith = acos(clamp(rd.y, -1.0, 1.0));
-  return pack_sky_view_lut_params(longitude, camera_altitude, zenith);
-}
 
 void main() {
   const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
@@ -50,15 +23,16 @@ void main() {
   if (pixel.x >= size.x || pixel.y >= size.y) {
     return;
   }
-  const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
-  const vec3 view_ray = vec3(
-    -ndc.x * push_constants.zoom.x, -ndc.y * push_constants.zoom.y, 1.0);
-  const vec3 camera_position = push_constants.camera_basis[3].xyz;
   const float depth =
     texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
   if (depth == 0.0) {
+    const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
+    const vec3 view_ray = vec3(
+      -ndc.x * push_constants.zoom.x, -ndc.y * push_constants.zoom.y, 1.0);
+    const vec3 camera_position = push_constants.camera_basis[3].xyz;
     const vec3 rd = normalize(mat3(push_constants.camera_basis) * view_ray);
-    const vec2 lut_texcoord = sky_view_texcoord(rd, camera_position.y);
+    const vec2 lut_texcoord =
+      pack_sky_view_lut_params(longitude(rd), camera_position.y, zenith(rd));
     const vec3 radiance =
       FPSPARTY_SAMPLE(push_constants.sky_view_lut, lut_texcoord).rgb;
     imageStore(
@@ -67,33 +41,22 @@ void main() {
       vec4(radiance, 1.0));
     return;
   }
-  const float view_z = push_constants.z_near / depth;
-  const vec3 world_position =
-    camera_position + mat3(push_constants.camera_basis) * (view_ray * view_z);
   const vec3 albedo =
-    texelFetch(sampled_images[push_constants.albedo_texture], pixel, 0).rgb;
-  const vec2 oct =
-    texelFetch(sampled_images[push_constants.normal_texture], pixel, 0).rg;
-  const vec3 n = oct_decode(oct);
-  const vec3 sun_direction = push_constants.scene.sun_direction;
-  const float n_dot_l = max(dot(n, sun_direction), 0.0);
-  const vec3 E_top = push_constants.scene.sun_irradiance;
-  const bool occluded = shadow_grid_trace(
-    push_constants.shadow_grid,
-    world_position + n * shadow_bias,
-    sun_direction);
-  const float visibility = occluded ? 0.0 : 1.0;
-  const vec3 E =
-    E_top *
-    transmittance_along_ray(
-      vec3(0.0, r_ground + world_position.y, 0.0),
-      sun_direction) *
-    visibility;
-  const vec3 sky_radiance =
-    texelFetch(sampled_images[push_constants.irradiance_texture], pixel, 0).rgb;
-  const vec3 L =
-    albedo / pi *
-    (E * n_dot_l + sky_radiance);
+    texelFetch(
+      sampled_images[push_constants.albedo_texture], pixel, 0).rgb;
+  const vec3 direct_irradiance =
+    texelFetch(
+      sampled_images[push_constants.direct_irradiance_texture],
+      pixel,
+      0).rgb;
+  const vec3 indirect_irradiance =
+    texelFetch(
+      sampled_images[push_constants.indirect_irradiance_texture],
+      pixel,
+      0).rgb;
+  const vec3 L = albedo / pi * (direct_irradiance + indirect_irradiance);
   imageStore(
-    storage_images[push_constants.radiance_image], pixel, vec4(L, 1.0));
+    storage_images[push_constants.radiance_image],
+    pixel,
+    vec4(L, 1.0));
 }

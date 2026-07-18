@@ -1,0 +1,92 @@
+#version 450
+
+#include "octahedral.glsl"
+#include "random.glsl"
+#include "rt.glsl"
+#include "sampling.glsl"
+#include "scene.glsl"
+#include "atmosphere/atmosphere.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) Scene scene;
+  layout(offset = 8) uint16_t normal_texture;
+  layout(offset = 10) uint16_t depth_texture;
+  layout(offset = 12) uint16_t direct_radiance_image;
+  layout(offset = 14) uint16_t rng_state_image;
+  layout(offset = 16) uint16_t transmittance_texture;
+  layout(offset = 24) Rt_block_grid rt_block_grid;
+  layout(offset = 32) Rt_entities entities;
+  layout(offset = 40) Rt_entity_grid entity_grid;
+  layout(offset = 48) Rt_entity_nodes entity_nodes;
+} push_constants;
+
+const float sun_angular_diameter = 0.0093;
+const float sun_angular_radius = sun_angular_diameter / 2.0;
+const float cos_sun_angular_radius = cos(sun_angular_radius);
+
+void main() {
+  const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  const ivec2 size =
+    imageSize(storage_images[push_constants.direct_radiance_image]);
+  if (pixel.x >= size.x || pixel.y >= size.y) {
+    return;
+  }
+  const float depth =
+    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
+  if (depth == 0.0) {
+    return;
+  }
+  const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
+  const vec3 view_ray = vec3(
+    -ndc.x * push_constants.scene.zoom.x,
+    -ndc.y * push_constants.scene.zoom.y,
+    1.0);
+  const vec3 camera_position = push_constants.scene.camera_basis[3].xyz;
+  const float view_z = push_constants.scene.z_near / depth;
+  const vec3 world_position =
+    camera_position +
+    mat3(push_constants.scene.camera_basis) * (view_ray * view_z);
+  const vec3 n = oct_decode(
+    texelFetch(
+      sampled_images[push_constants.normal_texture], pixel, 0).rg);
+  const vec3 sun_direction = push_constants.scene.sun_direction;
+  Random random;
+  random.state = imageLoad(
+    storage_uimages[push_constants.rng_state_image], pixel).x;
+  const vec3 l =
+    make_basis(sun_direction) *
+    square_to_cone(
+      vec2(random_float(random), random_float(random)),
+      cos_sun_angular_radius);
+  const float n_dot_l = max(dot(n, sun_direction), 0.0);
+  const bool occluded =
+    n_dot_l > 0.0
+      ? trace_ray(
+          push_constants.rt_block_grid,
+          push_constants.entities,
+          push_constants.entity_grid,
+          push_constants.entity_nodes,
+          offset_ray_origin(world_position, n),
+          l,
+          true)
+      : true;
+  const float visibility = occluded ? 0.0 : 1.0;
+  const vec3 E_top = push_constants.scene.sun_irradiance;
+  const vec3 E =
+    E_top *
+    transmittance_along_ray(
+      push_constants.transmittance_texture,
+      vec3(0.0, r_ground + world_position.y, 0.0),
+      sun_direction) *
+    visibility;
+  imageStore(
+    storage_images[push_constants.direct_radiance_image],
+    pixel,
+    vec4(E * n_dot_l, 1.0));
+  imageStore(
+    storage_uimages[push_constants.rng_state_image],
+    pixel,
+    uvec4(random.state));
+}

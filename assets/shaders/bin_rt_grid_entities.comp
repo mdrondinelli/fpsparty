@@ -1,0 +1,68 @@
+#version 450
+
+#include "rt.glsl"
+
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) Rt_block_grid block_grid;
+  layout(offset = 8) Rt_entities entities;
+  layout(offset = 16) Rt_entity_grid entity_grid;
+  layout(offset = 24) Rt_entity_nodes entity_nodes;
+} push_constants;
+
+const uint node_capacity_per_chunk = 1000;
+
+void main() {
+  const uint invocation = gl_LocalInvocationIndex;
+  const uvec3 chunk_counts = uvec3(
+    push_constants.block_grid.chunk_count_x,
+    push_constants.block_grid.chunk_count_y,
+    push_constants.block_grid.chunk_count_z);
+  const uint chunk_index = gl_WorkGroupID.x;
+  const uint chunk_count =
+    chunk_counts.x * chunk_counts.y * chunk_counts.z;
+  if (chunk_index >= chunk_count) {
+    return;
+  }
+  const uint node_capacity = chunk_count * node_capacity_per_chunk;
+  const uvec3 local_chunk = uvec3(
+    chunk_index % chunk_counts.x,
+    (chunk_index / chunk_counts.x) % chunk_counts.y,
+    chunk_index / (chunk_counts.x * chunk_counts.y));
+  const ivec3 cell_coords =
+    4 * (
+      ivec3(local_chunk) +
+      ivec3(
+        push_constants.block_grid.min_chunk_x,
+        push_constants.block_grid.min_chunk_y,
+        push_constants.block_grid.min_chunk_z)
+    ) +
+    ivec3(gl_LocalInvocationID);
+  int local_head = -1;
+  const uint entity_count = push_constants.entities.count;
+  for (uint entity_index = 0; entity_index < entity_count; ++entity_index) {
+    const Rt_grid_entity entity =
+      push_constants.entities.entities[entity_index];
+    const vec3 center = vec3(
+      entity.model[0].w, entity.model[1].w, entity.model[2].w);
+    const vec3 world_half_extents = vec3(
+      dot(abs(entity.model[0].xyz), entity.half_extents.xyz),
+      dot(abs(entity.model[1].xyz), entity.half_extents.xyz),
+      dot(abs(entity.model[2].xyz), entity.half_extents.xyz));
+    const vec3 cell_min = vec3(cell_coords);
+    const vec3 cell_max = cell_min + 1.0;
+    if (all(lessThanEqual(center - world_half_extents, cell_max)) &&
+        all(greaterThanEqual(center + world_half_extents, cell_min))) {
+      const uint node_index =
+        atomicAdd(push_constants.entity_nodes.allocation_count, 1);
+      if (node_index < node_capacity) {
+        push_constants.entity_nodes.nodes[node_index] =
+          Rt_entity_node(entity_index, local_head);
+        local_head = int(node_index);
+      }
+    }
+  }
+  const uint cell_index = chunk_index * 64 + invocation;
+  push_constants.entity_grid.heads[cell_index] = local_head;
+}
