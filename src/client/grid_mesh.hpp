@@ -28,9 +28,8 @@ public:
 
   ~Grid_mesh();
 
-  void record_draws(
-    graphics::Work_recorder &recorder,
-    math::signed_axis3 normal);
+  void
+  record_draws(graphics::Work_recorder &recorder, math::signed_axis3 normal);
 
   bool is_uploaded() const noexcept;
 
@@ -38,8 +37,7 @@ public:
 
   rc::Strong<graphics::Buffer> const &get_index_buffer() const noexcept;
 
-  rc::Strong<graphics::Buffer> const &
-  get_rt_block_grid_buffer() const noexcept;
+  rc::Strong<graphics::Buffer> const &get_rt_block_grid_buffer() const noexcept;
 
   u32 get_rt_chunk_count() const noexcept;
 

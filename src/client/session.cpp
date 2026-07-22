@@ -6,8 +6,8 @@
 
 #include <tracy/Tracy.hpp>
 
-#include <game/humanoid.hpp>
 #include <game/entity_type.hpp>
+#include <game/humanoid.hpp>
 
 namespace fpsparty::client {
 
@@ -179,8 +179,8 @@ void Session::load_public_state(
         keyframe.components.cameras.push_back(
           scene::elements::Camera{
             .key = *(*player_it)->player_entity_id,
-            .position = *position + Eigen::Vector3f::UnitY() *
-                                      game::Humanoid::eye_height,
+            .position =
+              *position + Eigen::Vector3f::UnitY() * game::Humanoid::eye_height,
             .pitch = input_state->pitch,
             .yaw = input_state->yaw,
           });

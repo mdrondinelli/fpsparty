@@ -30,8 +30,7 @@ public:
 
   rc::Strong<graphics::Image> get(Texture texture) const noexcept;
 
-  rc::Strong<graphics::Image>
-  get_blue_noise(std::size_t index) const noexcept;
+  rc::Strong<graphics::Image> get_blue_noise(std::size_t index) const noexcept;
 
 private:
   std::vector<rc::Strong<graphics::Image>> _images;

@@ -24,9 +24,7 @@ u32 Block_texture_registry::add(rc::Strong<graphics::Image> image) {
     auto const memory = _descriptor_index_buffer->map();
     auto const handle = descriptor->get_handle();
     std::memcpy(
-      memory.get().data() + sizeof(u32) * retval,
-      &handle,
-      sizeof(handle));
+      memory.get().data() + sizeof(u32) * retval, &handle, sizeof(handle));
     _images.push_back(std::move(image));
     _descriptors.push_back(std::move(descriptor));
     return retval;
@@ -60,9 +58,7 @@ void Block_texture_registry::reserve(u32 capacity) {
     for (auto i = std::size_t{}; i != _descriptors.size(); ++i) {
       auto const handle = _descriptors[i]->get_handle();
       std::memcpy(
-        memory.get().data() + sizeof(u32) * i,
-        &handle,
-        sizeof(handle));
+        memory.get().data() + sizeof(u32) * i, &handle, sizeof(handle));
     }
   }
 }

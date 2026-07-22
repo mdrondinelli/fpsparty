@@ -31,8 +31,7 @@ rc::Strong<graphics::Image> create_texture(
   std::span<std::byte const> pixels,
   int width,
   int height,
-  graphics::Image_format format =
-    graphics::Image_format::b8g8r8a8_srgb) {
+  graphics::Image_format format = graphics::Image_format::b8g8r8a8_srgb) {
   auto image = graphics.create_image({
     .dimensionality = 2,
     .format = format,
@@ -70,9 +69,8 @@ rc::Strong<graphics::Image> create_texture(
       .access_mask = graphics::Access_flag_bits::transfer_write,
     },
     {
-      .stage_mask =
-        graphics::Pipeline_stage_flag_bits::compute_shader |
-        graphics::Pipeline_stage_flag_bits::fragment_shader,
+      .stage_mask = graphics::Pipeline_stage_flag_bits::compute_shader |
+                    graphics::Pipeline_stage_flag_bits::fragment_shader,
       .access_mask = graphics::Access_flag_bits::shader_sampled_read,
     });
   auto work = graphics.submit_transient_work(std::move(work_recorder));
@@ -80,12 +78,10 @@ rc::Strong<graphics::Image> create_texture(
   return image;
 }
 
-rc::Strong<graphics::Image>
-load_texture(
+rc::Strong<graphics::Image> load_texture(
   graphics::Graphics &graphics,
   char const *path,
-  graphics::Image_format format =
-    graphics::Image_format::b8g8r8a8_srgb) {
+  graphics::Image_format format = graphics::Image_format::b8g8r8a8_srgb) {
   auto const file = load_file(path);
   auto const ppm_image = ppm::load_ppm(file);
   auto pixels = std::vector<std::byte>(
@@ -101,11 +97,7 @@ load_texture(
     pixels[i * 4 + 3] = static_cast<std::byte>(0xff);
   }
   return create_texture(
-    graphics,
-    pixels,
-    ppm_image.width,
-    ppm_image.height,
-    format);
+    graphics, pixels, ppm_image.width, ppm_image.height, format);
 }
 
 } // namespace
@@ -130,10 +122,9 @@ Texture_manager::Texture_manager(Texture_manager_create_info const &info) {
   _images.emplace_back(create_texture(*info.graphics, light_pixel, 1, 1));
   _blue_noise_images.reserve(blue_noise_texture_count);
   for (auto i = std::size_t{}; i != blue_noise_texture_count; ++i) {
-    auto const filename =
-      "./assets/textures/blue-noise/"
-      "stbn_unitvec3_cosine_2Dx1D_128x128x64_" +
-      std::to_string(i) + ".ppm";
+    auto const filename = "./assets/textures/blue-noise/"
+                          "stbn_unitvec3_cosine_2Dx1D_128x128x64_" +
+                          std::to_string(i) + ".ppm";
     _blue_noise_images.emplace_back(load_texture(
       *info.graphics,
       filename.c_str(),
