@@ -17,11 +17,14 @@ namespace fpsparty::client {
 namespace {
 
 struct Rt_block_grid_cell {
-  std::uint8_t model_index;
+  Rt_block_shape shape;
   std::uint8_t albedo_index;
+  std::uint8_t emissivity_index;
+  float emissivity_scale;
 };
 
-static_assert(sizeof(Rt_block_grid_cell) == 2);
+static_assert(sizeof(Rt_block_grid_cell) == 8);
+static_assert(offsetof(Rt_block_grid_cell, emissivity_scale) == 4);
 
 struct Rt_block_grid_chunk {
   std::array<Rt_block_grid_cell, 64> cells;
@@ -90,6 +93,8 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
                   aligned_chunk_vertices.emplace_back(face.vertices[i]);
                   aligned_chunk_vertices.back().position +=
                     block_coords.cast<f32>();
+                  aligned_chunk_vertices.back().emissivity_scale =
+                    block_model->emissivity_scale;
                 }
                 for (auto const i : {0, 1, 2, 2, 3, 0}) {
                   aligned_chunk_indices.emplace_back(first_index + i);
@@ -100,30 +105,12 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
           if (chunk->is_solid({rel_x, rel_y, rel_z})) {
             auto const block_index =
               game::Chunk::get_block_index({rel_x, rel_y, rel_z});
-            switch (block) {
-            default:
-              rt_block_grid_chunks[chunk_index]
-                .cells[block_index]
-                .model_index = 1;
-              break;
-            case game::Block::conveyor:
-              rt_block_grid_chunks[chunk_index]
-                .cells[block_index]
-                .model_index = 2;
-              break;
-            }
-            switch (block) {
-            default:
-              rt_block_grid_chunks[chunk_index]
-                .cells[block_index]
-                .albedo_index = 0;
-              break;
-            case game::Block::dirt:
-              rt_block_grid_chunks[chunk_index]
-                .cells[block_index]
-                .albedo_index = 1;
-              break;
-            }
+            rt_block_grid_chunks[chunk_index].cells[block_index] = {
+              .shape = block_model->rt_shape,
+              .albedo_index = block_model->rt_albedo_index,
+              .emissivity_index = block_model->rt_emissivity_index,
+              .emissivity_scale = block_model->emissivity_scale,
+            };
           }
         }
       }
@@ -169,7 +156,8 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
   static_assert(sizeof(rt_block_grid_header) == 24);
   _rt_block_grid_chunk_count =
     static_cast<std::uint32_t>(rt_block_grid_chunks.size());
-  auto const rt_block_grid_buffer_size = sizeof(rt_block_grid_header) +
+  auto const rt_block_grid_buffer_size =
+    sizeof(rt_block_grid_header) +
     sizeof(Rt_block_grid_chunk) * rt_block_grid_chunks.size();
   if (vertex_buffer_size > 0 && index_buffer_size > 0 && draw_buffer_size > 0) {
     auto const staging_buffer = info.graphics->create_staging_buffer(
@@ -193,10 +181,8 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
       }
     }
     auto const rt_block_grid_buffer_offset = staging_buffer_writer.offset();
-    staging_buffer_writer
-      .write(std::as_bytes(std::span{rt_block_grid_header}));
-    staging_buffer_writer
-      .write(std::as_bytes(std::span{rt_block_grid_chunks}));
+    staging_buffer_writer.write(std::as_bytes(std::span{rt_block_grid_header}));
+    staging_buffer_writer.write(std::as_bytes(std::span{rt_block_grid_chunks}));
     _vertex_buffer = info.graphics->create_buffer({
       .size = vertex_buffer_size,
       .usage = graphics::Buffer_usage_flag_bits::transfer_dst |

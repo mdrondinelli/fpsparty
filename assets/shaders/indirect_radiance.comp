@@ -19,11 +19,11 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 16) uint16_t indirect_radiance_image;
   layout(offset = 18) uint16_t indirect_radiance_direction_image;
   layout(offset = 20) uint16_t rng_state_image;
+  layout(offset = 22) uint16_t blue_noise_texture;
   layout(offset = 24) Rt_block_grid rt_block_grid;
   layout(offset = 32) Rt_entities entities;
   layout(offset = 40) Rt_entity_grid entity_grid;
   layout(offset = 48) Rt_entity_nodes entity_nodes;
-  layout(offset = 56) uvec2 stratum_permutation;
 } push_constants;
 
 const int bounce_count = 2;
@@ -61,26 +61,21 @@ void main() {
       push_constants.transmittance_texture,
       vec3(0.0, r_ground + world_position.y, 0.0),
       sun_direction);
-  const int unscrambled_stratum = pixel.x % 3 + 3 * (pixel.y % 3);
-  const int scrambled_stratum =
-    int(0xfu & (unscrambled_stratum == 0
-      ? push_constants.stratum_permutation.y
-      : push_constants.stratum_permutation.x >> (4 * unscrambled_stratum - 4)));
   Random random;
   random.state =
     imageLoad(storage_uimages[push_constants.rng_state_image], pixel).x;
-  const vec2 u =
-    (vec2(scrambled_stratum % 3, scrambled_stratum / 3) +
-     vec2(random_float(random), random_float(random))) / 3.0;
-  vec3 rd = make_basis(n) * square_to_cosine_hemisphere(u);
-  imageStore(
-    storage_images[push_constants.indirect_radiance_direction_image],
-    pixel,
-    vec4(oct_encode(rd), 0.0, 0.0));
+  const ivec2 blue_noise_pixel = pixel % 128;
+  const vec3 tangent_ray_direction = normalize(texelFetch(
+    sampled_images[push_constants.blue_noise_texture],
+    blue_noise_pixel,
+    0).rgb * 2.0 - 1.0);
+  vec3 rd = make_basis(n) * tangent_ray_direction;
+  const vec2 encoded_ray_direction = oct_encode(rd);
+  vec2 encoded_hit_normal = oct_encode(-rd);
   vec3 ro = offset_ray_origin(world_position, n);
   vec3 radiance = vec3(0.0);
   vec3 radiance_multiplier = vec3(1.0);
-  float ray_length = 0.0;
+  float ray_length = 1024.0;
   for (int bounce = 0; bounce < bounce_count; ++bounce) {
     Rt_hit hit;
     if (trace_ray(
@@ -90,10 +85,11 @@ void main() {
         push_constants.entity_nodes,
         ro,
         rd,
-        false,
+        true,
         hit)) {
       if (bounce == 0) {
         ray_length = hit.t;
+        encoded_hit_normal = oct_encode(hit.normal);
       }
       const vec3 hit_position = ro + hit.t * rd;
       const vec3 new_ro = offset_ray_origin(hit_position, hit.normal);
@@ -108,9 +104,10 @@ void main() {
           true)
           ? 0.0
           : 1.0;
+      const float n_dot_l = max(dot(hit.normal, sun_direction), 0.0);
       radiance +=
-        radiance_multiplier * hit.albedo / pi * E_sun * sun_visibility *
-        max(dot(hit.normal, sun_direction), 0.0);
+        radiance_multiplier *
+        (hit.emissivity + hit.albedo / pi * E_sun * sun_visibility * n_dot_l);
       if (bounce + 1 < bounce_count) {
         ro = new_ro;
         rd =
@@ -135,6 +132,10 @@ void main() {
     storage_images[push_constants.indirect_radiance_image],
     pixel,
     vec4(radiance, ray_length));
+  imageStore(
+    storage_images[push_constants.indirect_radiance_direction_image],
+    pixel,
+    vec4(encoded_ray_direction, encoded_hit_normal));
   imageStore(
     storage_uimages[push_constants.rng_state_image],
     pixel,

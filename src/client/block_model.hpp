@@ -2,12 +2,20 @@
 #define FPSPARTY_CLIENT_BLOCK_MODEL_HPP
 
 #include <bitset>
+#include <cstdint>
 
 #include <math/axis.hpp>
 
 #include "block_mesh/block_mesh.hpp"
 
 namespace fpsparty::client {
+
+enum class Rt_block_shape : std::uint8_t {
+  empty = 0,
+  full = 1,
+  bottom_slab = 2,
+  top_slab = 3,
+};
 
 struct Block_model {
   bool occludes_neighbor(math::signed_axis3 normal) const noexcept {
@@ -16,6 +24,10 @@ struct Block_model {
 
   Block_mesh mesh;
   std::bitset<6> neighbor_occlusion_flags;
+  Rt_block_shape rt_shape{Rt_block_shape::full};
+  std::uint8_t rt_albedo_index{};
+  std::uint8_t rt_emissivity_index{};
+  float emissivity_scale{};
 };
 
 } // namespace fpsparty::client

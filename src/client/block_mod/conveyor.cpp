@@ -5,10 +5,10 @@
 namespace fpsparty::client {
 
 void Conveyor_block_mod::init(Block_mod_init_info const &info) {
-  auto const belt_texture_index =
-    info.texture_registry->add(info.texture_manager->get(Texture::conveyor_belt));
-  auto const side_texture_index =
-    info.texture_registry->add(info.texture_manager->get(Texture::conveyor_side));
+  auto const belt_texture_index = info.texture_registry->add(
+    info.texture_manager->get(Texture::conveyor_belt));
+  auto const side_texture_index = info.texture_registry->add(
+    info.texture_manager->get(Texture::conveyor_side));
   auto mesh = Block_mesh{};
   // +x face
   mesh.add_face(
@@ -72,6 +72,7 @@ void Conveyor_block_mod::init(Block_mod_init_info const &info) {
     Block_model{
       .mesh = mesh,
       .neighbor_occlusion_flags = 1 << (+math::axis3::y).index(),
+      .rt_shape = Rt_block_shape::top_slab,
     });
   // west
   mesh.rotate_90(+math::axis3::y);
@@ -81,6 +82,7 @@ void Conveyor_block_mod::init(Block_mod_init_info const &info) {
     Block_model{
       .mesh = mesh,
       .neighbor_occlusion_flags = 1 << (+math::axis3::y).index(),
+      .rt_shape = Rt_block_shape::top_slab,
     });
   // south
   mesh.rotate_90(+math::axis3::y);
@@ -90,6 +92,7 @@ void Conveyor_block_mod::init(Block_mod_init_info const &info) {
     Block_model{
       .mesh = mesh,
       .neighbor_occlusion_flags = 1 << (+math::axis3::y).index(),
+      .rt_shape = Rt_block_shape::top_slab,
     });
   // east
   mesh.rotate_90(+math::axis3::y);
@@ -99,6 +102,7 @@ void Conveyor_block_mod::init(Block_mod_init_info const &info) {
     Block_model{
       .mesh = mesh,
       .neighbor_occlusion_flags = 1 << (+math::axis3::y).index(),
+      .rt_shape = Rt_block_shape::top_slab,
     });
 }
 

@@ -34,6 +34,7 @@
 #include "block_mod/block_mod.hpp"
 #include "block_mod/conveyor.hpp"
 #include "block_mod/dirt.hpp"
+#include "block_mod/light.hpp"
 #include "block_mod/placeholder.hpp"
 #include "block_mod/stone.hpp"
 #include "block_model_registry.hpp"
@@ -335,6 +336,12 @@ public:
     Stone_block_mod{}.init(block_mod_init_info);
     Dirt_block_mod{}.init(block_mod_init_info);
     Conveyor_block_mod{}.init(block_mod_init_info);
+    Light_block_mod{}.init(block_mod_init_info);
+    for (auto i = std::size_t{}; i != blue_noise_texture_count; ++i) {
+      _blue_noise_texture_descriptors[i] =
+        _graphics
+          .create_sampled_image_descriptor(_texture_manager.get_blue_noise(i));
+    }
   }
 
   ~Impl() {
@@ -408,7 +415,7 @@ private:
       work_recorder,
       _albedo_render_target,
       _albedo_render_target_descriptor,
-      graphics::Image_format::b8g8r8a8_srgb,
+      graphics::Image_format::r16g16b16a16_sfloat,
       framebuffer_extent);
     for (auto i = std::size_t{}; i != 2; ++i) {
       get_color_render_target(
@@ -423,7 +430,7 @@ private:
       work_recorder,
       _motion_vector_render_target,
       _motion_vector_render_target_descriptor,
-      graphics::Image_format::r16g16_snorm,
+      graphics::Image_format::r16g16b16a16_sfloat,
       framebuffer_extent);
     get_radiance_render_target(work_recorder, framebuffer_extent);
     get_direct_radiance_render_target(work_recorder, framebuffer_extent);
@@ -853,7 +860,9 @@ private:
        _transmittance_lut_sampled_descriptor,
        _indirect_radiance_render_target_storage_descriptor,
        _indirect_radiance_direction_render_target_storage_descriptor,
-       _indirect_rng_state_image_descriptor});
+       _indirect_rng_state_image_descriptor,
+       _blue_noise_texture_descriptors
+         [_frame_number % blue_noise_texture_count]});
     auto const frame = _frame_number % max_frames_in_flight;
     auto const layout =
       make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
@@ -864,16 +873,6 @@ private:
       40, _rt_entity_binning_buffers[frame], layout.grid_offset);
     work_recorder.push_buffer_reference(
       48, _rt_entity_binning_buffers[frame], layout.nodes_offset);
-    auto stratum_permutation = std::array<u32, 9>{0, 1, 2, 3, 4, 5, 6, 7, 8};
-    std::shuffle(
-      stratum_permutation.begin(), stratum_permutation.end(), _rng_engine);
-    auto packed_stratum_permutation = std::array<u32, 2>{};
-    for (auto i = 1u; i != 9; ++i) {
-      packed_stratum_permutation[0] |= stratum_permutation[i] << (4 * (i - 1));
-    }
-    packed_stratum_permutation[1] = stratum_permutation[0];
-    work_recorder
-      .push_data(56, std::as_bytes(std::span{packed_stratum_permutation}));
     auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
     auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
     work_recorder.dispatch(group_count_x, group_count_y, 1);
@@ -1108,6 +1107,9 @@ private:
         break;
       case glfw::Key::k_2:
         input_state.slot_index = static_cast<u8>(game::Block::conveyor);
+        break;
+      case glfw::Key::k_3:
+        input_state.slot_index = static_cast<u8>(game::Block::light);
         break;
       default:
       }
@@ -1369,7 +1371,7 @@ private:
       });
       _indirect_radiance_direction_render_target = _graphics.create_image({
         .dimensionality = 2,
-        .format = graphics::Image_format::r16g16_snorm,
+        .format = graphics::Image_format::r16g16b16a16_snorm,
         .extent = extent,
         .mip_level_count = 1,
         .array_layer_count = 1,
@@ -1605,9 +1607,9 @@ private:
         },
       };
     auto const color_attachment_formats = std::array{
-      graphics::Image_format::b8g8r8a8_srgb,
+      graphics::Image_format::r16g16b16a16_sfloat,
       graphics::Image_format::r16g16_snorm,
-      graphics::Image_format::r16g16_snorm,
+      graphics::Image_format::r16g16b16a16_sfloat,
     };
     auto pipeline = _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
@@ -1640,9 +1642,9 @@ private:
         },
       };
     auto const color_attachment_formats = std::array{
-      graphics::Image_format::b8g8r8a8_srgb,
+      graphics::Image_format::r16g16b16a16_sfloat,
       graphics::Image_format::r16g16_snorm,
-      graphics::Image_format::r16g16_snorm,
+      graphics::Image_format::r16g16b16a16_sfloat,
     };
     auto pipeline = _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
@@ -1819,6 +1821,8 @@ private:
   rc::Strong<graphics::Descriptor> _indirect_rng_state_image_descriptor{};
   rc::Strong<graphics::Image> _direct_rng_state_image{};
   rc::Strong<graphics::Descriptor> _direct_rng_state_image_descriptor{};
+  std::array<rc::Strong<graphics::Descriptor>, blue_noise_texture_count>
+    _blue_noise_texture_descriptors{};
   std::mt19937 _rng_engine{std::random_device{}()};
   rc::Strong<graphics::Image> _crosshair_mask_render_target{};
   rc::Strong<graphics::Descriptor> _crosshair_mask_render_target_descriptor{};

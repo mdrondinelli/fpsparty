@@ -8,6 +8,7 @@ struct Vertex {
   float position[3];
   float texcoord[2];
   uint texture_index;
+  float emissivity_scale;
 };
 
 layout(std430, buffer_reference, buffer_reference_align = 4)

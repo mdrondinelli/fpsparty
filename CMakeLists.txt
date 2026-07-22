@@ -95,6 +95,7 @@ add_library(
   src/client/block_mesh/full.cpp
   src/client/block_mod/conveyor.cpp
   src/client/block_mod/dirt.cpp
+  src/client/block_mod/light.cpp
   src/client/block_mod/placeholder.cpp
   src/client/block_mod/stone.cpp
   src/client/block_model_registry.cpp
@@ -138,6 +139,7 @@ add_test(NAME scene-tests COMMAND scene-tests)
 
 add_executable(
   client-tests
+  tests/client/block_model_registry.cpp
   tests/client/session.cpp
 )
 target_link_libraries(client-tests client Catch2::Catch2WithMain)

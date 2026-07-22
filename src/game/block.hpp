@@ -6,7 +6,7 @@
 
 namespace fpsparty::game {
 
-enum class Block { air, placeholder, stone, dirt, conveyor };
+enum class Block { air, placeholder, stone, dirt, conveyor, light };
 
 constexpr u16 pack_block_data(Block block, u8 data) noexcept {
   return ((data & 0xff) << 8) | static_cast<u8>(block);

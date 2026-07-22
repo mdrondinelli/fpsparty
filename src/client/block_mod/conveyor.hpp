@@ -4,12 +4,12 @@
 #include "block_mod.hpp"
 
 namespace fpsparty::client {
-  
+
 class Conveyor_block_mod : public Block_mod {
 public:
   void init(Block_mod_init_info const &info) override;
 };
 
-}
+} // namespace fpsparty::client
 
 #endif

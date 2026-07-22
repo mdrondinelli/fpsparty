@@ -7,7 +7,7 @@
 namespace fpsparty::client {
 
 void Light_block_mod::init(Block_mod_init_info const &info) {
-  auto texture_image = info.texture_manager->get(Texture::light);
+  auto texture_image = info.texture_manager->get(Texture::red);
   auto const texture_index =
     info.texture_registry->add(std::move(texture_image));
   info.model_registry->add(

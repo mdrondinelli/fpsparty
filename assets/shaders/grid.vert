@@ -6,6 +6,7 @@ layout(location = 0) out vec2 out_texcoord;
 layout(location = 1) flat out uint out_texture;
 layout(location = 2) out vec4 out_current_clip;
 layout(location = 3) out vec4 out_previous_clip;
+layout(location = 4) flat out float out_emissivity_scale;
 
 void main() {
   Vertex vertex = push_constants.vertex_buffer.vertices[gl_VertexIndex];
@@ -21,4 +22,5 @@ void main() {
   }
   out_texcoord = vec2(vertex.texcoord[0], vertex.texcoord[1]);
   out_texture = push_constants.texture_buffer.textures[vertex.texture_index];
+  out_emissivity_scale = vertex.emissivity_scale;
 }

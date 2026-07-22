@@ -1,9 +1,9 @@
 #ifndef FPSPARTY_CLIENT_BLOCK_MOD_HPP
 #define FPSPARTY_CLIENT_BLOCK_MOD_HPP
 
-#include "../texture_manager.hpp"
-#include "../block_texture_registry.hpp"
 #include "../block_model_registry.hpp"
+#include "../block_texture_registry.hpp"
+#include "../texture_manager.hpp"
 
 namespace fpsparty::client {
 
@@ -20,6 +20,6 @@ public:
   virtual void init(Block_mod_init_info const &info) = 0;
 };
 
-}
+} // namespace fpsparty::client
 
 #endif
