@@ -7,10 +7,12 @@ namespace fpsparty::graphics {
 
 enum class Image_format {
   r8_unorm = static_cast<int>(vk::Format::eR8Unorm),
+  b8g8r8a8_unorm = static_cast<int>(vk::Format::eB8G8R8A8Unorm),
   b8g8r8a8_srgb = static_cast<int>(vk::Format::eB8G8R8A8Srgb),
   r16g16_snorm = static_cast<int>(vk::Format::eR16G16Snorm),
   r16g16_sfloat = static_cast<int>(vk::Format::eR16G16Sfloat),
   r32g32_sfloat = static_cast<int>(vk::Format::eR32G32Sfloat),
+  r16g16b16a16_snorm = static_cast<int>(vk::Format::eR16G16B16A16Snorm),
   r16g16b16a16_sfloat = static_cast<int>(vk::Format::eR16G16B16A16Sfloat),
   r32g32b32a32_sfloat = static_cast<int>(vk::Format::eR32G32B32A32Sfloat),
   r32_uint = static_cast<int>(vk::Format::eR32Uint),
@@ -23,10 +25,12 @@ constexpr vk::ImageAspectFlags
 get_image_format_vk_image_aspect_flags(Image_format format) {
   switch (format) {
   case Image_format::r8_unorm:
+  case Image_format::b8g8r8a8_unorm:
   case Image_format::b8g8r8a8_srgb:
   case Image_format::r16g16_snorm:
   case Image_format::r16g16_sfloat:
   case Image_format::r32g32_sfloat:
+  case Image_format::r16g16b16a16_snorm:
   case Image_format::r16g16b16a16_sfloat:
   case Image_format::r32g32b32a32_sfloat:
   case Image_format::r32_uint:
