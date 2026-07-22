@@ -25,8 +25,7 @@ struct Block_model {
   Block_mesh mesh;
   std::bitset<6> neighbor_occlusion_flags;
   Rt_block_shape rt_shape{Rt_block_shape::full};
-  std::uint8_t rt_albedo_index{};
-  std::uint8_t rt_emissivity_index{};
+  std::uint8_t rt_color_index{};
   float emissivity_scale{};
 };
 

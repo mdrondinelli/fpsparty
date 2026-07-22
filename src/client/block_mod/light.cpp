@@ -16,7 +16,7 @@ void Light_block_mod::init(Block_mod_init_info const &info) {
     Block_model{
       .mesh = make_full_block_mesh(texture_index),
       .neighbor_occlusion_flags = full_block_occlusion_flags,
-      .rt_emissivity_index = 1,
+      .rt_color_index = 2,
       .emissivity_scale = 64.0f,
     });
 }

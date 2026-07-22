@@ -17,20 +17,15 @@ Rt_block_shape rt_block_shapes[] = {
   Rt_block_shape(vec3(0.0, 0.5, 0.0), vec3(1.0, 1.0, 1.0)), // top_slab
 };
 
-vec3 rt_albedo_palette[] = {
+vec3 rt_color_palette[] = {
   vec3(0.3), // generic
   color_code(0x5a4336), // dirt
-};
-
-vec3 rt_emissivity_palette[] = {
-  vec3(0.0), // non-emissive
   vec3(1.0, 0.0, 0.0), // red light
 };
 
 struct Rt_block_cell {
   uint8_t shape_index;
-  uint8_t albedo_index;
-  uint8_t emissivity_index;
+  uint8_t color_index;
   float emissivity_scale;
 };
 
@@ -163,10 +158,9 @@ bool trace_ray(
       hit.t = entry_t;
       // ties between axes can leave a diagonal entry normal
       hit.normal = normalize(entry_normal);
-      hit.albedo = rt_albedo_palette[rt_block_cell.albedo_index];
-      hit.emissivity =
-        rt_emissivity_palette[rt_block_cell.emissivity_index] *
-        rt_block_cell.emissivity_scale;
+      const vec3 color = rt_color_palette[rt_block_cell.color_index];
+      hit.albedo = color;
+      hit.emissivity = color * rt_block_cell.emissivity_scale;
       return true;
     }
     float closest_t = 1.0 / 0.0;
@@ -185,10 +179,9 @@ bool trace_ray(
       if (!isinf(t_hit)) {
         closest_t = t_hit;
         closest_normal = hit_normal;
-        closest_albedo = rt_albedo_palette[rt_block_cell.albedo_index];
-        closest_emissivity =
-          rt_emissivity_palette[rt_block_cell.emissivity_index] *
-          rt_block_cell.emissivity_scale;
+        const vec3 color = rt_color_palette[rt_block_cell.color_index];
+        closest_albedo = color;
+        closest_emissivity = color * rt_block_cell.emissivity_scale;
       }
     }
     if (trace_entities) {
