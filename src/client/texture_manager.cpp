@@ -1,6 +1,7 @@
 #include "texture_manager.hpp"
 
 #include <fstream>
+#include <string>
 
 #include <ppm/ppm.hpp>
 
@@ -25,25 +26,17 @@ std::vector<std::byte> load_file(char const *path) {
   return data;
 }
 
-rc::Strong<graphics::Image> load_texture(graphics::Graphics &graphics, char const *path) {
-  auto const file = load_file(path);
-  auto const ppm_image = ppm::load_ppm(file);
-  auto pixels = std::vector<std::byte>(
-    static_cast<std::size_t>(ppm_image.width) *
-    static_cast<std::size_t>(ppm_image.height) * 4);
-  for (auto i = std::size_t{};
-       i != static_cast<std::size_t>(ppm_image.width) *
-              static_cast<std::size_t>(ppm_image.height);
-       ++i) {
-    pixels[i * 4 + 0] = ppm_image.data[i * 3 + 2];
-    pixels[i * 4 + 1] = ppm_image.data[i * 3 + 1];
-    pixels[i * 4 + 2] = ppm_image.data[i * 3 + 0];
-    pixels[i * 4 + 3] = static_cast<std::byte>(0xff);
-  }
+rc::Strong<graphics::Image> create_texture(
+  graphics::Graphics &graphics,
+  std::span<std::byte const> pixels,
+  int width,
+  int height,
+  graphics::Image_format format =
+    graphics::Image_format::b8g8r8a8_srgb) {
   auto image = graphics.create_image({
     .dimensionality = 2,
-    .format = graphics::Image_format::b8g8r8a8_srgb,
-    .extent = {ppm_image.width, ppm_image.height, 1},
+    .format = format,
+    .extent = {width, height, 1},
     .mip_level_count = 1,
     .array_layer_count = 1,
     .usage = graphics::Image_usage_flag_bits::sampled |
@@ -69,7 +62,7 @@ rc::Strong<graphics::Image> load_texture(graphics::Graphics &graphics, char cons
       .dst_base_array_layer = 0,
       .dst_array_layer_count = 1,
       .dst_offset = {0, 0, 0},
-      .dst_extent = {ppm_image.width, ppm_image.height, 1},
+      .dst_extent = {width, height, 1},
     });
   work_recorder.barrier(
     {
@@ -77,7 +70,9 @@ rc::Strong<graphics::Image> load_texture(graphics::Graphics &graphics, char cons
       .access_mask = graphics::Access_flag_bits::transfer_write,
     },
     {
-      .stage_mask = graphics::Pipeline_stage_flag_bits::fragment_shader,
+      .stage_mask =
+        graphics::Pipeline_stage_flag_bits::compute_shader |
+        graphics::Pipeline_stage_flag_bits::fragment_shader,
       .access_mask = graphics::Access_flag_bits::shader_sampled_read,
     });
   auto work = graphics.submit_transient_work(std::move(work_recorder));
@@ -85,7 +80,35 @@ rc::Strong<graphics::Image> load_texture(graphics::Graphics &graphics, char cons
   return image;
 }
 
+rc::Strong<graphics::Image>
+load_texture(
+  graphics::Graphics &graphics,
+  char const *path,
+  graphics::Image_format format =
+    graphics::Image_format::b8g8r8a8_srgb) {
+  auto const file = load_file(path);
+  auto const ppm_image = ppm::load_ppm(file);
+  auto pixels = std::vector<std::byte>(
+    static_cast<std::size_t>(ppm_image.width) *
+    static_cast<std::size_t>(ppm_image.height) * 4);
+  for (auto i = std::size_t{};
+       i != static_cast<std::size_t>(ppm_image.width) *
+              static_cast<std::size_t>(ppm_image.height);
+       ++i) {
+    pixels[i * 4 + 0] = ppm_image.data[i * 3 + 2];
+    pixels[i * 4 + 1] = ppm_image.data[i * 3 + 1];
+    pixels[i * 4 + 2] = ppm_image.data[i * 3 + 0];
+    pixels[i * 4 + 3] = static_cast<std::byte>(0xff);
+  }
+  return create_texture(
+    graphics,
+    pixels,
+    ppm_image.width,
+    ppm_image.height,
+    format);
 }
+
+} // namespace
 
 Texture_manager::Texture_manager(Texture_manager_create_info const &info) {
   auto const texture_filenames = std::array<char const *, 5>{
@@ -98,10 +121,34 @@ Texture_manager::Texture_manager(Texture_manager_create_info const &info) {
   for (auto const &texture_filename : texture_filenames) {
     _images.emplace_back(load_texture(*info.graphics, texture_filename));
   }
+  auto constexpr light_pixel = std::array{
+    std::byte{0x00},
+    std::byte{0x00},
+    std::byte{0xff},
+    std::byte{0xff},
+  };
+  _images.emplace_back(create_texture(*info.graphics, light_pixel, 1, 1));
+  _blue_noise_images.reserve(blue_noise_texture_count);
+  for (auto i = std::size_t{}; i != blue_noise_texture_count; ++i) {
+    auto const filename =
+      "./assets/textures/blue-noise/"
+      "stbn_unitvec3_cosine_2Dx1D_128x128x64_" +
+      std::to_string(i) + ".ppm";
+    _blue_noise_images.emplace_back(load_texture(
+      *info.graphics,
+      filename.c_str(),
+      graphics::Image_format::b8g8r8a8_unorm));
+  }
 }
 
-rc::Strong<graphics::Image> Texture_manager::get(Texture texture) const noexcept {
+rc::Strong<graphics::Image>
+Texture_manager::get(Texture texture) const noexcept {
   return _images[static_cast<std::size_t>(texture)];
 }
 
+rc::Strong<graphics::Image>
+Texture_manager::get_blue_noise(std::size_t index) const noexcept {
+  return _blue_noise_images[index];
 }
+
+} // namespace fpsparty::client
