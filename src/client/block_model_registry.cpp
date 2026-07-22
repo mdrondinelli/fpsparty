@@ -33,7 +33,8 @@ public:
 
   Hash_table(Hash_table &&other) noexcept
       : _buckets{std::move(other._buckets)},
-        _bucket_count{std::exchange(other._bucket_count, 0)} {}
+        _bucket_count{std::exchange(other._bucket_count, 0)},
+        _entry_count{std::exchange(other._entry_count, 0)} {}
 
   Hash_table &operator=(Hash_table &&other) noexcept {
     auto temp = std::move(other);
@@ -61,6 +62,7 @@ public:
       rehash(bucket_count() * 2);
     }
     insert_impl(key, std::move(value));
+    ++_entry_count;
   }
 
   Block_model const *get(Key key) const noexcept {
@@ -123,6 +125,7 @@ private:
   void swap(Hash_table &other) noexcept {
     _buckets.swap(other._buckets);
     std::swap(_bucket_count, other._bucket_count);
+    std::swap(_entry_count, other._entry_count);
   }
 
   std::span<Entry const> buckets() const noexcept {
