@@ -56,13 +56,11 @@ float surface_pdf(
     vec3 hit_normal) {
   const vec3 hit_displacement = hit_position - position;
   const float hit_distance_squared = dot(hit_displacement, hit_displacement);
-  if (!(hit_distance_squared > 0.0)) {
+  if (hit_distance_squared <= 0.0) {
     return 1.0 / 0.0;
   }
-  const vec3 hit_direction =
-    hit_displacement / sqrt(hit_distance_squared);
-  const float angular_pdf =
-    max(dot(normal, hit_direction), 0.0) / pi;
+  const vec3 hit_direction = hit_displacement / sqrt(hit_distance_squared);
+  const float angular_pdf = max(dot(normal, hit_direction), 0.0) / pi;
   return
     angular_pdf *
     abs(dot(hit_normal, hit_direction)) / hit_distance_squared;
@@ -73,37 +71,23 @@ float sampled_surface_pdf(
     vec3 ray_direction,
     vec3 hit_normal,
     float hit_distance) {
-  if (!(hit_distance > 0.0)) {
+  if (hit_distance <= 0.0) {
     return 1.0 / 0.0;
   }
-  const float angular_pdf =
-    max(dot(normal, ray_direction), 0.0) / pi;
+  const float angular_pdf = max(dot(normal, ray_direction), 0.0) / pi;
   return
     angular_pdf *
-    abs(dot(hit_normal, ray_direction)) /
-    (hit_distance * hit_distance);
+    abs(dot(hit_normal, ray_direction)) / (hit_distance * hit_distance);
 }
 
 float balance_weight(float pdf, float other_pdf) {
-  if (isnan(pdf)) {
-    return 0.0;
-  }
-  if (isnan(other_pdf)) {
-    return 1.0;
-  }
   if (isinf(pdf)) {
     return isinf(other_pdf) ? 0.5 : 1.0;
   }
-  if (isinf(other_pdf) || !(pdf > 0.0)) {
+  if (isinf(other_pdf)) {
     return 0.0;
   }
-  if (!(other_pdf > 0.0)) {
-    return 1.0;
-  }
-  const float scale = max(pdf, other_pdf);
-  const float scaled_pdf = pdf / scale;
-  const float scaled_other_pdf = other_pdf / scale;
-  return scaled_pdf / (scaled_pdf + scaled_other_pdf);
+  return pdf / (pdf + other_pdf);
 }
 
 void main() {
@@ -149,6 +133,9 @@ void main() {
         center_ray_direction,
         center_hit_normal,
         center_radiance_and_distance.a);
+    // f(X_c) = center_radiance_and_distance.rgb * pi * center_pdf_at_center_hit,
+    // so f(X_c) / p_c(X_c) reduces to center_radiance_and_distance.rgb * pi.
+    const vec3 f_Xc_over_pc = center_radiance_and_distance.rgb * pi;
     int neighbor_count = 0;
     for (int j = 1; j < sample_count; ++j) {
       const ivec2 sample_pixel = pixel + sample_offset(j);
@@ -232,17 +219,11 @@ void main() {
         balance_weight(
           n * neighbor_pdf_at_neighbor_hit,
           center_pdf_at_neighbor_hit);
-      // f(X_c) = center_radiance_and_distance.rgb * pi * center_pdf_at_center_hit,
-      // so f(X_c) / p_c(X_c) reduces to center_radiance_and_distance.rgb * pi.
-      const vec3 f_Xc_over_pc = center_radiance_and_distance.rgb * pi;
       // f(X_i), the shared target function evaluated at the neighbor's hit
       // point using center's geometry, divided by the neighbor's own pdf.
-      vec3 f_Xi_over_pi = vec3(0.0);
-      if (m_i > 0.0) {
-        f_Xi_over_pi =
-          radiance_and_distance.rgb * pi * center_pdf_at_neighbor_hit /
-          neighbor_pdf_at_neighbor_hit;
-      }
+      const vec3 f_Xi_over_pi = 
+        radiance_and_distance.rgb * pi * center_pdf_at_neighbor_hit /
+        neighbor_pdf_at_neighbor_hit;
       irradiance += m_c * f_Xc_over_pc + m_i * f_Xi_over_pi;
     }
     if (neighbor_count == 0) {
