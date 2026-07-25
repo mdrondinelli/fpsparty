@@ -143,7 +143,7 @@ auto constexpr z_near = 0.1f;
 auto const transmittance_lut_size = math::ivec2{256, 128};
 auto const sky_view_lut_size = math::ivec2{256, 256};
 
-auto constexpr scene_uniform_data_size = std::size_t{240};
+auto constexpr scene_uniform_data_size = std::size_t{320};
 auto constexpr scene_view_projection_matrix_offset = std::size_t{0};
 auto constexpr scene_previous_view_projection_matrix_offset = std::size_t{64};
 auto constexpr scene_animation_time_offset = std::size_t{128};
@@ -152,6 +152,7 @@ auto constexpr scene_sun_direction_offset = std::size_t{192};
 auto constexpr scene_sun_irradiance_offset = std::size_t{208};
 auto constexpr scene_zoom_offset = std::size_t{224};
 auto constexpr scene_z_near_offset = std::size_t{232};
+auto constexpr scene_sky_irradiance_offset = std::size_t{236};
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
@@ -270,6 +271,8 @@ public:
           graphics::load_shader("./assets/shaders/composite.frag.spv")},
         _sky_view_compute_shader{graphics::load_shader(
           "./assets/shaders/atmosphere/sky_view.comp.spv")},
+        _sky_irradiance_compute_shader{graphics::load_shader(
+          "./assets/shaders/atmosphere/sky_irradiance.comp.spv")},
         _direct_irradiance_compute_shader{
           graphics::load_shader("./assets/shaders/direct_irradiance.comp.spv")},
         _rt_grid_entity_binning_compute_shader{graphics::load_shader(
@@ -281,6 +284,8 @@ public:
         _crosshair_pipeline{make_crosshair_pipeline()},
         _sky_view_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_sky_view_compute_shader})},
+        _sky_irradiance_pipeline{_graphics.create_compute_pipeline(
+          {.shader = &_sky_irradiance_compute_shader})},
         _direct_irradiance_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_direct_irradiance_compute_shader})},
         _rt_grid_entity_binning_pipeline{_graphics.create_compute_pipeline(
@@ -449,6 +454,8 @@ private:
     if (camera && sun) {
       record_sky_view_pass(
         work_recorder, camera->position, sun->direction, sun->irradiance);
+      record_sky_irradiance_pass(
+        work_recorder, camera->position, scene_uniform_offset);
     }
     record_gbuffer_pass(work_recorder, framebuffer_size, scene_uniform_offset);
     record_rt_entity_binning_pass(work_recorder);
@@ -478,6 +485,26 @@ private:
     work_recorder.barrier(
       compute_shader_storage_write_scope,
       compute_shader_sampled_read_scope | fragment_shader_sampled_read_scope);
+  }
+
+  // Pre-integrates unshadowed sky irradiance for the 6 axis-aligned face
+  // normals from this frame's sky_view_lut, so direct_irradiance.comp can
+  // pick sun vs. sky by estimated contribution without per-pixel MC noise.
+  void record_sky_irradiance_pass(
+    graphics::Work_recorder &work_recorder,
+    math::vec3 camera_position,
+    std::size_t scene_uniform_offset) {
+    auto const camera_altitude = camera_position.y();
+    work_recorder.bind_compute_pipeline(_sky_irradiance_pipeline);
+    work_recorder.push_descriptors(0, {_sky_view_lut_sampled_descriptor});
+    work_recorder.push_data(4, std::as_bytes(std::span{&camera_altitude, 1}));
+    work_recorder.push_buffer_reference(
+      8,
+      _scene_uniform_buffer,
+      scene_uniform_offset + scene_sky_irradiance_offset);
+    work_recorder.dispatch(6, 1, 1);
+    work_recorder.barrier(
+      compute_shader_storage_write_scope, compute_shader_storage_read_scope);
   }
 
   void record_gbuffer_pass(
@@ -748,7 +775,6 @@ private:
        _depth_render_target_descriptors[_frame_number % 2],
        _direct_irradiance_render_target_storage_descriptor,
        _transmittance_lut_sampled_descriptor,
-       _albedo_render_target_descriptor,
        _sky_view_lut_sampled_descriptor});
     work_recorder.push_data(56, std::as_bytes(std::span{&_frame_number, 1}));
     auto const frame = _frame_number % max_frames_in_flight;
@@ -1523,6 +1549,7 @@ private:
   graphics::Shader _composite_vertex_shader;
   graphics::Shader _composite_fragment_shader;
   graphics::Shader _sky_view_compute_shader;
+  graphics::Shader _sky_irradiance_compute_shader;
   graphics::Shader _direct_irradiance_compute_shader;
   graphics::Shader _rt_grid_entity_binning_compute_shader;
   graphics::Shader _radiance_compute_shader;
@@ -1530,6 +1557,7 @@ private:
   rc::Strong<graphics::Pipeline> _mesh_pipeline{};
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _sky_view_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _sky_irradiance_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _direct_irradiance_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _rt_grid_entity_binning_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _radiance_pipeline{};
