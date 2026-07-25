@@ -747,7 +747,9 @@ private:
       {_normal_render_target_descriptors[_frame_number % 2],
        _depth_render_target_descriptors[_frame_number % 2],
        _direct_irradiance_render_target_storage_descriptor,
-       _transmittance_lut_sampled_descriptor});
+       _transmittance_lut_sampled_descriptor,
+       _albedo_render_target_descriptor,
+       _sky_view_lut_sampled_descriptor});
     work_recorder.push_data(56, std::as_bytes(std::span{&_frame_number, 1}));
     auto const frame = _frame_number % max_frames_in_flight;
     auto const layout =

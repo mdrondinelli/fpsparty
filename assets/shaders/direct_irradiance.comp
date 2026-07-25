@@ -15,6 +15,8 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 10) uint16_t depth_texture;
   layout(offset = 12) uint16_t direct_irradiance_image;
   layout(offset = 14) uint16_t transmittance_texture;
+  layout(offset = 16) uint16_t albedo_texture;
+  layout(offset = 18) uint16_t sky_view_lut;
   layout(offset = 24) Rt_block_grid rt_block_grid;
   layout(offset = 32) Rt_entities entities;
   layout(offset = 40) Rt_entity_grid entity_grid;
@@ -25,6 +27,25 @@ layout(push_constant) uniform Push_constants {
 const float sun_angular_diameter = 0.0093;
 const float sun_angular_radius = sun_angular_diameter / 2.0;
 const float cos_sun_angular_radius = cos(sun_angular_radius);
+const float sun_solid_angle = 2.0 * pi * (1.0 - cos_sun_angular_radius);
+
+float luminance(vec3 color) {
+  return dot(color, vec3(0.2126, 0.7152, 0.0722));
+}
+
+// Generation pdf of the uniform-cone sun technique, evaluated at an
+// arbitrary direction (0 outside the cone).
+float sun_pdf(vec3 dir, vec3 sun_direction) {
+  return dot(dir, sun_direction) >= cos_sun_angular_radius
+    ? 1.0 / sun_solid_angle
+    : 0.0;
+}
+
+// Generation pdf of the cosine-weighted sky technique, evaluated at an
+// arbitrary direction (0 below the horizon).
+float sky_pdf(vec3 dir, vec3 n) {
+  return max(dot(dir, n), 0.0) / pi;
+}
 
 void main() {
   const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
@@ -51,43 +72,87 @@ void main() {
   const vec3 n = oct_decode(
     texelFetch(
       sampled_images[push_constants.normal_texture], pixel, 0).rg);
+  const vec3 albedo =
+    texelFetch(sampled_images[push_constants.albedo_texture], pixel, 0).rgb;
   const vec3 sun_direction = push_constants.scene.sun_direction;
+
   Random random;
   const uint pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
-  // Pre-hash the frame seed before combining: XOR-ing a raw incrementing
-  // counter straight into the pixel index means every frame->frame+1
-  // transition (same low bits flipped each time) hits the exact same
-  // avalanche bias of lowbias32, producing a small but frame-coherent
-  // correlation instead of independent per-frame noise.
   random.state = lowbias32(pixel_index ^ lowbias32(push_constants.seed));
-  const vec3 l =
+
+  // Candidate 1: uniform sample within the sun's disk.
+  const vec3 sun_sample =
     make_basis(sun_direction) *
     square_to_cone(
       vec2(random_float(random), random_float(random)),
       cos_sun_angular_radius);
-  const float n_dot_l = max(dot(n, sun_direction), 0.0);
-  const bool occluded =
-    n_dot_l > 0.0
-      ? trace_ray(
-          push_constants.rt_block_grid,
-          push_constants.entities,
-          push_constants.entity_grid,
-          push_constants.entity_nodes,
-          offset_ray_origin(world_position, n),
-          l,
-          true)
-      : true;
-  const float visibility = occluded ? 0.0 : 1.0;
-  const vec3 E_top = push_constants.scene.sun_irradiance;
-  const vec3 E =
-    E_top *
+  // Candidate 2: cosine-weighted sample over the surface hemisphere.
+  const vec3 sky_sample =
+    make_basis(n) *
+    square_to_cosine_hemisphere(vec2(random_float(random), random_float(random)));
+
+  // Technique-agnostic integrand f(x) = L(x) * cos_theta(x) at each
+  // candidate, using that candidate's own light source. p_hat must be
+  // built from this raw value, NOT divided by either technique's own
+  // generating pdf, or the balance-heuristic weights below would each
+  // pick up an extra (and wildly different) 1/p_i(x_i) factor.
+  //
+  // scene.sun_irradiance is E_top: solar irradiance integrated over the
+  // sun's disk (projected solid angle sun_solid_angle), i.e. what a
+  // surface facing the sun dead-on would receive. Divide back out by
+  // sun_solid_angle to recover the disk's (assumed-uniform) radiance.
+  const vec3 sun_transmittance =
     transmittance_along_ray(
       push_constants.transmittance_texture,
       vec3(0.0, r_ground + world_position.y, 0.0),
-      sun_direction) *
-    visibility;
+      sun_direction);
+  const vec3 L_sun =
+    push_constants.scene.sun_irradiance * sun_transmittance / sun_solid_angle;
+  const vec3 f_sun = L_sun * max(dot(n, sun_sample), 0.0);
+  const vec3 L_sky =
+    FPSPARTY_SAMPLE(
+      push_constants.sky_view_lut,
+      pack_sky_view_lut_params(
+        longitude(sky_sample),
+        push_constants.scene.camera_basis[3][1],
+        zenith(sky_sample))).rgb;
+  const vec3 f_sky = L_sky * max(dot(n, sky_sample), 0.0);
+
+  // RIS with the balance heuristic: w_i = m_i(x_i) * p_hat(x_i) / p_i(x_i)
+  // with m_i(x) = p_i(x) / sum_j p_j(x) simplifies to
+  // p_hat(x_i) / sum_j p_j(x_i) (the technique's own pdf cancels here,
+  // but only because p_hat above carries no hidden pdf division of its
+  // own).
+  const float p_hat_sun = luminance(f_sun * albedo);
+  const float p_hat_sky = luminance(f_sky * albedo);
+  const float sun_denom =
+    sun_pdf(sun_sample, sun_direction) + sky_pdf(sun_sample, n);
+  const float sky_denom =
+    sun_pdf(sky_sample, sun_direction) + sky_pdf(sky_sample, n);
+  const float w_sun = sun_denom > 0.0 ? p_hat_sun / sun_denom : 0.0;
+  const float w_sky = sky_denom > 0.0 ? p_hat_sky / sky_denom : 0.0;
+  const float w_sum = w_sun + w_sky;
+
+  vec3 E = vec3(0.0);
+  if (w_sum > 0.0) {
+    const bool selected_sun = random_float(random) * w_sum < w_sun;
+    const vec3 l = selected_sun ? sun_sample : sky_sample;
+    const vec3 f_selected = selected_sun ? f_sun : f_sky;
+    const float p_hat_selected = selected_sun ? p_hat_sun : p_hat_sky;
+    const bool occluded = trace_ray(
+      push_constants.rt_block_grid,
+      push_constants.entities,
+      push_constants.entity_grid,
+      push_constants.entity_nodes,
+      offset_ray_origin(world_position, n),
+      l,
+      true);
+    const float visibility = occluded ? 0.0 : 1.0;
+    E = f_selected * (visibility * w_sum / p_hat_selected);
+  }
+
   imageStore(
     storage_images[push_constants.direct_irradiance_image],
     pixel,
-    vec4(E * n_dot_l, 1.0));
+    vec4(E, 1.0));
 }
