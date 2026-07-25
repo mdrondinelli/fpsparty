@@ -18,12 +18,12 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 14) uint16_t transmittance_texture;
   layout(offset = 16) uint16_t indirect_radiance_image;
   layout(offset = 18) uint16_t indirect_radiance_direction_image;
-  layout(offset = 20) uint16_t rng_state_image;
-  layout(offset = 22) uint16_t blue_noise_texture;
+  layout(offset = 20) uint16_t blue_noise_texture;
   layout(offset = 24) Rt_block_grid rt_block_grid;
   layout(offset = 32) Rt_entities entities;
   layout(offset = 40) Rt_entity_grid entity_grid;
   layout(offset = 48) Rt_entity_nodes entity_nodes;
+  layout(offset = 56) uint seed;
 } push_constants;
 
 const int bounce_count = 2;
@@ -62,8 +62,8 @@ void main() {
       vec3(0.0, r_ground + world_position.y, 0.0),
       sun_direction);
   Random random;
-  random.state =
-    imageLoad(storage_uimages[push_constants.rng_state_image], pixel).x;
+  const uint pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
+  random.state = lowbias32(pixel_index ^ push_constants.seed);
   const ivec2 blue_noise_pixel = pixel % 128;
   const vec3 tangent_ray_direction = normalize(texelFetch(
     sampled_images[push_constants.blue_noise_texture],
@@ -136,8 +136,4 @@ void main() {
     storage_images[push_constants.indirect_radiance_direction_image],
     pixel,
     vec4(encoded_ray_direction, encoded_hit_normal));
-  imageStore(
-    storage_uimages[push_constants.rng_state_image],
-    pixel,
-    uvec4(random.state));
 }

@@ -9,7 +9,6 @@
 #include <memory>
 #include <numbers>
 #include <optional>
-#include <random>
 #include <span>
 #include <stdexcept>
 #include <vector>
@@ -275,8 +274,6 @@ public:
           graphics::load_shader("./assets/shaders/direct_radiance.comp.spv")},
         _rt_grid_entity_binning_compute_shader{graphics::load_shader(
           "./assets/shaders/bin_rt_grid_entities.comp.spv")},
-        _rng_seed_compute_shader{
-          graphics::load_shader("./assets/shaders/rng_seed.comp.spv")},
         _radiance_compute_shader{
           graphics::load_shader("./assets/shaders/radiance.comp.spv")},
         _indirect_radiance_compute_shader{
@@ -292,8 +289,6 @@ public:
           {.shader = &_direct_radiance_compute_shader})},
         _rt_grid_entity_binning_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_rt_grid_entity_binning_compute_shader})},
-        _rng_seed_pipeline{_graphics.create_compute_pipeline(
-          {.shader = &_rng_seed_compute_shader})},
         _radiance_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_radiance_compute_shader})},
         _indirect_radiance_pipeline{_graphics.create_compute_pipeline(
@@ -436,16 +431,6 @@ private:
     get_direct_radiance_render_target(work_recorder, framebuffer_extent);
     get_indirect_radiance_render_targets(work_recorder, framebuffer_extent);
     get_indirect_irradiance_render_targets(work_recorder, framebuffer_extent);
-    auto const indirect_rng_state_image_created = get_rng_state_image(
-      work_recorder,
-      _indirect_rng_state_image,
-      _indirect_rng_state_image_descriptor,
-      framebuffer_extent);
-    auto const direct_rng_state_image_created = get_rng_state_image(
-      work_recorder,
-      _direct_rng_state_image,
-      _direct_rng_state_image_descriptor,
-      framebuffer_extent);
     get_color_render_target(
       work_recorder,
       _crosshair_mask_render_target,
@@ -474,20 +459,6 @@ private:
     if (camera && sun) {
       record_sky_view_pass(
         work_recorder, camera->position, sun->direction, sun->irradiance);
-    }
-    if (indirect_rng_state_image_created) {
-      record_rng_seed_pass(
-        work_recorder,
-        framebuffer_size,
-        _indirect_rng_state_image_descriptor,
-        static_cast<u32>(_rng_engine()));
-    }
-    if (direct_rng_state_image_created) {
-      record_rng_seed_pass(
-        work_recorder,
-        framebuffer_size,
-        _direct_rng_state_image_descriptor,
-        static_cast<u32>(_rng_engine()));
     }
     record_gbuffer_pass(work_recorder, framebuffer_size, scene_uniform_offset);
     record_rt_entity_binning_pass(work_recorder);
@@ -674,25 +645,6 @@ private:
     work_recorder.end_rendering();
   }
 
-  // Seeds a freshly created RNG state image; the lighting passes then
-  // advance the per-pixel streams in place from frame to frame.
-  void record_rng_seed_pass(
-    graphics::Work_recorder &work_recorder,
-    math::ivec2 framebuffer_size,
-    rc::Strong<graphics::Descriptor> const &rng_state_image_descriptor,
-    u32 seed) {
-    ZoneScoped;
-    work_recorder.bind_compute_pipeline(_rng_seed_pipeline);
-    work_recorder.push_descriptors(0, {rng_state_image_descriptor});
-    work_recorder.push_data(4, std::as_bytes(std::span{&seed, 1}));
-    auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
-    auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
-    work_recorder.dispatch(group_count_x, group_count_y, 1);
-    work_recorder.barrier(
-      compute_shader_storage_write_scope,
-      compute_shader_storage_read_scope | compute_shader_storage_write_scope);
-  }
-
   void ensure_rt_entity_capacity(std::size_t capacity) {
     if (_rt_entity_capacity >= capacity) {
       return;
@@ -808,8 +760,8 @@ private:
       {_normal_render_target_descriptors[_frame_number % 2],
        _depth_render_target_descriptors[_frame_number % 2],
        _direct_radiance_render_target_storage_descriptor,
-       _direct_rng_state_image_descriptor,
        _transmittance_lut_sampled_descriptor});
+    work_recorder.push_data(56, std::as_bytes(std::span{&_frame_number, 1}));
     auto const frame = _frame_number % max_frames_in_flight;
     auto const layout =
       make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
@@ -860,9 +812,9 @@ private:
        _transmittance_lut_sampled_descriptor,
        _indirect_radiance_render_target_storage_descriptor,
        _indirect_radiance_direction_render_target_storage_descriptor,
-       _indirect_rng_state_image_descriptor,
        _blue_noise_texture_descriptors
          [_frame_number % blue_noise_texture_count]});
+    work_recorder.push_data(56, std::as_bytes(std::span{&_frame_number, 1}));
     auto const frame = _frame_number % max_frames_in_flight;
     auto const layout =
       make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
@@ -877,8 +829,6 @@ private:
     auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
     work_recorder.dispatch(group_count_x, group_count_y, 1);
     // Also covers the direct radiance pass recorded just before this one.
-    // The storage read/write scope covers next frame's lighting passes
-    // reading and updating the RNG state images.
     work_recorder.barrier(
       compute_shader_storage_write_scope,
       compute_shader_sampled_read_scope | compute_shader_storage_read_scope |
@@ -1439,33 +1389,6 @@ private:
     }
   }
 
-  // Returns true if the image was (re)created and needs seeding.
-  bool get_rng_state_image(
-    graphics::Work_recorder &work_recorder,
-    rc::Strong<graphics::Image> &image,
-    rc::Strong<graphics::Descriptor> &descriptor,
-    math::ivec3 extent) {
-    auto const create_image = !image || image->get_extent() != extent;
-    if (create_image) {
-      image = _graphics.create_image({
-        .dimensionality = 2,
-        .format = graphics::Image_format::r32_uint,
-        .extent = extent,
-        .mip_level_count = 1,
-        .array_layer_count = 1,
-        .usage = graphics::Image_usage_flag_bits::storage,
-      });
-      work_recorder.transition_image_layout(
-        {},
-        compute_shader_storage_write_scope,
-        graphics::Image_layout::undefined,
-        graphics::Image_layout::general,
-        image);
-      descriptor = _graphics.create_storage_image_descriptor(image);
-    }
-    return create_image;
-  }
-
   rc::Strong<graphics::Buffer>
   upload_vertices(std::span<std::byte const> data) {
     auto const staging_buffer = _graphics.create_staging_buffer(data);
@@ -1817,13 +1740,8 @@ private:
   std::array<rc::Strong<graphics::Descriptor>, 2>
     _indirect_irradiance_render_target_storage_descriptors{};
   std::optional<u32> _last_indirect_irradiance_frame{};
-  rc::Strong<graphics::Image> _indirect_rng_state_image{};
-  rc::Strong<graphics::Descriptor> _indirect_rng_state_image_descriptor{};
-  rc::Strong<graphics::Image> _direct_rng_state_image{};
-  rc::Strong<graphics::Descriptor> _direct_rng_state_image_descriptor{};
   std::array<rc::Strong<graphics::Descriptor>, blue_noise_texture_count>
     _blue_noise_texture_descriptors{};
-  std::mt19937 _rng_engine{std::random_device{}()};
   rc::Strong<graphics::Image> _crosshair_mask_render_target{};
   rc::Strong<graphics::Descriptor> _crosshair_mask_render_target_descriptor{};
   graphics::Shader _grid_vertex_shader;
@@ -1837,7 +1755,6 @@ private:
   graphics::Shader _sky_view_compute_shader;
   graphics::Shader _direct_radiance_compute_shader;
   graphics::Shader _rt_grid_entity_binning_compute_shader;
-  graphics::Shader _rng_seed_compute_shader;
   graphics::Shader _radiance_compute_shader;
   graphics::Shader _indirect_radiance_compute_shader;
   graphics::Shader _indirect_irradiance_compute_shader;
@@ -1847,7 +1764,6 @@ private:
   rc::Strong<graphics::Compute_pipeline> _sky_view_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _direct_radiance_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _rt_grid_entity_binning_pipeline{};
-  rc::Strong<graphics::Compute_pipeline> _rng_seed_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _radiance_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _indirect_radiance_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _indirect_irradiance_pipeline{};

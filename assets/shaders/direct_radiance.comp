@@ -14,12 +14,12 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 8) uint16_t normal_texture;
   layout(offset = 10) uint16_t depth_texture;
   layout(offset = 12) uint16_t direct_radiance_image;
-  layout(offset = 14) uint16_t rng_state_image;
-  layout(offset = 16) uint16_t transmittance_texture;
+  layout(offset = 14) uint16_t transmittance_texture;
   layout(offset = 24) Rt_block_grid rt_block_grid;
   layout(offset = 32) Rt_entities entities;
   layout(offset = 40) Rt_entity_grid entity_grid;
   layout(offset = 48) Rt_entity_nodes entity_nodes;
+  layout(offset = 56) uint seed;
 } push_constants;
 
 const float sun_angular_diameter = 0.0093;
@@ -53,8 +53,10 @@ void main() {
       sampled_images[push_constants.normal_texture], pixel, 0).rg);
   const vec3 sun_direction = push_constants.scene.sun_direction;
   Random random;
-  random.state = imageLoad(
-    storage_uimages[push_constants.rng_state_image], pixel).x;
+  const uint pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
+  // XOR a distinct constant so this pass's stream decorrelates from
+  // indirect_radiance.comp's, which hashes the same (pixel, frame) pair.
+  random.state = lowbias32(pixel_index ^ push_constants.seed ^ 0x9e3779b9u);
   const vec3 l =
     make_basis(sun_direction) *
     square_to_cone(
@@ -85,8 +87,4 @@ void main() {
     storage_images[push_constants.direct_radiance_image],
     pixel,
     vec4(E * n_dot_l, 1.0));
-  imageStore(
-    storage_uimages[push_constants.rng_state_image],
-    pixel,
-    uvec4(random.state));
 }

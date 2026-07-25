@@ -41,7 +41,6 @@ shaders=(
   indirect_irradiance.comp
   indirect_radiance.comp
   bin_rt_grid_entities.comp
-  rng_seed.comp
 )
 
 for shader in "${shaders[@]}"; do
