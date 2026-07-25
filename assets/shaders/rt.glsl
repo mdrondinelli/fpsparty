@@ -19,8 +19,11 @@ Rt_block_shape rt_block_shapes[] = {
 
 vec3 rt_color_palette[] = {
   vec3(0.3), // generic
+  vec3(1.0, 0.0, 0.0), // red
+  vec3(0.0, 1.0, 0.0), // green
+  vec3(0.0, 0.0, 1.0), // blue
+  vec3(1.0, 1.0, 1.0), // white
   color_code(0x5a4336), // dirt
-  vec3(1.0, 0.0, 0.0), // red light
 };
 
 struct Rt_block_cell {

@@ -17,6 +17,15 @@ enum class Rt_block_shape : std::uint8_t {
   top_slab = 3,
 };
 
+enum class Rt_color : std::uint8_t {
+  generic = 0,
+  red = 1,
+  green = 2,
+  blue = 3,
+  white = 4,
+  dirt = 5,
+};
+
 struct Block_model {
   bool occludes_neighbor(math::signed_axis3 normal) const noexcept {
     return neighbor_occlusion_flags[normal.index()];
@@ -25,7 +34,7 @@ struct Block_model {
   Block_mesh mesh;
   std::bitset<6> neighbor_occlusion_flags;
   Rt_block_shape rt_shape{Rt_block_shape::full};
-  std::uint8_t rt_color_index{};
+  Rt_color rt_color{Rt_color::generic};
   float emissivity_scale{};
 };
 

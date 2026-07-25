@@ -18,7 +18,7 @@ namespace {
 
 struct Rt_block_grid_cell {
   Rt_block_shape shape;
-  std::uint8_t color_index;
+  Rt_color color;
   float emissivity_scale;
 };
 
@@ -106,7 +106,7 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
               game::Chunk::get_block_index({rel_x, rel_y, rel_z});
             rt_block_grid_chunks[chunk_index].cells[block_index] = {
               .shape = block_model->rt_shape,
-              .color_index = block_model->rt_color_index,
+              .color = block_model->rt_color,
               .emissivity_scale = block_model->emissivity_scale,
             };
           }
