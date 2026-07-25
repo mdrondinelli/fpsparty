@@ -37,9 +37,7 @@ shaders=(
   atmosphere/transmittance.comp
   atmosphere/sky_view.comp
   radiance.comp
-  direct_radiance.comp
-  indirect_irradiance.comp
-  indirect_radiance.comp
+  direct_irradiance.comp
   bin_rt_grid_entities.comp
 )
 

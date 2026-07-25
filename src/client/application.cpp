@@ -270,31 +270,23 @@ public:
           graphics::load_shader("./assets/shaders/composite.frag.spv")},
         _sky_view_compute_shader{graphics::load_shader(
           "./assets/shaders/atmosphere/sky_view.comp.spv")},
-        _direct_radiance_compute_shader{
-          graphics::load_shader("./assets/shaders/direct_radiance.comp.spv")},
+        _direct_irradiance_compute_shader{
+          graphics::load_shader("./assets/shaders/direct_irradiance.comp.spv")},
         _rt_grid_entity_binning_compute_shader{graphics::load_shader(
           "./assets/shaders/bin_rt_grid_entities.comp.spv")},
         _radiance_compute_shader{
           graphics::load_shader("./assets/shaders/radiance.comp.spv")},
-        _indirect_radiance_compute_shader{
-          graphics::load_shader("./assets/shaders/indirect_radiance.comp.spv")},
-        _indirect_irradiance_compute_shader{graphics::load_shader(
-          "./assets/shaders/indirect_irradiance.comp.spv")},
         _grid_pipeline{make_grid_pipeline()},
         _mesh_pipeline{make_mesh_pipeline()},
         _crosshair_pipeline{make_crosshair_pipeline()},
         _sky_view_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_sky_view_compute_shader})},
-        _direct_radiance_pipeline{_graphics.create_compute_pipeline(
-          {.shader = &_direct_radiance_compute_shader})},
+        _direct_irradiance_pipeline{_graphics.create_compute_pipeline(
+          {.shader = &_direct_irradiance_compute_shader})},
         _rt_grid_entity_binning_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_rt_grid_entity_binning_compute_shader})},
         _radiance_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_radiance_compute_shader})},
-        _indirect_radiance_pipeline{_graphics.create_compute_pipeline(
-          {.shader = &_indirect_radiance_compute_shader})},
-        _indirect_irradiance_pipeline{_graphics.create_compute_pipeline(
-          {.shader = &_indirect_irradiance_compute_shader})},
         _texture_manager{{.graphics = &_graphics}},
         _block_texture_registry{{.graphics = &_graphics}},
         _scene_uniform_buffer{_graphics.create_buffer({
@@ -428,9 +420,7 @@ private:
       graphics::Image_format::r16g16b16a16_sfloat,
       framebuffer_extent);
     get_radiance_render_target(work_recorder, framebuffer_extent);
-    get_direct_radiance_render_target(work_recorder, framebuffer_extent);
-    get_indirect_radiance_render_targets(work_recorder, framebuffer_extent);
-    get_indirect_irradiance_render_targets(work_recorder, framebuffer_extent);
+    get_direct_irradiance_render_target(work_recorder, framebuffer_extent);
     get_color_render_target(
       work_recorder,
       _crosshair_mask_render_target,
@@ -462,11 +452,8 @@ private:
     }
     record_gbuffer_pass(work_recorder, framebuffer_size, scene_uniform_offset);
     record_rt_entity_binning_pass(work_recorder);
-    record_direct_radiance_pass(
+    record_direct_irradiance_pass(
       work_recorder, framebuffer_size, scene_uniform_offset);
-    record_indirect_radiance_pass(
-      work_recorder, framebuffer_size, scene_uniform_offset);
-    record_indirect_irradiance_pass(work_recorder, framebuffer_size);
     record_radiance_pass(work_recorder, framebuffer_size);
     record_crosshair_pass(work_recorder, framebuffer_size);
     record_composite_pass(work_recorder, swapchain_image, framebuffer_size);
@@ -731,7 +718,7 @@ private:
       compute_shader_storage_write_scope, compute_shader_storage_read_scope);
   }
 
-  void record_direct_radiance_pass(
+  void record_direct_irradiance_pass(
     graphics::Work_recorder &work_recorder,
     math::ivec2 framebuffer_size,
     std::size_t scene_uniform_offset) {
@@ -752,14 +739,14 @@ private:
     if (!sun) {
       return;
     }
-    work_recorder.bind_compute_pipeline(_direct_radiance_pipeline);
+    work_recorder.bind_compute_pipeline(_direct_irradiance_pipeline);
     work_recorder
       .push_buffer_reference(0, _scene_uniform_buffer, scene_uniform_offset);
     work_recorder.push_descriptors(
       8,
       {_normal_render_target_descriptors[_frame_number % 2],
        _depth_render_target_descriptors[_frame_number % 2],
-       _direct_radiance_render_target_storage_descriptor,
+       _direct_irradiance_render_target_storage_descriptor,
        _transmittance_lut_sampled_descriptor});
     work_recorder.push_data(56, std::as_bytes(std::span{&_frame_number, 1}));
     auto const frame = _frame_number % max_frames_in_flight;
@@ -772,120 +759,6 @@ private:
       40, _rt_entity_binning_buffers[frame], layout.grid_offset);
     work_recorder.push_buffer_reference(
       48, _rt_entity_binning_buffers[frame], layout.nodes_offset);
-    auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
-    auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
-    work_recorder.dispatch(group_count_x, group_count_y, 1);
-    // No barrier here: this pass is recorded back to back with the indirect
-    // radiance pass so the GPU can overlap them, and the indirect pass's
-    // trailing barrier covers this pass's storage writes too.
-  }
-
-  void record_indirect_radiance_pass(
-    graphics::Work_recorder &work_recorder,
-    math::ivec2 framebuffer_size,
-    std::size_t scene_uniform_offset) {
-    ZoneScoped;
-    auto const &session = _client.get_session();
-    auto const camera =
-      session && _local_player && _local_player->player_entity_id &&
-          _local_player->humanoid_entity_id
-        ? session->get_scene().get_camera(*_local_player->player_entity_id)
-        : nullptr;
-    if (!camera || !_grid_mesh || !_grid_mesh->is_uploaded()) {
-      // Nothing was rasterized into the G-buffer this frame (see
-      // record_radiance_pass for why): nothing to trace paths for.
-      return;
-    }
-    auto const sun =
-      session->get_scene().get_distant_light(scene::elements::sun_light_key);
-    if (!sun) {
-      return;
-    }
-    work_recorder.bind_compute_pipeline(_indirect_radiance_pipeline);
-    work_recorder
-      .push_buffer_reference(0, _scene_uniform_buffer, scene_uniform_offset);
-    work_recorder.push_descriptors(
-      8,
-      {_normal_render_target_descriptors[_frame_number % 2],
-       _depth_render_target_descriptors[_frame_number % 2],
-       _sky_view_lut_sampled_descriptor,
-       _transmittance_lut_sampled_descriptor,
-       _indirect_radiance_render_target_storage_descriptor,
-       _indirect_radiance_direction_render_target_storage_descriptor,
-       _blue_noise_texture_descriptors
-         [_frame_number % blue_noise_texture_count]});
-    work_recorder.push_data(56, std::as_bytes(std::span{&_frame_number, 1}));
-    auto const frame = _frame_number % max_frames_in_flight;
-    auto const layout =
-      make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
-    work_recorder
-      .push_buffer_reference(24, _grid_mesh->get_rt_block_grid_buffer());
-    work_recorder.push_buffer_reference(32, _rt_entity_buffers[frame]);
-    work_recorder.push_buffer_reference(
-      40, _rt_entity_binning_buffers[frame], layout.grid_offset);
-    work_recorder.push_buffer_reference(
-      48, _rt_entity_binning_buffers[frame], layout.nodes_offset);
-    auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
-    auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
-    work_recorder.dispatch(group_count_x, group_count_y, 1);
-    // Also covers the direct radiance pass recorded just before this one.
-    work_recorder.barrier(
-      compute_shader_storage_write_scope,
-      compute_shader_sampled_read_scope | compute_shader_storage_read_scope |
-        compute_shader_storage_write_scope);
-  }
-
-  void record_indirect_irradiance_pass(
-    graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
-    ZoneScoped;
-    auto const &session = _client.get_session();
-    auto const camera =
-      session && _local_player && _local_player->player_entity_id &&
-          _local_player->humanoid_entity_id
-        ? session->get_scene().get_camera(*_local_player->player_entity_id)
-        : nullptr;
-    if (!camera || !_grid_mesh || !_grid_mesh->is_uploaded()) {
-      // No indirect radiance samples were traced this frame (see
-      // record_radiance_pass for why): nothing to compute irradiance for.
-      return;
-    }
-    work_recorder.bind_compute_pipeline(_indirect_irradiance_pipeline);
-    work_recorder.push_descriptors(
-      0,
-      {_depth_render_target_descriptors[_frame_number % 2],
-       _depth_render_target_descriptors[(_frame_number + 1) % 2],
-       _normal_render_target_descriptors[_frame_number % 2],
-       _normal_render_target_descriptors[(_frame_number + 1) % 2],
-       _indirect_radiance_render_target_descriptor,
-       _indirect_radiance_direction_render_target_descriptor,
-       _indirect_irradiance_render_target_storage_descriptors
-         [_frame_number % 2],
-       _indirect_irradiance_render_target_descriptors[(_frame_number + 1) % 2],
-       _motion_vector_render_target_descriptor});
-    // History is only valid if last frame's pass wrote the other image.
-    auto const history_valid = u32{
-      _last_indirect_irradiance_frame &&
-      *_last_indirect_irradiance_frame + 1 == _frame_number};
-    work_recorder.push_data(20, std::as_bytes(std::span{&history_valid, 1}));
-    work_recorder.push_data(24, std::as_bytes(std::span{&z_near, 1}));
-    auto constexpr zoom = 1.125f;
-    auto const aspect_ratio = static_cast<f32>(framebuffer_size.x()) /
-                              static_cast<f32>(framebuffer_size.y());
-    auto const zoom_vec = math::vec2{
-      aspect_ratio > 1.0f ? zoom : zoom * aspect_ratio,
-      aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
-    };
-    auto const camera_basis =
-      (math::translation_matrix(camera->position) *
-       math::y_rotation_matrix(_local_player->input_state.yaw) *
-       math::x_rotation_matrix(_local_player->input_state.pitch))
-        .eval();
-    auto const camera_basis_rows =
-      Eigen::Matrix<float, 3, 4, Eigen::RowMajor>{camera_basis.topRows<3>()};
-    work_recorder
-      .push_data(32, std::as_bytes(std::span{&camera_basis_rows, 1}));
-    work_recorder.push_data(80, std::as_bytes(std::span{&zoom_vec, 1}));
-    _last_indirect_irradiance_frame = _frame_number;
     auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
     auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
     work_recorder.dispatch(group_count_x, group_count_y, 1);
@@ -946,8 +819,7 @@ private:
        _depth_render_target_descriptors[_frame_number % 2],
        _sky_view_lut_sampled_descriptor,
        _radiance_render_target_storage_descriptor,
-       _direct_radiance_render_target_descriptor,
-       _indirect_irradiance_render_target_descriptors[_frame_number % 2]});
+       _direct_irradiance_render_target_descriptor});
     auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
     auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
     work_recorder.dispatch(group_count_x, group_count_y, 1);
@@ -1274,13 +1146,13 @@ private:
     }
   }
 
-  void get_direct_radiance_render_target(
+  void get_direct_irradiance_render_target(
     graphics::Work_recorder &work_recorder, math::ivec3 extent) {
     auto const create_image =
-      !_direct_radiance_render_target ||
-      _direct_radiance_render_target->get_extent() != extent;
+      !_direct_irradiance_render_target ||
+      _direct_irradiance_render_target->get_extent() != extent;
     if (create_image) {
-      _direct_radiance_render_target = _graphics.create_image({
+      _direct_irradiance_render_target = _graphics.create_image({
         .dimensionality = 2,
         .format = graphics::Image_format::r16g16b16a16_sfloat,
         .extent = extent,
@@ -1294,98 +1166,13 @@ private:
         compute_shader_storage_write_scope,
         graphics::Image_layout::undefined,
         graphics::Image_layout::general,
-        _direct_radiance_render_target);
-      _direct_radiance_render_target_descriptor =
+        _direct_irradiance_render_target);
+      _direct_irradiance_render_target_descriptor =
         _graphics
-          .create_sampled_image_descriptor(_direct_radiance_render_target);
-      _direct_radiance_render_target_storage_descriptor =
+          .create_sampled_image_descriptor(_direct_irradiance_render_target);
+      _direct_irradiance_render_target_storage_descriptor =
         _graphics
-          .create_storage_image_descriptor(_direct_radiance_render_target);
-    }
-  }
-
-  void get_indirect_radiance_render_targets(
-    graphics::Work_recorder &work_recorder, math::ivec3 extent) {
-    auto const create_images =
-      !_indirect_radiance_render_target ||
-      _indirect_radiance_render_target->get_extent() != extent;
-    if (create_images) {
-      _indirect_radiance_render_target = _graphics.create_image({
-        .dimensionality = 2,
-        .format = graphics::Image_format::r16g16b16a16_sfloat,
-        .extent = extent,
-        .mip_level_count = 1,
-        .array_layer_count = 1,
-        .usage = graphics::Image_usage_flag_bits::sampled |
-                 graphics::Image_usage_flag_bits::storage,
-      });
-      _indirect_radiance_direction_render_target = _graphics.create_image({
-        .dimensionality = 2,
-        .format = graphics::Image_format::r16g16b16a16_snorm,
-        .extent = extent,
-        .mip_level_count = 1,
-        .array_layer_count = 1,
-        .usage = graphics::Image_usage_flag_bits::sampled |
-                 graphics::Image_usage_flag_bits::storage,
-      });
-      work_recorder.transition_image_layout(
-        {},
-        compute_shader_storage_write_scope,
-        graphics::Image_layout::undefined,
-        graphics::Image_layout::general,
-        _indirect_radiance_render_target);
-      work_recorder.transition_image_layout(
-        {},
-        compute_shader_storage_write_scope,
-        graphics::Image_layout::undefined,
-        graphics::Image_layout::general,
-        _indirect_radiance_direction_render_target);
-      _indirect_radiance_render_target_descriptor =
-        _graphics
-          .create_sampled_image_descriptor(_indirect_radiance_render_target);
-      _indirect_radiance_render_target_storage_descriptor =
-        _graphics
-          .create_storage_image_descriptor(_indirect_radiance_render_target);
-      _indirect_radiance_direction_render_target_descriptor =
-        _graphics.create_sampled_image_descriptor(
-          _indirect_radiance_direction_render_target);
-      _indirect_radiance_direction_render_target_storage_descriptor =
-        _graphics.create_storage_image_descriptor(
-          _indirect_radiance_direction_render_target);
-    }
-  }
-
-  void get_indirect_irradiance_render_targets(
-    graphics::Work_recorder &work_recorder, math::ivec3 extent) {
-    auto const create_images =
-      !_indirect_irradiance_render_targets[0] ||
-      _indirect_irradiance_render_targets[0]->get_extent() != extent;
-    if (create_images) {
-      _last_indirect_irradiance_frame.reset();
-      for (auto i = std::size_t{}; i != 2; ++i) {
-        _indirect_irradiance_render_targets[i] = _graphics.create_image({
-          .dimensionality = 2,
-          .format = graphics::Image_format::r16g16b16a16_sfloat,
-          .extent = extent,
-          .mip_level_count = 1,
-          .array_layer_count = 1,
-          .usage = graphics::Image_usage_flag_bits::sampled |
-                   graphics::Image_usage_flag_bits::storage,
-        });
-        work_recorder.transition_image_layout(
-          {},
-          compute_shader_storage_write_scope,
-          graphics::Image_layout::undefined,
-          graphics::Image_layout::general,
-          _indirect_irradiance_render_targets[i]);
-        _indirect_irradiance_render_target_descriptors[i] =
-          _graphics.create_sampled_image_descriptor(
-            _indirect_irradiance_render_targets[i],
-            graphics::Sampler::linear_clamp);
-        _indirect_irradiance_render_target_storage_descriptors[i] =
-          _graphics.create_storage_image_descriptor(
-            _indirect_irradiance_render_targets[i]);
-      }
+          .create_storage_image_descriptor(_direct_irradiance_render_target);
     }
   }
 
@@ -1717,29 +1504,10 @@ private:
   rc::Strong<graphics::Image> _radiance_render_target{};
   rc::Strong<graphics::Descriptor> _radiance_render_target_descriptor{};
   rc::Strong<graphics::Descriptor> _radiance_render_target_storage_descriptor{};
-  rc::Strong<graphics::Image> _direct_radiance_render_target{};
-  rc::Strong<graphics::Descriptor> _direct_radiance_render_target_descriptor{};
+  rc::Strong<graphics::Image> _direct_irradiance_render_target{};
+  rc::Strong<graphics::Descriptor> _direct_irradiance_render_target_descriptor{};
   rc::Strong<graphics::Descriptor>
-    _direct_radiance_render_target_storage_descriptor{};
-  rc::Strong<graphics::Image> _indirect_radiance_render_target{};
-  rc::Strong<graphics::Descriptor>
-    _indirect_radiance_render_target_descriptor{};
-  rc::Strong<graphics::Descriptor>
-    _indirect_radiance_render_target_storage_descriptor{};
-  rc::Strong<graphics::Image> _indirect_radiance_direction_render_target{};
-  rc::Strong<graphics::Descriptor>
-    _indirect_radiance_direction_render_target_descriptor{};
-  rc::Strong<graphics::Descriptor>
-    _indirect_radiance_direction_render_target_storage_descriptor{};
-  // Ping-pong pair: [_frame_number % 2] is written this frame, the other
-  // holds last frame's irradiance.
-  std::array<rc::Strong<graphics::Image>, 2>
-    _indirect_irradiance_render_targets{};
-  std::array<rc::Strong<graphics::Descriptor>, 2>
-    _indirect_irradiance_render_target_descriptors{};
-  std::array<rc::Strong<graphics::Descriptor>, 2>
-    _indirect_irradiance_render_target_storage_descriptors{};
-  std::optional<u32> _last_indirect_irradiance_frame{};
+    _direct_irradiance_render_target_storage_descriptor{};
   std::array<rc::Strong<graphics::Descriptor>, blue_noise_texture_count>
     _blue_noise_texture_descriptors{};
   rc::Strong<graphics::Image> _crosshair_mask_render_target{};
@@ -1753,20 +1521,16 @@ private:
   graphics::Shader _composite_vertex_shader;
   graphics::Shader _composite_fragment_shader;
   graphics::Shader _sky_view_compute_shader;
-  graphics::Shader _direct_radiance_compute_shader;
+  graphics::Shader _direct_irradiance_compute_shader;
   graphics::Shader _rt_grid_entity_binning_compute_shader;
   graphics::Shader _radiance_compute_shader;
-  graphics::Shader _indirect_radiance_compute_shader;
-  graphics::Shader _indirect_irradiance_compute_shader;
   rc::Strong<graphics::Pipeline> _grid_pipeline{};
   rc::Strong<graphics::Pipeline> _mesh_pipeline{};
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _sky_view_pipeline{};
-  rc::Strong<graphics::Compute_pipeline> _direct_radiance_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _direct_irradiance_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _rt_grid_entity_binning_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _radiance_pipeline{};
-  rc::Strong<graphics::Compute_pipeline> _indirect_radiance_pipeline{};
-  rc::Strong<graphics::Compute_pipeline> _indirect_irradiance_pipeline{};
   rc::Strong<graphics::Pipeline> _composite_pipeline{};
   std::optional<graphics::Image_format> _composite_pipeline_color_format{};
   rc::Strong<graphics::Image> _transmittance_lut{};
