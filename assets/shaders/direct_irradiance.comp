@@ -8,59 +8,52 @@
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
-// Sun and sky are handled asymmetrically: the sun's solid angle is tiny, so
-// occlusion is close to binary and a single fresh sample per frame already
-// responds instantly -- no reservoir, one ray. Sky spans the whole
-// hemisphere, so it gets a temporal reservoir (dir.xy, W, M packed into
-// one rgba16f image, zero-initialized on creation) combined with a fresh
-// candidate every frame, still one ray -- its cached direction is not
-// re-traced (see the combine below for why that's safe without a separate
-// visibility flag). Final shading sums both lights' contributions, since
-// that's physically what direct irradiance from two sources is -- no
-// picking between them needed. Spatial reuse is not implemented for this
-// yet -- temporal only.
+// Pass 1 of 2 (direct_irradiance_shade.comp is pass 2). M fresh sun-cone
+// candidates per pixel, combined via RIS into one selected sample -- no
+// cross-pixel/cross-frame reuse yet, just this pixel's own M draws. Every
+// candidate is drawn from the identical cone distribution (same fixed
+// global sun_direction), so the balance heuristic's m_i = p_i(x)/sum(p_j(x))
+// collapses to a plain 1/M, and p_gen(x_i) = 1/sun_solid_angle is the same
+// constant for all of them -- see the loop below for where that shows up.
+// p_hat(x_i) is the true (visibility-inclusive) integrand, so every
+// candidate needs its own trace: M rays per pixel here (M is a constant
+// below, currently 2), not one.
+//
+// Stores the *chosen* sample's square coords (u,v) packed into a
+// r32_uint (12 bits per axis, 8 spare/reserved) -- oct-encoding a 3D
+// direction would waste nearly all its resolution outside the sun's tiny
+// cone, whereas (u,v) maps directly onto it. Also stores the reservoir's
+// final unbiased weight W_y into a separate r16_sfloat texture. No
+// visibility flag is stored anywhere: if the chosen candidate was
+// occluded, p_hat(chosen) = 0, which forces W_y = 0 by construction (see
+// the guard below) -- pass 2 can multiply by W_y blindly and get the
+// right answer (zero) without needing to know why.
+//
+// Written and read via storage_uimages/storage_images (imageLoad/
+// imageStore), not a sampled descriptor -- there's no uint-sampled
+// bindless array in this codebase (only sampler2D), and imageLoad was
+// conclusively cleared as a hang suspect earlier this session (the real
+// cause was an unrelated divergent-branch pattern), so there's no reason
+// to avoid it here.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
   layout(offset = 8) uint16_t normal_texture;
   layout(offset = 10) uint16_t depth_texture;
-  layout(offset = 12) uint16_t direct_irradiance_image;
-  layout(offset = 14) uint16_t transmittance_texture;
-  layout(offset = 16) uint16_t sky_view_lut;
+  layout(offset = 12) uint16_t transmittance_texture;
+  layout(offset = 14) uint16_t sample_image;
+  layout(offset = 16) uint16_t weight_image;
   layout(offset = 24) Rt_block_grid rt_block_grid;
   layout(offset = 32) Rt_entities entities;
   layout(offset = 40) Rt_entity_grid entity_grid;
   layout(offset = 48) Rt_entity_nodes entity_nodes;
   layout(offset = 56) uint seed;
-  layout(offset = 60) uint history_valid;
-  layout(offset = 64) uint16_t reservoir_read;
-  layout(offset = 66) uint16_t reservoir_write;
-  layout(offset = 68) uint16_t motion_vector_texture;
-  layout(offset = 70) uint16_t previous_depth_texture;
-  layout(offset = 72) uint16_t previous_normal_texture;
 } push_constants;
 
-// Never let a non-finite value (from some untested edge case) escape into
-// the persistent reservoir, where it could poison every future frame that
-// reads it back -- clamp to a safe fallback instead.
-float sanitize(float x, float fallback) {
-  return (isnan(x) || isinf(x)) ? fallback : x;
-}
-
-vec2 sanitize(vec2 x, vec2 fallback) {
-  return vec2(sanitize(x.x, fallback.x), sanitize(x.y, fallback.y));
-}
-
-vec3 sanitize(vec3 x, vec3 fallback) {
-  return vec3(
-    sanitize(x.x, fallback.x),
-    sanitize(x.y, fallback.y),
-    sanitize(x.z, fallback.z));
-}
+const int M = 2;
 
 void main() {
   const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
-  const ivec2 size =
-    imageSize(storage_images[push_constants.direct_irradiance_image]);
+  const ivec2 size = imageSize(storage_uimages[push_constants.sample_image]);
   if (pixel.x >= size.x || pixel.y >= size.y) {
     return;
   }
@@ -83,11 +76,6 @@ void main() {
     texelFetch(
       sampled_images[push_constants.normal_texture], pixel, 0).rg);
   const vec3 sun_direction = push_constants.scene.sun_direction;
-
-  Random random;
-  const uint pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
-  random.state = lowbias32(pixel_index ^ lowbias32(push_constants.seed));
-
   const vec3 sun_transmittance =
     transmittance_along_ray(
       push_constants.transmittance_texture,
@@ -95,157 +83,45 @@ void main() {
       sun_direction);
   const vec3 ray_origin = offset_ray_origin(world_position, n);
 
-  // Sun: one fresh sample, plain unbiased NEE, no reservoir.
-  const vec3 sun_dir =
-    make_basis(sun_direction) *
-    square_to_cone(
-      vec2(random_float(random), random_float(random)),
-      cos_sun_angular_radius);
-  const bool sun_occluded = trace_ray(
-    push_constants.rt_block_grid,
-    push_constants.entities,
-    push_constants.entity_grid,
-    push_constants.entity_nodes,
-    ray_origin,
-    sun_dir,
-    true);
-  const vec3 f_true_sun =
-    eval_f_true_sun(sun_dir, n, sun_transmittance, push_constants.scene) *
-    (sun_occluded ? 0.0 : 1.0);
-  // pdf = 1/sun_solid_angle, so f_true/pdf = f_true*sun_solid_angle.
-  const vec3 E_sun = f_true_sun * sun_solid_angle;
+  Random random;
+  const uint pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
+  random.state = lowbias32(pixel_index ^ lowbias32(push_constants.seed));
 
-  // This frame's fresh sky candidate.
-  const vec3 sky_new_dir =
-    make_basis(n) *
-    square_to_cosine_hemisphere(
-      vec2(random_float(random), random_float(random)));
-  const bool sky_new_occluded = trace_ray(
-    push_constants.rt_block_grid,
-    push_constants.entities,
-    push_constants.entity_grid,
-    push_constants.entity_nodes,
-    ray_origin,
-    sky_new_dir,
-    true);
-  const vec3 f_true_sky_new =
-    eval_f_true_sky(
-      sky_new_dir, n, push_constants.scene, push_constants.sky_view_lut) *
-    (sky_new_occluded ? 0.0 : 1.0);
-  const float sky_new_cos_theta = max(dot(n, sky_new_dir), 0.0);
-  // pdf = cos_theta/pi, so f_true/pdf = f_true*pi/cos_theta (the cos_theta
-  // baked into f_true cancels the one here, but we still need it to divide).
-  const float w_sky_new =
-    sky_new_cos_theta > 0.0
-      ? luminance(f_true_sky_new) * pi / sky_new_cos_theta
-      : 0.0;
-
-  // Reproject to find where this surface point was last frame. Validity
-  // (depth/normal match) is checked via continuous, bilinearly-filtered
-  // texture() sampling -- the same access pattern main's proven
-  // indirect_irradiance.comp used for this exact reprojection check.
-  // history_pixel (a separate, nearest-pixel lookup) is only used
-  // afterward, to index the reservoir image itself: that data is a
-  // discrete direction that isn't meaningfully bilinear-filterable, so it
-  // still needs an exact integer texel, unlike the validity check above.
-  bool use_history = push_constants.history_valid != 0u;
-  ivec2 history_pixel = pixel;
-  if (use_history) {
-    const vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
-    const vec3 motion_vector_and_previous_depth =
-      texelFetch(
-        sampled_images[push_constants.motion_vector_texture], pixel, 0).rgb;
-    const vec2 previous_uv = uv + motion_vector_and_previous_depth.xy;
-    use_history =
-      all(greaterThanEqual(previous_uv, vec2(0.0))) &&
-      all(lessThanEqual(previous_uv, vec2(1.0)));
-    if (use_history) {
-      const float history_depth =
-        texture(
-          sampled_images[push_constants.previous_depth_texture],
-          previous_uv).r;
-      if (history_depth == 0.0) {
-        use_history = false;
-      } else {
-        history_pixel = clamp(
-          ivec2(previous_uv * vec2(size)), ivec2(0), size - ivec2(1));
-        const float zn = push_constants.scene.z_near;
-        const float previous_linear_depth =
-          zn / motion_vector_and_previous_depth.z;
-        const float history_linear_depth = zn / history_depth;
-        const float depth_weight =
-          exp(-4.0 * abs(previous_linear_depth - history_linear_depth));
-        const vec3 history_normal =
-          oct_decode(
-            texture(
-              sampled_images[push_constants.previous_normal_texture],
-              previous_uv).rg);
-        const float normal_weight =
-          pow(max(dot(n, history_normal), 0.0), 32.0);
-        use_history = depth_weight * normal_weight > 0.5;
-      }
-    }
+  vec2 chosen_uv = vec2(0.0);
+  vec3 chosen_f = vec3(0.0);
+  float w_sum = 0.0;
+  for (int i = 0; i < M; ++i) {
+    const vec2 uv = vec2(random_float(random), random_float(random));
+    const vec3 dir =
+      make_basis(sun_direction) * square_to_cone(uv, cos_sun_angular_radius);
+    const bool occluded = trace_ray(
+      push_constants.rt_block_grid,
+      push_constants.entities,
+      push_constants.entity_grid,
+      push_constants.entity_nodes,
+      ray_origin,
+      dir,
+      true);
+    const vec3 f =
+      eval_f_true_sun(dir, n, sun_transmittance, push_constants.scene) *
+      (occluded ? 0.0 : 1.0);
+    const float p_hat = luminance(f);
+    // pdf = 1/sun_solid_angle, so w_i = p_hat/p_gen = p_hat*sun_solid_angle.
+    const float w = (1.0 / M) * p_hat * sun_solid_angle;
+    w_sum += w;
+    const bool select = random_float(random) * w_sum < w;
+    chosen_uv = select ? uv : chosen_uv;
+    chosen_f = select ? f : chosen_f;
   }
-
-  // Combine the sky candidate with the reprojected sky reservoir. Retraces
-  // the cached direction's visibility every frame (an extra ray whenever
-  // history is valid) instead of trusting a stale cached weight -- keeps a
-  // moving shadow from leaving a stale-lit cached direction for a few
-  // frames the way an untraced cache would.
-  // Unconditional (uniform control flow), not gated behind `if (use_history)`
-  // -- bisection proved a value computed inside that divergent branch,
-  // conditionally written into chosen_sky_dir/chosen_f_true_sky and read
-  // back after the branch reconverges, reliably hung the GPU (Xid 109)
-  // on this driver, regardless of which direction or texture was involved.
-  // Root cause wasn't pinned down further than "divergent branch + deferred
-  // reassignment"; sidestepping the divergence entirely (always trace this
-  // path, gate its *weight* to zero instead of skipping it) avoids the
-  // pattern outright. Costs one wasted texelFetch+sample+ray when history
-  // is invalid, which is cheap.
-  const float history_gate = use_history ? 1.0 : 0.0;
-  const vec4 prev = texelFetch(
-    sampled_images[push_constants.reservoir_read], history_pixel, 0);
-  const vec3 prev_sky_dir = oct_decode(prev.xy);
-  const float prev_sky_W = max(prev.z, 0.0) * history_gate;
-  const float prev_sky_M = clamp(prev.w, 0.0, max_temporal_M) * history_gate;
-  const bool prev_sky_occluded = trace_ray(
-    push_constants.rt_block_grid,
-    push_constants.entities,
-    push_constants.entity_grid,
-    push_constants.entity_nodes,
-    ray_origin,
-    prev_sky_dir,
-    true);
-  const vec3 f_true_prev_sky =
-    eval_f_true_sky(
-      prev_sky_dir, n, push_constants.scene, push_constants.sky_view_lut) *
-    (prev_sky_occluded ? 0.0 : 1.0);
-  const float p_hat_prev_sky = luminance(f_true_prev_sky);
-  const float w_prev_sky = p_hat_prev_sky * prev_sky_W * prev_sky_M;
-
-  vec3 chosen_sky_dir = sky_new_dir;
-  vec3 chosen_f_true_sky = f_true_sky_new;
-  float sky_w_sum = w_sky_new + w_prev_sky;
-  float sky_M = (w_prev_sky > 0.0 ? prev_sky_M : 0.0) + 1.0;
-  const bool select_prev =
-    sky_w_sum > 0.0 && random_float(random) * sky_w_sum < w_prev_sky;
-  chosen_sky_dir = select_prev ? prev_sky_dir : chosen_sky_dir;
-  chosen_f_true_sky = select_prev ? f_true_prev_sky : chosen_f_true_sky;
-  const float p_hat_chosen_sky = luminance(chosen_f_true_sky);
-  const float sky_W =
-    p_hat_chosen_sky > 0.0 ? sky_w_sum / (sky_M * p_hat_chosen_sky) : 0.0;
-
-  const vec2 stored_dir = sanitize(oct_encode(chosen_sky_dir), vec2(0.0));
-  const float stored_W = sanitize(sky_W, 0.0);
-  const float stored_M = sanitize(sky_M, 0.0);
+  const float chosen_p_hat = luminance(chosen_f);
+  const float W_y = chosen_p_hat > 0.0 ? w_sum / chosen_p_hat : 0.0;
+  const uint u_bits = uint(clamp(chosen_uv.x, 0.0, 1.0) * 4095.0 + 0.5);
+  const uint v_bits = uint(clamp(chosen_uv.y, 0.0, 1.0) * 4095.0 + 0.5);
+  const uint packed = u_bits | (v_bits << 12);
   imageStore(
-    storage_images[push_constants.reservoir_write],
-    pixel,
-    vec4(stored_dir, stored_W, stored_M));
-
-  const vec3 E = sanitize(E_sun + chosen_f_true_sky * sky_W, vec3(0.0));
+    storage_uimages[push_constants.sample_image], pixel, uvec4(packed));
   imageStore(
-    storage_images[push_constants.direct_irradiance_image],
+    storage_images[push_constants.weight_image],
     pixel,
-    vec4(E, 1.0));
+    vec4(sanitize(W_y, 0.0)));
 }

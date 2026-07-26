@@ -272,6 +272,8 @@ public:
           "./assets/shaders/atmosphere/sky_view.comp.spv")},
         _direct_irradiance_compute_shader{
           graphics::load_shader("./assets/shaders/direct_irradiance.comp.spv")},
+        _direct_irradiance_shade_compute_shader{graphics::load_shader(
+          "./assets/shaders/direct_irradiance_shade.comp.spv")},
         _rt_grid_entity_binning_compute_shader{graphics::load_shader(
           "./assets/shaders/bin_rt_grid_entities.comp.spv")},
         _radiance_compute_shader{
@@ -283,6 +285,8 @@ public:
           {.shader = &_sky_view_compute_shader})},
         _direct_irradiance_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_direct_irradiance_compute_shader})},
+        _direct_irradiance_shade_pipeline{_graphics.create_compute_pipeline(
+          {.shader = &_direct_irradiance_shade_compute_shader})},
         _rt_grid_entity_binning_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_rt_grid_entity_binning_compute_shader})},
         _radiance_pipeline{_graphics.create_compute_pipeline(
@@ -421,7 +425,7 @@ private:
       framebuffer_extent);
     get_radiance_render_target(work_recorder, framebuffer_extent);
     get_direct_irradiance_render_target(work_recorder, framebuffer_extent);
-    get_direct_irradiance_reservoir_render_targets(
+    get_direct_irradiance_sample_render_target(
       work_recorder, framebuffer_extent);
     get_color_render_target(
       work_recorder,
@@ -748,24 +752,10 @@ private:
       8,
       {_normal_render_target_descriptors[_frame_number % 2],
        _depth_render_target_descriptors[_frame_number % 2],
-       _direct_irradiance_render_target_storage_descriptor,
        _transmittance_lut_sampled_descriptor,
-       _sky_view_lut_sampled_descriptor});
+       _direct_irradiance_sample_storage_descriptor,
+       _direct_irradiance_weight_storage_descriptor});
     work_recorder.push_data(56, std::as_bytes(std::span{&_frame_number, 1}));
-    // History is only valid if last frame's pass wrote the other reservoir
-    // slot (e.g. not true right after the reservoir images were (re)created).
-    auto const history_valid = u32{
-      _last_direct_irradiance_reservoir_frame &&
-      *_last_direct_irradiance_reservoir_frame + 1 == _frame_number};
-    work_recorder.push_data(60, std::as_bytes(std::span{&history_valid, 1}));
-    work_recorder.push_descriptors(
-      64,
-      {_direct_irradiance_reservoir_sampled_descriptors[(_frame_number + 1) % 2],
-       _direct_irradiance_reservoir_descriptors[_frame_number % 2],
-       _motion_vector_render_target_descriptor,
-       _depth_render_target_descriptors[(_frame_number + 1) % 2],
-       _normal_render_target_descriptors[(_frame_number + 1) % 2]});
-    _last_direct_irradiance_reservoir_frame = _frame_number;
     auto const frame = _frame_number % max_frames_in_flight;
     auto const layout =
       make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
@@ -779,9 +769,37 @@ private:
     auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
     auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
     work_recorder.dispatch(group_count_x, group_count_y, 1);
-    // Covers this frame's reservoir writes (read back by this same pass next
-    // frame) as well as direct_irradiance_render_target's sampled read in
-    // record_radiance_pass.
+    // sample_image's read (via imageLoad, not a sampled descriptor -- there
+    // is no uint-sampled bindless array) in the shade pass below.
+    work_recorder.barrier(
+      compute_shader_storage_write_scope, compute_shader_storage_read_scope);
+    record_direct_irradiance_shade_pass(
+      work_recorder, framebuffer_size, scene_uniform_offset);
+  }
+
+  void record_direct_irradiance_shade_pass(
+    graphics::Work_recorder &work_recorder,
+    math::ivec2 framebuffer_size,
+    std::size_t scene_uniform_offset) {
+    ZoneScoped;
+    // Called only from record_direct_irradiance_pass, right after it
+    // dispatches and barriers -- camera/grid_mesh/sun were already checked
+    // further up the call chain.
+    work_recorder.bind_compute_pipeline(_direct_irradiance_shade_pipeline);
+    work_recorder
+      .push_buffer_reference(0, _scene_uniform_buffer, scene_uniform_offset);
+    work_recorder.push_descriptors(
+      8,
+      {_normal_render_target_descriptors[_frame_number % 2],
+       _depth_render_target_descriptors[_frame_number % 2],
+       _transmittance_lut_sampled_descriptor,
+       _direct_irradiance_sample_storage_descriptor,
+       _direct_irradiance_weight_storage_descriptor,
+       _direct_irradiance_render_target_storage_descriptor});
+    auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
+    auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
+    work_recorder.dispatch(group_count_x, group_count_y, 1);
+    // direct_irradiance_render_target's sampled read in record_radiance_pass.
     work_recorder.barrier(
       compute_shader_storage_write_scope,
       compute_shader_sampled_read_scope | compute_shader_storage_read_scope);
@@ -1197,61 +1215,59 @@ private:
     }
   }
 
-  // Per-pixel temporal reservoir for direct_irradiance.comp's sky sample
-  // (the sun doesn't use one -- see there). Ping-pong pair:
-  // [_frame_number % 2] is written this frame, the other holds last
-  // frame's reservoir. Written via the storage descriptor (imageStore);
-  // read back next frame via a *sampled* descriptor with texelFetch
-  // instead of imageLoad -- imageLoad is otherwise unused anywhere in this
-  // codebase (grep confirms it), whereas texelFetch on a sampled image at
-  // a data-dependent coordinate is exactly what previous_depth_texture/
-  // previous_normal_texture already do successfully, so this sidesteps an
-  // otherwise-completely-untested code path rather than trusting it.
-  void get_direct_irradiance_reservoir_render_targets(
+  // Per-pixel candidate for direct_irradiance.comp's sun sample (sky is
+  // handled by a separate surface-patch-based GI system, not this). Single
+  // image, no ping-pong, no persistence across frames -- pass 1 writes
+  // every in-bounds, on-geometry pixel unconditionally every frame, and
+  // pass 2 (direct_irradiance_shade.comp) independently checks depth==0
+  // and never reads a texel pass 1 didn't just write, so no clear-on-
+  // creation is needed either. r32_uint, bit-packed (see
+  // direct_irradiance.comp's header); accessed via imageLoad/imageStore
+  // through storage_uimages on both ends, not a sampled descriptor -- there
+  // is no uint-sampled bindless array in this codebase.
+  void get_direct_irradiance_sample_render_target(
     graphics::Work_recorder &work_recorder, math::ivec3 extent) {
-    auto const create_images = !_direct_irradiance_reservoir_targets[0] ||
-      _direct_irradiance_reservoir_targets[0]->get_extent() != extent;
-    if (create_images) {
-      _last_direct_irradiance_reservoir_frame.reset();
-      for (auto i = std::size_t{}; i != 2; ++i) {
-        _direct_irradiance_reservoir_targets[i] = _graphics.create_image({
-          .dimensionality = 2,
-          .format = graphics::Image_format::r16g16b16a16_sfloat,
-          .extent = extent,
-          .mip_level_count = 1,
-          .array_layer_count = 1,
-          .usage = graphics::Image_usage_flag_bits::storage |
-                   graphics::Image_usage_flag_bits::sampled |
-                   graphics::Image_usage_flag_bits::transfer_dst,
-        });
-        work_recorder.transition_image_layout(
-          {},
-          transfer_write_scope,
-          graphics::Image_layout::undefined,
-          graphics::Image_layout::general,
-          _direct_irradiance_reservoir_targets[i]);
-        // Explicitly zeroed rather than left as garbage: a texel that's
-        // never been written (e.g. reprojection briefly lands somewhere
-        // stale right after these are (re)created) must decode to a
-        // harmless empty slot (W=0, M=0), not whatever bit pattern was
-        // already in memory -- oct_decode ends with normalize(), and
-        // normalizing garbage can hand a NaN direction to a texture
-        // sample, which is undefined behavior.
-        work_recorder.clear_color_image(
-          _direct_irradiance_reservoir_targets[i],
-          graphics::Image_layout::general,
-          math::vec4{0.0f, 0.0f, 0.0f, 0.0f});
-        _direct_irradiance_reservoir_descriptors[i] =
-          _graphics.create_storage_image_descriptor(
-            _direct_irradiance_reservoir_targets[i]);
-        _direct_irradiance_reservoir_sampled_descriptors[i] =
-          _graphics.create_sampled_image_descriptor(
-            _direct_irradiance_reservoir_targets[i], graphics::Sampler::nearest);
-      }
-      work_recorder.barrier(
-        transfer_write_scope,
-        compute_shader_sampled_read_scope |
-          compute_shader_storage_write_scope);
+    auto const create_image = !_direct_irradiance_sample_target ||
+      _direct_irradiance_sample_target->get_extent() != extent;
+    if (create_image) {
+      _direct_irradiance_sample_target = _graphics.create_image({
+        .dimensionality = 2,
+        .format = graphics::Image_format::r32_uint,
+        .extent = extent,
+        .mip_level_count = 1,
+        .array_layer_count = 1,
+        .usage = graphics::Image_usage_flag_bits::storage,
+      });
+      work_recorder.transition_image_layout(
+        {},
+        compute_shader_storage_write_scope,
+        graphics::Image_layout::undefined,
+        graphics::Image_layout::general,
+        _direct_irradiance_sample_target);
+      _direct_irradiance_sample_storage_descriptor =
+        _graphics.create_storage_image_descriptor(
+          _direct_irradiance_sample_target);
+      // Reservoir's unbiased weight W_y for the chosen candidate (see
+      // direct_irradiance.comp) -- r16_sfloat is plenty; W_y ends up
+      // O(sun_solid_angle) regardless of the sun's own huge radiance
+      // magnitude, since that magnitude cancels out of the ratio.
+      _direct_irradiance_weight_target = _graphics.create_image({
+        .dimensionality = 2,
+        .format = graphics::Image_format::r16_sfloat,
+        .extent = extent,
+        .mip_level_count = 1,
+        .array_layer_count = 1,
+        .usage = graphics::Image_usage_flag_bits::storage,
+      });
+      work_recorder.transition_image_layout(
+        {},
+        compute_shader_storage_write_scope,
+        graphics::Image_layout::undefined,
+        graphics::Image_layout::general,
+        _direct_irradiance_weight_target);
+      _direct_irradiance_weight_storage_descriptor =
+        _graphics.create_storage_image_descriptor(
+          _direct_irradiance_weight_target);
     }
   }
 
@@ -1587,13 +1603,12 @@ private:
   rc::Strong<graphics::Descriptor> _direct_irradiance_render_target_descriptor{};
   rc::Strong<graphics::Descriptor>
     _direct_irradiance_render_target_storage_descriptor{};
-  std::array<rc::Strong<graphics::Image>, 2>
-    _direct_irradiance_reservoir_targets{};
-  std::array<rc::Strong<graphics::Descriptor>, 2>
-    _direct_irradiance_reservoir_descriptors{};
-  std::array<rc::Strong<graphics::Descriptor>, 2>
-    _direct_irradiance_reservoir_sampled_descriptors{};
-  std::optional<u32> _last_direct_irradiance_reservoir_frame{};
+  rc::Strong<graphics::Image> _direct_irradiance_sample_target{};
+  rc::Strong<graphics::Descriptor>
+    _direct_irradiance_sample_storage_descriptor{};
+  rc::Strong<graphics::Image> _direct_irradiance_weight_target{};
+  rc::Strong<graphics::Descriptor>
+    _direct_irradiance_weight_storage_descriptor{};
   std::array<rc::Strong<graphics::Descriptor>, blue_noise_texture_count>
     _blue_noise_texture_descriptors{};
   rc::Strong<graphics::Image> _crosshair_mask_render_target{};
@@ -1608,6 +1623,7 @@ private:
   graphics::Shader _composite_fragment_shader;
   graphics::Shader _sky_view_compute_shader;
   graphics::Shader _direct_irradiance_compute_shader;
+  graphics::Shader _direct_irradiance_shade_compute_shader;
   graphics::Shader _rt_grid_entity_binning_compute_shader;
   graphics::Shader _radiance_compute_shader;
   rc::Strong<graphics::Pipeline> _grid_pipeline{};
@@ -1615,6 +1631,7 @@ private:
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _sky_view_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _direct_irradiance_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _direct_irradiance_shade_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _rt_grid_entity_binning_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _radiance_pipeline{};
   rc::Strong<graphics::Pipeline> _composite_pipeline{};

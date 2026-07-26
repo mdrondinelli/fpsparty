@@ -1,0 +1,74 @@
+#version 450
+
+#include "direct_irradiance_common.glsl"
+#include "octahedral.glsl"
+#include "sampling.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// Pass 2 of 2: unpacks pass 1's (direct_irradiance.comp) chosen candidate,
+// reconstructs the sun direction from its stored (u,v) square coords, and
+// shades: E = f_true(dir) * W_y. No visibility flag is read here -- if the
+// chosen candidate was occluded, pass 1 already forced W_y to exactly 0,
+// so multiplying by it gives the right answer regardless of what f_true
+// evaluates to on this end.
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) Scene scene;
+  layout(offset = 8) uint16_t normal_texture;
+  layout(offset = 10) uint16_t depth_texture;
+  layout(offset = 12) uint16_t transmittance_texture;
+  layout(offset = 14) uint16_t sample_image;
+  layout(offset = 16) uint16_t weight_image;
+  layout(offset = 18) uint16_t direct_irradiance_image;
+} push_constants;
+
+void main() {
+  const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  const ivec2 size =
+    imageSize(storage_images[push_constants.direct_irradiance_image]);
+  if (pixel.x >= size.x || pixel.y >= size.y) {
+    return;
+  }
+  const float depth =
+    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
+  if (depth == 0.0) {
+    return;
+  }
+  const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
+  const vec3 view_ray = vec3(
+    -ndc.x * push_constants.scene.zoom.x,
+    -ndc.y * push_constants.scene.zoom.y,
+    1.0);
+  const vec3 camera_position = push_constants.scene.camera_basis[3].xyz;
+  const float view_z = push_constants.scene.z_near / depth;
+  const vec3 world_position =
+    camera_position +
+    mat3(push_constants.scene.camera_basis) * (view_ray * view_z);
+  const vec3 n = oct_decode(
+    texelFetch(
+      sampled_images[push_constants.normal_texture], pixel, 0).rg);
+  const vec3 sun_direction = push_constants.scene.sun_direction;
+  const vec3 sun_transmittance =
+    transmittance_along_ray(
+      push_constants.transmittance_texture,
+      vec3(0.0, r_ground + world_position.y, 0.0),
+      sun_direction);
+
+  const uint packed =
+    imageLoad(storage_uimages[push_constants.sample_image], pixel).r;
+  const vec2 uv = vec2(
+    float(packed & 0xFFFu) / 4095.0,
+    float((packed >> 12) & 0xFFFu) / 4095.0);
+  const float W_y =
+    imageLoad(storage_images[push_constants.weight_image], pixel).r;
+
+  const vec3 dir =
+    make_basis(sun_direction) * square_to_cone(uv, cos_sun_angular_radius);
+  const vec3 f_true =
+    eval_f_true_sun(dir, n, sun_transmittance, push_constants.scene);
+  const vec3 E = sanitize(f_true * W_y, vec3(0.0));
+  imageStore(
+    storage_images[push_constants.direct_irradiance_image],
+    pixel,
+    vec4(E, 1.0));
+}
