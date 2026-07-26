@@ -189,7 +189,14 @@ bool trace_ray(
     }
     if (trace_entities) {
       int node_index = entity_grid.heads[cell_index];
-      while (node_index != -1) {
+      // Bounded by entities.count (not just `!= -1`): a valid, acyclic list
+      // can't have more distinct nodes than there are entities, so this
+      // guarantees termination even if a corrupted `next` pointer ever
+      // formed a cycle -- an unbounded loop here previously showed up as
+      // an Nvidia Xid 109 (context switch timeout / GPU hang).
+      for (uint node_count = 0u;
+          node_index != -1 && node_count < entities.count;
+          ++node_count) {
         const Rt_entity_node node = entity_nodes.nodes[node_index];
         const Rt_grid_entity entity = entities.entities[node.entity_index];
         const vec3 model_origin = vec3(

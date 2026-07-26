@@ -1,14 +1,24 @@
 #version 450
 
+#include "direct_irradiance_common.glsl"
 #include "octahedral.glsl"
 #include "random.glsl"
 #include "rt.glsl"
 #include "sampling.glsl"
-#include "scene.glsl"
-#include "atmosphere/atmosphere.glsl"
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
+// Sun and sky are handled asymmetrically: the sun's solid angle is tiny, so
+// occlusion is close to binary and a single fresh sample per frame already
+// responds instantly -- no reservoir, one ray. Sky spans the whole
+// hemisphere, so it gets a temporal reservoir (dir.xy, W, M packed into
+// one rgba16f image, zero-initialized on creation) combined with a fresh
+// candidate every frame, still one ray -- its cached direction is not
+// re-traced (see the combine below for why that's safe without a separate
+// visibility flag). Final shading sums both lights' contributions, since
+// that's physically what direct irradiance from two sources is -- no
+// picking between them needed. Spatial reuse is not implemented for this
+// yet -- temporal only.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
   layout(offset = 8) uint16_t normal_texture;
@@ -21,14 +31,30 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 40) Rt_entity_grid entity_grid;
   layout(offset = 48) Rt_entity_nodes entity_nodes;
   layout(offset = 56) uint seed;
+  layout(offset = 60) uint history_valid;
+  layout(offset = 64) uint16_t reservoir_read;
+  layout(offset = 66) uint16_t reservoir_write;
+  layout(offset = 68) uint16_t motion_vector_texture;
+  layout(offset = 70) uint16_t previous_depth_texture;
+  layout(offset = 72) uint16_t previous_normal_texture;
 } push_constants;
 
-const float sun_angular_diameter = 0.0093;
-const float sun_angular_radius = sun_angular_diameter / 2.0;
-const float cos_sun_angular_radius = cos(sun_angular_radius);
+// Never let a non-finite value (from some untested edge case) escape into
+// the persistent reservoir, where it could poison every future frame that
+// reads it back -- clamp to a safe fallback instead.
+float sanitize(float x, float fallback) {
+  return (isnan(x) || isinf(x)) ? fallback : x;
+}
 
-float luminance(vec3 color) {
-  return dot(color, vec3(0.2126, 0.7152, 0.0722));
+vec2 sanitize(vec2 x, vec2 fallback) {
+  return vec2(sanitize(x.x, fallback.x), sanitize(x.y, fallback.y));
+}
+
+vec3 sanitize(vec3 x, vec3 fallback) {
+  return vec3(
+    sanitize(x.x, fallback.x),
+    sanitize(x.y, fallback.y),
+    sanitize(x.z, fallback.z));
 }
 
 void main() {
@@ -62,69 +88,162 @@ void main() {
   const uint pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
   random.state = lowbias32(pixel_index ^ lowbias32(push_constants.seed));
 
-  // scene.sun_irradiance is E_top: solar irradiance integrated over the
-  // sun's disk, i.e. what a surface facing the sun dead-on would receive.
   const vec3 sun_transmittance =
     transmittance_along_ray(
       push_constants.transmittance_texture,
       vec3(0.0, r_ground + world_position.y, 0.0),
       sun_direction);
-  const vec3 E_sun_est =
-    push_constants.scene.sun_irradiance * sun_transmittance *
-    max(dot(n, sun_direction), 0.0);
-  // Pre-integrated per frame by sky_irradiance.comp: no per-pixel MC noise.
-  const vec3 E_sky_est =
-    sample_sky_irradiance(push_constants.scene, n);
+  const vec3 ray_origin = offset_ray_origin(world_position, n);
 
-  // Pick sun or sky as the single light to sample this pixel, with
-  // probability proportional to each one's cheap unshadowed irradiance
-  // estimate (standard importance-sampled discrete light selection).
-  const float l_sun_est = luminance(E_sun_est);
-  const float l_sky_est = luminance(E_sky_est);
-  const float l_total = l_sun_est + l_sky_est;
+  // Sun: one fresh sample, plain unbiased NEE, no reservoir.
+  const vec3 sun_dir =
+    make_basis(sun_direction) *
+    square_to_cone(
+      vec2(random_float(random), random_float(random)),
+      cos_sun_angular_radius);
+  const bool sun_occluded = trace_ray(
+    push_constants.rt_block_grid,
+    push_constants.entities,
+    push_constants.entity_grid,
+    push_constants.entity_nodes,
+    ray_origin,
+    sun_dir,
+    true);
+  const vec3 f_true_sun =
+    eval_f_true_sun(sun_dir, n, sun_transmittance, push_constants.scene) *
+    (sun_occluded ? 0.0 : 1.0);
+  // pdf = 1/sun_solid_angle, so f_true/pdf = f_true*sun_solid_angle.
+  const vec3 E_sun = f_true_sun * sun_solid_angle;
 
-  vec3 E = vec3(0.0);
-  if (l_total > 0.0) {
-    const float pmf_sun = l_sun_est / l_total;
-    const bool selected_sun = random_float(random) < pmf_sun;
-    vec3 l;
-    if (selected_sun) {
-      l = make_basis(sun_direction) *
-        square_to_cone(
-          vec2(random_float(random), random_float(random)),
-          cos_sun_angular_radius);
-      const vec3 f = push_constants.scene.sun_irradiance * sun_transmittance *
-        max(dot(n, l), 0.0);
-      // f_true(l) = L_sun * cos_theta(l) with L_sun = E_top*T/sun_solid_angle,
-      // and pdf = 1/sun_solid_angle, so f_true/pdf = f_true*sun_solid_angle
-      // = E_top*T*cos_theta(l) = f: sun_solid_angle cancels out entirely.
-      E = f / pmf_sun;
-    } else {
-      l = make_basis(n) *
-        square_to_cosine_hemisphere(
-          vec2(random_float(random), random_float(random)));
-      const vec3 L_sky =
-        FPSPARTY_SAMPLE(
-          push_constants.sky_view_lut,
-          pack_sky_view_lut_params(
-            longitude(l),
-            push_constants.scene.camera_basis[3][1],
-            zenith(l))).rgb;
-      const float pmf_sky = 1.0 - pmf_sun;
-      // f / (pmf * pdf), pdf = cos_theta / pi; the cos_theta in f cancels.
-      E = L_sky * (pi / pmf_sky);
+  // This frame's fresh sky candidate.
+  const vec3 sky_new_dir =
+    make_basis(n) *
+    square_to_cosine_hemisphere(
+      vec2(random_float(random), random_float(random)));
+  const bool sky_new_occluded = trace_ray(
+    push_constants.rt_block_grid,
+    push_constants.entities,
+    push_constants.entity_grid,
+    push_constants.entity_nodes,
+    ray_origin,
+    sky_new_dir,
+    true);
+  const vec3 f_true_sky_new =
+    eval_f_true_sky(
+      sky_new_dir, n, push_constants.scene, push_constants.sky_view_lut) *
+    (sky_new_occluded ? 0.0 : 1.0);
+  const float sky_new_cos_theta = max(dot(n, sky_new_dir), 0.0);
+  // pdf = cos_theta/pi, so f_true/pdf = f_true*pi/cos_theta (the cos_theta
+  // baked into f_true cancels the one here, but we still need it to divide).
+  const float w_sky_new =
+    sky_new_cos_theta > 0.0
+      ? luminance(f_true_sky_new) * pi / sky_new_cos_theta
+      : 0.0;
+
+  // Reproject to find where this surface point was last frame. Validity
+  // (depth/normal match) is checked via continuous, bilinearly-filtered
+  // texture() sampling -- the same access pattern main's proven
+  // indirect_irradiance.comp used for this exact reprojection check.
+  // history_pixel (a separate, nearest-pixel lookup) is only used
+  // afterward, to index the reservoir image itself: that data is a
+  // discrete direction that isn't meaningfully bilinear-filterable, so it
+  // still needs an exact integer texel, unlike the validity check above.
+  bool use_history = push_constants.history_valid != 0u;
+  ivec2 history_pixel = pixel;
+  if (use_history) {
+    const vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
+    const vec3 motion_vector_and_previous_depth =
+      texelFetch(
+        sampled_images[push_constants.motion_vector_texture], pixel, 0).rgb;
+    const vec2 previous_uv = uv + motion_vector_and_previous_depth.xy;
+    use_history =
+      all(greaterThanEqual(previous_uv, vec2(0.0))) &&
+      all(lessThanEqual(previous_uv, vec2(1.0)));
+    if (use_history) {
+      const float history_depth =
+        texture(
+          sampled_images[push_constants.previous_depth_texture],
+          previous_uv).r;
+      if (history_depth == 0.0) {
+        use_history = false;
+      } else {
+        history_pixel = clamp(
+          ivec2(previous_uv * vec2(size)), ivec2(0), size - ivec2(1));
+        const float zn = push_constants.scene.z_near;
+        const float previous_linear_depth =
+          zn / motion_vector_and_previous_depth.z;
+        const float history_linear_depth = zn / history_depth;
+        const float depth_weight =
+          exp(-4.0 * abs(previous_linear_depth - history_linear_depth));
+        const vec3 history_normal =
+          oct_decode(
+            texture(
+              sampled_images[push_constants.previous_normal_texture],
+              previous_uv).rg);
+        const float normal_weight =
+          pow(max(dot(n, history_normal), 0.0), 32.0);
+        use_history = depth_weight * normal_weight > 0.5;
+      }
     }
-    const bool occluded = trace_ray(
-      push_constants.rt_block_grid,
-      push_constants.entities,
-      push_constants.entity_grid,
-      push_constants.entity_nodes,
-      offset_ray_origin(world_position, n),
-      l,
-      true);
-    E *= occluded ? 0.0 : 1.0;
   }
 
+  // Combine the sky candidate with the reprojected sky reservoir. Retraces
+  // the cached direction's visibility every frame (an extra ray whenever
+  // history is valid) instead of trusting a stale cached weight -- keeps a
+  // moving shadow from leaving a stale-lit cached direction for a few
+  // frames the way an untraced cache would.
+  // Unconditional (uniform control flow), not gated behind `if (use_history)`
+  // -- bisection proved a value computed inside that divergent branch,
+  // conditionally written into chosen_sky_dir/chosen_f_true_sky and read
+  // back after the branch reconverges, reliably hung the GPU (Xid 109)
+  // on this driver, regardless of which direction or texture was involved.
+  // Root cause wasn't pinned down further than "divergent branch + deferred
+  // reassignment"; sidestepping the divergence entirely (always trace this
+  // path, gate its *weight* to zero instead of skipping it) avoids the
+  // pattern outright. Costs one wasted texelFetch+sample+ray when history
+  // is invalid, which is cheap.
+  const float history_gate = use_history ? 1.0 : 0.0;
+  const vec4 prev = texelFetch(
+    sampled_images[push_constants.reservoir_read], history_pixel, 0);
+  const vec3 prev_sky_dir = oct_decode(prev.xy);
+  const float prev_sky_W = max(prev.z, 0.0) * history_gate;
+  const float prev_sky_M = clamp(prev.w, 0.0, max_temporal_M) * history_gate;
+  const bool prev_sky_occluded = trace_ray(
+    push_constants.rt_block_grid,
+    push_constants.entities,
+    push_constants.entity_grid,
+    push_constants.entity_nodes,
+    ray_origin,
+    prev_sky_dir,
+    true);
+  const vec3 f_true_prev_sky =
+    eval_f_true_sky(
+      prev_sky_dir, n, push_constants.scene, push_constants.sky_view_lut) *
+    (prev_sky_occluded ? 0.0 : 1.0);
+  const float p_hat_prev_sky = luminance(f_true_prev_sky);
+  const float w_prev_sky = p_hat_prev_sky * prev_sky_W * prev_sky_M;
+
+  vec3 chosen_sky_dir = sky_new_dir;
+  vec3 chosen_f_true_sky = f_true_sky_new;
+  float sky_w_sum = w_sky_new + w_prev_sky;
+  float sky_M = (w_prev_sky > 0.0 ? prev_sky_M : 0.0) + 1.0;
+  const bool select_prev =
+    sky_w_sum > 0.0 && random_float(random) * sky_w_sum < w_prev_sky;
+  chosen_sky_dir = select_prev ? prev_sky_dir : chosen_sky_dir;
+  chosen_f_true_sky = select_prev ? f_true_prev_sky : chosen_f_true_sky;
+  const float p_hat_chosen_sky = luminance(chosen_f_true_sky);
+  const float sky_W =
+    p_hat_chosen_sky > 0.0 ? sky_w_sum / (sky_M * p_hat_chosen_sky) : 0.0;
+
+  const vec2 stored_dir = sanitize(oct_encode(chosen_sky_dir), vec2(0.0));
+  const float stored_W = sanitize(sky_W, 0.0);
+  const float stored_M = sanitize(sky_M, 0.0);
+  imageStore(
+    storage_images[push_constants.reservoir_write],
+    pixel,
+    vec4(stored_dir, stored_W, stored_M));
+
+  const vec3 E = sanitize(E_sun + chosen_f_true_sky * sky_W, vec3(0.0));
   imageStore(
     storage_images[push_constants.direct_irradiance_image],
     pixel,

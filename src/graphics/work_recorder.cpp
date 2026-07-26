@@ -131,6 +131,27 @@ void Work_recorder::transition_image_layout(
   add_reference(std::move(image));
 }
 
+void Work_recorder::clear_color_image(
+  rc::Strong<Image> image, Image_layout layout, math::vec4 clear_value) {
+  auto const range = vk::ImageSubresourceRange{
+    .aspectMask =
+      detail::get_image_format_vk_image_aspect_flags(image->get_format()),
+    .baseMipLevel = 0,
+    .levelCount = static_cast<std::uint32_t>(image->get_mip_level_count()),
+    .baseArrayLayer = 0,
+    .layerCount = static_cast<std::uint32_t>(image->get_array_layer_count()),
+  };
+  auto const color = vk::ClearColorValue{std::array{
+    clear_value.x(), clear_value.y(), clear_value.z(), clear_value.w()}};
+  get_command_buffer().clearColorImage(
+    detail::get_image_vk_image(*image),
+    static_cast<vk::ImageLayout>(layout),
+    &color,
+    1,
+    &range);
+  add_reference(std::move(image));
+}
+
 void Work_recorder::begin_rendering(Rendering_begin_info const &info) {
   auto vk_color_attachments = std::vector<vk::RenderingAttachmentInfo>{};
   vk_color_attachments.reserve(info.color_attachments.size());

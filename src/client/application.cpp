@@ -143,7 +143,7 @@ auto constexpr z_near = 0.1f;
 auto const transmittance_lut_size = math::ivec2{256, 128};
 auto const sky_view_lut_size = math::ivec2{256, 256};
 
-auto constexpr scene_uniform_data_size = std::size_t{320};
+auto constexpr scene_uniform_data_size = std::size_t{240};
 auto constexpr scene_view_projection_matrix_offset = std::size_t{0};
 auto constexpr scene_previous_view_projection_matrix_offset = std::size_t{64};
 auto constexpr scene_animation_time_offset = std::size_t{128};
@@ -152,7 +152,6 @@ auto constexpr scene_sun_direction_offset = std::size_t{192};
 auto constexpr scene_sun_irradiance_offset = std::size_t{208};
 auto constexpr scene_zoom_offset = std::size_t{224};
 auto constexpr scene_z_near_offset = std::size_t{232};
-auto constexpr scene_sky_irradiance_offset = std::size_t{236};
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
@@ -271,8 +270,6 @@ public:
           graphics::load_shader("./assets/shaders/composite.frag.spv")},
         _sky_view_compute_shader{graphics::load_shader(
           "./assets/shaders/atmosphere/sky_view.comp.spv")},
-        _sky_irradiance_compute_shader{graphics::load_shader(
-          "./assets/shaders/atmosphere/sky_irradiance.comp.spv")},
         _direct_irradiance_compute_shader{
           graphics::load_shader("./assets/shaders/direct_irradiance.comp.spv")},
         _rt_grid_entity_binning_compute_shader{graphics::load_shader(
@@ -284,8 +281,6 @@ public:
         _crosshair_pipeline{make_crosshair_pipeline()},
         _sky_view_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_sky_view_compute_shader})},
-        _sky_irradiance_pipeline{_graphics.create_compute_pipeline(
-          {.shader = &_sky_irradiance_compute_shader})},
         _direct_irradiance_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_direct_irradiance_compute_shader})},
         _rt_grid_entity_binning_pipeline{_graphics.create_compute_pipeline(
@@ -426,6 +421,8 @@ private:
       framebuffer_extent);
     get_radiance_render_target(work_recorder, framebuffer_extent);
     get_direct_irradiance_render_target(work_recorder, framebuffer_extent);
+    get_direct_irradiance_reservoir_render_targets(
+      work_recorder, framebuffer_extent);
     get_color_render_target(
       work_recorder,
       _crosshair_mask_render_target,
@@ -454,8 +451,6 @@ private:
     if (camera && sun) {
       record_sky_view_pass(
         work_recorder, camera->position, sun->direction, sun->irradiance);
-      record_sky_irradiance_pass(
-        work_recorder, camera->position, scene_uniform_offset);
     }
     record_gbuffer_pass(work_recorder, framebuffer_size, scene_uniform_offset);
     record_rt_entity_binning_pass(work_recorder);
@@ -485,26 +480,6 @@ private:
     work_recorder.barrier(
       compute_shader_storage_write_scope,
       compute_shader_sampled_read_scope | fragment_shader_sampled_read_scope);
-  }
-
-  // Pre-integrates unshadowed sky irradiance for the 6 axis-aligned face
-  // normals from this frame's sky_view_lut, so direct_irradiance.comp can
-  // pick sun vs. sky by estimated contribution without per-pixel MC noise.
-  void record_sky_irradiance_pass(
-    graphics::Work_recorder &work_recorder,
-    math::vec3 camera_position,
-    std::size_t scene_uniform_offset) {
-    auto const camera_altitude = camera_position.y();
-    work_recorder.bind_compute_pipeline(_sky_irradiance_pipeline);
-    work_recorder.push_descriptors(0, {_sky_view_lut_sampled_descriptor});
-    work_recorder.push_data(4, std::as_bytes(std::span{&camera_altitude, 1}));
-    work_recorder.push_buffer_reference(
-      8,
-      _scene_uniform_buffer,
-      scene_uniform_offset + scene_sky_irradiance_offset);
-    work_recorder.dispatch(6, 1, 1);
-    work_recorder.barrier(
-      compute_shader_storage_write_scope, compute_shader_storage_read_scope);
   }
 
   void record_gbuffer_pass(
@@ -777,6 +752,20 @@ private:
        _transmittance_lut_sampled_descriptor,
        _sky_view_lut_sampled_descriptor});
     work_recorder.push_data(56, std::as_bytes(std::span{&_frame_number, 1}));
+    // History is only valid if last frame's pass wrote the other reservoir
+    // slot (e.g. not true right after the reservoir images were (re)created).
+    auto const history_valid = u32{
+      _last_direct_irradiance_reservoir_frame &&
+      *_last_direct_irradiance_reservoir_frame + 1 == _frame_number};
+    work_recorder.push_data(60, std::as_bytes(std::span{&history_valid, 1}));
+    work_recorder.push_descriptors(
+      64,
+      {_direct_irradiance_reservoir_sampled_descriptors[(_frame_number + 1) % 2],
+       _direct_irradiance_reservoir_descriptors[_frame_number % 2],
+       _motion_vector_render_target_descriptor,
+       _depth_render_target_descriptors[(_frame_number + 1) % 2],
+       _normal_render_target_descriptors[(_frame_number + 1) % 2]});
+    _last_direct_irradiance_reservoir_frame = _frame_number;
     auto const frame = _frame_number % max_frames_in_flight;
     auto const layout =
       make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
@@ -790,8 +779,12 @@ private:
     auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
     auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
     work_recorder.dispatch(group_count_x, group_count_y, 1);
+    // Covers this frame's reservoir writes (read back by this same pass next
+    // frame) as well as direct_irradiance_render_target's sampled read in
+    // record_radiance_pass.
     work_recorder.barrier(
-      compute_shader_storage_write_scope, compute_shader_sampled_read_scope);
+      compute_shader_storage_write_scope,
+      compute_shader_sampled_read_scope | compute_shader_storage_read_scope);
   }
 
   void record_radiance_pass(
@@ -1204,6 +1197,64 @@ private:
     }
   }
 
+  // Per-pixel temporal reservoir for direct_irradiance.comp's sky sample
+  // (the sun doesn't use one -- see there). Ping-pong pair:
+  // [_frame_number % 2] is written this frame, the other holds last
+  // frame's reservoir. Written via the storage descriptor (imageStore);
+  // read back next frame via a *sampled* descriptor with texelFetch
+  // instead of imageLoad -- imageLoad is otherwise unused anywhere in this
+  // codebase (grep confirms it), whereas texelFetch on a sampled image at
+  // a data-dependent coordinate is exactly what previous_depth_texture/
+  // previous_normal_texture already do successfully, so this sidesteps an
+  // otherwise-completely-untested code path rather than trusting it.
+  void get_direct_irradiance_reservoir_render_targets(
+    graphics::Work_recorder &work_recorder, math::ivec3 extent) {
+    auto const create_images = !_direct_irradiance_reservoir_targets[0] ||
+      _direct_irradiance_reservoir_targets[0]->get_extent() != extent;
+    if (create_images) {
+      _last_direct_irradiance_reservoir_frame.reset();
+      for (auto i = std::size_t{}; i != 2; ++i) {
+        _direct_irradiance_reservoir_targets[i] = _graphics.create_image({
+          .dimensionality = 2,
+          .format = graphics::Image_format::r16g16b16a16_sfloat,
+          .extent = extent,
+          .mip_level_count = 1,
+          .array_layer_count = 1,
+          .usage = graphics::Image_usage_flag_bits::storage |
+                   graphics::Image_usage_flag_bits::sampled |
+                   graphics::Image_usage_flag_bits::transfer_dst,
+        });
+        work_recorder.transition_image_layout(
+          {},
+          transfer_write_scope,
+          graphics::Image_layout::undefined,
+          graphics::Image_layout::general,
+          _direct_irradiance_reservoir_targets[i]);
+        // Explicitly zeroed rather than left as garbage: a texel that's
+        // never been written (e.g. reprojection briefly lands somewhere
+        // stale right after these are (re)created) must decode to a
+        // harmless empty slot (W=0, M=0), not whatever bit pattern was
+        // already in memory -- oct_decode ends with normalize(), and
+        // normalizing garbage can hand a NaN direction to a texture
+        // sample, which is undefined behavior.
+        work_recorder.clear_color_image(
+          _direct_irradiance_reservoir_targets[i],
+          graphics::Image_layout::general,
+          math::vec4{0.0f, 0.0f, 0.0f, 0.0f});
+        _direct_irradiance_reservoir_descriptors[i] =
+          _graphics.create_storage_image_descriptor(
+            _direct_irradiance_reservoir_targets[i]);
+        _direct_irradiance_reservoir_sampled_descriptors[i] =
+          _graphics.create_sampled_image_descriptor(
+            _direct_irradiance_reservoir_targets[i], graphics::Sampler::nearest);
+      }
+      work_recorder.barrier(
+        transfer_write_scope,
+        compute_shader_sampled_read_scope |
+          compute_shader_storage_write_scope);
+    }
+  }
+
   rc::Strong<graphics::Buffer>
   upload_vertices(std::span<std::byte const> data) {
     auto const staging_buffer = _graphics.create_staging_buffer(data);
@@ -1536,6 +1587,13 @@ private:
   rc::Strong<graphics::Descriptor> _direct_irradiance_render_target_descriptor{};
   rc::Strong<graphics::Descriptor>
     _direct_irradiance_render_target_storage_descriptor{};
+  std::array<rc::Strong<graphics::Image>, 2>
+    _direct_irradiance_reservoir_targets{};
+  std::array<rc::Strong<graphics::Descriptor>, 2>
+    _direct_irradiance_reservoir_descriptors{};
+  std::array<rc::Strong<graphics::Descriptor>, 2>
+    _direct_irradiance_reservoir_sampled_descriptors{};
+  std::optional<u32> _last_direct_irradiance_reservoir_frame{};
   std::array<rc::Strong<graphics::Descriptor>, blue_noise_texture_count>
     _blue_noise_texture_descriptors{};
   rc::Strong<graphics::Image> _crosshair_mask_render_target{};
@@ -1549,7 +1607,6 @@ private:
   graphics::Shader _composite_vertex_shader;
   graphics::Shader _composite_fragment_shader;
   graphics::Shader _sky_view_compute_shader;
-  graphics::Shader _sky_irradiance_compute_shader;
   graphics::Shader _direct_irradiance_compute_shader;
   graphics::Shader _rt_grid_entity_binning_compute_shader;
   graphics::Shader _radiance_compute_shader;
@@ -1557,7 +1614,6 @@ private:
   rc::Strong<graphics::Pipeline> _mesh_pipeline{};
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _sky_view_pipeline{};
-  rc::Strong<graphics::Compute_pipeline> _sky_irradiance_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _direct_irradiance_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _rt_grid_entity_binning_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _radiance_pipeline{};

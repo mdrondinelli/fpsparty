@@ -99,6 +99,11 @@ public:
     Image_layout new_layout,
     rc::Strong<Image> image);
 
+  // image must have been created with Image_usage_flag_bits::transfer_dst
+  // and currently be in layout (general or transfer_dst_optimal).
+  void clear_color_image(
+    rc::Strong<Image> image, Image_layout layout, math::vec4 clear_value);
+
   void begin_rendering(Rendering_begin_info const &info);
 
   void end_rendering();
