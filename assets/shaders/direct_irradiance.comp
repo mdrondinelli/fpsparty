@@ -7,16 +7,6 @@
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
-// Pass 1 of 2 (direct_irradiance_trace_sun.comp / direct_irradiance_trace_
-// sky.comp are pass 2, one dispatch per technique). Splits sample
-// generation from tracing: this pass only picks a technique (sun vs sky,
-// importance-sampled by unshadowed irradiance as before) and a direction
-// per pixel, and appends it to that technique's own buffer via atomicAdd --
-// no ray tracing happens here at all. Sorting into two buffers up front is
-// what lets pass 2 run as two uniform-technique dispatches: a tiny cone
-// around one fixed global direction (sun) is far more ray-coherent than
-// cosine-sampled sky, which spans the whole hemisphere differently at every
-// pixel, and neither dispatch has to branch on technique anymore.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
   layout(offset = 8) uint16_t normal_texture;
@@ -29,18 +19,6 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 40) uint seed;
 } push_constants;
 
-// Batches this workgroup's samples through groupshared memory instead of
-// hitting push_constants.{sun,sky}_samples.count with one global atomicAdd
-// per invocation: every invocation first bumps a groupshared per-type
-// counter, invocation 0 reserves this workgroup's whole span with a single
-// global atomicAdd per type (turning up to 64 global atomics into at most
-// 2), then every invocation bumps that same groupshared variable again --
-// now holding the reserved global base -- to claim its own unique global
-// slot. Three barriers mark the phase changes (init -> count -> reserve ->
-// write); all of them must be reached by every invocation in the workgroup,
-// which is why pixel/depth validity below is carried as a bool instead of
-// an early return (a divergent return before a barrier is not
-// workgroup-uniform control flow).
 shared uint sun_offset;
 shared uint sky_offset;
 
