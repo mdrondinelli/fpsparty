@@ -141,6 +141,7 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
     .shaderSampledImageArrayNonUniformIndexing = true,
     .shaderStorageImageArrayNonUniformIndexing = true,
     .descriptorBindingUpdateUnusedWhilePending = true,
+    .scalarBlockLayout = true,
     .bufferDeviceAddress = true,
   };
   auto vulkan_1_1_features = vk::PhysicalDeviceVulkan11Features{

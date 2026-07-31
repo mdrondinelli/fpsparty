@@ -1,0 +1,35 @@
+#version 450
+
+#include "extensions.glsl"
+
+layout(local_size_x = 1) in;
+
+// Turns a GPU-computed element count into a VkDispatchIndirectCommand for a
+// later vkCmdDispatchIndirect: group_size invocations per group, rounded up.
+// args points 12 bytes before the count it reads -- x/y/z (this shader's
+// only writes) and count (its only read) alias the same buffer region a
+// caller may otherwise be viewing as {u32 count; T elements[];}, so this
+// shader never touches the elements themselves.
+layout(scalar, buffer_reference, buffer_reference_align = 4)
+restrict buffer Indirect_dispatch_args {
+  uint x;
+  uint y;
+  uint z;
+  uint count;
+};
+
+// The consuming dispatch_indirect's local_size_x -- direct_irradiance_
+// trace_sun.comp / direct_irradiance_trace_sky.comp are both 64 today, the
+// only callers of this shader.
+const uint group_size = 64;
+
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) Indirect_dispatch_args args;
+} push_constants;
+
+void main() {
+  push_constants.args.x =
+    (push_constants.args.count + group_size - 1) / group_size;
+  push_constants.args.y = 1u;
+  push_constants.args.z = 1u;
+}

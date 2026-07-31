@@ -1,127 +1,141 @@
 #version 450
 
+#include "atmosphere/sky_irradiance.glsl"
 #include "direct_irradiance_common.glsl"
 #include "octahedral.glsl"
 #include "random.glsl"
-#include "rt.glsl"
-#include "sampling.glsl"
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
-// Pass 1 of 2 (direct_irradiance_shade.comp is pass 2). M fresh sun-cone
-// candidates per pixel, combined via RIS into one selected sample -- no
-// cross-pixel/cross-frame reuse yet, just this pixel's own M draws. Every
-// candidate is drawn from the identical cone distribution (same fixed
-// global sun_direction), so the balance heuristic's m_i = p_i(x)/sum(p_j(x))
-// collapses to a plain 1/M, and p_gen(x_i) = 1/sun_solid_angle is the same
-// constant for all of them -- see the loop below for where that shows up.
-// p_hat(x_i) is the true (visibility-inclusive) integrand, so every
-// candidate needs its own trace: M rays per pixel here (M is a constant
-// below, currently 2), not one.
-//
-// Stores the *chosen* sample's square coords (u,v) packed into a
-// r32_uint (12 bits per axis, 8 spare/reserved) -- oct-encoding a 3D
-// direction would waste nearly all its resolution outside the sun's tiny
-// cone, whereas (u,v) maps directly onto it. Also stores the reservoir's
-// final unbiased weight W_y into a separate r16_sfloat texture. No
-// visibility flag is stored anywhere: if the chosen candidate was
-// occluded, p_hat(chosen) = 0, which forces W_y = 0 by construction (see
-// the guard below) -- pass 2 can multiply by W_y blindly and get the
-// right answer (zero) without needing to know why.
-//
-// Written and read via storage_uimages/storage_images (imageLoad/
-// imageStore), not a sampled descriptor -- there's no uint-sampled
-// bindless array in this codebase (only sampler2D), and imageLoad was
-// conclusively cleared as a hang suspect earlier this session (the real
-// cause was an unrelated divergent-branch pattern), so there's no reason
-// to avoid it here.
+// Pass 1 of 2 (direct_irradiance_trace_sun.comp / direct_irradiance_trace_
+// sky.comp are pass 2, one dispatch per technique). Splits sample
+// generation from tracing: this pass only picks a technique (sun vs sky,
+// importance-sampled by unshadowed irradiance as before) and a direction
+// per pixel, and appends it to that technique's own buffer via atomicAdd --
+// no ray tracing happens here at all. Sorting into two buffers up front is
+// what lets pass 2 run as two uniform-technique dispatches: a tiny cone
+// around one fixed global direction (sun) is far more ray-coherent than
+// cosine-sampled sky, which spans the whole hemisphere differently at every
+// pixel, and neither dispatch has to branch on technique anymore.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
   layout(offset = 8) uint16_t normal_texture;
   layout(offset = 10) uint16_t depth_texture;
   layout(offset = 12) uint16_t transmittance_texture;
-  layout(offset = 14) uint16_t sample_image;
-  layout(offset = 16) uint16_t weight_image;
-  layout(offset = 24) Rt_block_grid rt_block_grid;
-  layout(offset = 32) Rt_entities entities;
-  layout(offset = 40) Rt_entity_grid entity_grid;
-  layout(offset = 48) Rt_entity_nodes entity_nodes;
-  layout(offset = 56) uint seed;
+  layout(offset = 14) uint16_t sky_view_lut;
+  layout(offset = 16) Sky_irradiance sky_irradiance;
+  layout(offset = 24) Distant_light_samples sun_samples;
+  layout(offset = 32) Distant_light_samples sky_samples;
+  layout(offset = 40) uint seed;
 } push_constants;
 
-const int M = 2;
+// Batches this workgroup's samples through groupshared memory instead of
+// hitting push_constants.{sun,sky}_samples.count with one global atomicAdd
+// per invocation: every invocation first bumps a groupshared per-type
+// counter, invocation 0 reserves this workgroup's whole span with a single
+// global atomicAdd per type (turning up to 64 global atomics into at most
+// 2), then every invocation bumps that same groupshared variable again --
+// now holding the reserved global base -- to claim its own unique global
+// slot. Three barriers mark the phase changes (init -> count -> reserve ->
+// write); all of them must be reached by every invocation in the workgroup,
+// which is why pixel/depth validity below is carried as a bool instead of
+// an early return (a divergent return before a barrier is not
+// workgroup-uniform control flow).
+shared uint sun_offset;
+shared uint sky_offset;
 
 void main() {
   const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
-  const ivec2 size = imageSize(storage_uimages[push_constants.sample_image]);
-  if (pixel.x >= size.x || pixel.y >= size.y) {
-    return;
-  }
-  const float depth =
-    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
-  if (depth == 0.0) {
-    return;
-  }
-  const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
-  const vec3 view_ray = vec3(
-    -ndc.x * push_constants.scene.zoom.x,
-    -ndc.y * push_constants.scene.zoom.y,
-    1.0);
-  const vec3 camera_position = push_constants.scene.camera_basis[3].xyz;
-  const float view_z = push_constants.scene.z_near / depth;
-  const vec3 world_position =
-    camera_position +
-    mat3(push_constants.scene.camera_basis) * (view_ray * view_z);
-  const vec3 n = oct_decode(
-    texelFetch(
-      sampled_images[push_constants.normal_texture], pixel, 0).rg);
-  const vec3 sun_direction = push_constants.scene.sun_direction;
-  const vec3 sun_transmittance =
-    transmittance_along_ray(
-      push_constants.transmittance_texture,
-      vec3(0.0, r_ground + world_position.y, 0.0),
-      sun_direction);
-  const vec3 ray_origin = offset_ray_origin(world_position, n);
+  const ivec2 size =
+    textureSize(sampled_images[push_constants.depth_texture], 0);
+  bool valid = pixel.x < size.x && pixel.y < size.y;
 
-  Random random;
-  const uint pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
-  random.state = lowbias32(pixel_index ^ lowbias32(push_constants.seed));
+  uint pixel_index = 0u;
+  bool sample_is_sun = false;
+  vec2 uv = vec2(0.0);
 
-  vec2 chosen_uv = vec2(0.0);
-  vec3 chosen_f = vec3(0.0);
-  float w_sum = 0.0;
-  for (int i = 0; i < M; ++i) {
-    const vec2 uv = vec2(random_float(random), random_float(random));
-    const vec3 dir =
-      make_basis(sun_direction) * square_to_cone(uv, cos_sun_angular_radius);
-    const bool occluded = trace_ray(
-      push_constants.rt_block_grid,
-      push_constants.entities,
-      push_constants.entity_grid,
-      push_constants.entity_nodes,
-      ray_origin,
-      dir,
-      true);
-    const vec3 f =
-      eval_f_true_sun(dir, n, sun_transmittance, push_constants.scene) *
-      (occluded ? 0.0 : 1.0);
-    const float p_hat = luminance(f);
-    // pdf = 1/sun_solid_angle, so w_i = p_hat/p_gen = p_hat*sun_solid_angle.
-    const float w = (1.0 / M) * p_hat * sun_solid_angle;
-    w_sum += w;
-    const bool select = random_float(random) * w_sum < w;
-    chosen_uv = select ? uv : chosen_uv;
-    chosen_f = select ? f : chosen_f;
+  if (valid) {
+    const float depth =
+      texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
+    valid = depth != 0.0;
+    if (valid) {
+      const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
+      const vec3 view_ray = vec3(
+        -ndc.x * push_constants.scene.zoom.x,
+        -ndc.y * push_constants.scene.zoom.y,
+        1.0);
+      const vec3 camera_position = push_constants.scene.camera_basis[3].xyz;
+      const float view_z = push_constants.scene.z_near / depth;
+      const vec3 world_position =
+        camera_position +
+        mat3(push_constants.scene.camera_basis) * (view_ray * view_z);
+      const vec3 n = oct_decode(
+        texelFetch(
+          sampled_images[push_constants.normal_texture], pixel, 0).rg);
+      const vec3 sun_direction = push_constants.scene.sun_direction;
+
+      pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
+      Random random;
+      random.state = lowbias32(pixel_index) ^ lowbias32(push_constants.seed);
+
+      const vec3 sun_transmittance =
+        transmittance_along_ray(
+          push_constants.transmittance_texture,
+          vec3(0.0, r_ground + world_position.y, 0.0),
+          sun_direction);
+
+      // Technique selection: importance-sample sun vs sky by unshadowed
+      // irradiance -- see direct_irradiance_trace.comp for the same
+      // computation, re-derived there once more rather than stored here (a
+      // cheap ambient-cube lookup plus one closed-form sun eval, not worth
+      // growing this struct over).
+      const vec3 unshadowed_sun = eval_f_true_sun(
+        sun_direction, n, sun_transmittance, push_constants.scene);
+      const vec3 unshadowed_sky =
+        sample_sky_irradiance(push_constants.sky_irradiance, n);
+      const float l_sun = luminance(unshadowed_sun) * sun_solid_angle;
+      const float l_sky = luminance(unshadowed_sky);
+      const float total = l_sun + l_sky;
+      const float p_sun = total > 0.0 ? l_sun / total : 0.5;
+
+      sample_is_sun = random_float(random) < p_sun;
+      // The actual dir warp (square_to_cone / square_to_cosine_hemisphere)
+      // is deferred to pass 2 -- only uv, the two uniform samples it needs,
+      // travels through the buffer. See Distant_light_sample.
+      uv = vec2(random_float(random), random_float(random));
+    }
   }
-  const float chosen_p_hat = luminance(chosen_f);
-  const float W_y = chosen_p_hat > 0.0 ? w_sum / chosen_p_hat : 0.0;
-  const uint u_bits = uint(clamp(chosen_uv.x, 0.0, 1.0) * 4095.0 + 0.5);
-  const uint v_bits = uint(clamp(chosen_uv.y, 0.0, 1.0) * 4095.0 + 0.5);
-  const uint packed = u_bits | (v_bits << 12);
-  imageStore(
-    storage_uimages[push_constants.sample_image], pixel, uvec4(packed));
-  imageStore(
-    storage_images[push_constants.weight_image],
-    pixel,
-    vec4(sanitize(W_y, 0.0)));
+
+  if (gl_LocalInvocationIndex == 0u) {
+    sun_offset = 0u;
+    sky_offset = 0u;
+  }
+  barrier();
+
+  if (valid) {
+    if (sample_is_sun) {
+      atomicAdd(sun_offset, 1u);
+    } else {
+      atomicAdd(sky_offset, 1u);
+    }
+  }
+  barrier();
+
+  if (gl_LocalInvocationIndex == 0u) {
+    sun_offset = atomicAdd(push_constants.sun_samples.count, sun_offset);
+    sky_offset = atomicAdd(push_constants.sky_samples.count, sky_offset);
+  }
+  barrier();
+
+  if (valid) {
+    if (sample_is_sun) {
+      const uint slot = atomicAdd(sun_offset, 1u);
+      push_constants.sun_samples.samples[slot].uv = packUnorm2x16(uv);
+      push_constants.sun_samples.samples[slot].pixel = pixel_index;
+    } else {
+      const uint slot = atomicAdd(sky_offset, 1u);
+      push_constants.sky_samples.samples[slot].uv = packUnorm2x16(uv);
+      push_constants.sky_samples.samples[slot].pixel = pixel_index;
+    }
+  }
 }

@@ -76,6 +76,11 @@ struct Indirect_indexed_draw_info {
   u32 stride;
 };
 
+struct Indirect_dispatch_info {
+  rc::Strong<Buffer> buffer;
+  u64 offset;
+};
+
 class Work_recorder {
 public:
   void copy_buffer(
@@ -103,6 +108,12 @@ public:
   // and currently be in layout (general or transfer_dst_optimal).
   void clear_color_image(
     rc::Strong<Image> image, Image_layout layout, math::vec4 clear_value);
+
+  // buffer must have been created with Buffer_usage_flag_bits::transfer_dst.
+  // offset and size must be multiples of 4.
+  void fill_buffer(
+    rc::Strong<Buffer> buffer, std::size_t offset, std::size_t size,
+    u32 data);
 
   void begin_rendering(Rendering_begin_info const &info);
 
@@ -134,6 +145,11 @@ public:
   void draw_indexed_indirect(Indirect_indexed_draw_info const &info) noexcept;
 
   void dispatch(u32 x, u32 y, u32 z) noexcept;
+
+  // buffer must have been created with Buffer_usage_flag_bits::indirect_buffer.
+  // offset must be a multiple of 4 and point to a tightly-packed
+  // {u32 x, u32 y, u32 z} group-count record.
+  void dispatch_indirect(Indirect_dispatch_info const &info) noexcept;
 
   void push_data(u32 push_offset, std::span<std::byte const> data) noexcept;
 

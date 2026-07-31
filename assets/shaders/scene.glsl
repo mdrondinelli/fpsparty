@@ -13,6 +13,14 @@ restrict readonly buffer Scene {
   vec3 sun_irradiance;
   vec2 zoom;
   float z_near;
+  // Ambient cube: 6 cardinal directions x RGB, written by
+  // atmosphere/sky_irradiance.comp. Shaders read this through a separate
+  // Sky_irradiance buffer_reference (see atmosphere/sky_irradiance.glsl)
+  // passed to them directly, host-offset into this same buffer via
+  // scene_sky_irradiance_offset in application.cpp -- not accessed through
+  // this Scene struct directly (keeps atmosphere/*.glsl from needing to
+  // know about Scene at all).
+  float sky_irradiance[18];
 };
 
 #endif

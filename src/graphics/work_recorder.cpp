@@ -152,6 +152,16 @@ void Work_recorder::clear_color_image(
   add_reference(std::move(image));
 }
 
+void Work_recorder::fill_buffer(
+  rc::Strong<Buffer> buffer, std::size_t offset, std::size_t size, u32 data) {
+  get_command_buffer().fillBuffer(
+    detail::get_buffer_vk_buffer(*buffer),
+    static_cast<vk::DeviceSize>(offset),
+    static_cast<vk::DeviceSize>(size),
+    data);
+  add_reference(std::move(buffer));
+}
+
 void Work_recorder::begin_rendering(Rendering_begin_info const &info) {
   auto vk_color_attachments = std::vector<vk::RenderingAttachmentInfo>{};
   vk_color_attachments.reserve(info.color_attachments.size());
@@ -311,6 +321,13 @@ void Work_recorder::draw_indexed_indirect(
 void Work_recorder::dispatch(
   std::uint32_t x, std::uint32_t y, std::uint32_t z) noexcept {
   get_command_buffer().dispatch(x, y, z);
+}
+
+void Work_recorder::dispatch_indirect(
+  Indirect_dispatch_info const &info) noexcept {
+  get_command_buffer().dispatchIndirect(
+    detail::get_buffer_vk_buffer(*info.buffer), info.offset);
+  add_reference(info.buffer);
 }
 
 void Work_recorder::push_data(

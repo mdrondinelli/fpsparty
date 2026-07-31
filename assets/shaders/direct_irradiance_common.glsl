@@ -11,12 +11,37 @@ const float sun_angular_radius = sun_angular_diameter / 2.0;
 const float cos_sun_angular_radius = cos(sun_angular_radius);
 const float sun_solid_angle = 2.0 * pi * (1.0 - cos_sun_angular_radius);
 
-// Caps how many frames' worth of confidence the sky reservoir can
-// represent, so the effective history window stays bounded. Its visibility
-// is cached rather than re-traced every frame (to save a ray), so this is
-// also what bounds how long a moving-shadow discrepancy can linger before
-// a fresh candidate has a real chance to override it -- keep it modest.
-const float max_temporal_M = 8.0;
+// One un-traced candidate for one technique: direct_irradiance.comp (pass
+// 1) picks a technique per pixel and appends the sample into that
+// technique's own buffer (sun_samples or sky_samples) via atomicAdd on
+// count -- which buffer it lands in is the technique, so no in-struct flag
+// is needed. direct_irradiance_trace_sun.comp / direct_irradiance_trace_sky
+// .comp (pass 2, one dispatch per technique) read their buffer back in flat
+// index order (not screen-space tile order), trace, shade, and write the
+// result to direct_irradiance_image at the stored pixel. pixel is packed as
+// y*width+x rather than an ivec2, so this struct's size doesn't depend on
+// knowing the framebuffer width up front -- pass 2 unpacks it using
+// direct_irradiance_image's own width.
+// uv holds the two uniform random numbers pass 1 drew to build dir
+// (square_to_cone for sun, square_to_cosine_hemisphere for sky), packed via
+// packUnorm2x16, rather than the resulting unit vector itself -- each trace
+// shader redoes its own (technique-fixed) warp from uv against its own
+// local basis (make_basis(sun_direction) or make_basis(n)) instead of
+// storing dir directly. This is both smaller (packUnorm2x16(uv) is one
+// uint vs. vec3 dir's three floats) and more accurate per stored bit: 16
+// bits per uv component quantizes the *input* to a well-conditioned warp,
+// where oct-encoding would instead quantize dir itself and add the oct
+// map's own distortion on top.
+struct Distant_light_sample {
+  uint pixel;
+  uint uv;
+};
+
+layout(scalar, buffer_reference, buffer_reference_align = 4)
+restrict buffer Distant_light_samples {
+  uint count;
+  Distant_light_sample samples[];
+};
 
 float luminance(vec3 color) {
   return dot(color, vec3(0.2126, 0.7152, 0.0722));
@@ -44,14 +69,7 @@ vec3 sanitize(vec3 x, vec3 fallback) {
 
 // f_true(dir) = incident_radiance(dir) * cos_theta(dir), i.e. the true
 // (visibility-free) rendering-equation integrand for a light sample; the
-// caller multiplies in a freshly-traced (or, for biased spatial reuse,
-// assumed) visibility separately. Re-evaluating this from a cached dir
-// costs one texture fetch or a closed-form formula -- much cheaper than
-// caching the shaded value itself, which would need to span the sun's
-// ~10^7 sr^-1 radiance without overflowing fp16 reservoir storage. Both
-// sun and sky share one technique-tagged reservoir (see
-// direct_irradiance.comp), so call sites branch on the tag to pick which
-// of these to call.
+// caller multiplies in a freshly-traced visibility separately.
 vec3 eval_f_true_sun(vec3 dir, vec3 n, vec3 sun_transmittance, Scene scene) {
   const vec3 L_sun = scene.sun_irradiance * sun_transmittance / sun_solid_angle;
   return L_sun * max(dot(n, dir), 0.0);

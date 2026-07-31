@@ -143,7 +143,9 @@ auto constexpr z_near = 0.1f;
 auto const transmittance_lut_size = math::ivec2{256, 128};
 auto const sky_view_lut_size = math::ivec2{256, 256};
 
-auto constexpr scene_uniform_data_size = std::size_t{240};
+// 320 = 236 (end of z_near) + 72 (18 floats of sky_irradiance) = 308,
+// rounded up to the next 16-byte boundary.
+auto constexpr scene_uniform_data_size = std::size_t{320};
 auto constexpr scene_view_projection_matrix_offset = std::size_t{0};
 auto constexpr scene_previous_view_projection_matrix_offset = std::size_t{64};
 auto constexpr scene_animation_time_offset = std::size_t{128};
@@ -152,6 +154,8 @@ auto constexpr scene_sun_direction_offset = std::size_t{192};
 auto constexpr scene_sun_irradiance_offset = std::size_t{208};
 auto constexpr scene_zoom_offset = std::size_t{224};
 auto constexpr scene_z_near_offset = std::size_t{232};
+// Must match scene.glsl's sky_irradiance_offset exactly.
+auto constexpr scene_sky_irradiance_offset = std::size_t{236};
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
@@ -270,10 +274,16 @@ public:
           graphics::load_shader("./assets/shaders/composite.frag.spv")},
         _sky_view_compute_shader{graphics::load_shader(
           "./assets/shaders/atmosphere/sky_view.comp.spv")},
+        _sky_irradiance_compute_shader{graphics::load_shader(
+          "./assets/shaders/atmosphere/sky_irradiance.comp.spv")},
         _direct_irradiance_compute_shader{
           graphics::load_shader("./assets/shaders/direct_irradiance.comp.spv")},
-        _direct_irradiance_shade_compute_shader{graphics::load_shader(
-          "./assets/shaders/direct_irradiance_shade.comp.spv")},
+        _direct_irradiance_trace_sun_compute_shader{graphics::load_shader(
+          "./assets/shaders/direct_irradiance_trace_sun.comp.spv")},
+        _direct_irradiance_trace_sky_compute_shader{graphics::load_shader(
+          "./assets/shaders/direct_irradiance_trace_sky.comp.spv")},
+        _indirect_dispatch_args_compute_shader{graphics::load_shader(
+          "./assets/shaders/indirect_dispatch_args.comp.spv")},
         _rt_grid_entity_binning_compute_shader{graphics::load_shader(
           "./assets/shaders/bin_rt_grid_entities.comp.spv")},
         _radiance_compute_shader{
@@ -283,10 +293,18 @@ public:
         _crosshair_pipeline{make_crosshair_pipeline()},
         _sky_view_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_sky_view_compute_shader})},
+        _sky_irradiance_pipeline{_graphics.create_compute_pipeline(
+          {.shader = &_sky_irradiance_compute_shader})},
         _direct_irradiance_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_direct_irradiance_compute_shader})},
-        _direct_irradiance_shade_pipeline{_graphics.create_compute_pipeline(
-          {.shader = &_direct_irradiance_shade_compute_shader})},
+        _direct_irradiance_trace_sun_pipeline{
+          _graphics.create_compute_pipeline(
+            {.shader = &_direct_irradiance_trace_sun_compute_shader})},
+        _direct_irradiance_trace_sky_pipeline{
+          _graphics.create_compute_pipeline(
+            {.shader = &_direct_irradiance_trace_sky_compute_shader})},
+        _indirect_dispatch_args_pipeline{_graphics.create_compute_pipeline(
+          {.shader = &_indirect_dispatch_args_compute_shader})},
         _rt_grid_entity_binning_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_rt_grid_entity_binning_compute_shader})},
         _radiance_pipeline{_graphics.create_compute_pipeline(
@@ -425,8 +443,7 @@ private:
       framebuffer_extent);
     get_radiance_render_target(work_recorder, framebuffer_extent);
     get_direct_irradiance_render_target(work_recorder, framebuffer_extent);
-    get_direct_irradiance_sample_render_target(
-      work_recorder, framebuffer_extent);
+    get_distant_light_sample_buffer(framebuffer_extent);
     get_color_render_target(
       work_recorder,
       _crosshair_mask_render_target,
@@ -455,6 +472,8 @@ private:
     if (camera && sun) {
       record_sky_view_pass(
         work_recorder, camera->position, sun->direction, sun->irradiance);
+      record_sky_irradiance_pass(
+        work_recorder, camera->position.y(), scene_uniform_offset);
     }
     record_gbuffer_pass(work_recorder, framebuffer_size, scene_uniform_offset);
     record_rt_entity_binning_pass(work_recorder);
@@ -484,6 +503,31 @@ private:
     work_recorder.barrier(
       compute_shader_storage_write_scope,
       compute_shader_sampled_read_scope | fragment_shader_sampled_read_scope);
+  }
+
+  void record_sky_irradiance_pass(
+    graphics::Work_recorder &work_recorder,
+    float camera_altitude,
+    std::size_t scene_uniform_offset) {
+    // Called only from render(), right after record_sky_view_pass -- its
+    // barrier above already makes sky_view_lut sampled-readable. Writes
+    // into the same _scene_uniform_buffer this frame's Scene occupies (see
+    // scene_sky_irradiance_offset), through a separate Sky_irradiance
+    // buffer_reference rather than through Scene itself -- the CPU-side
+    // write to Scene's other fields happens later, during
+    // record_gbuffer_pass, but that's fine: this only touches disjoint
+    // bytes, and the GPU-side write here still needs its own barrier below
+    // before direct_irradiance_pass reads it.
+    work_recorder.bind_compute_pipeline(_sky_irradiance_pipeline);
+    work_recorder.push_descriptors(0, {_sky_view_lut_sampled_descriptor});
+    work_recorder.push_data(4, std::as_bytes(std::span{&camera_altitude, 1}));
+    work_recorder.push_buffer_reference(
+      8,
+      _scene_uniform_buffer,
+      scene_uniform_offset + scene_sky_irradiance_offset);
+    work_recorder.dispatch(6, 1, 1);
+    work_recorder.barrier(
+      compute_shader_storage_write_scope, compute_shader_storage_read_scope);
   }
 
   void record_gbuffer_pass(
@@ -745,6 +789,14 @@ private:
     if (!sun) {
       return;
     }
+    // Reset both atomic sample counters to 0 before pass 1 appends to them.
+    // Only the counts need clearing (not the sample data itself) -- pass 2
+    // only ever reads indices below whatever count pass 1 ends up with. The
+    // count field sits 12 bytes in (see get_distant_light_sample_buffer).
+    work_recorder.fill_buffer(_distant_light_sample_buffer_sun, 12, 4, 0u);
+    work_recorder.fill_buffer(_distant_light_sample_buffer_sky, 12, 4, 0u);
+    work_recorder.barrier(
+      transfer_write_scope, compute_shader_storage_write_scope);
     work_recorder.bind_compute_pipeline(_direct_irradiance_pipeline);
     work_recorder
       .push_buffer_reference(0, _scene_uniform_buffer, scene_uniform_offset);
@@ -753,56 +805,126 @@ private:
       {_normal_render_target_descriptors[_frame_number % 2],
        _depth_render_target_descriptors[_frame_number % 2],
        _transmittance_lut_sampled_descriptor,
-       _direct_irradiance_sample_storage_descriptor,
-       _direct_irradiance_weight_storage_descriptor});
-    work_recorder.push_data(56, std::as_bytes(std::span{&_frame_number, 1}));
-    auto const frame = _frame_number % max_frames_in_flight;
-    auto const layout =
-      make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
+       _sky_view_lut_sampled_descriptor});
+    work_recorder.push_buffer_reference(
+      16,
+      _scene_uniform_buffer,
+      scene_uniform_offset + scene_sky_irradiance_offset);
     work_recorder
-      .push_buffer_reference(24, _grid_mesh->get_rt_block_grid_buffer());
-    work_recorder.push_buffer_reference(32, _rt_entity_buffers[frame]);
-    work_recorder.push_buffer_reference(
-      40, _rt_entity_binning_buffers[frame], layout.grid_offset);
-    work_recorder.push_buffer_reference(
-      48, _rt_entity_binning_buffers[frame], layout.nodes_offset);
+      .push_buffer_reference(24, _distant_light_sample_buffer_sun, 12);
+    work_recorder
+      .push_buffer_reference(32, _distant_light_sample_buffer_sky, 12);
+    work_recorder.push_data(40, std::as_bytes(std::span{&_frame_number, 1}));
     auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
     auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
     work_recorder.dispatch(group_count_x, group_count_y, 1);
-    // sample_image's read (via imageLoad, not a sampled descriptor -- there
-    // is no uint-sampled bindless array) in the shade pass below.
+    // counts' reads and indirect-command writes in the two
+    // indirect_dispatch_args.comp dispatches below.
     work_recorder.barrier(
-      compute_shader_storage_write_scope, compute_shader_storage_read_scope);
-    record_direct_irradiance_shade_pass(
-      work_recorder, framebuffer_size, scene_uniform_offset);
+      compute_shader_storage_write_scope,
+      compute_shader_storage_read_scope | compute_shader_storage_write_scope);
+    work_recorder.bind_compute_pipeline(_indirect_dispatch_args_pipeline);
+    work_recorder.push_buffer_reference(0, _distant_light_sample_buffer_sun);
+    work_recorder.dispatch(1, 1, 1);
+    work_recorder.push_buffer_reference(0, _distant_light_sample_buffer_sky);
+    work_recorder.dispatch(1, 1, 1);
+    // indirect commands' reads in the two trace passes' dispatch_indirect
+    // below.
+    work_recorder.barrier(
+      compute_shader_storage_write_scope, indirect_command_read_scope);
+    record_direct_irradiance_trace_sun_pass(
+      work_recorder, scene_uniform_offset);
+    record_direct_irradiance_trace_sky_pass(
+      work_recorder, scene_uniform_offset);
+    // Both dispatches above write disjoint direct_irradiance_image texels
+    // (pass 1 sends each pixel to exactly one of the two sample buffers, so
+    // a pixel is only ever written by one of the two trace dispatches) --
+    // no hazard between them, so one barrier covering both suffices before
+    // direct_irradiance_render_target's sampled read in record_radiance_pass.
+    work_recorder.barrier(
+      compute_shader_storage_write_scope,
+      compute_shader_sampled_read_scope | compute_shader_storage_read_scope);
   }
 
-  void record_direct_irradiance_shade_pass(
+  void record_direct_irradiance_trace_sun_pass(
     graphics::Work_recorder &work_recorder,
-    math::ivec2 framebuffer_size,
     std::size_t scene_uniform_offset) {
     ZoneScoped;
     // Called only from record_direct_irradiance_pass, right after it
     // dispatches and barriers -- camera/grid_mesh/sun were already checked
     // further up the call chain.
-    work_recorder.bind_compute_pipeline(_direct_irradiance_shade_pipeline);
+    work_recorder.bind_compute_pipeline(_direct_irradiance_trace_sun_pipeline);
     work_recorder
       .push_buffer_reference(0, _scene_uniform_buffer, scene_uniform_offset);
     work_recorder.push_descriptors(
       8,
       {_normal_render_target_descriptors[_frame_number % 2],
        _depth_render_target_descriptors[_frame_number % 2],
+       _direct_irradiance_render_target_storage_descriptor,
+       _transmittance_lut_sampled_descriptor});
+    work_recorder.push_buffer_reference(
+      16,
+      _scene_uniform_buffer,
+      scene_uniform_offset + scene_sky_irradiance_offset);
+    work_recorder
+      .push_buffer_reference(24, _distant_light_sample_buffer_sun, 12);
+    auto const frame = _frame_number % max_frames_in_flight;
+    auto const layout =
+      make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
+    work_recorder
+      .push_buffer_reference(32, _grid_mesh->get_rt_block_grid_buffer());
+    work_recorder.push_buffer_reference(40, _rt_entity_buffers[frame]);
+    work_recorder.push_buffer_reference(
+      48, _rt_entity_binning_buffers[frame], layout.grid_offset);
+    work_recorder.push_buffer_reference(
+      56, _rt_entity_binning_buffers[frame], layout.nodes_offset);
+    // Actual group count, computed GPU-side from pass 1's atomic counter by
+    // indirect_dispatch_args.comp -- see direct_irradiance_trace_sun.comp.
+    work_recorder.dispatch_indirect({
+      .buffer = _distant_light_sample_buffer_sun,
+      .offset = 0,
+    });
+  }
+
+  void record_direct_irradiance_trace_sky_pass(
+    graphics::Work_recorder &work_recorder,
+    std::size_t scene_uniform_offset) {
+    ZoneScoped;
+    // Called only from record_direct_irradiance_pass, right after it
+    // dispatches and barriers -- camera/grid_mesh/sun were already checked
+    // further up the call chain.
+    work_recorder.bind_compute_pipeline(_direct_irradiance_trace_sky_pipeline);
+    work_recorder
+      .push_buffer_reference(0, _scene_uniform_buffer, scene_uniform_offset);
+    work_recorder.push_descriptors(
+      8,
+      {_normal_render_target_descriptors[_frame_number % 2],
+       _depth_render_target_descriptors[_frame_number % 2],
+       _direct_irradiance_render_target_storage_descriptor,
        _transmittance_lut_sampled_descriptor,
-       _direct_irradiance_sample_storage_descriptor,
-       _direct_irradiance_weight_storage_descriptor,
-       _direct_irradiance_render_target_storage_descriptor});
-    auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
-    auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
-    work_recorder.dispatch(group_count_x, group_count_y, 1);
-    // direct_irradiance_render_target's sampled read in record_radiance_pass.
-    work_recorder.barrier(
-      compute_shader_storage_write_scope,
-      compute_shader_sampled_read_scope | compute_shader_storage_read_scope);
+       _sky_view_lut_sampled_descriptor});
+    work_recorder.push_buffer_reference(
+      24,
+      _scene_uniform_buffer,
+      scene_uniform_offset + scene_sky_irradiance_offset);
+    work_recorder
+      .push_buffer_reference(32, _distant_light_sample_buffer_sky, 12);
+    auto const frame = _frame_number % max_frames_in_flight;
+    auto const layout =
+      make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
+    work_recorder
+      .push_buffer_reference(40, _grid_mesh->get_rt_block_grid_buffer());
+    work_recorder.push_buffer_reference(48, _rt_entity_buffers[frame]);
+    work_recorder.push_buffer_reference(
+      56, _rt_entity_binning_buffers[frame], layout.grid_offset);
+    work_recorder.push_buffer_reference(
+      64, _rt_entity_binning_buffers[frame], layout.nodes_offset);
+    // Actual group count, computed GPU-side from pass 1's atomic counter by
+    // indirect_dispatch_args.comp -- see direct_irradiance_trace_sky.comp.
+    work_recorder.dispatch_indirect({
+      .buffer = _distant_light_sample_buffer_sky,
+      .offset = 0,
+    });
   }
 
   void record_radiance_pass(
@@ -1215,59 +1337,48 @@ private:
     }
   }
 
-  // Per-pixel candidate for direct_irradiance.comp's sun sample (sky is
-  // handled by a separate surface-patch-based GI system, not this). Single
-  // image, no ping-pong, no persistence across frames -- pass 1 writes
-  // every in-bounds, on-geometry pixel unconditionally every frame, and
-  // pass 2 (direct_irradiance_shade.comp) independently checks depth==0
-  // and never reads a texel pass 1 didn't just write, so no clear-on-
-  // creation is needed either. r32_uint, bit-packed (see
-  // direct_irradiance.comp's header); accessed via imageLoad/imageStore
-  // through storage_uimages on both ends, not a sampled descriptor -- there
-  // is no uint-sampled bindless array in this codebase.
-  void get_direct_irradiance_sample_render_target(
-    graphics::Work_recorder &work_recorder, math::ivec3 extent) {
-    auto const create_image = !_direct_irradiance_sample_target ||
-      _direct_irradiance_sample_target->get_extent() != extent;
-    if (create_image) {
-      _direct_irradiance_sample_target = _graphics.create_image({
-        .dimensionality = 2,
-        .format = graphics::Image_format::r32_uint,
-        .extent = extent,
-        .mip_level_count = 1,
-        .array_layer_count = 1,
-        .usage = graphics::Image_usage_flag_bits::storage,
+  // Worst-case-sized buffers for direct_irradiance.comp (pass 1) to append
+  // Distant_light_sample records into and direct_irradiance_trace_sun.comp /
+  // direct_irradiance_trace_sky.comp (pass 2) to read them back from -- see
+  // direct_irradiance_common.glsl. Layout: a 12-byte VkDispatchIndirectCommand
+  // {x, y, z} (written every frame by indirect_dispatch_args.comp from the
+  // count below, then read by the trace pass's dispatch_indirect) followed
+  // by the 4-byte count and the Distant_light_sample array -- i.e. what the
+  // shaders see as Distant_light_samples (count + samples[]) starts 12 bytes
+  // into the buffer, not at its start. Each buffer is sized for every pixel
+  // picking that buffer's technique (12-byte indirect command + 4-byte count
+  // header plus one Distant_light_sample -- packed pixel + uv, 8 bytes --
+  // per pixel), since pass 1 can send any pixel to either buffer and never
+  // produces more than one sample per pixel total; the two buffers' counts
+  // can never both hit their individual worst case at once, but each must
+  // be able to alone. count is reset to 0 every frame via fill_buffer, not
+  // recreated -- no need to fully clear the sample data itself, since pass
+  // 2 only ever reads indices below whatever count pass 1 ends up with.
+  void get_distant_light_sample_buffer(math::ivec3 extent) {
+    auto const create_buffers = !_distant_light_sample_buffer_sun ||
+      _distant_light_sample_buffer_extent != extent;
+    if (create_buffers) {
+      auto const pixel_count =
+        static_cast<std::size_t>(extent.x()) *
+        static_cast<std::size_t>(extent.y());
+      auto const buffer_size = std::size_t{16} + pixel_count * std::size_t{8};
+      _distant_light_sample_buffer_sun = _graphics.create_buffer({
+        .size = buffer_size,
+        .usage = graphics::Buffer_usage_flag_bits::shader_device_address |
+                 graphics::Buffer_usage_flag_bits::transfer_dst |
+                 graphics::Buffer_usage_flag_bits::indirect_buffer,
+        .mapping_mode = graphics::Mapping_mode::none,
+        .min_alignment = 4,
       });
-      work_recorder.transition_image_layout(
-        {},
-        compute_shader_storage_write_scope,
-        graphics::Image_layout::undefined,
-        graphics::Image_layout::general,
-        _direct_irradiance_sample_target);
-      _direct_irradiance_sample_storage_descriptor =
-        _graphics.create_storage_image_descriptor(
-          _direct_irradiance_sample_target);
-      // Reservoir's unbiased weight W_y for the chosen candidate (see
-      // direct_irradiance.comp) -- r16_sfloat is plenty; W_y ends up
-      // O(sun_solid_angle) regardless of the sun's own huge radiance
-      // magnitude, since that magnitude cancels out of the ratio.
-      _direct_irradiance_weight_target = _graphics.create_image({
-        .dimensionality = 2,
-        .format = graphics::Image_format::r16_sfloat,
-        .extent = extent,
-        .mip_level_count = 1,
-        .array_layer_count = 1,
-        .usage = graphics::Image_usage_flag_bits::storage,
+      _distant_light_sample_buffer_sky = _graphics.create_buffer({
+        .size = buffer_size,
+        .usage = graphics::Buffer_usage_flag_bits::shader_device_address |
+                 graphics::Buffer_usage_flag_bits::transfer_dst |
+                 graphics::Buffer_usage_flag_bits::indirect_buffer,
+        .mapping_mode = graphics::Mapping_mode::none,
+        .min_alignment = 4,
       });
-      work_recorder.transition_image_layout(
-        {},
-        compute_shader_storage_write_scope,
-        graphics::Image_layout::undefined,
-        graphics::Image_layout::general,
-        _direct_irradiance_weight_target);
-      _direct_irradiance_weight_storage_descriptor =
-        _graphics.create_storage_image_descriptor(
-          _direct_irradiance_weight_target);
+      _distant_light_sample_buffer_extent = extent;
     }
   }
 
@@ -1561,6 +1672,12 @@ private:
     .access_mask = graphics::Access_flag_bits::transfer_write,
   };
 
+  static auto constexpr indirect_command_read_scope =
+    graphics::Synchronization_scope{
+      .stage_mask = graphics::Pipeline_stage_flag_bits::draw_indirect,
+      .access_mask = graphics::Access_flag_bits::indirect_command_read,
+    };
+
   static auto constexpr color_attachment_scope =
     graphics::Synchronization_scope{
       .stage_mask = graphics::Pipeline_stage_flag_bits::color_attachment_output,
@@ -1603,12 +1720,9 @@ private:
   rc::Strong<graphics::Descriptor> _direct_irradiance_render_target_descriptor{};
   rc::Strong<graphics::Descriptor>
     _direct_irradiance_render_target_storage_descriptor{};
-  rc::Strong<graphics::Image> _direct_irradiance_sample_target{};
-  rc::Strong<graphics::Descriptor>
-    _direct_irradiance_sample_storage_descriptor{};
-  rc::Strong<graphics::Image> _direct_irradiance_weight_target{};
-  rc::Strong<graphics::Descriptor>
-    _direct_irradiance_weight_storage_descriptor{};
+  rc::Strong<graphics::Buffer> _distant_light_sample_buffer_sun{};
+  rc::Strong<graphics::Buffer> _distant_light_sample_buffer_sky{};
+  math::ivec3 _distant_light_sample_buffer_extent{};
   std::array<rc::Strong<graphics::Descriptor>, blue_noise_texture_count>
     _blue_noise_texture_descriptors{};
   rc::Strong<graphics::Image> _crosshair_mask_render_target{};
@@ -1622,16 +1736,22 @@ private:
   graphics::Shader _composite_vertex_shader;
   graphics::Shader _composite_fragment_shader;
   graphics::Shader _sky_view_compute_shader;
+  graphics::Shader _sky_irradiance_compute_shader;
   graphics::Shader _direct_irradiance_compute_shader;
-  graphics::Shader _direct_irradiance_shade_compute_shader;
+  graphics::Shader _direct_irradiance_trace_sun_compute_shader;
+  graphics::Shader _direct_irradiance_trace_sky_compute_shader;
+  graphics::Shader _indirect_dispatch_args_compute_shader;
   graphics::Shader _rt_grid_entity_binning_compute_shader;
   graphics::Shader _radiance_compute_shader;
   rc::Strong<graphics::Pipeline> _grid_pipeline{};
   rc::Strong<graphics::Pipeline> _mesh_pipeline{};
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _sky_view_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _sky_irradiance_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _direct_irradiance_pipeline{};
-  rc::Strong<graphics::Compute_pipeline> _direct_irradiance_shade_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _direct_irradiance_trace_sun_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _direct_irradiance_trace_sky_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _indirect_dispatch_args_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _rt_grid_entity_binning_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _radiance_pipeline{};
   rc::Strong<graphics::Pipeline> _composite_pipeline{};

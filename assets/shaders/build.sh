@@ -36,9 +36,12 @@ shaders=(
   composite.frag
   atmosphere/transmittance.comp
   atmosphere/sky_view.comp
+  atmosphere/sky_irradiance.comp
   radiance.comp
+  indirect_dispatch_args.comp
   direct_irradiance.comp
-  direct_irradiance_shade.comp
+  direct_irradiance_trace_sun.comp
+  direct_irradiance_trace_sky.comp
   bin_rt_grid_entities.comp
 )
 
@@ -53,6 +56,6 @@ for shader in "${shaders[@]}"; do
     -o "$output"
 
   if [[ -n "$spirv_val" ]]; then
-    "$spirv_val" --target-env vulkan1.4 "$output"
+    "$spirv_val" --target-env vulkan1.4 --scalar-block-layout "$output"
   fi
 done
