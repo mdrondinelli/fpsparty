@@ -48,12 +48,10 @@ void main() {
   const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
   const ivec2 size =
     textureSize(sampled_images[push_constants.depth_texture], 0);
+  const uint pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
   bool valid = pixel.x < size.x && pixel.y < size.y;
-
-  uint pixel_index = 0u;
-  bool sample_is_sun = false;
+  bool is_sun = false;
   vec2 uv = vec2(0.0);
-
   if (valid) {
     const float depth =
       texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
@@ -73,62 +71,50 @@ void main() {
         texelFetch(
           sampled_images[push_constants.normal_texture], pixel, 0).rg);
       const vec3 sun_direction = push_constants.scene.sun_direction;
-
-      pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
-      Random random;
-      random.state = lowbias32(pixel_index) ^ lowbias32(push_constants.seed);
-
       const vec3 sun_transmittance =
         transmittance_along_ray(
           push_constants.transmittance_texture,
           vec3(0.0, r_ground + world_position.y, 0.0),
           sun_direction);
-
-      // Technique selection: importance-sample sun vs sky by unshadowed
-      // irradiance -- see direct_irradiance_trace.comp for the same
-      // computation, re-derived there once more rather than stored here (a
-      // cheap ambient-cube lookup plus one closed-form sun eval, not worth
-      // growing this struct over).
-      const vec3 unshadowed_sun = eval_f_true_sun(
-        sun_direction, n, sun_transmittance, push_constants.scene);
+      const vec3 unshadowed_sun =
+        eval_f_true_sun(
+          sun_direction,
+          n,
+          sun_transmittance,
+          push_constants.scene) *
+        sun_solid_angle;
       const vec3 unshadowed_sky =
         sample_sky_irradiance(push_constants.sky_irradiance, n);
-      const float l_sun = luminance(unshadowed_sun) * sun_solid_angle;
+      const float l_sun = luminance(unshadowed_sun);
       const float l_sky = luminance(unshadowed_sky);
       const float total = l_sun + l_sky;
       const float p_sun = total > 0.0 ? l_sun / total : 0.5;
-
-      sample_is_sun = random_float(random) < p_sun;
-      // The actual dir warp (square_to_cone / square_to_cosine_hemisphere)
-      // is deferred to pass 2 -- only uv, the two uniform samples it needs,
-      // travels through the buffer. See Distant_light_sample.
+      Random random;
+      random.state = lowbias32(pixel_index) ^ lowbias32(push_constants.seed);
+      is_sun = random_float(random) < p_sun;
       uv = vec2(random_float(random), random_float(random));
     }
   }
-
   if (gl_LocalInvocationIndex == 0u) {
     sun_offset = 0u;
     sky_offset = 0u;
   }
   barrier();
-
   if (valid) {
-    if (sample_is_sun) {
+    if (is_sun) {
       atomicAdd(sun_offset, 1u);
     } else {
       atomicAdd(sky_offset, 1u);
     }
   }
   barrier();
-
   if (gl_LocalInvocationIndex == 0u) {
     sun_offset = atomicAdd(push_constants.sun_samples.count, sun_offset);
     sky_offset = atomicAdd(push_constants.sky_samples.count, sky_offset);
   }
   barrier();
-
   if (valid) {
-    if (sample_is_sun) {
+    if (is_sun) {
       const uint slot = atomicAdd(sun_offset, 1u);
       push_constants.sun_samples.samples[slot].uv = packUnorm2x16(uv);
       push_constants.sun_samples.samples[slot].pixel = pixel_index;
