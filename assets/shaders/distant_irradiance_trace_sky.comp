@@ -28,6 +28,8 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 76) uint16_t motion_vector_texture;
   layout(offset = 78) uint16_t previous_normal_texture;
   layout(offset = 80) uint history_valid;
+  layout(offset = 84) uint16_t distant_irradiance_luminance_image;
+  layout(offset = 86) uint16_t previous_distant_irradiance_luminance_texture;
 } push_constants;
 
 void main() {
@@ -98,8 +100,10 @@ void main() {
   const float p_sky = 1.0 - p_sun;
 
   const vec3 E = p_sky > 0.0 && pdf > 0.0 ? f / (p_sky * pdf) : vec3(0.0);
-  const vec3 result = apply_distant_irradiance_history(
+  const float l = luminance(E);
+  const Distant_irradiance_history result = apply_distant_irradiance_history(
     E,
+    vec2(l, l * l),
     n,
     pixel,
     size,
@@ -108,9 +112,14 @@ void main() {
     push_constants.previous_depth_texture,
     push_constants.previous_normal_texture,
     push_constants.previous_distant_irradiance_texture,
+    push_constants.previous_distant_irradiance_luminance_texture,
     push_constants.history_valid);
   imageStore(
     storage_images[push_constants.distant_irradiance_image],
     pixel,
-    vec4(result, 1.0));
+    vec4(result.color, 1.0));
+  imageStore(
+    storage_images[push_constants.distant_irradiance_luminance_image],
+    pixel,
+    vec4(result.luminance_moments, 0.0, 0.0));
 }

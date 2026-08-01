@@ -4,7 +4,7 @@
 #include "srgb.glsl"
 
 layout(push_constant) uniform Push_constants {
-  layout(offset = 0) uint16_t albedo_texture_index;
+  layout(offset = 0) uint16_t radiance_texture_index;
   layout(offset = 2) uint16_t mask_texture_index;
   layout(offset = 4) uint frame_number;
 } push_constants;
@@ -35,12 +35,10 @@ void main() {
   const uvec3 pixel_hash =
     pcg3d(uvec3(uvec2(pixel), uint(push_constants.frame_number)));
   const vec3 pixel_noise = vec3(pixel_hash) / 4294967296.0f - 0.5;
-  const uint albedo_texture_index =
-    uint(push_constants.albedo_texture_index);
   const uint mask_texture_index =
     uint(push_constants.mask_texture_index);
   vec3 color = texelFetch(
-    sampled_images[albedo_texture_index],
+    sampled_images[radiance_texture_index],
     pixel,
     0).rgb;
   color *= 1.0f / 256.0f; // exposure 

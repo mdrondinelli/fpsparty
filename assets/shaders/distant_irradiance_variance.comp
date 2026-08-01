@@ -1,0 +1,69 @@
+#version 450
+
+#include "descriptors.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// Runs after distant_irradiance_trace_sun.comp / distant_irradiance_trace_
+// sky.comp (temporal accumulation done): reads this frame's luminance
+// moments, derives per-pixel variance, and blurs it with a 3x3 gaussian
+// (separable 1,2,1 binomial weights) before writing out.
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) uint16_t depth_texture;
+  layout(offset = 2) uint16_t distant_irradiance_luminance_texture;
+  layout(offset = 4) uint16_t distant_irradiance_variance_image;
+} push_constants;
+
+const float gaussian_weights[3] = float[3](0.25, 0.5, 0.25);
+
+float variance_at(ivec2 coord) {
+  const vec2 moments = texelFetch(
+    sampled_images[push_constants.distant_irradiance_luminance_texture],
+    coord,
+    0).rg;
+  return max(moments.y - moments.x * moments.x, 0.0);
+}
+
+void main() {
+  const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  const ivec2 size = imageSize(
+    storage_images[push_constants.distant_irradiance_variance_image]);
+  if (pixel.x >= size.x || pixel.y >= size.y) {
+    return;
+  }
+  // A tap with no geometry (depth == 0, e.g. sky) never had its luminance
+  // moments written this frame -- distant_irradiance.comp skips those
+  // pixels entirely -- so the texture holds stale/unrelated data there.
+  // Skip such taps and redistribute their weight among the rest, same as
+  // apply_distant_irradiance_history's per-tap rejection.
+  const float center_depth =
+    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
+  if (center_depth == 0.0) {
+    imageStore(
+      storage_images[push_constants.distant_irradiance_variance_image],
+      pixel,
+      vec4(0.0));
+    return;
+  }
+  const ivec2 max_coord = size - ivec2(1);
+  float weight_sum = 0.0;
+  float result = 0.0;
+  for (int dy = -1; dy <= 1; ++dy) {
+    for (int dx = -1; dx <= 1; ++dx) {
+      const ivec2 coord = clamp(pixel + ivec2(dx, dy), ivec2(0), max_coord);
+      const float depth =
+        texelFetch(sampled_images[push_constants.depth_texture], coord, 0).r;
+      if (depth == 0.0) {
+        continue;
+      }
+      const float weight =
+        gaussian_weights[dx + 1] * gaussian_weights[dy + 1];
+      weight_sum += weight;
+      result += weight * variance_at(coord);
+    }
+  }
+  imageStore(
+    storage_images[push_constants.distant_irradiance_variance_image],
+    pixel,
+    vec4(result / weight_sum, 0.0, 0.0, 0.0));
+}

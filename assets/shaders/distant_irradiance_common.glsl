@@ -46,33 +46,19 @@ const float distant_irradiance_history_depth_reject_ratio = 0.03;
 
 const float distant_irradiance_history_normal_reject_cos = 0.9;
 
-// Applies temporal accumulation to the distant irradiance signal. Shared by
-// distant_irradiance_trace_sun.comp and distant_irradiance_trace_sky.comp.
-//
-// History is manually 4-tap bilinear rather than hardware-filtered: hardware
-// filtering would silently blend in a disoccluded neighbor's rejected texel
-// at the same weight as valid ones. Instead each of the 4 nearest texels is
-// depth- and normal-tested individually; a rejected tap's bilinear weight is
-// dropped and the remaining taps' weights renormalized to sum to 1, so a
-// disocclusion only removes/redistributes weight rather than corrupting it.
-//
-// @param current the new distant irradiance sample
-// @param n the normal at the sample's pixel
-// @param pixel the sample's pixel coordinates
-// @param size the extent of the distant irradiance image
-// @param z_near the camera's near plane distance, for linearizing depth
-// @param motion_vector_texture this frame's motion vector texture
-// @param previous_depth_texture the previous frame's depth texture
-// @param previous_normal_texture the previous frame's normal texture
-// @param previous_distant_irradiance_texture the previous frame's
-//   accumulated distant irradiance texture
-// @param history_valid whether the previous frame's textures hold valid
-//   history (0 forces current to be returned unchanged)
-// @return current unmixed if there's no usable history (first frame /
-//   resize, off-screen reprojection, or all 4 history taps rejected);
-//   otherwise mix(history, current, 0.2)
-vec3 apply_distant_irradiance_history(
-    vec3 current,
+// Applies temporal accumulation to the distant irradiance color and
+// luminance moments (R = luminance, G = luminance^2, for a future variance
+// estimate). Manual 4-tap bilinear (not hardware-filtered) so each tap can
+// be depth/normal-rejected individually, with its weight redistributed
+// among the survivors rather than corrupting the blend.
+struct Distant_irradiance_history {
+  vec3 color;
+  vec2 luminance_moments;
+};
+
+Distant_irradiance_history apply_distant_irradiance_history(
+    vec3 current_color,
+    vec2 current_luminance_moments,
     vec3 n,
     ivec2 pixel,
     ivec2 size,
@@ -81,9 +67,10 @@ vec3 apply_distant_irradiance_history(
     uint previous_depth_texture,
     uint previous_normal_texture,
     uint previous_distant_irradiance_texture,
+    uint previous_distant_irradiance_luminance_texture,
     uint history_valid) {
   if (history_valid == 0u) {
-    return current;
+    return Distant_irradiance_history(current_color, current_luminance_moments);
   }
   const vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
   const vec3 motion_and_previous_depth =
@@ -91,7 +78,7 @@ vec3 apply_distant_irradiance_history(
   const vec2 previous_uv = uv + motion_and_previous_depth.xy;
   if (any(lessThan(previous_uv, vec2(0.0))) ||
       any(greaterThan(previous_uv, vec2(1.0)))) {
-    return current;
+    return Distant_irradiance_history(current_color, current_luminance_moments);
   }
   const float previous_linear_depth = z_near / motion_and_previous_depth.z;
 
@@ -108,7 +95,8 @@ vec3 apply_distant_irradiance_history(
     f.x * f.y);
 
   float weight_sum = 0.0;
-  vec3 history_sum = vec3(0.0);
+  vec3 color_sum = vec3(0.0);
+  vec2 luminance_sum = vec2(0.0);
   for (int i = 0; i < 4; ++i) {
     const ivec2 coord = clamp(base + offsets[i], ivec2(0), max_coord);
     const float history_depth =
@@ -123,17 +111,24 @@ vec3 apply_distant_irradiance_history(
     if (dot(n, history_normal) < distant_irradiance_history_normal_reject_cos) {
       continue;
     }
-    const vec3 history_color =
+    weight_sum += weights[i];
+    color_sum +=
+      weights[i] *
       texelFetch(
         sampled_images[previous_distant_irradiance_texture], coord, 0).rgb;
-    weight_sum += weights[i];
-    history_sum += weights[i] * history_color;
+    luminance_sum +=
+      weights[i] *
+      texelFetch(
+        sampled_images[previous_distant_irradiance_luminance_texture],
+        coord,
+        0).rg;
   }
   if (weight_sum <= 0.0) {
-    return current;
+    return Distant_irradiance_history(current_color, current_luminance_moments);
   }
-  const vec3 history = history_sum / weight_sum;
-  return mix(history, current, 0.2);
+  return Distant_irradiance_history(
+    mix(color_sum / weight_sum, current_color, 0.2),
+    mix(luminance_sum / weight_sum, current_luminance_moments, 0.2));
 }
 
 #endif
