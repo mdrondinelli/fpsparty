@@ -6,15 +6,17 @@ layout(local_size_x = 8, local_size_y = 8) in;
 
 // Runs after distant_irradiance_trace_sun.comp / distant_irradiance_trace_
 // sky.comp (temporal accumulation done): reads this frame's luminance
-// moments, derives per-pixel variance, and blurs it with a 3x3 gaussian
-// (separable 1,2,1 binomial weights) before writing out.
+// moments, derives per-pixel variance, and blurs it with a 5x5 gaussian
+// (separable 1,4,6,4,1 binomial weights, same kernel as distant_irradiance_
+// spatial_filter.comp's a-trous filter) before writing out.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) uint16_t depth_texture;
   layout(offset = 2) uint16_t distant_irradiance_luminance_texture;
   layout(offset = 4) uint16_t distant_irradiance_variance_image;
 } push_constants;
 
-const float gaussian_weights[3] = float[3](0.25, 0.5, 0.25);
+const float gaussian_weights[5] =
+  float[5](1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0 / 16.0);
 
 float variance_at(ivec2 coord) {
   const vec2 moments = texelFetch(
@@ -48,8 +50,8 @@ void main() {
   const ivec2 max_coord = size - ivec2(1);
   float weight_sum = 0.0;
   float result = 0.0;
-  for (int dy = -1; dy <= 1; ++dy) {
-    for (int dx = -1; dx <= 1; ++dx) {
+  for (int dy = -2; dy <= 2; ++dy) {
+    for (int dx = -2; dx <= 2; ++dx) {
       const ivec2 coord = clamp(pixel + ivec2(dx, dy), ivec2(0), max_coord);
       const float depth =
         texelFetch(sampled_images[push_constants.depth_texture], coord, 0).r;
@@ -57,7 +59,7 @@ void main() {
         continue;
       }
       const float weight =
-        gaussian_weights[dx + 1] * gaussian_weights[dy + 1];
+        gaussian_weights[dx + 2] * gaussian_weights[dy + 2];
       weight_sum += weight;
       result += weight * variance_at(coord);
     }

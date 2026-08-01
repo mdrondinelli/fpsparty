@@ -1,0 +1,111 @@
+#version 450
+
+#include "color.glsl"
+#include "descriptors.glsl"
+#include "distant_irradiance_spatial_filter.glsl"
+#include "octahedral.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// One iteration of the 5x5 a-trous edge-aware filter on the distant
+// irradiance color, combining the depth/normal/luminance edge-stopping
+// weights (distant_irradiance_spatial_filter.glsl) with the standard
+// a-trous B3-spline kernel. Also propagates variance for the next
+// iteration's luminance_weight tolerance, reusing this iteration's own
+// per-tap h(q)*w(p,q) weight:
+// Var(c_{i+1}(p)) = sum(h(q)*w(p,q))^2 * Var(c_i(q)) / (sum(h(q)*w(p,q)))^2.
+// Dispatched once per iteration with different textures/step_size rather
+// than duplicated -- nothing about the logic differs between iterations.
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) uint16_t depth_texture;
+  layout(offset = 2) uint16_t normal_texture;
+  layout(offset = 4) uint16_t depth_gradient_texture;
+  layout(offset = 6) uint16_t distant_irradiance_texture;
+  layout(offset = 8) uint16_t distant_irradiance_variance_texture;
+  layout(offset = 10) uint16_t distant_irradiance_filtered_image;
+  layout(offset = 12) uint16_t distant_irradiance_variance_image;
+  layout(offset = 16) uint step_size;
+} push_constants;
+
+const float kernel_1d[5] =
+  float[5](1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0 / 16.0);
+
+void main() {
+  const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  const ivec2 size = imageSize(
+    storage_images[push_constants.distant_irradiance_filtered_image]);
+  if (pixel.x >= size.x || pixel.y >= size.y) {
+    return;
+  }
+  const float depth_p =
+    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
+  if (depth_p == 0.0) {
+    imageStore(
+      storage_images[push_constants.distant_irradiance_filtered_image],
+      pixel,
+      vec4(0.0));
+    imageStore(
+      storage_images[push_constants.distant_irradiance_variance_image],
+      pixel,
+      vec4(0.0));
+    return;
+  }
+  const vec2 p = vec2(pixel);
+  const vec3 n_p = oct_decode(
+    texelFetch(sampled_images[push_constants.normal_texture], pixel, 0).rg);
+  const vec2 gradient_z_p = texelFetch(
+    sampled_images[push_constants.depth_gradient_texture], pixel, 0).rg;
+  const vec3 color_p = texelFetch(
+    sampled_images[push_constants.distant_irradiance_texture], pixel, 0).rgb;
+  const float l_p = luminance(color_p);
+  const float variance_p = texelFetch(
+    sampled_images[push_constants.distant_irradiance_variance_texture],
+    pixel,
+    0).r;
+
+  const ivec2 max_coord = size - ivec2(1);
+  const int step_size = int(push_constants.step_size);
+  vec3 color_numerator = vec3(0.0);
+  float weight_sum = 0.0;
+  float variance_numerator = 0.0;
+  for (int dy = -2; dy <= 2; ++dy) {
+    for (int dx = -2; dx <= 2; ++dx) {
+      const ivec2 coord =
+        clamp(pixel + ivec2(dx, dy) * step_size, ivec2(0), max_coord);
+      const float depth_q =
+        texelFetch(sampled_images[push_constants.depth_texture], coord, 0).r;
+      if (depth_q == 0.0) {
+        continue;
+      }
+      const vec2 q = vec2(coord);
+      const vec3 n_q = oct_decode(
+        texelFetch(sampled_images[push_constants.normal_texture], coord, 0)
+          .rg);
+      const vec3 color_q = texelFetch(
+        sampled_images[push_constants.distant_irradiance_texture],
+        coord,
+        0).rgb;
+      const float l_q = luminance(color_q);
+      const float weight =
+        kernel_1d[dx + 2] * kernel_1d[dy + 2] *
+        depth_weight(p, q, depth_p, depth_q, gradient_z_p) *
+        normal_weight(n_p, n_q) *
+        luminance_weight(l_p, l_q, variance_p);
+      const float variance_q = texelFetch(
+        sampled_images[push_constants.distant_irradiance_variance_texture],
+        coord,
+        0).r;
+      color_numerator += weight * color_q;
+      weight_sum += weight;
+      variance_numerator += weight * weight * variance_q;
+    }
+  }
+  imageStore(
+    storage_images[push_constants.distant_irradiance_filtered_image],
+    pixel,
+    vec4(color_numerator / weight_sum, 1.0));
+  imageStore(
+    storage_images[push_constants.distant_irradiance_variance_image],
+    pixel,
+    vec4(variance_numerator / (weight_sum * weight_sum), 0.0, 0.0, 0.0));
+}

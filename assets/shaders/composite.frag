@@ -38,7 +38,7 @@ void main() {
   const uint mask_texture_index =
     uint(push_constants.mask_texture_index);
   vec3 color = texelFetch(
-    sampled_images[radiance_texture_index],
+    sampled_images[push_constants.radiance_texture_index],
     pixel,
     0).rgb;
   color *= 1.0f / 256.0f; // exposure 

@@ -43,6 +43,7 @@ shaders=(
   distant_irradiance_trace_sun.comp
   distant_irradiance_trace_sky.comp
   distant_irradiance_variance.comp
+  distant_irradiance_spatial_filter.comp
   bin_rt_grid_entities.comp
 )
 

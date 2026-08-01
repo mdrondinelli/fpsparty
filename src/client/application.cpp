@@ -284,6 +284,9 @@ public:
           "./assets/shaders/distant_irradiance_trace_sky.comp.spv")},
         _distant_irradiance_variance_compute_shader{graphics::load_shader(
           "./assets/shaders/distant_irradiance_variance.comp.spv")},
+        _distant_irradiance_spatial_filter_compute_shader{
+          graphics::load_shader(
+            "./assets/shaders/distant_irradiance_spatial_filter.comp.spv")},
         _indirect_dispatch_args_compute_shader{graphics::load_shader(
           "./assets/shaders/indirect_dispatch_args.comp.spv")},
         _rt_grid_entity_binning_compute_shader{graphics::load_shader(
@@ -308,6 +311,9 @@ public:
         _distant_irradiance_variance_pipeline{
           _graphics.create_compute_pipeline(
             {.shader = &_distant_irradiance_variance_compute_shader})},
+        _distant_irradiance_spatial_filter_pipeline{
+          _graphics.create_compute_pipeline(
+            {.shader = &_distant_irradiance_spatial_filter_compute_shader})},
         _indirect_dispatch_args_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_indirect_dispatch_args_compute_shader})},
         _rt_grid_entity_binning_pipeline{_graphics.create_compute_pipeline(
@@ -446,9 +452,17 @@ private:
       _motion_vector_render_target_descriptor,
       graphics::Image_format::r16g16b16a16_sfloat,
       framebuffer_extent);
+    get_color_render_target(
+      work_recorder,
+      _depth_gradient_render_target,
+      _depth_gradient_render_target_descriptor,
+      graphics::Image_format::r16g16_sfloat,
+      framebuffer_extent);
     get_radiance_render_target(work_recorder, framebuffer_extent);
     get_distant_irradiance_render_targets(work_recorder, framebuffer_extent);
-    get_distant_irradiance_variance_render_target(
+    get_distant_irradiance_variance_render_targets(
+      work_recorder, framebuffer_extent);
+    get_distant_irradiance_filtered_render_targets(
       work_recorder, framebuffer_extent);
     get_distant_light_sample_buffer(framebuffer_extent);
     get_color_render_target(
@@ -549,6 +563,7 @@ private:
       graphics::Color_attachment_info{
         .image = _normal_render_targets[_frame_number % 2]},
       graphics::Color_attachment_info{.image = _motion_vector_render_target},
+      graphics::Color_attachment_info{.image = _depth_gradient_render_target},
     };
     work_recorder.begin_rendering({
       .color_attachments = gbuffer_color_attachments,
@@ -862,6 +877,54 @@ private:
       compute_shader_storage_write_scope,
       compute_shader_sampled_read_scope | compute_shader_storage_read_scope);
     record_distant_irradiance_variance_pass(work_recorder, framebuffer_size);
+    // Each iteration reads the previous one's outputs and writes into
+    // whichever slot is stale (its own input from two iterations back, no
+    // longer needed by anything). Slots just keep alternating 0/1/0/...
+    // regardless of iteration count. Step size doubles per the a-trous
+    // algorithm; the last iteration's filtered[...] is the final result --
+    // see record_radiance_pass.
+    record_distant_irradiance_spatial_filter_pass(
+      work_recorder,
+      framebuffer_size,
+      _distant_irradiance_render_target_descriptors[_frame_number % 2],
+      _distant_irradiance_filtered_render_target_storage_descriptors[0],
+      _distant_irradiance_variance_render_target_descriptors[0],
+      _distant_irradiance_variance_render_target_storage_descriptors[1],
+      1u);
+    record_distant_irradiance_spatial_filter_pass(
+      work_recorder,
+      framebuffer_size,
+      _distant_irradiance_filtered_render_target_descriptors[0],
+      _distant_irradiance_filtered_render_target_storage_descriptors[1],
+      _distant_irradiance_variance_render_target_descriptors[1],
+      _distant_irradiance_variance_render_target_storage_descriptors[0],
+      2u);
+    record_distant_irradiance_spatial_filter_pass(
+      work_recorder,
+      framebuffer_size,
+      _distant_irradiance_filtered_render_target_descriptors[1],
+      _distant_irradiance_filtered_render_target_storage_descriptors[0],
+      _distant_irradiance_variance_render_target_descriptors[0],
+      _distant_irradiance_variance_render_target_storage_descriptors[1],
+      4u);
+    record_distant_irradiance_spatial_filter_pass(
+      work_recorder,
+      framebuffer_size,
+      _distant_irradiance_filtered_render_target_descriptors[0],
+      _distant_irradiance_filtered_render_target_storage_descriptors[1],
+      _distant_irradiance_variance_render_target_descriptors[1],
+      _distant_irradiance_variance_render_target_storage_descriptors[0],
+      8u);
+    // 5 iterations total, steps 1/2/4/8/16 -- the standard SVGF
+    // configuration, giving an effective 65x65 pixel filter footprint.
+    record_distant_irradiance_spatial_filter_pass(
+      work_recorder,
+      framebuffer_size,
+      _distant_irradiance_filtered_render_target_descriptors[1],
+      _distant_irradiance_filtered_render_target_storage_descriptors[0],
+      _distant_irradiance_variance_render_target_descriptors[0],
+      _distant_irradiance_variance_render_target_storage_descriptors[1],
+      16u);
   }
 
   void record_distant_irradiance_variance_pass(
@@ -875,12 +938,46 @@ private:
       {_depth_render_target_descriptors[_frame_number % 2],
        _distant_irradiance_luminance_render_target_descriptors
          [_frame_number % 2],
-       _distant_irradiance_variance_render_target_storage_descriptor});
+       _distant_irradiance_variance_render_target_storage_descriptors[0]});
+    auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
+    auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
+    work_recorder.dispatch(group_count_x, group_count_y, 1);
+    // Read by record_distant_irradiance_spatial_filter_pass's first
+    // iteration below.
+    work_recorder.barrier(
+      compute_shader_storage_write_scope, compute_shader_sampled_read_scope);
+  }
+
+  void record_distant_irradiance_spatial_filter_pass(
+    graphics::Work_recorder &work_recorder,
+    math::ivec2 framebuffer_size,
+    rc::Strong<graphics::Descriptor> color_in_descriptor,
+    rc::Strong<graphics::Descriptor> color_out_storage_descriptor,
+    rc::Strong<graphics::Descriptor> variance_in_descriptor,
+    rc::Strong<graphics::Descriptor> variance_out_storage_descriptor,
+    u32 step_size) {
+    ZoneScoped;
+    // Called only from record_distant_irradiance_pass, once per a-trous
+    // iteration; each call's own trailing barrier orders the next one's
+    // (or record_radiance_pass's) reads of its outputs.
+    work_recorder.bind_compute_pipeline(
+      _distant_irradiance_spatial_filter_pipeline);
+    work_recorder.push_descriptors(
+      0,
+      {_depth_render_target_descriptors[_frame_number % 2],
+       _normal_render_target_descriptors[_frame_number % 2],
+       _depth_gradient_render_target_descriptor,
+       std::move(color_in_descriptor),
+       std::move(variance_in_descriptor),
+       std::move(color_out_storage_descriptor),
+       std::move(variance_out_storage_descriptor)});
+    work_recorder.push_data(16, std::as_bytes(std::span{&step_size, 1}));
     auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
     auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
     work_recorder.dispatch(group_count_x, group_count_y, 1);
     work_recorder.barrier(
-      compute_shader_storage_write_scope, fragment_shader_sampled_read_scope);
+      compute_shader_storage_write_scope,
+      compute_shader_sampled_read_scope | fragment_shader_sampled_read_scope);
   }
 
   void record_distant_irradiance_trace_sun_pass(
@@ -1045,7 +1142,7 @@ private:
        _depth_render_target_descriptors[_frame_number % 2],
        _sky_view_lut_sampled_descriptor,
        _radiance_render_target_storage_descriptor,
-       _distant_irradiance_render_target_descriptors[_frame_number % 2]});
+       _distant_irradiance_filtered_render_target_descriptors[0]});
     auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
     auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
     work_recorder.dispatch(group_count_x, group_count_y, 1);
@@ -1430,32 +1527,65 @@ private:
     }
   }
 
-  void get_distant_irradiance_variance_render_target(
+  void get_distant_irradiance_variance_render_targets(
     graphics::Work_recorder &work_recorder, math::ivec3 extent) {
-    auto const create_image = !_distant_irradiance_variance_render_target ||
-      _distant_irradiance_variance_render_target->get_extent() != extent;
-    if (create_image) {
-      _distant_irradiance_variance_render_target = _graphics.create_image({
-        .dimensionality = 2,
-        .format = graphics::Image_format::r16_sfloat,
-        .extent = extent,
-        .mip_level_count = 1,
-        .array_layer_count = 1,
-        .usage = graphics::Image_usage_flag_bits::sampled |
-                 graphics::Image_usage_flag_bits::storage,
-      });
-      work_recorder.transition_image_layout(
-        {},
-        compute_shader_storage_write_scope,
-        graphics::Image_layout::undefined,
-        graphics::Image_layout::general,
-        _distant_irradiance_variance_render_target);
-      _distant_irradiance_variance_render_target_descriptor =
-        _graphics.create_sampled_image_descriptor(
-          _distant_irradiance_variance_render_target);
-      _distant_irradiance_variance_render_target_storage_descriptor =
-        _graphics.create_storage_image_descriptor(
-          _distant_irradiance_variance_render_target);
+    auto const create_images = !_distant_irradiance_variance_render_targets[0] ||
+      _distant_irradiance_variance_render_targets[0]->get_extent() != extent;
+    if (create_images) {
+      for (auto i = std::size_t{}; i != 2; ++i) {
+        _distant_irradiance_variance_render_targets[i] = _graphics.create_image({
+          .dimensionality = 2,
+          .format = graphics::Image_format::r16_sfloat,
+          .extent = extent,
+          .mip_level_count = 1,
+          .array_layer_count = 1,
+          .usage = graphics::Image_usage_flag_bits::sampled |
+                   graphics::Image_usage_flag_bits::storage,
+        });
+        work_recorder.transition_image_layout(
+          {},
+          compute_shader_storage_write_scope,
+          graphics::Image_layout::undefined,
+          graphics::Image_layout::general,
+          _distant_irradiance_variance_render_targets[i]);
+        _distant_irradiance_variance_render_target_descriptors[i] =
+          _graphics.create_sampled_image_descriptor(
+            _distant_irradiance_variance_render_targets[i]);
+        _distant_irradiance_variance_render_target_storage_descriptors[i] =
+          _graphics.create_storage_image_descriptor(
+            _distant_irradiance_variance_render_targets[i]);
+      }
+    }
+  }
+
+  void get_distant_irradiance_filtered_render_targets(
+    graphics::Work_recorder &work_recorder, math::ivec3 extent) {
+    auto const create_images = !_distant_irradiance_filtered_render_targets[0] ||
+      _distant_irradiance_filtered_render_targets[0]->get_extent() != extent;
+    if (create_images) {
+      for (auto i = std::size_t{}; i != 2; ++i) {
+        _distant_irradiance_filtered_render_targets[i] = _graphics.create_image({
+          .dimensionality = 2,
+          .format = graphics::Image_format::r16g16b16a16_sfloat,
+          .extent = extent,
+          .mip_level_count = 1,
+          .array_layer_count = 1,
+          .usage = graphics::Image_usage_flag_bits::sampled |
+                   graphics::Image_usage_flag_bits::storage,
+        });
+        work_recorder.transition_image_layout(
+          {},
+          compute_shader_storage_write_scope,
+          graphics::Image_layout::undefined,
+          graphics::Image_layout::general,
+          _distant_irradiance_filtered_render_targets[i]);
+        _distant_irradiance_filtered_render_target_descriptors[i] =
+          _graphics.create_sampled_image_descriptor(
+            _distant_irradiance_filtered_render_targets[i]);
+        _distant_irradiance_filtered_render_target_storage_descriptors[i] =
+          _graphics.create_storage_image_descriptor(
+            _distant_irradiance_filtered_render_targets[i]);
+      }
     }
   }
 
@@ -1648,6 +1778,7 @@ private:
       graphics::Image_format::r16g16b16a16_sfloat,
       graphics::Image_format::r16g16_snorm,
       graphics::Image_format::r16g16b16a16_sfloat,
+      graphics::Image_format::r16g16_sfloat,
     };
     auto pipeline = _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
@@ -1683,6 +1814,7 @@ private:
       graphics::Image_format::r16g16b16a16_sfloat,
       graphics::Image_format::r16g16_snorm,
       graphics::Image_format::r16g16b16a16_sfloat,
+      graphics::Image_format::r16g16_sfloat,
     };
     auto pipeline = _graphics.create_pipeline({
       .shader_stages = std::span{shader_stages},
@@ -1835,6 +1967,8 @@ private:
     _normal_render_target_descriptors{};
   rc::Strong<graphics::Image> _motion_vector_render_target{};
   rc::Strong<graphics::Descriptor> _motion_vector_render_target_descriptor{};
+  rc::Strong<graphics::Image> _depth_gradient_render_target{};
+  rc::Strong<graphics::Descriptor> _depth_gradient_render_target_descriptor{};
   rc::Strong<graphics::Image> _radiance_render_target{};
   rc::Strong<graphics::Descriptor> _radiance_render_target_descriptor{};
   rc::Strong<graphics::Descriptor> _radiance_render_target_storage_descriptor{};
@@ -1855,13 +1989,28 @@ private:
   std::array<rc::Strong<graphics::Descriptor>, 2>
     _distant_irradiance_luminance_render_target_storage_descriptors{};
   std::optional<u32> _last_distant_irradiance_frame{};
-  // 3x3-gaussian-blurred variance derived from the luminance moments above,
-  // recomputed fresh every frame (not itself temporally accumulated).
-  rc::Strong<graphics::Image> _distant_irradiance_variance_render_target{};
-  rc::Strong<graphics::Descriptor>
-    _distant_irradiance_variance_render_target_descriptor{};
-  rc::Strong<graphics::Descriptor>
-    _distant_irradiance_variance_render_target_storage_descriptor{};
+  // Variance of the distant irradiance signal: slot [0] is
+  // distant_irradiance_variance.comp's 3x3-blurred seed (derived from the
+  // luminance moments above); each a-trous iteration then reads one slot
+  // and writes its own propagated variance into the other. Ping-ponged
+  // within a frame only (same two images reused every frame), not across
+  // frames -- recomputed fresh every frame, not itself temporally
+  // accumulated.
+  std::array<rc::Strong<graphics::Image>, 2>
+    _distant_irradiance_variance_render_targets{};
+  std::array<rc::Strong<graphics::Descriptor>, 2>
+    _distant_irradiance_variance_render_target_descriptors{};
+  std::array<rc::Strong<graphics::Descriptor>, 2>
+    _distant_irradiance_variance_render_target_storage_descriptors{};
+  // 5x5 a-trous-filtered color, one slot per iteration (iteration 2 reads
+  // iteration 1's output, so they can't share an image) -- also recomputed
+  // fresh every frame.
+  std::array<rc::Strong<graphics::Image>, 2>
+    _distant_irradiance_filtered_render_targets{};
+  std::array<rc::Strong<graphics::Descriptor>, 2>
+    _distant_irradiance_filtered_render_target_descriptors{};
+  std::array<rc::Strong<graphics::Descriptor>, 2>
+    _distant_irradiance_filtered_render_target_storage_descriptors{};
   rc::Strong<graphics::Buffer> _distant_light_sample_buffer_sun{};
   rc::Strong<graphics::Buffer> _distant_light_sample_buffer_sky{};
   math::ivec3 _distant_light_sample_buffer_extent{};
@@ -1883,6 +2032,7 @@ private:
   graphics::Shader _distant_irradiance_trace_sun_compute_shader;
   graphics::Shader _distant_irradiance_trace_sky_compute_shader;
   graphics::Shader _distant_irradiance_variance_compute_shader;
+  graphics::Shader _distant_irradiance_spatial_filter_compute_shader;
   graphics::Shader _indirect_dispatch_args_compute_shader;
   graphics::Shader _rt_grid_entity_binning_compute_shader;
   graphics::Shader _radiance_compute_shader;
@@ -1895,6 +2045,8 @@ private:
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_trace_sun_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_trace_sky_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_variance_pipeline{};
+  rc::Strong<graphics::Compute_pipeline>
+    _distant_irradiance_spatial_filter_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _indirect_dispatch_args_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _rt_grid_entity_binning_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _radiance_pipeline{};

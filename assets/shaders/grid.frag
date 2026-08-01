@@ -13,6 +13,7 @@ layout(location = 4) flat in float in_emissivity_scale;
 layout(location = 0) out vec4 out_albedo;
 layout(location = 1) out vec2 out_normal;
 layout(location = 2) out vec3 out_motion_vector;
+layout(location = 3) out vec2 out_depth_gradient;
 
 void main() {
   const vec3 base_color =
@@ -24,4 +25,5 @@ void main() {
   out_albedo = vec4(base_color, in_emissivity_scale);
   out_normal = oct_encode(n);
   out_motion_vector = motion_vector(in_current_clip, in_previous_clip);
+  out_depth_gradient = vec2(dFdx(gl_FragCoord.z), dFdy(gl_FragCoord.z));
 }

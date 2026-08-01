@@ -44,7 +44,7 @@ vec3 eval_incident_irradiance_sky(vec3 w_i, vec3 n, Scene scene, uint sky_view_l
 
 const float distant_irradiance_history_depth_reject_ratio = 0.03;
 
-const float distant_irradiance_history_normal_reject_cos = 0.9;
+const float distant_irradiance_history_normal_reject_cos = 0.9659;
 
 // Applies temporal accumulation to the distant irradiance color and
 // luminance moments (R = luminance, G = luminance^2, for a future variance
