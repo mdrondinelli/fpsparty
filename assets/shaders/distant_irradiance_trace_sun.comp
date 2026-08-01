@@ -1,0 +1,111 @@
+// Sun half of pass 2 (distant_irradiance_trace_sky.comp is the other half).
+
+#version 450
+
+#include "atmosphere/sky_irradiance.glsl"
+#include "color.glsl"
+#include "distant_irradiance_common.glsl"
+#include "octahedral.glsl"
+#include "rt.glsl"
+#include "sampling.glsl"
+
+layout(local_size_x = 64) in;
+
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) Scene scene;
+  layout(offset = 8) uint16_t normal_texture;
+  layout(offset = 10) uint16_t depth_texture;
+  layout(offset = 12) uint16_t distant_irradiance_image;
+  layout(offset = 14) uint16_t transmittance_texture;
+  layout(offset = 16) Sky_irradiance sky_irradiance;
+  layout(offset = 24) Distant_light_samples sun_samples;
+  layout(offset = 32) Rt_block_grid rt_block_grid;
+  layout(offset = 40) Rt_entities entities;
+  layout(offset = 48) Rt_entity_grid entity_grid;
+  layout(offset = 56) Rt_entity_nodes entity_nodes;
+  layout(offset = 64) uint16_t previous_depth_texture;
+  layout(offset = 66) uint16_t previous_distant_irradiance_texture;
+  layout(offset = 68) uint16_t motion_vector_texture;
+  layout(offset = 70) uint16_t previous_normal_texture;
+  layout(offset = 72) uint history_valid;
+} push_constants;
+
+void main() {
+  if (gl_GlobalInvocationID.x >= push_constants.sun_samples.count) {
+    return;
+  }
+  const Distant_light_sample light_sample =
+    push_constants.sun_samples.samples[gl_GlobalInvocationID.x];
+  const ivec2 size =
+    imageSize(storage_images[push_constants.distant_irradiance_image]);
+  const ivec2 pixel = ivec2(
+    int(light_sample.pixel % uint(size.x)),
+    int(light_sample.pixel / uint(size.x)));
+  const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
+  const vec3 view_ray_origin = push_constants.scene.camera_basis[3].xyz;
+  const vec3 view_ray_direction = vec3(
+    -ndc.x * push_constants.scene.zoom.x,
+    -ndc.y * push_constants.scene.zoom.y,
+    1.0);
+  const float depth =
+    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
+  const float view_z = push_constants.scene.z_near / depth;
+  const vec3 shading_position =
+    view_ray_origin +
+    mat3(push_constants.scene.camera_basis) * (view_ray_direction * view_z);
+  const vec3 n = oct_decode(
+    texelFetch(
+      sampled_images[push_constants.normal_texture], pixel, 0).rg);
+  const vec3 sun_irradiance = push_constants.scene.sun_irradiance;
+  const vec3 sun_direction = push_constants.scene.sun_direction;
+  const vec3 w_i =
+    make_basis(sun_direction) *
+    square_to_cone(unpackUnorm2x16(light_sample.uv), cos_sun_angular_radius);
+  const vec3 transmittance =
+    transmittance_along_ray(
+      push_constants.transmittance_texture,
+      vec3(0.0, r_ground + shading_position.y, 0.0),
+      w_i);
+  const vec3 shadow_ray_origin = offset_ray_origin(shading_position, n);
+  const bool shadow_ray_hit = trace_ray(
+    push_constants.rt_block_grid,
+    push_constants.entities,
+    push_constants.entity_grid,
+    push_constants.entity_nodes,
+    shadow_ray_origin,
+    w_i,
+    true);
+  const vec3 f =
+    (shadow_ray_hit ? 0.0 : 1.0) *
+    eval_incident_irradiance_sun(w_i, n, sun_irradiance, transmittance);
+  const float pdf = 1.0 / sun_solid_angle;
+
+  // Re-derived from pass 1 (see distant_irradiance.comp).
+  const vec3 integrated_unshadowed_sun =
+    eval_incident_irradiance_sun(sun_direction, n, sun_irradiance, transmittance) *
+    sun_solid_angle;
+  const vec3 integrated_unshadowed_sky =
+    sample_sky_irradiance(push_constants.sky_irradiance, n);
+  const float l_sun = luminance(integrated_unshadowed_sun);
+  const float l_sky = luminance(integrated_unshadowed_sky);
+  const float l_total = l_sun + l_sky;
+  // Guard against l_total == 0 (NaN is contagious through history).
+  const float p_sun = l_total > 0.0 ? l_sun / l_total : 0.0;
+
+  const vec3 E = p_sun > 0.0 ? f / (p_sun * pdf) : vec3(0.0);
+  const vec3 result = apply_distant_irradiance_history(
+    E,
+    n,
+    pixel,
+    size,
+    push_constants.scene.z_near,
+    push_constants.motion_vector_texture,
+    push_constants.previous_depth_texture,
+    push_constants.previous_normal_texture,
+    push_constants.previous_distant_irradiance_texture,
+    push_constants.history_valid);
+  imageStore(
+    storage_images[push_constants.distant_irradiance_image],
+    pixel,
+    vec4(result, 1.0));
+}

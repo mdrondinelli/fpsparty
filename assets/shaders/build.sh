@@ -39,9 +39,9 @@ shaders=(
   atmosphere/sky_irradiance.comp
   radiance.comp
   indirect_dispatch_args.comp
-  direct_irradiance.comp
-  direct_irradiance_trace_sun.comp
-  direct_irradiance_trace_sky.comp
+  distant_irradiance.comp
+  distant_irradiance_trace_sun.comp
+  distant_irradiance_trace_sky.comp
   bin_rt_grid_entities.comp
 )
 

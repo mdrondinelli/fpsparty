@@ -18,8 +18,8 @@ restrict buffer Indirect_dispatch_args {
   uint count;
 };
 
-// The consuming dispatch_indirect's local_size_x -- direct_irradiance_
-// trace_sun.comp / direct_irradiance_trace_sky.comp are both 64 today, the
+// The consuming dispatch_indirect's local_size_x -- distant_irradiance_
+// trace_sun.comp / distant_irradiance_trace_sky.comp are both 64 today, the
 // only callers of this shader.
 const uint group_size = 64;
 

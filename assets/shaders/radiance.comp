@@ -13,7 +13,7 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 58) uint16_t depth_texture;
   layout(offset = 60) uint16_t sky_view_lut;
   layout(offset = 62) uint16_t radiance_image;
-  layout(offset = 64) uint16_t direct_irradiance_texture;
+  layout(offset = 64) uint16_t distant_irradiance_texture;
 } push_constants;
 
 void main() {
@@ -43,13 +43,13 @@ void main() {
   const vec4 material =
     texelFetch(
       sampled_images[push_constants.albedo_texture], pixel, 0);
-  const vec3 direct_irradiance =
+  const vec3 distant_irradiance =
     texelFetch(
-      sampled_images[push_constants.direct_irradiance_texture],
+      sampled_images[push_constants.distant_irradiance_texture],
       pixel,
       0).rgb;
   const vec3 L_e = material.rgb * material.a;
-  const vec3 L = L_e + material.rgb / pi * direct_irradiance;
+  const vec3 L = L_e + material.rgb / pi * distant_irradiance;
   imageStore(
     storage_images[push_constants.radiance_image],
     pixel,

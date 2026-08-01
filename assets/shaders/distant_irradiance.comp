@@ -1,7 +1,8 @@
 #version 450
 
 #include "atmosphere/sky_irradiance.glsl"
-#include "direct_irradiance_common.glsl"
+#include "color.glsl"
+#include "distant_irradiance_common.glsl"
 #include "octahedral.glsl"
 #include "random.glsl"
 
@@ -28,45 +29,51 @@ void main() {
     textureSize(sampled_images[push_constants.depth_texture], 0);
   const uint pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
   bool valid = pixel.x < size.x && pixel.y < size.y;
+  float depth = 0.0;
   bool is_sun = false;
   vec2 uv = vec2(0.0);
   if (valid) {
-    const float depth =
+    depth =
       texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
     valid = depth != 0.0;
-    if (valid) {
-      const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
-      const vec3 view_ray = vec3(
-        -ndc.x * push_constants.scene.zoom.x,
-        -ndc.y * push_constants.scene.zoom.y,
-        1.0);
-      const vec3 camera_position = push_constants.scene.camera_basis[3].xyz;
-      const float view_z = push_constants.scene.z_near / depth;
-      const vec3 world_position =
-        camera_position +
-        mat3(push_constants.scene.camera_basis) * (view_ray * view_z);
-      const vec3 n = oct_decode(
-        texelFetch(
-          sampled_images[push_constants.normal_texture], pixel, 0).rg);
-      const vec3 sun_direction = push_constants.scene.sun_direction;
-      const vec3 sun_transmittance =
-        transmittance_along_ray(
-          push_constants.transmittance_texture,
-          vec3(0.0, r_ground + world_position.y, 0.0),
-          sun_direction);
-      const vec3 unshadowed_sun =
-        eval_f_true_sun(
-          sun_direction,
-          n,
-          sun_transmittance,
-          push_constants.scene) *
-        sun_solid_angle;
-      const vec3 unshadowed_sky =
-        sample_sky_irradiance(push_constants.sky_irradiance, n);
-      const float l_sun = luminance(unshadowed_sun);
-      const float l_sky = luminance(unshadowed_sky);
-      const float total = l_sun + l_sky;
-      const float p_sun = total > 0.0 ? l_sun / total : 0.5;
+  }
+  if (valid) {
+    const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
+    const vec3 view_ray = vec3(
+      -ndc.x * push_constants.scene.zoom.x,
+      -ndc.y * push_constants.scene.zoom.y,
+      1.0);
+    const vec3 camera_position = push_constants.scene.camera_basis[3].xyz;
+    const float view_z = push_constants.scene.z_near / depth;
+    const vec3 world_position =
+      camera_position +
+      mat3(push_constants.scene.camera_basis) * (view_ray * view_z);
+    const vec3 n = oct_decode(
+      texelFetch(
+        sampled_images[push_constants.normal_texture], pixel, 0).rg);
+    const vec3 sun_direction = push_constants.scene.sun_direction;
+    const vec3 sun_irradiance = push_constants.scene.sun_irradiance;
+    const vec3 sun_transmittance =
+      transmittance_along_ray(
+        push_constants.transmittance_texture,
+        vec3(0.0, r_ground + world_position.y, 0.0),
+        sun_direction);
+    const vec3 integrated_unshadowed_sun =
+      eval_incident_irradiance_sun(
+        sun_direction,
+        n,
+        sun_irradiance,
+        sun_transmittance) *
+      sun_solid_angle;
+    const vec3 integrated_unshadowed_sky =
+      sample_sky_irradiance(push_constants.sky_irradiance, n);
+    const float l_sun = luminance(integrated_unshadowed_sun);
+    const float l_sky = luminance(integrated_unshadowed_sky);
+    const float total = l_sun + l_sky;
+    if (total == 0.0) {
+      valid = false;
+    } else {
+      const float p_sun = l_sun / total;
       Random random;
       random.state = lowbias32(pixel_index) ^ lowbias32(push_constants.seed);
       is_sun = random_float(random) < p_sun;
