@@ -142,6 +142,7 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
     .shaderStorageImageArrayNonUniformIndexing = true,
     .descriptorBindingUpdateUnusedWhilePending = true,
     .scalarBlockLayout = true,
+    .timelineSemaphore = true,
     .bufferDeviceAddress = true,
   };
   auto vulkan_1_1_features = vk::PhysicalDeviceVulkan11Features{
@@ -212,6 +213,11 @@ Global_vulkan_state &Global_vulkan_state::get() noexcept {
 void Global_vulkan_state::submit(vk::SubmitInfo const &info, vk::Fence fence) {
   auto const lock = std::scoped_lock{_queue_mutex};
   _queue.submit({info}, fence);
+}
+
+void Global_vulkan_state::submit2(vk::SubmitInfo2 const &info, vk::Fence fence) {
+  auto const lock = std::scoped_lock{_queue_mutex};
+  _queue.submit2({info}, fence);
 }
 
 vk::Result Global_vulkan_state::present(vk::PresentInfoKHR const &info) {

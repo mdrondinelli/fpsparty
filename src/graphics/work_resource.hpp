@@ -5,6 +5,7 @@
 
 #include <vulkan/vulkan.hpp>
 
+#include <int.hpp>
 #include <rc.hpp>
 
 #include "buffer.hpp"
@@ -20,6 +21,9 @@ struct Work_resource {
   vk::UniqueFence vk_fence;
   vk::UniqueCommandPool vk_command_pool;
   vk::CommandBuffer vk_command_buffer;
+  // Value this resource's submission signaled on Work_queue's shared
+  // timeline semaphore -- see Work::timeline_value.
+  u64 timeline_value{};
   std::vector<rc::Strong<Buffer const>> buffers{};
   std::vector<rc::Strong<Descriptor const>> descriptors{};
   std::vector<rc::Strong<Image const>> images{};

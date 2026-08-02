@@ -251,9 +251,13 @@ Work_recorder Graphics::record_transient_work() {
     }});
 }
 
-rc::Strong<Work> Graphics::submit_transient_work(Work_recorder recorder) {
+rc::Strong<Work> Graphics::submit_transient_work(
+  Work_recorder recorder, rc::Strong<Work> const &wait_for) {
   auto resource = detail::release_work_recorder(std::move(recorder));
-  return _works.submit({.resource = &resource});
+  return _works.submit({
+    .resource = &resource,
+    .wait_timeline_value = wait_for ? wait_for->timeline_value() : 0,
+  });
 }
 
 std::optional<std::pair<Work_recorder, rc::Strong<Image>>>
@@ -309,7 +313,8 @@ std::pair<Work_recorder, rc::Strong<Image>> Graphics::record_frame_work() {
   return *try_record_frame_work();
 }
 
-rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {
+rc::Strong<Work> Graphics::submit_frame_work(
+  Work_recorder recorder, rc::Strong<Work> const &wait_for) {
   ZoneScoped;
   auto &frame_resource = _frame_resources[_frame_resource_index];
   auto &swapchain_image_release_semaphore =
@@ -328,6 +333,7 @@ rc::Strong<Work> Graphics::submit_frame_work(Work_recorder recorder) {
     .resource = &work_resource,
     .wait_semaphore = *frame_resource.swapchain_image_acquire_semaphore,
     .signal_semaphore = *swapchain_image_release_semaphore,
+    .wait_timeline_value = wait_for ? wait_for->timeline_value() : 0,
   });
   try {
     auto const present_result = Global_vulkan_state::get().present({

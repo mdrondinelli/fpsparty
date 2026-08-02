@@ -274,6 +274,20 @@ target_include_directories(
 target_link_libraries(graphics glfw volk GPUOpen::VulkanMemoryAllocator)
 target_link_libraries(graphics spirv-reflect)
 
+# librender_graph
+add_library(
+  render_graph
+  src/render_graph/builder.cpp
+  src/render_graph/graph.cpp
+  src/render_graph/resources.cpp
+)
+target_include_directories(
+  render_graph
+  PUBLIC
+  ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(render_graph PUBLIC graphics)
+
 # client
 add_executable(
   client-app
@@ -310,6 +324,7 @@ set(fpsparty_targets
   int-map-tests
   server
   graphics
+  render_graph
   client-app
 )
 set_property(TARGET ${fpsparty_targets} PROPERTY CXX_STANDARD 23)

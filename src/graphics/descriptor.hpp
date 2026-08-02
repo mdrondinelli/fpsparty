@@ -29,6 +29,8 @@ public:
 
   u32 get_handle() const noexcept { return _handle; }
 
+  rc::Strong<Image const> const &get_image() const noexcept { return _image; }
+
 private:
   friend class rc::Factory<Descriptor>;
 

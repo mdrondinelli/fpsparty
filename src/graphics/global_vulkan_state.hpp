@@ -32,6 +32,8 @@ public:
 
   void submit(vk::SubmitInfo const &info, vk::Fence fence);
 
+  void submit2(vk::SubmitInfo2 const &info, vk::Fence fence);
+
   vk::Result present(vk::PresentInfoKHR const &info);
 
 private:

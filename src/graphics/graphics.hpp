@@ -69,14 +69,22 @@ public:
 
   Work_recorder record_transient_work();
 
-  rc::Strong<Work> submit_transient_work(Work_recorder recorder);
+  // wait_for, if given, makes this submission's GPU execution wait on
+  // wait_for's completion (via Work_queue's shared timeline semaphore)
+  // before it begins -- a GPU-side wait, not a CPU stall. Use this to
+  // order two submissions that touch the same resource without the RHI
+  // silently serializing every submission; the caller decides when it's
+  // actually needed.
+  rc::Strong<Work> submit_transient_work(
+    Work_recorder recorder, rc::Strong<Work> const &wait_for = {});
 
   std::optional<std::pair<Work_recorder, rc::Strong<Image>>>
   try_record_frame_work();
 
   std::pair<Work_recorder, rc::Strong<Image>> record_frame_work();
 
-  rc::Strong<Work> submit_frame_work(Work_recorder recorder);
+  rc::Strong<Work> submit_frame_work(
+    Work_recorder recorder, rc::Strong<Work> const &wait_for = {});
 
   bool is_vsync_preferred() const noexcept;
 

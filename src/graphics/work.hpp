@@ -3,6 +3,7 @@
 
 #include "graphics/work_done_callback.hpp"
 #include "graphics/work_resource.hpp"
+#include "int.hpp"
 #include "rc.hpp"
 
 namespace fpsparty::graphics {
@@ -23,6 +24,13 @@ public:
   bool is_done() const;
 
   void await() const;
+
+  // Value this submission signaled on Work_queue's shared timeline
+  // semaphore. Pass the owning Work to Graphics::submit_frame_work/
+  // submit_transient_work's wait_for parameter to make a later
+  // submission's GPU execution wait on this one having completed,
+  // without a CPU-side stall.
+  u64 timeline_value() const noexcept { return _resource.timeline_value; }
 
 private:
   friend class rc::Factory<Work>;
