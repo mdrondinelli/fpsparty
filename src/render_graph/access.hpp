@@ -34,6 +34,18 @@ constexpr Access color_attachment_write{
   .access_mask = graphics::Access_flag_bits::color_attachment_write,
 };
 
+constexpr Access indirect_command_read{
+  .stage_mask = graphics::Pipeline_stage_flag_bits::draw_indirect,
+  .access_mask = graphics::Access_flag_bits::indirect_command_read,
+};
+
+constexpr Access depth_attachment_write{
+  .stage_mask = graphics::Pipeline_stage_flag_bits::early_fragment_tests |
+                graphics::Pipeline_stage_flag_bits::late_fragment_tests,
+  .access_mask = graphics::Access_flag_bits::depth_stencil_attachment_read |
+                 graphics::Access_flag_bits::depth_stencil_attachment_write,
+};
+
 } // namespace access
 } // namespace fpsparty::render_graph
 

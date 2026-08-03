@@ -103,6 +103,14 @@ add_library(
   src/client/client.cpp
   src/client/grid_mesh.cpp
   src/client/local_player.cpp
+  src/client/passes/composite_pass.cpp
+  src/client/passes/crosshair_pass.cpp
+  src/client/passes/distant_irradiance_passes.cpp
+  src/client/passes/gbuffer_pass.cpp
+  src/client/passes/radiance_pass.cpp
+  src/client/passes/rt_entity_binning_pass.cpp
+  src/client/passes/sky_irradiance_pass.cpp
+  src/client/passes/sky_view_pass.cpp
   src/client/session.cpp
   src/client/texture_manager.cpp
 )
@@ -119,7 +127,7 @@ target_include_directories(
 )
 target_link_libraries(
   client
-  PUBLIC game graphics scene net ppm
+  PUBLIC game graphics render_graph scene net ppm
   PRIVATE tracy
 )
 

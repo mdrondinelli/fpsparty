@@ -28,6 +28,7 @@
 #include <math/transforms.hpp>
 #include <math/vec.hpp>
 #include <ppm/ppm.hpp>
+#include <render_graph/graph.hpp>
 
 #include "application.hpp"
 #include "block_mod/block_mod.hpp"
@@ -40,6 +41,17 @@
 #include "block_texture_registry.hpp"
 #include "client.hpp"
 #include "grid_mesh.hpp"
+#include "passes/distant_irradiance_passes.hpp"
+#include "passes/composite_pass.hpp"
+#include "passes/crosshair_pass.hpp"
+#include "passes/gbuffer_pass.hpp"
+#include "passes/radiance_pass.hpp"
+#include "passes/rt_entity_binning_pass.hpp"
+#include "passes/sky_irradiance_pass.hpp"
+#include "passes/sky_view_pass.hpp"
+#include "rt_entity.hpp"
+#include "rt_math.hpp"
+#include "scene_uniform_layout.hpp"
 #include "texture_manager.hpp"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
@@ -138,24 +150,9 @@ auto const cube_mesh_indices = std::vector<std::uint16_t>{
 auto const crosshair_indices =
   std::array<std::uint16_t, 12>{0, 1, 2, 2, 1, 3, 4, 5, 6, 6, 5, 7};
 auto const composite_indices = std::array<std::uint16_t, 3>{0, 1, 2};
-auto const sky_color = math::vec4{0.4196f, 0.6196f, 0.7451f, 1.0f};
 auto constexpr z_near = 0.1f;
 auto const transmittance_lut_size = math::ivec2{256, 128};
 auto const sky_view_lut_size = math::ivec2{256, 256};
-
-// 320 = 236 (end of z_near) + 72 (18 floats of sky_irradiance) = 308,
-// rounded up to the next 16-byte boundary.
-auto constexpr scene_uniform_data_size = std::size_t{320};
-auto constexpr scene_view_projection_matrix_offset = std::size_t{0};
-auto constexpr scene_previous_view_projection_matrix_offset = std::size_t{64};
-auto constexpr scene_animation_time_offset = std::size_t{128};
-auto constexpr scene_camera_basis_offset = std::size_t{144};
-auto constexpr scene_sun_direction_offset = std::size_t{192};
-auto constexpr scene_sun_irradiance_offset = std::size_t{208};
-auto constexpr scene_zoom_offset = std::size_t{224};
-auto constexpr scene_z_near_offset = std::size_t{232};
-// Must match scene.glsl's sky_irradiance_offset exactly.
-auto constexpr scene_sky_irradiance_offset = std::size_t{236};
 
 vk::UniqueSurfaceKHR make_vk_surface(glfw::Window window) {
   auto retval = glfw::create_window_surface_unique(
@@ -182,62 +179,6 @@ std::vector<std::byte> load_file(char const *path) {
 }
 
 auto constexpr max_frames_in_flight = 2;
-auto constexpr rt_entity_node_size = 2 * sizeof(std::uint32_t);
-auto constexpr rt_entity_nodes_per_chunk = std::size_t{1000};
-auto constexpr rt_cells_per_chunk = std::size_t{64};
-
-struct alignas(16) Rt_entity {
-  std::array<float, 12> model;
-  std::array<float, 12> inverse_model;
-  math::vec4 half_extents;
-  math::vec4 albedo;
-};
-
-struct Rt_entity_binning_buffer_layout {
-  std::size_t grid_offset;
-  std::size_t nodes_offset;
-  std::size_t size;
-};
-
-Rt_entity_binning_buffer_layout
-make_rt_entity_binning_buffer_layout(std::size_t chunk_count) {
-  auto const grid_offset = std::size_t{};
-  auto const grid_size =
-    chunk_count * rt_cells_per_chunk * sizeof(std::int32_t);
-  auto const nodes_offset = grid_offset + grid_size;
-  assert(nodes_offset % 8 == 0);
-  auto const nodes_size = sizeof(std::uint32_t) + chunk_count *
-                                                    rt_entity_nodes_per_chunk *
-                                                    rt_entity_node_size;
-  return {
-    .grid_offset = grid_offset,
-    .nodes_offset = nodes_offset,
-    .size = nodes_offset + nodes_size,
-  };
-}
-
-static_assert(sizeof(Rt_entity) == 128);
-static_assert(offsetof(Rt_entity, inverse_model) == 48);
-static_assert(offsetof(Rt_entity, half_extents) == 96);
-static_assert(offsetof(Rt_entity, albedo) == 112);
-
-auto make_rt_matrix_rows(math::mat4 const &matrix) {
-  auto rows = std::array<float, 12>{};
-  for (auto row = 0; row != 3; ++row) {
-    for (auto column = 0; column != 4; ++column) {
-      rows[static_cast<std::size_t>(row * 4 + column)] = matrix(row, column);
-    }
-  }
-  return rows;
-}
-
-math::mat4 make_model_matrix(scene::elements::Box const &box) {
-  auto rotation = math::mat4::Identity().eval();
-  rotation.block<3, 3>(0, 0) = box.orientation.toRotationMatrix();
-  return (math::translation_matrix(box.position) * rotation *
-          math::axis_aligned_scale_matrix(box.half_extents * 2.0f))
-    .eval();
-}
 
 } // namespace
 
@@ -491,217 +432,235 @@ private:
     auto const scene_uniform_offset =
       (_frame_number % max_frames_in_flight) * scene_uniform_data_size;
     if (camera && sun) {
-      record_sky_view_pass(
-        work_recorder, camera->position, sun->direction, sun->irradiance);
-      record_sky_irradiance_pass(
-        work_recorder, camera->position.y(), scene_uniform_offset);
+      _sky_view_pass.update(
+        _transmittance_lut_sampled_descriptor,
+        _sky_view_lut_storage_descriptor,
+        camera->position,
+        sun->direction,
+        sun->irradiance);
+      _graph.add_pass(_sky_view_pass);
+      _sky_irradiance_pass.update(
+        _sky_view_lut_sampled_descriptor,
+        _scene_uniform_buffer,
+        camera->position.y(),
+        scene_uniform_offset + scene_sky_irradiance_offset);
+      _graph.add_pass(_sky_irradiance_pass);
     }
-    record_gbuffer_pass(work_recorder, framebuffer_size, scene_uniform_offset);
-    record_rt_entity_binning_pass(work_recorder);
-    record_distant_irradiance_pass(
-      work_recorder, framebuffer_size, scene_uniform_offset);
-    record_radiance_pass(work_recorder, framebuffer_size);
-    record_crosshair_pass(work_recorder, framebuffer_size);
-    record_composite_pass(work_recorder, swapchain_image, framebuffer_size);
-    _graphics.submit_frame_work(std::move(work_recorder));
-  }
-
-  void record_sky_view_pass(
-    graphics::Work_recorder &work_recorder,
-    math::vec3 camera_position,
-    math::vec3 sun_direction,
-    math::vec3 sun_irradiance) {
-    auto const camera_altitude = camera_position.y();
-    work_recorder.bind_compute_pipeline(_sky_view_pipeline);
-    work_recorder.push_descriptors(
-      0,
-      {_transmittance_lut_sampled_descriptor,
-       _sky_view_lut_storage_descriptor});
-    work_recorder.push_data(4, std::as_bytes(std::span{&camera_altitude, 1}));
-    work_recorder.push_data(16, std::as_bytes(std::span{&sun_direction, 1}));
-    work_recorder.push_data(32, std::as_bytes(std::span{&sun_irradiance, 1}));
-    work_recorder.dispatch(sky_view_lut_size.x(), sky_view_lut_size.y(), 1);
-    work_recorder.barrier(
-      compute_shader_storage_write_scope,
-      compute_shader_sampled_read_scope | fragment_shader_sampled_read_scope);
-  }
-
-  void record_sky_irradiance_pass(
-    graphics::Work_recorder &work_recorder,
-    float camera_altitude,
-    std::size_t scene_uniform_offset) {
-    // Called only from render(), right after record_sky_view_pass -- its
-    // barrier above already makes sky_view_lut sampled-readable. Writes
-    // into the same _scene_uniform_buffer this frame's Scene occupies (see
-    // scene_sky_irradiance_offset), through a separate Sky_irradiance
-    // buffer_reference rather than through Scene itself -- the CPU-side
-    // write to Scene's other fields happens later, during
-    // record_gbuffer_pass, but that's fine: this only touches disjoint
-    // bytes, and the GPU-side write here still needs its own barrier below
-    // before distant_irradiance_pass reads it.
-    work_recorder.bind_compute_pipeline(_sky_irradiance_pipeline);
-    work_recorder.push_descriptors(0, {_sky_view_lut_sampled_descriptor});
-    work_recorder.push_data(4, std::as_bytes(std::span{&camera_altitude, 1}));
-    work_recorder.push_buffer_reference(
-      8,
-      _scene_uniform_buffer,
-      scene_uniform_offset + scene_sky_irradiance_offset);
-    work_recorder.dispatch(6, 1, 1);
-    work_recorder.barrier(
-      compute_shader_storage_write_scope, compute_shader_storage_read_scope);
-  }
-
-  void record_gbuffer_pass(
-    graphics::Work_recorder &work_recorder,
-    math::ivec2 framebuffer_size,
-    std::size_t scene_uniform_offset) {
-    work_recorder.barrier(
-      compute_shader_sampled_read_scope | fragment_shader_sampled_read_scope,
-      color_attachment_scope | depth_attachment_scope);
-    auto const gbuffer_color_attachments = std::array{
-      graphics::Color_attachment_info{.image = _albedo_render_target},
-      graphics::Color_attachment_info{
-        .image = _normal_render_targets[_frame_number % 2]},
-      graphics::Color_attachment_info{.image = _motion_vector_render_target},
-      graphics::Color_attachment_info{.image = _depth_gradient_render_target},
-    };
-    work_recorder.begin_rendering({
-      .color_attachments = gbuffer_color_attachments,
-      .depth_image = _depth_render_targets[_frame_number % 2],
+    _gbuffer_pass.update({
+      .albedo_render_target = _albedo_render_target,
+      .normal_render_target = _normal_render_targets[_frame_number % 2],
+      .motion_vector_render_target = _motion_vector_render_target,
+      .depth_gradient_render_target = _depth_gradient_render_target,
+      .depth_render_target = _depth_render_targets[_frame_number % 2],
+      .framebuffer_size = framebuffer_size,
+      .scene_uniform_offset = scene_uniform_offset,
+      .client = &_client,
+      .local_player = _local_player,
+      .scene_uniform_buffer = _scene_uniform_buffer,
+      .animation_time = _animation_time,
+      .grid_mesh = _grid_mesh.get(),
+      .block_texture_registry = &_block_texture_registry,
+      .cube_vertex_buffer = _cube_vertex_buffer,
+      .cube_index_buffer = _cube_index_buffer,
     });
-    work_recorder.set_viewport(framebuffer_size);
-    work_recorder.set_scissor(framebuffer_size);
-    auto const &session = _client.get_session();
-    auto const camera =
-      session && _local_player && _local_player->player_entity_id &&
-          _local_player->humanoid_entity_id
-        ? session->get_scene().get_camera(*_local_player->player_entity_id)
-        : nullptr;
-    work_recorder.set_depth_test_enabled(true);
-    work_recorder.set_depth_write_enabled(true);
-    work_recorder.set_depth_compare_op(graphics::Compare_op::greater);
-    if (camera) {
-      auto const view_matrix =
-        (math::x_rotation_matrix(-_local_player->input_state.pitch) *
-         math::y_rotation_matrix(-_local_player->input_state.yaw) *
-         math::translation_matrix(-camera->position))
-          .eval();
-      auto const zoom = 1.125f;
-      auto const aspect_ratio = static_cast<float>(framebuffer_size.x()) /
-                                static_cast<float>(framebuffer_size.y());
-      auto const zoom_vec = math::vec2{
-        aspect_ratio > 1.0f ? zoom : zoom * aspect_ratio,
-        aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
-      };
-      auto const projection_matrix =
-        math::perspective_projection_matrix(zoom_vec.x(), zoom_vec.y(), z_near);
-      auto const view_projection_matrix =
-        (projection_matrix * view_matrix).eval();
-      auto const camera_basis =
-        (math::translation_matrix(camera->position) *
-         math::y_rotation_matrix(_local_player->input_state.yaw) *
-         math::x_rotation_matrix(_local_player->input_state.pitch))
-          .eval();
-      auto const camera_basis_rows = make_rt_matrix_rows(camera_basis);
-      auto const scene_uniform_memory = _scene_uniform_buffer->map();
-      auto const write_scene_uniform =
-        [&]<typename T>(std::size_t offset, T const &value) {
-          std::memcpy(
-            scene_uniform_memory.get().data() + scene_uniform_offset + offset,
-            &value,
-            sizeof(value));
-        };
-      auto const previous_view_projection_matrix =
-        _previous_view_projection_matrix.value_or(view_projection_matrix);
-      _previous_view_projection_matrix = view_projection_matrix;
-      write_scene_uniform(
-        scene_view_projection_matrix_offset, view_projection_matrix);
-      write_scene_uniform(
-        scene_previous_view_projection_matrix_offset,
-        previous_view_projection_matrix);
-      write_scene_uniform(scene_animation_time_offset, _animation_time);
-      write_scene_uniform(scene_camera_basis_offset, camera_basis_rows);
-      write_scene_uniform(scene_zoom_offset, zoom_vec);
-      write_scene_uniform(scene_z_near_offset, z_near);
-      auto const sun =
-        session->get_scene().get_distant_light(scene::elements::sun_light_key);
-      if (sun) {
-        write_scene_uniform(scene_sun_direction_offset, sun->direction);
-        write_scene_uniform(scene_sun_irradiance_offset, sun->irradiance);
-      }
-      // draw grid
-      if (_grid_mesh && _grid_mesh->is_uploaded()) {
-        work_recorder.bind_pipeline(_grid_pipeline);
-        work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
-        work_recorder.set_cull_mode(graphics::Cull_mode::back);
-        work_recorder.bind_index_buffer(
-          _grid_mesh->get_index_buffer(), graphics::Index_type::u32);
-        work_recorder.push_buffer_reference(
-          0, _scene_uniform_buffer, scene_uniform_offset);
-        work_recorder.push_buffer_reference(8, _grid_mesh->get_vertex_buffer());
-        work_recorder
-          .push_buffer_reference(16, _block_texture_registry.get_buffer());
-        _block_texture_registry.add_references(work_recorder);
-        auto push_normal = [&](math::vec3 const &value) {
-          work_recorder.push_data(24, std::as_bytes(std::span{&value, 1}));
-        };
-        push_normal({1.0f, 0.0f, 0.0f});
-        _grid_mesh->record_draws(work_recorder, +math::axis3::x);
-        push_normal({-1.0f, 0.0f, 0.0f});
-        _grid_mesh->record_draws(work_recorder, -math::axis3::x);
-        push_normal({0.0f, 1.0f, 0.0f});
-        _grid_mesh->record_draws(work_recorder, +math::axis3::y);
-        push_normal({0.0f, -1.0f, 0.0f});
-        _grid_mesh->record_draws(work_recorder, -math::axis3::y);
-        push_normal({0.0f, 0.0f, 1.0f});
-        _grid_mesh->record_draws(work_recorder, +math::axis3::z);
-        push_normal({0.0f, 0.0f, -1.0f});
-        _grid_mesh->record_draws(work_recorder, -math::axis3::z);
-      }
-      // draw cubes
-      work_recorder.bind_pipeline(_mesh_pipeline);
-      work_recorder.set_cull_mode(graphics::Cull_mode::back);
-      work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
-      work_recorder
-        .bind_index_buffer(_cube_index_buffer, graphics::Index_type::u16);
-      work_recorder
-        .push_buffer_reference(0, _scene_uniform_buffer, scene_uniform_offset);
-      work_recorder.push_buffer_reference(8, _cube_vertex_buffer);
-      for (auto const &box : session->get_scene().get_current_frame().boxes) {
-        auto const local_body_key = _local_player->humanoid_entity_id
-                                      ? scene::elements::entity_part_key(
-                                          *_local_player->humanoid_entity_id, 0)
-                                      : 0;
-        auto const local_head_key = _local_player->humanoid_entity_id
-                                      ? scene::elements::entity_part_key(
-                                          *_local_player->humanoid_entity_id, 1)
-                                      : 0;
-        if (box.key == local_body_key || box.key == local_head_key) {
-          continue;
-        }
-        auto const previous_box =
-          session->get_scene().get_previous_box(box.key);
-        auto const model_matrix = make_model_matrix(box);
-        auto const previous_model_matrix =
-          make_model_matrix(previous_box ? *previous_box : box);
-        auto const model_rows = Eigen::Matrix<float, 3, 4, Eigen::RowMajor>{
-          model_matrix.topRows<3>()};
-        auto const previous_model_rows =
-          Eigen::Matrix<float, 3, 4, Eigen::RowMajor>{previous_model_matrix
-                                                        .topRows<3>()};
-        work_recorder.push_data(16, std::as_bytes(std::span{&model_rows, 1}));
-        work_recorder
-          .push_data(64, std::as_bytes(std::span{&previous_model_rows, 1}));
-        work_recorder.draw_indexed({
-          .index_count = static_cast<std::uint32_t>(cube_mesh_indices.size()),
-          .instance_count = 1,
-          .first_index = 0,
-          .vertex_offset = 0,
-          .first_instance = 0,
-        });
+    _graph.add_pass(_gbuffer_pass);
+    {
+      auto const &session = _client.get_session();
+      if (session && _grid_mesh && _grid_mesh->is_uploaded()) {
+        ensure_rt_entity_capacity(std::max(
+          session->get_scene().get_current_frame().boxes.size(),
+          std::size_t{1}));
       }
     }
-    work_recorder.end_rendering();
+    auto const rt_frame = _frame_number % max_frames_in_flight;
+    if (_rt_entity_binning_pass.update({
+          .client = &_client,
+          .grid_mesh = _grid_mesh.get(),
+          .entity_buffer = _rt_entity_buffers[rt_frame],
+          .binning_buffer = _rt_entity_binning_buffers[rt_frame],
+        })) {
+      _graph.add_pass(_rt_entity_binning_pass);
+    }
+    {
+      auto const &session = _client.get_session();
+      auto const distant_irradiance_camera =
+        session && _local_player && _local_player->player_entity_id &&
+            _local_player->humanoid_entity_id
+          ? session->get_scene().get_camera(*_local_player->player_entity_id)
+          : nullptr;
+      auto const distant_irradiance_sun =
+        distant_irradiance_camera
+          ? session->get_scene().get_distant_light(
+              scene::elements::sun_light_key)
+          : nullptr;
+      if (distant_irradiance_camera && _grid_mesh &&
+          _grid_mesh->is_uploaded() && distant_irradiance_sun) {
+        // History is only valid if last frame's pass wrote the other
+        // ping-ponged slot -- if this pass was skipped last frame (one of
+        // the checks above), or the images were just (re)created, treat
+        // history as absent rather than stale.
+        auto const history_valid = u32{
+          _last_distant_irradiance_frame &&
+          *_last_distant_irradiance_frame + 1 == _frame_number};
+        _last_distant_irradiance_frame = _frame_number;
+        auto const frame = _frame_number % max_frames_in_flight;
+        auto const layout =
+          make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
+        _distant_irradiance_pass1.update({
+          .normal_descriptor = _normal_render_target_descriptors[_frame_number % 2],
+          .depth_descriptor = _depth_render_target_descriptors[_frame_number % 2],
+          .transmittance_lut_sampled_descriptor =
+            _transmittance_lut_sampled_descriptor,
+          .sky_view_lut_sampled_descriptor = _sky_view_lut_sampled_descriptor,
+          .scene_uniform_buffer = _scene_uniform_buffer,
+          .scene_uniform_offset = scene_uniform_offset,
+          .sun_sample_buffer = _distant_light_sample_buffer_sun,
+          .sky_sample_buffer = _distant_light_sample_buffer_sky,
+          .framebuffer_size = framebuffer_size,
+          .frame_number = _frame_number,
+        });
+        _graph.add_pass(_distant_irradiance_pass1);
+        _distant_irradiance_indirect_args_pass.update({
+          .sun_sample_buffer = _distant_light_sample_buffer_sun,
+          .sky_sample_buffer = _distant_light_sample_buffer_sky,
+        });
+        _graph.add_pass(_distant_irradiance_indirect_args_pass);
+        auto const shared_trace_inputs = passes::Distant_irradiance_trace_pass_inputs{
+          .normal_descriptor = _normal_render_target_descriptors[_frame_number % 2],
+          .depth_descriptor = _depth_render_target_descriptors[_frame_number % 2],
+          .distant_irradiance_storage_descriptor =
+            _distant_irradiance_render_target_storage_descriptors
+              [_frame_number % 2],
+          .transmittance_lut_sampled_descriptor =
+            _transmittance_lut_sampled_descriptor,
+          .scene_uniform_buffer = _scene_uniform_buffer,
+          .scene_uniform_offset = scene_uniform_offset,
+          .sample_buffer = {},
+          .rt_block_grid_buffer = _grid_mesh->get_rt_block_grid_buffer(),
+          .rt_entity_buffer = _rt_entity_buffers[frame],
+          .rt_entity_binning_buffer = _rt_entity_binning_buffers[frame],
+          .rt_entity_binning_grid_offset = layout.grid_offset,
+          .rt_entity_binning_nodes_offset = layout.nodes_offset,
+          .previous_depth_descriptor =
+            _depth_render_target_descriptors[(_frame_number + 1) % 2],
+          .previous_distant_irradiance_descriptor =
+            _distant_irradiance_render_target_descriptors
+              [(_frame_number + 1) % 2],
+          .motion_vector_descriptor = _motion_vector_render_target_descriptor,
+          .previous_normal_descriptor =
+            _normal_render_target_descriptors[(_frame_number + 1) % 2],
+          .history_valid = history_valid,
+          .luminance_storage_descriptor =
+            _distant_irradiance_luminance_render_target_storage_descriptors
+              [_frame_number % 2],
+          .previous_luminance_descriptor =
+            _distant_irradiance_luminance_render_target_descriptors
+              [(_frame_number + 1) % 2],
+        };
+        auto sun_trace_inputs = shared_trace_inputs;
+        sun_trace_inputs.sample_buffer = _distant_light_sample_buffer_sun;
+        _distant_irradiance_trace_sun_pass.update(std::move(sun_trace_inputs));
+        _graph.add_pass(_distant_irradiance_trace_sun_pass);
+        auto sky_trace_inputs = shared_trace_inputs;
+        sky_trace_inputs.sample_buffer = _distant_light_sample_buffer_sky;
+        _distant_irradiance_trace_sky_pass.update(
+          std::move(sky_trace_inputs), _sky_view_lut_sampled_descriptor);
+        _graph.add_pass(_distant_irradiance_trace_sky_pass);
+        _distant_irradiance_variance_pass.update({
+          .depth_descriptor = _depth_render_target_descriptors[_frame_number % 2],
+          .luminance_descriptor =
+            _distant_irradiance_luminance_render_target_descriptors
+              [_frame_number % 2],
+          .variance_storage_descriptor =
+            _distant_irradiance_variance_render_target_storage_descriptors[0],
+          .framebuffer_size = framebuffer_size,
+        });
+        _graph.add_pass(_distant_irradiance_variance_pass);
+        auto const update_spatial_filter =
+          [&](passes::Distant_irradiance_spatial_filter_pass &pass,
+              rc::Strong<graphics::Descriptor> color_in,
+              rc::Strong<graphics::Descriptor> color_out,
+              rc::Strong<graphics::Descriptor> variance_in,
+              rc::Strong<graphics::Descriptor> variance_out) {
+            pass.update({
+              .depth_descriptor =
+                _depth_render_target_descriptors[_frame_number % 2],
+              .normal_descriptor =
+                _normal_render_target_descriptors[_frame_number % 2],
+              .depth_gradient_descriptor = _depth_gradient_render_target_descriptor,
+              .color_in_descriptor = std::move(color_in),
+              .variance_in_descriptor = std::move(variance_in),
+              .color_out_storage_descriptor = std::move(color_out),
+              .variance_out_storage_descriptor = std::move(variance_out),
+              .framebuffer_size = framebuffer_size,
+            });
+            _graph.add_pass(pass);
+          };
+        update_spatial_filter(
+          _distant_irradiance_spatial_filter_passes[0],
+          _distant_irradiance_render_target_descriptors[_frame_number % 2],
+          _distant_irradiance_filtered_render_target_storage_descriptors[0],
+          _distant_irradiance_variance_render_target_descriptors[0],
+          _distant_irradiance_variance_render_target_storage_descriptors[1]);
+        update_spatial_filter(
+          _distant_irradiance_spatial_filter_passes[1],
+          _distant_irradiance_filtered_render_target_descriptors[0],
+          _distant_irradiance_filtered_render_target_storage_descriptors[1],
+          _distant_irradiance_variance_render_target_descriptors[1],
+          _distant_irradiance_variance_render_target_storage_descriptors[0]);
+        update_spatial_filter(
+          _distant_irradiance_spatial_filter_passes[2],
+          _distant_irradiance_filtered_render_target_descriptors[1],
+          _distant_irradiance_filtered_render_target_storage_descriptors[0],
+          _distant_irradiance_variance_render_target_descriptors[0],
+          _distant_irradiance_variance_render_target_storage_descriptors[1]);
+        update_spatial_filter(
+          _distant_irradiance_spatial_filter_passes[3],
+          _distant_irradiance_filtered_render_target_descriptors[0],
+          _distant_irradiance_filtered_render_target_storage_descriptors[1],
+          _distant_irradiance_variance_render_target_descriptors[1],
+          _distant_irradiance_variance_render_target_storage_descriptors[0]);
+        // 5 iterations total, steps 1/2/4/8/16 -- the standard SVGF
+        // configuration, giving an effective 65x65 pixel filter footprint.
+        update_spatial_filter(
+          _distant_irradiance_spatial_filter_passes[4],
+          _distant_irradiance_filtered_render_target_descriptors[1],
+          _distant_irradiance_filtered_render_target_storage_descriptors[0],
+          _distant_irradiance_variance_render_target_descriptors[0],
+          _distant_irradiance_variance_render_target_storage_descriptors[1]);
+      }
+    }
+    _radiance_pass.update({
+      .client = &_client,
+      .local_player = _local_player,
+      .grid_mesh = _grid_mesh.get(),
+      .radiance_render_target = _radiance_render_target,
+      .radiance_render_target_storage_descriptor =
+        _radiance_render_target_storage_descriptor,
+      .albedo_descriptor = _albedo_render_target_descriptor,
+      .depth_descriptor = _depth_render_target_descriptors[_frame_number % 2],
+      .sky_view_lut_sampled_descriptor = _sky_view_lut_sampled_descriptor,
+      .distant_irradiance_filtered_descriptor =
+        _distant_irradiance_filtered_render_target_descriptors[0],
+      .framebuffer_size = framebuffer_size,
+    });
+    _graph.add_pass(_radiance_pass);
+    _crosshair_pass.update(
+      _crosshair_index_buffer, _crosshair_mask_render_target, framebuffer_size);
+    _graph.add_pass(_crosshair_pass);
+    _composite_pass.update({
+      .pipeline = get_composite_pipeline(swapchain_image->get_format()),
+      .index_buffer = _composite_index_buffer,
+      .swapchain_image = swapchain_image,
+      .radiance_descriptor = _radiance_render_target_descriptor,
+      .crosshair_mask_descriptor = _crosshair_mask_render_target_descriptor,
+      .framebuffer_size = framebuffer_size,
+      .frame_number = _frame_number,
+    });
+    _graph.add_pass(_composite_pass);
+    _graph.execute(work_recorder);
+    _previous_frame_work = _graphics.submit_frame_work(
+      std::move(work_recorder), _previous_frame_work);
   }
 
   void ensure_rt_entity_capacity(std::size_t capacity) {
@@ -731,491 +690,6 @@ private:
         .min_alignment = 8,
       });
     }
-  }
-
-  void record_rt_entity_binning_pass(graphics::Work_recorder &work_recorder) {
-    auto const &session = _client.get_session();
-    if (!session || !_grid_mesh || !_grid_mesh->is_uploaded()) {
-      return;
-    }
-    auto const &boxes = session->get_scene().get_current_frame().boxes;
-    ensure_rt_entity_capacity(std::max(boxes.size(), std::size_t{1}));
-    auto entities = std::vector<Rt_entity>{};
-    entities.reserve(boxes.size());
-    for (auto const &box : boxes) {
-      auto rotation = math::mat4::Identity().eval();
-      rotation.block<3, 3>(0, 0) = box.orientation.toRotationMatrix();
-      auto const model =
-        (math::translation_matrix(box.position) * rotation).eval();
-      auto const inverse_model = model.inverse().eval();
-      auto const half_extents = box.half_extents.cwiseAbs().eval();
-      entities.push_back({
-        .model = make_rt_matrix_rows(model),
-        .inverse_model = make_rt_matrix_rows(inverse_model),
-        .half_extents =
-          math::vec4{
-            half_extents.x(), half_extents.y(), half_extents.z(), 0.0f},
-        .albedo = math::vec4{0.3f, 0.3f, 0.3f, 0.0f},
-      });
-    }
-    auto const frame = _frame_number % max_frames_in_flight;
-    auto const entity_memory = _rt_entity_buffers[frame]->map();
-    auto const entity_count = static_cast<std::uint32_t>(entities.size());
-    std::memcpy(
-      entity_memory.get().data(), &entity_count, sizeof(entity_count));
-    if (!entities.empty()) {
-      std::memcpy(
-        entity_memory.get().data() + 16,
-        entities.data(),
-        entities.size() * sizeof(Rt_entity));
-    }
-    auto const layout =
-      make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
-    auto const entity_grid_memory = _rt_entity_binning_buffers[frame]->map();
-    std::memset(
-      entity_grid_memory.get().data() + layout.nodes_offset,
-      0,
-      sizeof(std::uint32_t));
-
-    work_recorder.bind_compute_pipeline(_rt_grid_entity_binning_pipeline);
-    work_recorder
-      .push_buffer_reference(0, _grid_mesh->get_rt_block_grid_buffer());
-    work_recorder.push_buffer_reference(8, _rt_entity_buffers[frame]);
-    work_recorder.push_buffer_reference(
-      16, _rt_entity_binning_buffers[frame], layout.grid_offset);
-    work_recorder.push_buffer_reference(
-      24, _rt_entity_binning_buffers[frame], layout.nodes_offset);
-    work_recorder.dispatch(_grid_mesh->get_rt_chunk_count(), 1, 1);
-    work_recorder.barrier(
-      compute_shader_storage_write_scope, compute_shader_storage_read_scope);
-  }
-
-  void record_distant_irradiance_pass(
-    graphics::Work_recorder &work_recorder,
-    math::ivec2 framebuffer_size,
-    std::size_t scene_uniform_offset) {
-    ZoneScoped;
-    auto const &session = _client.get_session();
-    auto const camera =
-      session && _local_player && _local_player->player_entity_id &&
-          _local_player->humanoid_entity_id
-        ? session->get_scene().get_camera(*_local_player->player_entity_id)
-        : nullptr;
-    if (!camera || !_grid_mesh || !_grid_mesh->is_uploaded()) {
-      // Nothing was rasterized into the G-buffer this frame (see
-      // record_radiance_pass for why): nothing to light.
-      return;
-    }
-    auto const sun =
-      session->get_scene().get_distant_light(scene::elements::sun_light_key);
-    if (!sun) {
-      return;
-    }
-    // History is only valid if last frame's pass wrote the other
-    // ping-ponged slot -- if this pass was skipped last frame (one of the
-    // early returns above), or the images were just (re)created, treat
-    // history as absent rather than stale.
-    auto const history_valid = u32{
-      _last_distant_irradiance_frame &&
-      *_last_distant_irradiance_frame + 1 == _frame_number};
-    _last_distant_irradiance_frame = _frame_number;
-    // Reset both atomic sample counters to 0 before pass 1 appends to them.
-    // Only the counts need clearing (not the sample data itself) -- pass 2
-    // only ever reads indices below whatever count pass 1 ends up with. The
-    // count field sits 12 bytes in (see get_distant_light_sample_buffer).
-    work_recorder.fill_buffer(_distant_light_sample_buffer_sun, 12, 4, 0u);
-    work_recorder.fill_buffer(_distant_light_sample_buffer_sky, 12, 4, 0u);
-    work_recorder.barrier(
-      transfer_write_scope, compute_shader_storage_write_scope);
-    work_recorder.bind_compute_pipeline(_distant_irradiance_pipeline);
-    work_recorder
-      .push_buffer_reference(0, _scene_uniform_buffer, scene_uniform_offset);
-    work_recorder.push_descriptors(
-      8,
-      {_normal_render_target_descriptors[_frame_number % 2],
-       _depth_render_target_descriptors[_frame_number % 2],
-       _transmittance_lut_sampled_descriptor,
-       _sky_view_lut_sampled_descriptor});
-    work_recorder.push_buffer_reference(
-      16,
-      _scene_uniform_buffer,
-      scene_uniform_offset + scene_sky_irradiance_offset);
-    work_recorder
-      .push_buffer_reference(24, _distant_light_sample_buffer_sun, 12);
-    work_recorder
-      .push_buffer_reference(32, _distant_light_sample_buffer_sky, 12);
-    work_recorder.push_data(40, std::as_bytes(std::span{&_frame_number, 1}));
-    auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
-    auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
-    work_recorder.dispatch(group_count_x, group_count_y, 1);
-    // counts' reads and indirect-command writes in the two
-    // indirect_dispatch_args.comp dispatches below.
-    work_recorder.barrier(
-      compute_shader_storage_write_scope,
-      compute_shader_storage_read_scope | compute_shader_storage_write_scope);
-    work_recorder.bind_compute_pipeline(_indirect_dispatch_args_pipeline);
-    work_recorder.push_buffer_reference(0, _distant_light_sample_buffer_sun);
-    work_recorder.dispatch(1, 1, 1);
-    work_recorder.push_buffer_reference(0, _distant_light_sample_buffer_sky);
-    work_recorder.dispatch(1, 1, 1);
-    // indirect commands' reads in the two trace passes' dispatch_indirect
-    // below.
-    work_recorder.barrier(
-      compute_shader_storage_write_scope, indirect_command_read_scope);
-    record_distant_irradiance_trace_sun_pass(
-      work_recorder, scene_uniform_offset, history_valid);
-    record_distant_irradiance_trace_sky_pass(
-      work_recorder, scene_uniform_offset, history_valid);
-    // Both dispatches above write disjoint distant_irradiance_image texels
-    // (pass 1 sends each pixel to exactly one of the two sample buffers, so
-    // a pixel is only ever written by one of the two trace dispatches) --
-    // no hazard between them, so one barrier covering both suffices before
-    // distant_irradiance_render_target's sampled read in record_radiance_pass
-    // and the luminance moments' sampled read in
-    // record_distant_irradiance_variance_pass below.
-    work_recorder.barrier(
-      compute_shader_storage_write_scope,
-      compute_shader_sampled_read_scope | compute_shader_storage_read_scope);
-    record_distant_irradiance_variance_pass(work_recorder, framebuffer_size);
-    // Each iteration reads the previous one's outputs and writes into
-    // whichever slot is stale (its own input from two iterations back, no
-    // longer needed by anything). Slots just keep alternating 0/1/0/...
-    // regardless of iteration count. Step size doubles per the a-trous
-    // algorithm; the last iteration's filtered[...] is the final result --
-    // see record_radiance_pass.
-    record_distant_irradiance_spatial_filter_pass(
-      work_recorder,
-      framebuffer_size,
-      _distant_irradiance_render_target_descriptors[_frame_number % 2],
-      _distant_irradiance_filtered_render_target_storage_descriptors[0],
-      _distant_irradiance_variance_render_target_descriptors[0],
-      _distant_irradiance_variance_render_target_storage_descriptors[1],
-      1u);
-    record_distant_irradiance_spatial_filter_pass(
-      work_recorder,
-      framebuffer_size,
-      _distant_irradiance_filtered_render_target_descriptors[0],
-      _distant_irradiance_filtered_render_target_storage_descriptors[1],
-      _distant_irradiance_variance_render_target_descriptors[1],
-      _distant_irradiance_variance_render_target_storage_descriptors[0],
-      2u);
-    record_distant_irradiance_spatial_filter_pass(
-      work_recorder,
-      framebuffer_size,
-      _distant_irradiance_filtered_render_target_descriptors[1],
-      _distant_irradiance_filtered_render_target_storage_descriptors[0],
-      _distant_irradiance_variance_render_target_descriptors[0],
-      _distant_irradiance_variance_render_target_storage_descriptors[1],
-      4u);
-    record_distant_irradiance_spatial_filter_pass(
-      work_recorder,
-      framebuffer_size,
-      _distant_irradiance_filtered_render_target_descriptors[0],
-      _distant_irradiance_filtered_render_target_storage_descriptors[1],
-      _distant_irradiance_variance_render_target_descriptors[1],
-      _distant_irradiance_variance_render_target_storage_descriptors[0],
-      8u);
-    // 5 iterations total, steps 1/2/4/8/16 -- the standard SVGF
-    // configuration, giving an effective 65x65 pixel filter footprint.
-    record_distant_irradiance_spatial_filter_pass(
-      work_recorder,
-      framebuffer_size,
-      _distant_irradiance_filtered_render_target_descriptors[1],
-      _distant_irradiance_filtered_render_target_storage_descriptors[0],
-      _distant_irradiance_variance_render_target_descriptors[0],
-      _distant_irradiance_variance_render_target_storage_descriptors[1],
-      16u);
-  }
-
-  void record_distant_irradiance_variance_pass(
-    graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
-    ZoneScoped;
-    // Called only from record_distant_irradiance_pass, right after it
-    // barriers past the trace passes' writes to the luminance moments.
-    work_recorder.bind_compute_pipeline(_distant_irradiance_variance_pipeline);
-    work_recorder.push_descriptors(
-      0,
-      {_depth_render_target_descriptors[_frame_number % 2],
-       _distant_irradiance_luminance_render_target_descriptors
-         [_frame_number % 2],
-       _distant_irradiance_variance_render_target_storage_descriptors[0]});
-    auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
-    auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
-    work_recorder.dispatch(group_count_x, group_count_y, 1);
-    // Read by record_distant_irradiance_spatial_filter_pass's first
-    // iteration below.
-    work_recorder.barrier(
-      compute_shader_storage_write_scope, compute_shader_sampled_read_scope);
-  }
-
-  void record_distant_irradiance_spatial_filter_pass(
-    graphics::Work_recorder &work_recorder,
-    math::ivec2 framebuffer_size,
-    rc::Strong<graphics::Descriptor> color_in_descriptor,
-    rc::Strong<graphics::Descriptor> color_out_storage_descriptor,
-    rc::Strong<graphics::Descriptor> variance_in_descriptor,
-    rc::Strong<graphics::Descriptor> variance_out_storage_descriptor,
-    u32 step_size) {
-    ZoneScoped;
-    // Called only from record_distant_irradiance_pass, once per a-trous
-    // iteration; each call's own trailing barrier orders the next one's
-    // (or record_radiance_pass's) reads of its outputs.
-    work_recorder.bind_compute_pipeline(
-      _distant_irradiance_spatial_filter_pipeline);
-    work_recorder.push_descriptors(
-      0,
-      {_depth_render_target_descriptors[_frame_number % 2],
-       _normal_render_target_descriptors[_frame_number % 2],
-       _depth_gradient_render_target_descriptor,
-       std::move(color_in_descriptor),
-       std::move(variance_in_descriptor),
-       std::move(color_out_storage_descriptor),
-       std::move(variance_out_storage_descriptor)});
-    work_recorder.push_data(16, std::as_bytes(std::span{&step_size, 1}));
-    auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
-    auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
-    work_recorder.dispatch(group_count_x, group_count_y, 1);
-    work_recorder.barrier(
-      compute_shader_storage_write_scope,
-      compute_shader_sampled_read_scope | fragment_shader_sampled_read_scope);
-  }
-
-  void record_distant_irradiance_trace_sun_pass(
-    graphics::Work_recorder &work_recorder,
-    std::size_t scene_uniform_offset,
-    u32 history_valid) {
-    ZoneScoped;
-    // Called only from record_distant_irradiance_pass, right after it
-    // dispatches and barriers -- camera/grid_mesh/sun were already checked
-    // further up the call chain.
-    work_recorder.bind_compute_pipeline(_distant_irradiance_trace_sun_pipeline);
-    work_recorder
-      .push_buffer_reference(0, _scene_uniform_buffer, scene_uniform_offset);
-    work_recorder.push_descriptors(
-      8,
-      {_normal_render_target_descriptors[_frame_number % 2],
-       _depth_render_target_descriptors[_frame_number % 2],
-       _distant_irradiance_render_target_storage_descriptors[_frame_number % 2],
-       _transmittance_lut_sampled_descriptor});
-    work_recorder.push_buffer_reference(
-      16,
-      _scene_uniform_buffer,
-      scene_uniform_offset + scene_sky_irradiance_offset);
-    work_recorder
-      .push_buffer_reference(24, _distant_light_sample_buffer_sun, 12);
-    auto const frame = _frame_number % max_frames_in_flight;
-    auto const layout =
-      make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
-    work_recorder
-      .push_buffer_reference(32, _grid_mesh->get_rt_block_grid_buffer());
-    work_recorder.push_buffer_reference(40, _rt_entity_buffers[frame]);
-    work_recorder.push_buffer_reference(
-      48, _rt_entity_binning_buffers[frame], layout.grid_offset);
-    work_recorder.push_buffer_reference(
-      56, _rt_entity_binning_buffers[frame], layout.nodes_offset);
-    work_recorder.push_descriptors(
-      64,
-      {_depth_render_target_descriptors[(_frame_number + 1) % 2],
-       _distant_irradiance_render_target_descriptors[(_frame_number + 1) % 2],
-       _motion_vector_render_target_descriptor,
-       _normal_render_target_descriptors[(_frame_number + 1) % 2]});
-    work_recorder.push_data(72, std::as_bytes(std::span{&history_valid, 1}));
-    work_recorder.push_descriptors(
-      76,
-      {_distant_irradiance_luminance_render_target_storage_descriptors
-         [_frame_number % 2],
-       _distant_irradiance_luminance_render_target_descriptors
-         [(_frame_number + 1) % 2]});
-    // Actual group count, computed GPU-side from pass 1's atomic counter by
-    // indirect_dispatch_args.comp -- see distant_irradiance_trace_sun.comp.
-    work_recorder.dispatch_indirect({
-      .buffer = _distant_light_sample_buffer_sun,
-      .offset = 0,
-    });
-  }
-
-  void record_distant_irradiance_trace_sky_pass(
-    graphics::Work_recorder &work_recorder,
-    std::size_t scene_uniform_offset,
-    u32 history_valid) {
-    ZoneScoped;
-    // Called only from record_distant_irradiance_pass, right after it
-    // dispatches and barriers -- camera/grid_mesh/sun were already checked
-    // further up the call chain.
-    work_recorder.bind_compute_pipeline(_distant_irradiance_trace_sky_pipeline);
-    work_recorder
-      .push_buffer_reference(0, _scene_uniform_buffer, scene_uniform_offset);
-    work_recorder.push_descriptors(
-      8,
-      {_normal_render_target_descriptors[_frame_number % 2],
-       _depth_render_target_descriptors[_frame_number % 2],
-       _distant_irradiance_render_target_storage_descriptors[_frame_number % 2],
-       _transmittance_lut_sampled_descriptor,
-       _sky_view_lut_sampled_descriptor});
-    work_recorder.push_buffer_reference(
-      24,
-      _scene_uniform_buffer,
-      scene_uniform_offset + scene_sky_irradiance_offset);
-    work_recorder
-      .push_buffer_reference(32, _distant_light_sample_buffer_sky, 12);
-    auto const frame = _frame_number % max_frames_in_flight;
-    auto const layout =
-      make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
-    work_recorder
-      .push_buffer_reference(40, _grid_mesh->get_rt_block_grid_buffer());
-    work_recorder.push_buffer_reference(48, _rt_entity_buffers[frame]);
-    work_recorder.push_buffer_reference(
-      56, _rt_entity_binning_buffers[frame], layout.grid_offset);
-    work_recorder.push_buffer_reference(
-      64, _rt_entity_binning_buffers[frame], layout.nodes_offset);
-    work_recorder.push_descriptors(
-      72,
-      {_depth_render_target_descriptors[(_frame_number + 1) % 2],
-       _distant_irradiance_render_target_descriptors[(_frame_number + 1) % 2],
-       _motion_vector_render_target_descriptor,
-       _normal_render_target_descriptors[(_frame_number + 1) % 2]});
-    work_recorder.push_data(80, std::as_bytes(std::span{&history_valid, 1}));
-    work_recorder.push_descriptors(
-      84,
-      {_distant_irradiance_luminance_render_target_storage_descriptors
-         [_frame_number % 2],
-       _distant_irradiance_luminance_render_target_descriptors
-         [(_frame_number + 1) % 2]});
-    // Actual group count, computed GPU-side from pass 1's atomic counter by
-    // indirect_dispatch_args.comp -- see distant_irradiance_trace_sky.comp.
-    work_recorder.dispatch_indirect({
-      .buffer = _distant_light_sample_buffer_sky,
-      .offset = 0,
-    });
-  }
-
-  void record_radiance_pass(
-    graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
-    ZoneScoped;
-    auto const &session = _client.get_session();
-    auto const camera =
-      session && _local_player && _local_player->player_entity_id &&
-          _local_player->humanoid_entity_id
-        ? session->get_scene().get_camera(*_local_player->player_entity_id)
-        : nullptr;
-    if (!camera || !_grid_mesh || !_grid_mesh->is_uploaded()) {
-      // No camera yet, or the grid mesh (and its shadow voxel buffer the
-      // shadow raymarch depends on) hasn't finished uploading: nothing was
-      // rasterized into the G-buffer this frame, so just clear the radiance
-      // target directly instead of dispatching a lighting pass with no
-      // valid view or grid to light with.
-      work_recorder
-        .barrier(compute_shader_storage_write_scope, color_attachment_scope);
-      auto const radiance_color_attachments = std::array{
-        graphics::Color_attachment_info{
-          .image = _radiance_render_target, .clear_value = sky_color},
-      };
-      work_recorder.begin_rendering({
-        .color_attachments = radiance_color_attachments,
-      });
-      work_recorder.end_rendering();
-      work_recorder
-        .barrier(color_attachment_scope, fragment_shader_sampled_read_scope);
-      return;
-    }
-    auto constexpr zoom = 1.125f;
-    auto const aspect_ratio = static_cast<f32>(framebuffer_size.x()) /
-                              static_cast<f32>(framebuffer_size.y());
-    auto const zoom_vec = math::vec2{
-      aspect_ratio > 1.0f ? zoom : zoom * aspect_ratio,
-      aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
-    };
-    auto const camera_basis =
-      (math::translation_matrix(camera->position) *
-       math::y_rotation_matrix(_local_player->input_state.yaw) *
-       math::x_rotation_matrix(_local_player->input_state.pitch))
-        .eval();
-    // Rows contiguous, matching the row_major mat4x3 push constants.
-    auto const camera_basis_rows =
-      Eigen::Matrix<float, 3, 4, Eigen::RowMajor>{camera_basis.topRows<3>()};
-    work_recorder.bind_compute_pipeline(_radiance_pipeline);
-    work_recorder.push_data(0, std::as_bytes(std::span{&camera_basis_rows, 1}));
-    work_recorder.push_data(48, std::as_bytes(std::span{&zoom_vec, 1}));
-    work_recorder.push_descriptors(
-      56,
-      {_albedo_render_target_descriptor,
-       _depth_render_target_descriptors[_frame_number % 2],
-       _sky_view_lut_sampled_descriptor,
-       _radiance_render_target_storage_descriptor,
-       _distant_irradiance_filtered_render_target_descriptors[0]});
-    auto const group_count_x = static_cast<u32>((framebuffer_size.x() + 7) / 8);
-    auto const group_count_y = static_cast<u32>((framebuffer_size.y() + 7) / 8);
-    work_recorder.dispatch(group_count_x, group_count_y, 1);
-    work_recorder.barrier(
-      compute_shader_storage_write_scope, fragment_shader_sampled_read_scope);
-  }
-
-  void record_crosshair_pass(
-    graphics::Work_recorder &work_recorder, math::ivec2 framebuffer_size) {
-    auto const color_attachments = std::array{
-      graphics::Color_attachment_info{.image = _crosshair_mask_render_target},
-    };
-    work_recorder.begin_rendering({
-      .color_attachments = color_attachments,
-    });
-    work_recorder.set_viewport(framebuffer_size);
-    work_recorder.set_scissor(framebuffer_size);
-    work_recorder.bind_pipeline(_crosshair_pipeline);
-    work_recorder.set_cull_mode(graphics::Cull_mode::none);
-    work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
-    work_recorder
-      .bind_index_buffer(_crosshair_index_buffer, graphics::Index_type::u16);
-    work_recorder.push_data(0, std::as_bytes(std::span{&framebuffer_size, 1}));
-    work_recorder.draw_indexed({
-      .index_count = static_cast<std::uint32_t>(crosshair_indices.size()),
-      .instance_count = 1,
-      .first_index = 0,
-      .vertex_offset = 0,
-      .first_instance = 0,
-    });
-    work_recorder.end_rendering();
-  }
-
-  void record_composite_pass(
-    graphics::Work_recorder &work_recorder,
-    rc::Strong<graphics::Image> const &swapchain_image,
-    math::ivec2 framebuffer_size) {
-    work_recorder.barrier(
-      color_attachment_scope | depth_attachment_scope,
-      fragment_shader_sampled_read_scope);
-    work_recorder.transition_image_layout(
-      {},
-      color_attachment_scope,
-      graphics::Image_layout::undefined,
-      graphics::Image_layout::general,
-      swapchain_image);
-    auto const color_attachments = std::array{
-      graphics::Color_attachment_info{.image = swapchain_image},
-    };
-    work_recorder.begin_rendering({
-      .color_attachments = color_attachments,
-    });
-    work_recorder.set_viewport(framebuffer_size);
-    work_recorder.set_scissor(framebuffer_size);
-    work_recorder
-      .bind_pipeline(get_composite_pipeline(swapchain_image->get_format()));
-    work_recorder.set_cull_mode(graphics::Cull_mode::none);
-    work_recorder.set_front_face(graphics::Front_face::counter_clockwise);
-    work_recorder
-      .bind_index_buffer(_composite_index_buffer, graphics::Index_type::u16);
-    work_recorder.push_descriptors(
-      0,
-      {_radiance_render_target_descriptor,
-       _crosshair_mask_render_target_descriptor});
-    work_recorder.push_data(4, std::as_bytes(std::span{&_frame_number, 1}));
-    work_recorder.draw_indexed({
-      .index_count = static_cast<u32>(composite_indices.size()),
-      .instance_count = 1,
-      .first_index = 0,
-      .vertex_offset = 0,
-      .first_instance = 0,
-    });
-    work_recorder.end_rendering();
   }
 
   void on_key(
@@ -2038,18 +1512,44 @@ private:
   graphics::Shader _radiance_compute_shader;
   rc::Strong<graphics::Pipeline> _grid_pipeline{};
   rc::Strong<graphics::Pipeline> _mesh_pipeline{};
+  passes::Gbuffer_pass _gbuffer_pass{
+    _grid_pipeline, _mesh_pipeline, cube_mesh_indices.size(), z_near};
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _sky_view_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _sky_irradiance_pipeline{};
+  passes::Sky_view_pass _sky_view_pass{_sky_view_pipeline, sky_view_lut_size};
+  passes::Sky_irradiance_pass _sky_irradiance_pass{_sky_irradiance_pipeline};
+  render_graph::Graph _graph{};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_pipeline{};
+  passes::Distant_irradiance_pass1 _distant_irradiance_pass1{
+    _distant_irradiance_pipeline};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_trace_sun_pipeline{};
+  passes::Distant_irradiance_trace_sun_pass _distant_irradiance_trace_sun_pass{
+    _distant_irradiance_trace_sun_pipeline};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_trace_sky_pipeline{};
+  passes::Distant_irradiance_trace_sky_pass _distant_irradiance_trace_sky_pass{
+    _distant_irradiance_trace_sky_pipeline};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_variance_pipeline{};
+  passes::Distant_irradiance_variance_pass _distant_irradiance_variance_pass{
+    _distant_irradiance_variance_pipeline};
   rc::Strong<graphics::Compute_pipeline>
     _distant_irradiance_spatial_filter_pipeline{};
+  passes::Distant_irradiance_spatial_filter_pass
+    _distant_irradiance_spatial_filter_passes[5]{
+      {_distant_irradiance_spatial_filter_pipeline, 1u},
+      {_distant_irradiance_spatial_filter_pipeline, 2u},
+      {_distant_irradiance_spatial_filter_pipeline, 4u},
+      {_distant_irradiance_spatial_filter_pipeline, 8u},
+      {_distant_irradiance_spatial_filter_pipeline, 16u},
+    };
   rc::Strong<graphics::Compute_pipeline> _indirect_dispatch_args_pipeline{};
+  passes::Distant_irradiance_indirect_args_pass
+    _distant_irradiance_indirect_args_pass{_indirect_dispatch_args_pipeline};
   rc::Strong<graphics::Compute_pipeline> _rt_grid_entity_binning_pipeline{};
+  passes::Rt_entity_binning_pass _rt_entity_binning_pass{
+    _rt_grid_entity_binning_pipeline};
   rc::Strong<graphics::Compute_pipeline> _radiance_pipeline{};
+  passes::Radiance_pass _radiance_pass{_radiance_pipeline};
   rc::Strong<graphics::Pipeline> _composite_pipeline{};
   std::optional<graphics::Image_format> _composite_pipeline_color_format{};
   rc::Strong<graphics::Image> _transmittance_lut{};
@@ -2071,8 +1571,15 @@ private:
   rc::Strong<graphics::Buffer> _cube_vertex_buffer{};
   rc::Strong<graphics::Buffer> _cube_index_buffer{};
   rc::Strong<graphics::Buffer> _crosshair_index_buffer{};
+  passes::Crosshair_pass _crosshair_pass{
+    _crosshair_pipeline, crosshair_indices.size()};
   rc::Strong<graphics::Buffer> _composite_index_buffer{};
+  passes::Composite_pass _composite_pass{composite_indices.size()};
   u32 _frame_number{};
+  // Makes this frame's GPU execution wait on last frame's, so a ping-
+  // ponged resource's "previous frame" slot is guaranteed visible before
+  // this frame reads it -- see Graphics::submit_frame_work.
+  rc::Strong<graphics::Work> _previous_frame_work{};
   float _animation_time{};
   std::optional<math::mat4> _previous_view_projection_matrix{};
 };

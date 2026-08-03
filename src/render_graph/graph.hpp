@@ -1,6 +1,7 @@
 #ifndef FPSPARTY_RENDER_GRAPH_GRAPH_HPP
 #define FPSPARTY_RENDER_GRAPH_GRAPH_HPP
 
+#include "graphics/buffer.hpp"
 #include "graphics/image.hpp"
 #include "graphics/work_recorder.hpp"
 #include "rc.hpp"
@@ -28,7 +29,9 @@ private:
   std::vector<Node *> _nodes{};
   Builder _builder{};
   std::unordered_map<rc::Strong<graphics::Image const>, Access>
-    _last_write{};
+    _last_image_write{};
+  std::unordered_map<rc::Strong<graphics::Buffer const>, Access>
+    _last_buffer_write{};
 };
 
 } // namespace fpsparty::render_graph
