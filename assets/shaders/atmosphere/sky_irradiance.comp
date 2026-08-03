@@ -13,8 +13,8 @@
 // standard squared-component ambient-cube blend (see sky_irradiance.glsl),
 // not a direct index. One workgroup per direction, work_group_size
 // invocations cooperatively summing a stratified set of cosine-weighted
-// hemisphere samples via FPSPARTY_SAMPLE'ing sky_view_lut, reduced with a
-// standard shared-memory tree reduction.
+// hemisphere samples of sky_view_lut, reduced with a standard shared-
+// memory tree reduction.
 const int work_group_size = 64;
 const int sample_width = 8;
 
@@ -71,7 +71,7 @@ void main() {
   const vec3 n = normal_for_index(normal_index);
   const vec3 local_dir = cosine_weighted_hemisphere(sample_index);
   const vec3 rd = make_basis(n) * local_dir;
-  // textureLod, not FPSPARTY_SAMPLE/texture: this is a compute shader, so
+  // textureLod, not texture: this is a compute shader, so
   // there's no real screen-space quad for implicit derivatives to begin
   // with -- explicit LOD 0 sidesteps relying on that entirely (uniform
   // control flow here so it was never the specific pattern that caused

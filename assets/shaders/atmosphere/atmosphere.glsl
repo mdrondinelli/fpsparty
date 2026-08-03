@@ -114,7 +114,7 @@ vec3 transmittance_along_ray(uint transmittance_texture, vec3 ro, vec3 rd) {
   const float h = altitude(ro);
   const float cos_zenith = dot(normalize(ro), rd);
   const vec2 lut_texcoord = pack_transmittance_lut_params(h, cos_zenith);
-  return FPSPARTY_SAMPLE(transmittance_texture, lut_texcoord).rgb;
+  return texture(sampled_images[transmittance_texture], lut_texcoord).rgb;
 }
 
 #endif

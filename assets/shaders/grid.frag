@@ -16,8 +16,15 @@ layout(location = 2) out vec3 out_motion_vector;
 layout(location = 3) out vec2 out_depth_gradient;
 
 void main() {
+  // Inline, not a helper: nonuniformEXT is a source-level qualifier on the
+  // index expression at the point of the array access -- routing it
+  // through a function call severs that (confirmed via spirv-dis: the
+  // SampledImageArrayNonUniformIndexing capability and the NonUniform
+  // decoration chain into the actual OpImageSampleImplicitLod both
+  // disappear). in_texture is a per-fragment varying, genuinely
+  // non-uniform, so this one has to stay inline.
   const vec3 base_color =
-    FPSPARTY_SAMPLE(nonuniformEXT(in_texture), in_texcoord).rgb;
+    texture(sampled_images[nonuniformEXT(in_texture)], in_texcoord).rgb;
   const vec3 n = vec3(
     push_constants.normal_x,
     push_constants.normal_y,
