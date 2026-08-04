@@ -37,14 +37,14 @@ void Radiance_pass::declare(render_graph::Builder &builder) {
     // harmless, see Distant_irradiance_pass1::declare's comment).
     // distant_irradiance_filtered: written by the last Distant_irradiance_
     // spatial_filter_pass iteration.
-    builder.read(
+    _albedo_handle = builder.read(
       _inputs.albedo_descriptor, render_graph::access::compute_sampled_read);
-    builder.read(
+    _depth_handle = builder.read(
       _inputs.depth_descriptor, render_graph::access::compute_sampled_read);
-    builder.read(
+    _sky_view_lut_handle = builder.read(
       _inputs.sky_view_lut_sampled_descriptor,
       render_graph::access::compute_sampled_read);
-    builder.read(
+    _distant_irradiance_filtered_handle = builder.read(
       _inputs.distant_irradiance_filtered_descriptor,
       render_graph::access::compute_sampled_read);
   }
@@ -55,7 +55,7 @@ void Radiance_pass::declare(render_graph::Builder &builder) {
 }
 
 void Radiance_pass::execute(
-  graphics::Work_recorder &recorder, render_graph::Resources &) {
+  graphics::Work_recorder &recorder, render_graph::Resources &resources) {
   auto const &session = _inputs.client->get_session();
   auto const camera =
     has_camera()
@@ -69,7 +69,7 @@ void Radiance_pass::execute(
     // valid view or grid to light with.
     auto const radiance_color_attachments = std::array{
       graphics::Color_attachment_info{
-        .image = _inputs.radiance_render_target, .clear_value = sky_color},
+        .image = resources.get_image(_radiance_handle), .clear_value = sky_color},
     };
     recorder.begin_rendering({.color_attachments = radiance_color_attachments});
     recorder.end_rendering();
@@ -96,11 +96,11 @@ void Radiance_pass::execute(
   recorder.push_data(48, std::as_bytes(std::span{&zoom_vec, 1}));
   recorder.push_descriptors(
     56,
-    {_inputs.albedo_descriptor,
-     _inputs.depth_descriptor,
-     _inputs.sky_view_lut_sampled_descriptor,
+    {resources.get_descriptor(_albedo_handle),
+     resources.get_descriptor(_depth_handle),
+     resources.get_descriptor(_sky_view_lut_handle),
      _inputs.radiance_render_target_storage_descriptor,
-     _inputs.distant_irradiance_filtered_descriptor});
+     resources.get_descriptor(_distant_irradiance_filtered_handle)});
   auto const group_count_x =
     static_cast<std::uint32_t>((_inputs.framebuffer_size.x() + 7) / 8);
   auto const group_count_y =

@@ -26,7 +26,8 @@ void Rt_entity_binning_pass::declare(render_graph::Builder &builder) {
 }
 
 void Rt_entity_binning_pass::execute(
-  graphics::Work_recorder &recorder, render_graph::Resources &) {
+  graphics::Work_recorder &recorder, render_graph::Resources &resources) {
+  auto const &binning_buffer = resources.get_buffer(_binning_buffer_handle);
   auto const &session = _inputs.client->get_session();
   auto const &boxes = session->get_scene().get_current_frame().boxes;
   auto entities = std::vector<Rt_entity>{};
@@ -57,7 +58,7 @@ void Rt_entity_binning_pass::execute(
   }
   auto const layout =
     make_rt_entity_binning_buffer_layout(_inputs.grid_mesh->get_rt_chunk_count());
-  auto const entity_grid_memory = _inputs.binning_buffer->map();
+  auto const entity_grid_memory = binning_buffer->map();
   std::memset(
     entity_grid_memory.get().data() + layout.nodes_offset,
     0,
@@ -67,9 +68,8 @@ void Rt_entity_binning_pass::execute(
   recorder.push_buffer_reference(
     0, _inputs.grid_mesh->get_rt_block_grid_buffer());
   recorder.push_buffer_reference(8, _inputs.entity_buffer);
-  recorder.push_buffer_reference(16, _inputs.binning_buffer, layout.grid_offset);
-  recorder.push_buffer_reference(
-    24, _inputs.binning_buffer, layout.nodes_offset);
+  recorder.push_buffer_reference(16, binning_buffer, layout.grid_offset);
+  recorder.push_buffer_reference(24, binning_buffer, layout.nodes_offset);
   recorder.dispatch(_inputs.grid_mesh->get_rt_chunk_count(), 1, 1);
 }
 

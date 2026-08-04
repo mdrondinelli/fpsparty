@@ -434,24 +434,24 @@ private:
     if (camera && sun) {
       _sky_view_pass.update(
         _transmittance_lut_sampled_descriptor,
-        _sky_view_lut_storage_descriptor,
+        _sky_view_lut_storage_descriptor_symbol,
         camera->position,
         sun->direction,
         sun->irradiance);
       _graph.add_pass(_sky_view_pass);
       _sky_irradiance_pass.update(
-        _sky_view_lut_sampled_descriptor,
-        _scene_uniform_buffer,
+        _sky_view_lut_sampled_descriptor_symbol,
+        _scene_uniform_buffer_symbol,
         camera->position.y(),
         scene_uniform_offset + scene_sky_irradiance_offset);
       _graph.add_pass(_sky_irradiance_pass);
     }
     _gbuffer_pass.update({
-      .albedo_render_target = _albedo_render_target,
-      .normal_render_target = _normal_render_targets[_frame_number % 2],
-      .motion_vector_render_target = _motion_vector_render_target,
-      .depth_gradient_render_target = _depth_gradient_render_target,
-      .depth_render_target = _depth_render_targets[_frame_number % 2],
+      .albedo_render_target = _albedo_render_target_symbol,
+      .normal_render_target = _normal_render_target_symbols[_frame_number % 2],
+      .motion_vector_render_target = _motion_vector_render_target_symbol,
+      .depth_gradient_render_target = _depth_gradient_render_target_symbol,
+      .depth_render_target = _depth_render_target_symbols[_frame_number % 2],
       .framebuffer_size = framebuffer_size,
       .scene_uniform_offset = scene_uniform_offset,
       .client = &_client,
@@ -477,7 +477,7 @@ private:
           .client = &_client,
           .grid_mesh = _grid_mesh.get(),
           .entity_buffer = _rt_entity_buffers[rt_frame],
-          .binning_buffer = _rt_entity_binning_buffers[rt_frame],
+          .binning_buffer = _rt_entity_binning_buffer_symbols[rt_frame],
         })) {
       _graph.add_pass(_rt_entity_binning_pass);
     }
@@ -507,38 +507,43 @@ private:
         auto const layout =
           make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
         _distant_irradiance_pass1.update({
-          .normal_descriptor = _normal_render_target_descriptors[_frame_number % 2],
-          .depth_descriptor = _depth_render_target_descriptors[_frame_number % 2],
+          .normal_descriptor =
+            _normal_render_target_descriptor_symbols[_frame_number % 2],
+          .depth_descriptor =
+            _depth_render_target_descriptor_symbols[_frame_number % 2],
           .transmittance_lut_sampled_descriptor =
             _transmittance_lut_sampled_descriptor,
-          .sky_view_lut_sampled_descriptor = _sky_view_lut_sampled_descriptor,
-          .scene_uniform_buffer = _scene_uniform_buffer,
+          .sky_view_lut_sampled_descriptor =
+            _sky_view_lut_sampled_descriptor_symbol,
+          .scene_uniform_buffer = _scene_uniform_buffer_symbol,
           .scene_uniform_offset = scene_uniform_offset,
-          .sun_sample_buffer = _distant_light_sample_buffer_sun,
-          .sky_sample_buffer = _distant_light_sample_buffer_sky,
+          .sun_sample_buffer = _distant_light_sample_buffer_sun_symbol,
+          .sky_sample_buffer = _distant_light_sample_buffer_sky_symbol,
           .framebuffer_size = framebuffer_size,
           .frame_number = _frame_number,
         });
         _graph.add_pass(_distant_irradiance_pass1);
         _distant_irradiance_indirect_args_pass.update({
-          .sun_sample_buffer = _distant_light_sample_buffer_sun,
-          .sky_sample_buffer = _distant_light_sample_buffer_sky,
+          .sun_sample_buffer = _distant_light_sample_buffer_sun_symbol,
+          .sky_sample_buffer = _distant_light_sample_buffer_sky_symbol,
         });
         _graph.add_pass(_distant_irradiance_indirect_args_pass);
         auto const shared_trace_inputs = passes::Distant_irradiance_trace_pass_inputs{
-          .normal_descriptor = _normal_render_target_descriptors[_frame_number % 2],
-          .depth_descriptor = _depth_render_target_descriptors[_frame_number % 2],
+          .normal_descriptor =
+            _normal_render_target_descriptor_symbols[_frame_number % 2],
+          .depth_descriptor =
+            _depth_render_target_descriptor_symbols[_frame_number % 2],
           .distant_irradiance_storage_descriptor =
-            _distant_irradiance_render_target_storage_descriptors
+            _distant_irradiance_render_target_storage_descriptor_symbols
               [_frame_number % 2],
           .transmittance_lut_sampled_descriptor =
             _transmittance_lut_sampled_descriptor,
-          .scene_uniform_buffer = _scene_uniform_buffer,
+          .scene_uniform_buffer = _scene_uniform_buffer_symbol,
           .scene_uniform_offset = scene_uniform_offset,
           .sample_buffer = {},
           .rt_block_grid_buffer = _grid_mesh->get_rt_block_grid_buffer(),
           .rt_entity_buffer = _rt_entity_buffers[frame],
-          .rt_entity_binning_buffer = _rt_entity_binning_buffers[frame],
+          .rt_entity_binning_buffer = _rt_entity_binning_buffer_symbols[frame],
           .rt_entity_binning_grid_offset = layout.grid_offset,
           .rt_entity_binning_nodes_offset = layout.nodes_offset,
           .previous_depth_descriptor =
@@ -546,119 +551,205 @@ private:
           .previous_distant_irradiance_descriptor =
             _distant_irradiance_render_target_descriptors
               [(_frame_number + 1) % 2],
-          .motion_vector_descriptor = _motion_vector_render_target_descriptor,
+          .motion_vector_descriptor = _motion_vector_render_target_descriptor_symbol,
           .previous_normal_descriptor =
             _normal_render_target_descriptors[(_frame_number + 1) % 2],
           .history_valid = history_valid,
           .luminance_storage_descriptor =
-            _distant_irradiance_luminance_render_target_storage_descriptors
+            _distant_irradiance_luminance_render_target_storage_descriptor_symbols
               [_frame_number % 2],
           .previous_luminance_descriptor =
             _distant_irradiance_luminance_render_target_descriptors
               [(_frame_number + 1) % 2],
         };
         auto sun_trace_inputs = shared_trace_inputs;
-        sun_trace_inputs.sample_buffer = _distant_light_sample_buffer_sun;
+        sun_trace_inputs.sample_buffer = _distant_light_sample_buffer_sun_symbol;
         _distant_irradiance_trace_sun_pass.update(std::move(sun_trace_inputs));
         _graph.add_pass(_distant_irradiance_trace_sun_pass);
         auto sky_trace_inputs = shared_trace_inputs;
-        sky_trace_inputs.sample_buffer = _distant_light_sample_buffer_sky;
+        sky_trace_inputs.sample_buffer = _distant_light_sample_buffer_sky_symbol;
         _distant_irradiance_trace_sky_pass.update(
-          std::move(sky_trace_inputs), _sky_view_lut_sampled_descriptor);
+          std::move(sky_trace_inputs), _sky_view_lut_sampled_descriptor_symbol);
         _graph.add_pass(_distant_irradiance_trace_sky_pass);
         _distant_irradiance_variance_pass.update({
-          .depth_descriptor = _depth_render_target_descriptors[_frame_number % 2],
+          .depth_descriptor =
+            _depth_render_target_descriptor_symbols[_frame_number % 2],
           .luminance_descriptor =
-            _distant_irradiance_luminance_render_target_descriptors
+            _distant_irradiance_luminance_render_target_descriptor_symbols
               [_frame_number % 2],
           .variance_storage_descriptor =
-            _distant_irradiance_variance_render_target_storage_descriptors[0],
+            _distant_irradiance_variance_render_target_storage_descriptor_symbols
+              [0],
           .framebuffer_size = framebuffer_size,
         });
         _graph.add_pass(_distant_irradiance_variance_pass);
         auto const update_spatial_filter =
           [&](passes::Distant_irradiance_spatial_filter_pass &pass,
-              rc::Strong<graphics::Descriptor> color_in,
-              rc::Strong<graphics::Descriptor> color_out,
-              rc::Strong<graphics::Descriptor> variance_in,
-              rc::Strong<graphics::Descriptor> variance_out) {
+              render_graph::Symbolic_descriptor color_in,
+              render_graph::Symbolic_descriptor color_out,
+              render_graph::Symbolic_descriptor variance_in,
+              render_graph::Symbolic_descriptor variance_out) {
             pass.update({
               .depth_descriptor =
-                _depth_render_target_descriptors[_frame_number % 2],
+                _depth_render_target_descriptor_symbols[_frame_number % 2],
               .normal_descriptor =
-                _normal_render_target_descriptors[_frame_number % 2],
-              .depth_gradient_descriptor = _depth_gradient_render_target_descriptor,
-              .color_in_descriptor = std::move(color_in),
-              .variance_in_descriptor = std::move(variance_in),
-              .color_out_storage_descriptor = std::move(color_out),
-              .variance_out_storage_descriptor = std::move(variance_out),
+                _normal_render_target_descriptor_symbols[_frame_number % 2],
+              .depth_gradient_descriptor =
+                _depth_gradient_render_target_descriptor_symbol,
+              .color_in_descriptor = color_in,
+              .variance_in_descriptor = variance_in,
+              .color_out_storage_descriptor = color_out,
+              .variance_out_storage_descriptor = variance_out,
               .framebuffer_size = framebuffer_size,
             });
             _graph.add_pass(pass);
           };
         update_spatial_filter(
           _distant_irradiance_spatial_filter_passes[0],
-          _distant_irradiance_render_target_descriptors[_frame_number % 2],
-          _distant_irradiance_filtered_render_target_storage_descriptors[0],
-          _distant_irradiance_variance_render_target_descriptors[0],
-          _distant_irradiance_variance_render_target_storage_descriptors[1]);
+          _distant_irradiance_render_target_descriptor_symbols[_frame_number % 2],
+          _distant_irradiance_filtered_render_target_storage_descriptor_symbols[0],
+          _distant_irradiance_variance_render_target_descriptor_symbols[0],
+          _distant_irradiance_variance_render_target_storage_descriptor_symbols[1]);
         update_spatial_filter(
           _distant_irradiance_spatial_filter_passes[1],
-          _distant_irradiance_filtered_render_target_descriptors[0],
-          _distant_irradiance_filtered_render_target_storage_descriptors[1],
-          _distant_irradiance_variance_render_target_descriptors[1],
-          _distant_irradiance_variance_render_target_storage_descriptors[0]);
+          _distant_irradiance_filtered_render_target_descriptor_symbols[0],
+          _distant_irradiance_filtered_render_target_storage_descriptor_symbols[1],
+          _distant_irradiance_variance_render_target_descriptor_symbols[1],
+          _distant_irradiance_variance_render_target_storage_descriptor_symbols[0]);
         update_spatial_filter(
           _distant_irradiance_spatial_filter_passes[2],
-          _distant_irradiance_filtered_render_target_descriptors[1],
-          _distant_irradiance_filtered_render_target_storage_descriptors[0],
-          _distant_irradiance_variance_render_target_descriptors[0],
-          _distant_irradiance_variance_render_target_storage_descriptors[1]);
+          _distant_irradiance_filtered_render_target_descriptor_symbols[1],
+          _distant_irradiance_filtered_render_target_storage_descriptor_symbols[0],
+          _distant_irradiance_variance_render_target_descriptor_symbols[0],
+          _distant_irradiance_variance_render_target_storage_descriptor_symbols[1]);
         update_spatial_filter(
           _distant_irradiance_spatial_filter_passes[3],
-          _distant_irradiance_filtered_render_target_descriptors[0],
-          _distant_irradiance_filtered_render_target_storage_descriptors[1],
-          _distant_irradiance_variance_render_target_descriptors[1],
-          _distant_irradiance_variance_render_target_storage_descriptors[0]);
+          _distant_irradiance_filtered_render_target_descriptor_symbols[0],
+          _distant_irradiance_filtered_render_target_storage_descriptor_symbols[1],
+          _distant_irradiance_variance_render_target_descriptor_symbols[1],
+          _distant_irradiance_variance_render_target_storage_descriptor_symbols[0]);
         // 5 iterations total, steps 1/2/4/8/16 -- the standard SVGF
         // configuration, giving an effective 65x65 pixel filter footprint.
         update_spatial_filter(
           _distant_irradiance_spatial_filter_passes[4],
-          _distant_irradiance_filtered_render_target_descriptors[1],
-          _distant_irradiance_filtered_render_target_storage_descriptors[0],
-          _distant_irradiance_variance_render_target_descriptors[0],
-          _distant_irradiance_variance_render_target_storage_descriptors[1]);
+          _distant_irradiance_filtered_render_target_descriptor_symbols[1],
+          _distant_irradiance_filtered_render_target_storage_descriptor_symbols[0],
+          _distant_irradiance_variance_render_target_descriptor_symbols[0],
+          _distant_irradiance_variance_render_target_storage_descriptor_symbols[1]);
       }
     }
     _radiance_pass.update({
       .client = &_client,
       .local_player = _local_player,
       .grid_mesh = _grid_mesh.get(),
-      .radiance_render_target = _radiance_render_target,
+      .radiance_render_target = _radiance_render_target_symbol,
       .radiance_render_target_storage_descriptor =
         _radiance_render_target_storage_descriptor,
-      .albedo_descriptor = _albedo_render_target_descriptor,
-      .depth_descriptor = _depth_render_target_descriptors[_frame_number % 2],
-      .sky_view_lut_sampled_descriptor = _sky_view_lut_sampled_descriptor,
+      .albedo_descriptor = _albedo_render_target_descriptor_symbol,
+      .depth_descriptor = _depth_render_target_descriptor_symbols[_frame_number % 2],
+      .sky_view_lut_sampled_descriptor = _sky_view_lut_sampled_descriptor_symbol,
       .distant_irradiance_filtered_descriptor =
-        _distant_irradiance_filtered_render_target_descriptors[0],
+        _distant_irradiance_filtered_render_target_descriptor_symbols[0],
       .framebuffer_size = framebuffer_size,
     });
     _graph.add_pass(_radiance_pass);
     _crosshair_pass.update(
-      _crosshair_index_buffer, _crosshair_mask_render_target, framebuffer_size);
+      _crosshair_index_buffer,
+      _crosshair_mask_render_target_symbol,
+      framebuffer_size);
     _graph.add_pass(_crosshair_pass);
     _composite_pass.update({
       .pipeline = get_composite_pipeline(swapchain_image->get_format()),
       .index_buffer = _composite_index_buffer,
-      .swapchain_image = swapchain_image,
-      .radiance_descriptor = _radiance_render_target_descriptor,
-      .crosshair_mask_descriptor = _crosshair_mask_render_target_descriptor,
+      .swapchain_image = _swapchain_image_symbol,
+      .radiance_descriptor = _radiance_render_target_descriptor_symbol,
+      .crosshair_mask_descriptor = _crosshair_mask_render_target_descriptor_symbol,
       .framebuffer_size = framebuffer_size,
       .frame_number = _frame_number,
     });
     _graph.add_pass(_composite_pass);
-    _graph.execute(work_recorder);
+    _graph.execute(
+      work_recorder,
+      {
+        {_albedo_render_target_symbol, _albedo_render_target},
+        {_normal_render_target_symbols[0], _normal_render_targets[0]},
+        {_normal_render_target_symbols[1], _normal_render_targets[1]},
+        {_motion_vector_render_target_symbol, _motion_vector_render_target},
+        {_depth_gradient_render_target_symbol, _depth_gradient_render_target},
+        {_depth_render_target_symbols[0], _depth_render_targets[0]},
+        {_depth_render_target_symbols[1], _depth_render_targets[1]},
+        {_radiance_render_target_symbol, _radiance_render_target},
+        {_crosshair_mask_render_target_symbol, _crosshair_mask_render_target},
+        {_swapchain_image_symbol, swapchain_image},
+      },
+      {
+        {_scene_uniform_buffer_symbol, _scene_uniform_buffer},
+        {_distant_light_sample_buffer_sun_symbol, _distant_light_sample_buffer_sun},
+        {_distant_light_sample_buffer_sky_symbol, _distant_light_sample_buffer_sky},
+        {_rt_entity_binning_buffer_symbols[0], _rt_entity_binning_buffers[0]},
+        {_rt_entity_binning_buffer_symbols[1], _rt_entity_binning_buffers[1]},
+      },
+      {
+        {_albedo_render_target_descriptor_symbol, _albedo_render_target_descriptor},
+        {_normal_render_target_descriptor_symbols[0],
+         _normal_render_target_descriptors[0]},
+        {_normal_render_target_descriptor_symbols[1],
+         _normal_render_target_descriptors[1]},
+        {_motion_vector_render_target_descriptor_symbol,
+         _motion_vector_render_target_descriptor},
+        {_depth_gradient_render_target_descriptor_symbol,
+         _depth_gradient_render_target_descriptor},
+        {_depth_render_target_descriptor_symbols[0],
+         _depth_render_target_descriptors[0]},
+        {_depth_render_target_descriptor_symbols[1],
+         _depth_render_target_descriptors[1]},
+        {_radiance_render_target_descriptor_symbol,
+         _radiance_render_target_descriptor},
+        {_crosshair_mask_render_target_descriptor_symbol,
+         _crosshair_mask_render_target_descriptor},
+        {_distant_irradiance_render_target_descriptor_symbols[0],
+         _distant_irradiance_render_target_descriptors[0]},
+        {_distant_irradiance_render_target_descriptor_symbols[1],
+         _distant_irradiance_render_target_descriptors[1]},
+        {_distant_irradiance_render_target_storage_descriptor_symbols[0],
+         _distant_irradiance_render_target_storage_descriptors[0]},
+        {_distant_irradiance_render_target_storage_descriptor_symbols[1],
+         _distant_irradiance_render_target_storage_descriptors[1]},
+        {_distant_irradiance_luminance_render_target_descriptor_symbols[0],
+         _distant_irradiance_luminance_render_target_descriptors[0]},
+        {_distant_irradiance_luminance_render_target_descriptor_symbols[1],
+         _distant_irradiance_luminance_render_target_descriptors[1]},
+        {_distant_irradiance_luminance_render_target_storage_descriptor_symbols
+           [0],
+         _distant_irradiance_luminance_render_target_storage_descriptors[0]},
+        {_distant_irradiance_luminance_render_target_storage_descriptor_symbols
+           [1],
+         _distant_irradiance_luminance_render_target_storage_descriptors[1]},
+        {_distant_irradiance_variance_render_target_descriptor_symbols[0],
+         _distant_irradiance_variance_render_target_descriptors[0]},
+        {_distant_irradiance_variance_render_target_descriptor_symbols[1],
+         _distant_irradiance_variance_render_target_descriptors[1]},
+        {_distant_irradiance_variance_render_target_storage_descriptor_symbols
+           [0],
+         _distant_irradiance_variance_render_target_storage_descriptors[0]},
+        {_distant_irradiance_variance_render_target_storage_descriptor_symbols
+           [1],
+         _distant_irradiance_variance_render_target_storage_descriptors[1]},
+        {_distant_irradiance_filtered_render_target_descriptor_symbols[0],
+         _distant_irradiance_filtered_render_target_descriptors[0]},
+        {_distant_irradiance_filtered_render_target_descriptor_symbols[1],
+         _distant_irradiance_filtered_render_target_descriptors[1]},
+        {_distant_irradiance_filtered_render_target_storage_descriptor_symbols
+           [0],
+         _distant_irradiance_filtered_render_target_storage_descriptors[0]},
+        {_distant_irradiance_filtered_render_target_storage_descriptor_symbols
+           [1],
+         _distant_irradiance_filtered_render_target_storage_descriptors[1]},
+        {_sky_view_lut_sampled_descriptor_symbol,
+         _sky_view_lut_sampled_descriptor},
+        {_sky_view_lut_storage_descriptor_symbol,
+         _sky_view_lut_storage_descriptor},
+      });
     _previous_frame_work = _graphics.submit_frame_work(
       std::move(work_recorder), _previous_frame_work);
   }
@@ -1520,6 +1611,95 @@ private:
   passes::Sky_view_pass _sky_view_pass{_sky_view_pipeline, sky_view_lut_size};
   passes::Sky_irradiance_pass _sky_irradiance_pass{_sky_irradiance_pipeline};
   render_graph::Graph _graph{};
+  // Symbolic ids for every render-graph-tracked resource -- see
+  // render_graph/symbolic_resource.hpp. Allocated once here; Graph::
+  // provide_* is called every frame (the get_*_render_target family below
+  // and render()) to tell Graph what each currently resolves to. A
+  // resource no Node in the graph ever writes (content textures, static
+  // geometry buffers, host-only buffers) has no symbol here at all -- see
+  // each pass's header for which fields those are.
+  std::array<render_graph::Symbolic_image, 2> _depth_render_target_symbols{
+    _graph.allocate_image_symbol(), _graph.allocate_image_symbol()};
+  std::array<render_graph::Symbolic_descriptor, 2>
+    _depth_render_target_descriptor_symbols{
+      _graph.allocate_descriptor_symbol(),
+      _graph.allocate_descriptor_symbol()};
+  render_graph::Symbolic_image _albedo_render_target_symbol{
+    _graph.allocate_image_symbol()};
+  render_graph::Symbolic_descriptor _albedo_render_target_descriptor_symbol{
+    _graph.allocate_descriptor_symbol()};
+  std::array<render_graph::Symbolic_image, 2> _normal_render_target_symbols{
+    _graph.allocate_image_symbol(), _graph.allocate_image_symbol()};
+  std::array<render_graph::Symbolic_descriptor, 2>
+    _normal_render_target_descriptor_symbols{
+      _graph.allocate_descriptor_symbol(),
+      _graph.allocate_descriptor_symbol()};
+  render_graph::Symbolic_image _motion_vector_render_target_symbol{
+    _graph.allocate_image_symbol()};
+  render_graph::Symbolic_descriptor
+    _motion_vector_render_target_descriptor_symbol{
+      _graph.allocate_descriptor_symbol()};
+  render_graph::Symbolic_image _depth_gradient_render_target_symbol{
+    _graph.allocate_image_symbol()};
+  render_graph::Symbolic_descriptor
+    _depth_gradient_render_target_descriptor_symbol{
+      _graph.allocate_descriptor_symbol()};
+  render_graph::Symbolic_image _radiance_render_target_symbol{
+    _graph.allocate_image_symbol()};
+  render_graph::Symbolic_descriptor _radiance_render_target_descriptor_symbol{
+    _graph.allocate_descriptor_symbol()};
+  std::array<render_graph::Symbolic_descriptor, 2>
+    _distant_irradiance_render_target_descriptor_symbols{
+      _graph.allocate_descriptor_symbol(),
+      _graph.allocate_descriptor_symbol()};
+  std::array<render_graph::Symbolic_descriptor, 2>
+    _distant_irradiance_render_target_storage_descriptor_symbols{
+      _graph.allocate_descriptor_symbol(),
+      _graph.allocate_descriptor_symbol()};
+  std::array<render_graph::Symbolic_descriptor, 2>
+    _distant_irradiance_luminance_render_target_descriptor_symbols{
+      _graph.allocate_descriptor_symbol(),
+      _graph.allocate_descriptor_symbol()};
+  std::array<render_graph::Symbolic_descriptor, 2>
+    _distant_irradiance_luminance_render_target_storage_descriptor_symbols{
+      _graph.allocate_descriptor_symbol(),
+      _graph.allocate_descriptor_symbol()};
+  std::array<render_graph::Symbolic_descriptor, 2>
+    _distant_irradiance_variance_render_target_descriptor_symbols{
+      _graph.allocate_descriptor_symbol(),
+      _graph.allocate_descriptor_symbol()};
+  std::array<render_graph::Symbolic_descriptor, 2>
+    _distant_irradiance_variance_render_target_storage_descriptor_symbols{
+      _graph.allocate_descriptor_symbol(),
+      _graph.allocate_descriptor_symbol()};
+  std::array<render_graph::Symbolic_descriptor, 2>
+    _distant_irradiance_filtered_render_target_descriptor_symbols{
+      _graph.allocate_descriptor_symbol(),
+      _graph.allocate_descriptor_symbol()};
+  std::array<render_graph::Symbolic_descriptor, 2>
+    _distant_irradiance_filtered_render_target_storage_descriptor_symbols{
+      _graph.allocate_descriptor_symbol(),
+      _graph.allocate_descriptor_symbol()};
+  render_graph::Symbolic_image _crosshair_mask_render_target_symbol{
+    _graph.allocate_image_symbol()};
+  render_graph::Symbolic_descriptor
+    _crosshair_mask_render_target_descriptor_symbol{
+      _graph.allocate_descriptor_symbol()};
+  render_graph::Symbolic_image _swapchain_image_symbol{
+    _graph.allocate_image_symbol()};
+  render_graph::Symbolic_descriptor _sky_view_lut_sampled_descriptor_symbol{
+    _graph.allocate_descriptor_symbol()};
+  render_graph::Symbolic_descriptor _sky_view_lut_storage_descriptor_symbol{
+    _graph.allocate_descriptor_symbol()};
+  render_graph::Symbolic_buffer _scene_uniform_buffer_symbol{
+    _graph.allocate_buffer_symbol()};
+  render_graph::Symbolic_buffer _distant_light_sample_buffer_sun_symbol{
+    _graph.allocate_buffer_symbol()};
+  render_graph::Symbolic_buffer _distant_light_sample_buffer_sky_symbol{
+    _graph.allocate_buffer_symbol()};
+  std::array<render_graph::Symbolic_buffer, max_frames_in_flight>
+    _rt_entity_binning_buffer_symbols{
+      _graph.allocate_buffer_symbol(), _graph.allocate_buffer_symbol()};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_pipeline{};
   passes::Distant_irradiance_pass1 _distant_irradiance_pass1{
     _distant_irradiance_pipeline};

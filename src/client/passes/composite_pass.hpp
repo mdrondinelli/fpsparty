@@ -2,13 +2,12 @@
 #define FPSPARTY_CLIENT_PASSES_COMPOSITE_PASS_HPP
 
 #include "graphics/buffer.hpp"
-#include "graphics/descriptor.hpp"
-#include "graphics/image.hpp"
 #include "graphics/pipeline.hpp"
 #include "int.hpp"
 #include "math/vec.hpp"
 #include "rc.hpp"
 #include "render_graph/node.hpp"
+#include "render_graph/symbolic_resource.hpp"
 #include <cstddef>
 
 namespace fpsparty::client::passes {
@@ -17,12 +16,16 @@ struct Composite_pass_inputs {
   // Neither pipeline (format-dependent, see Application::get_composite_
   // pipeline) nor index_buffer (assigned in Application's constructor
   // *body*, like Crosshair_pass's -- see its header comment) are stable
-  // enough to be constructor parameters.
+  // enough to be constructor parameters. swapchain_image has no backing
+  // Application member at all (freshly acquired by Graphics::
+  // record_frame_work every frame) so it stays a per-frame value here
+  // too, just a symbolic one -- allocated once, provided fresh every
+  // frame.
   rc::Strong<graphics::Pipeline> pipeline;
   rc::Strong<graphics::Buffer> index_buffer;
-  rc::Strong<graphics::Image> swapchain_image;
-  rc::Strong<graphics::Descriptor> radiance_descriptor;
-  rc::Strong<graphics::Descriptor> crosshair_mask_descriptor;
+  render_graph::Symbolic_image swapchain_image;
+  render_graph::Symbolic_descriptor radiance_descriptor;
+  render_graph::Symbolic_descriptor crosshair_mask_descriptor;
   math::ivec2 framebuffer_size;
   u32 frame_number;
 };

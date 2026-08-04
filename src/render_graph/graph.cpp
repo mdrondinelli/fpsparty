@@ -7,28 +7,72 @@ namespace fpsparty::render_graph {
 
 void Graph::add_pass(Node &node) { _nodes.push_back(&node); }
 
-void Graph::execute(graphics::Work_recorder &recorder) {
+Symbolic_image Graph::allocate_image_symbol() noexcept {
+  return {.id = _next_image_symbol++};
+}
+
+Symbolic_buffer Graph::allocate_buffer_symbol() noexcept {
+  return {.id = _next_buffer_symbol++};
+}
+
+Symbolic_descriptor Graph::allocate_descriptor_symbol() noexcept {
+  return {.id = _next_descriptor_symbol++};
+}
+
+rc::Strong<graphics::Image> const &
+Graph::resolve_image(Symbolic_image symbol) const {
+  return _provided_images.at(symbol);
+}
+
+rc::Strong<graphics::Buffer> const &
+Graph::resolve_buffer(Symbolic_buffer symbol) const {
+  return _provided_buffers.at(symbol);
+}
+
+rc::Strong<graphics::Descriptor> const &
+Graph::resolve_descriptor(Symbolic_descriptor symbol) const {
+  return _provided_descriptors.at(symbol);
+}
+
+void Graph::execute(
+  graphics::Work_recorder &recorder,
+  std::initializer_list<std::pair<Symbolic_image, rc::Strong<graphics::Image>>>
+    images,
+  std::initializer_list<
+    std::pair<Symbolic_buffer, rc::Strong<graphics::Buffer>>> buffers,
+  std::initializer_list<
+    std::pair<Symbolic_descriptor, rc::Strong<graphics::Descriptor>>>
+    descriptors) {
+  for (auto const &[symbol, image] : images) {
+    _provided_images[symbol] = image;
+  }
+  for (auto const &[symbol, buffer] : buffers) {
+    _provided_buffers[symbol] = buffer;
+  }
+  for (auto const &[symbol, descriptor] : descriptors) {
+    _provided_descriptors[symbol] = descriptor;
+  }
+
   auto const find_last_write =
     [&](Builder::Entry const &entry) -> std::optional<Access> {
     if (auto const *descriptor =
-          std::get_if<rc::Strong<graphics::Descriptor>>(&entry.payload)) {
-      auto const it = _last_image_write.find((*descriptor)->get_image());
+          std::get_if<Symbolic_descriptor>(&entry.payload)) {
+      auto const it =
+        _last_image_write.find(resolve_descriptor(*descriptor)->get_image());
       if (it != _last_image_write.end()) {
         return it->second;
       }
       return std::nullopt;
     }
-    if (auto const *image =
-          std::get_if<rc::Strong<graphics::Image const>>(&entry.payload)) {
-      auto const it = _last_image_write.find(*image);
+    if (auto const *image = std::get_if<Symbolic_image>(&entry.payload)) {
+      auto const it = _last_image_write.find(resolve_image(*image));
       if (it != _last_image_write.end()) {
         return it->second;
       }
       return std::nullopt;
     }
-    auto const &buffer =
-      std::get<rc::Strong<graphics::Buffer const>>(entry.payload);
-    auto const it = _last_buffer_write.find(buffer);
+    auto const &buffer = std::get<Symbolic_buffer>(entry.payload);
+    auto const it = _last_buffer_write.find(resolve_buffer(buffer));
     if (it != _last_buffer_write.end()) {
       return it->second;
     }
@@ -37,16 +81,15 @@ void Graph::execute(graphics::Work_recorder &recorder) {
 
   auto const record_write = [&](Builder::Entry const &entry) {
     if (auto const *descriptor =
-          std::get_if<rc::Strong<graphics::Descriptor>>(&entry.payload)) {
-      _last_image_write[(*descriptor)->get_image()] = entry.access;
-    } else if (
-      auto const *image =
-        std::get_if<rc::Strong<graphics::Image const>>(&entry.payload)) {
-      _last_image_write[*image] = entry.access;
-    } else {
-      _last_buffer_write
-        [std::get<rc::Strong<graphics::Buffer const>>(entry.payload)] =
+          std::get_if<Symbolic_descriptor>(&entry.payload)) {
+      _last_image_write[resolve_descriptor(*descriptor)->get_image()] =
         entry.access;
+    } else if (
+      auto const *image = std::get_if<Symbolic_image>(&entry.payload)) {
+      _last_image_write[resolve_image(*image)] = entry.access;
+    } else {
+      _last_buffer_write[resolve_buffer(std::get<Symbolic_buffer>(
+        entry.payload))] = entry.access;
     }
   };
 
@@ -77,12 +120,15 @@ void Graph::execute(graphics::Work_recorder &recorder) {
       }
     }
 
-    auto resources = Resources{_builder};
+    auto resources = Resources{_builder, *this};
     node->execute(recorder, resources);
   }
   _nodes.clear();
   _last_image_write.clear();
   _last_buffer_write.clear();
+  _provided_images.clear();
+  _provided_buffers.clear();
+  _provided_descriptors.clear();
 }
 
 } // namespace fpsparty::render_graph

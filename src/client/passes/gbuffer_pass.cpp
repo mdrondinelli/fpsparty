@@ -42,18 +42,18 @@ void Gbuffer_pass::declare(render_graph::Builder &builder) {
 }
 
 void Gbuffer_pass::execute(
-  graphics::Work_recorder &recorder, render_graph::Resources &) {
+  graphics::Work_recorder &recorder, render_graph::Resources &resources) {
   auto const gbuffer_color_attachments = std::array{
-    graphics::Color_attachment_info{.image = _inputs.albedo_render_target},
-    graphics::Color_attachment_info{.image = _inputs.normal_render_target},
+    graphics::Color_attachment_info{.image = resources.get_image(_albedo_handle)},
+    graphics::Color_attachment_info{.image = resources.get_image(_normal_handle)},
     graphics::Color_attachment_info{
-      .image = _inputs.motion_vector_render_target},
+      .image = resources.get_image(_motion_vector_handle)},
     graphics::Color_attachment_info{
-      .image = _inputs.depth_gradient_render_target},
+      .image = resources.get_image(_depth_gradient_handle)},
   };
   recorder.begin_rendering({
     .color_attachments = gbuffer_color_attachments,
-    .depth_image = _inputs.depth_render_target,
+    .depth_image = resources.get_image(_depth_handle),
   });
   recorder.set_viewport(_inputs.framebuffer_size);
   recorder.set_scissor(_inputs.framebuffer_size);

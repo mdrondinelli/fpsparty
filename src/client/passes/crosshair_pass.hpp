@@ -2,11 +2,11 @@
 #define FPSPARTY_CLIENT_PASSES_CROSSHAIR_PASS_HPP
 
 #include "graphics/buffer.hpp"
-#include "graphics/image.hpp"
 #include "graphics/pipeline.hpp"
 #include "math/vec.hpp"
 #include "rc.hpp"
 #include "render_graph/node.hpp"
+#include "render_graph/symbolic_resource.hpp"
 #include <cstddef>
 
 namespace fpsparty::client::passes {
@@ -25,7 +25,7 @@ public:
   // silently capture an empty buffer forever.
   void update(
     rc::Strong<graphics::Buffer> index_buffer,
-    rc::Strong<graphics::Image> mask_render_target,
+    render_graph::Symbolic_image mask_render_target,
     math::ivec2 framebuffer_size);
 
   void declare(render_graph::Builder &builder) override;
@@ -38,7 +38,7 @@ private:
   rc::Strong<graphics::Pipeline> _pipeline;
   std::size_t _index_count;
   rc::Strong<graphics::Buffer> _index_buffer{};
-  rc::Strong<graphics::Image> _mask_render_target{};
+  render_graph::Symbolic_image _mask_render_target{};
   math::ivec2 _framebuffer_size{};
   render_graph::Resource_handle _mask_handle{};
 };

@@ -1,11 +1,10 @@
 #ifndef FPSPARTY_CLIENT_PASSES_SKY_IRRADIANCE_PASS_HPP
 #define FPSPARTY_CLIENT_PASSES_SKY_IRRADIANCE_PASS_HPP
 
-#include "graphics/buffer.hpp"
 #include "graphics/compute_pipeline.hpp"
-#include "graphics/descriptor.hpp"
 #include "rc.hpp"
 #include "render_graph/node.hpp"
+#include "render_graph/symbolic_resource.hpp"
 #include <cstddef>
 
 namespace fpsparty::client::passes {
@@ -22,8 +21,8 @@ public:
     rc::Strong<graphics::Compute_pipeline> pipeline);
 
   void update(
-    rc::Strong<graphics::Descriptor> sky_view_lut_sampled_descriptor,
-    rc::Strong<graphics::Buffer> scene_uniform_buffer,
+    render_graph::Symbolic_descriptor sky_view_lut_sampled_descriptor,
+    render_graph::Symbolic_buffer scene_uniform_buffer,
     float camera_altitude,
     std::size_t scene_uniform_sky_irradiance_offset);
 
@@ -35,8 +34,8 @@ public:
 
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
-  rc::Strong<graphics::Descriptor> _sky_view_lut_sampled_descriptor{};
-  rc::Strong<graphics::Buffer> _scene_uniform_buffer{};
+  render_graph::Symbolic_descriptor _sky_view_lut_sampled_descriptor{};
+  render_graph::Symbolic_buffer _scene_uniform_buffer{};
   float _camera_altitude{};
   std::size_t _scene_uniform_sky_irradiance_offset{};
   render_graph::Resource_handle _sky_view_lut_handle{};

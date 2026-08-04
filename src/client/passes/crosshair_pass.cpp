@@ -12,10 +12,10 @@ Crosshair_pass::Crosshair_pass(
 
 void Crosshair_pass::update(
   rc::Strong<graphics::Buffer> index_buffer,
-  rc::Strong<graphics::Image> mask_render_target,
+  render_graph::Symbolic_image mask_render_target,
   math::ivec2 framebuffer_size) {
   _index_buffer = std::move(index_buffer);
-  _mask_render_target = std::move(mask_render_target);
+  _mask_render_target = mask_render_target;
   _framebuffer_size = framebuffer_size;
 }
 
@@ -25,9 +25,9 @@ void Crosshair_pass::declare(render_graph::Builder &builder) {
 }
 
 void Crosshair_pass::execute(
-  graphics::Work_recorder &recorder, render_graph::Resources &) {
+  graphics::Work_recorder &recorder, render_graph::Resources &resources) {
   auto const color_attachments = std::array{
-    graphics::Color_attachment_info{.image = _mask_render_target},
+    graphics::Color_attachment_info{.image = resources.get_image(_mask_handle)},
   };
   recorder.begin_rendering({.color_attachments = color_attachments});
   recorder.set_viewport(_framebuffer_size);

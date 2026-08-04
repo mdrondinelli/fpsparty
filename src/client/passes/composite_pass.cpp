@@ -24,7 +24,8 @@ void Composite_pass::declare(render_graph::Builder &builder) {
 }
 
 void Composite_pass::execute(
-  graphics::Work_recorder &recorder, render_graph::Resources &) {
+  graphics::Work_recorder &recorder, render_graph::Resources &resources) {
+  auto const &swapchain_image = resources.get_image(_swapchain_handle);
   // Freshly acquired each frame (unlike every other render target here,
   // which transitions once at creation and stays general forever) -- so
   // it needs its own transition, not just a memory barrier.
@@ -33,9 +34,9 @@ void Composite_pass::execute(
     render_graph::access::color_attachment_write,
     graphics::Image_layout::undefined,
     graphics::Image_layout::general,
-    _inputs.swapchain_image);
+    swapchain_image);
   auto const color_attachments = std::array{
-    graphics::Color_attachment_info{.image = _inputs.swapchain_image},
+    graphics::Color_attachment_info{.image = swapchain_image},
   };
   recorder.begin_rendering({.color_attachments = color_attachments});
   recorder.set_viewport(_inputs.framebuffer_size);
@@ -45,7 +46,9 @@ void Composite_pass::execute(
   recorder.set_front_face(graphics::Front_face::counter_clockwise);
   recorder.bind_index_buffer(_inputs.index_buffer, graphics::Index_type::u16);
   recorder.push_descriptors(
-    0, {_inputs.radiance_descriptor, _inputs.crosshair_mask_descriptor});
+    0,
+    {resources.get_descriptor(_radiance_handle),
+     resources.get_descriptor(_crosshair_mask_handle)});
   recorder.push_data(4, std::as_bytes(std::span{&_inputs.frame_number, 1}));
   recorder.draw_indexed({
     .index_count = static_cast<u32>(_index_count),

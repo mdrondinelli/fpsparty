@@ -7,18 +7,21 @@
 #include "graphics/compute_pipeline.hpp"
 #include "rc.hpp"
 #include "render_graph/node.hpp"
+#include "render_graph/symbolic_resource.hpp"
 
 namespace fpsparty::client::passes {
 
 struct Rt_entity_binning_pass_inputs {
   Client const *client;
   Grid_mesh *grid_mesh;
-  // This frame's _rt_entity_buffers[frame]/_rt_entity_binning_buffers
-  // [frame] -- resizing them to fit this frame's entity count
-  // (ensure_rt_entity_capacity) stays Application's job, out of the
-  // graph's scope, same as render-target creation.
+  // This frame's _rt_entity_buffers[frame] -- resizing it to fit this
+  // frame's entity count (ensure_rt_entity_capacity) stays Application's
+  // job, out of the graph's scope, same as render-target creation. Never
+  // read via anything but this pass's host map()/a direct
+  // push_buffer_reference in the trace passes, so it never needs a
+  // symbol/barrier.
   rc::Strong<graphics::Buffer> entity_buffer;
-  rc::Strong<graphics::Buffer> binning_buffer;
+  render_graph::Symbolic_buffer binning_buffer;
 };
 
 class Rt_entity_binning_pass : public render_graph::Node {

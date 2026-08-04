@@ -6,27 +6,31 @@
 #include "client/grid_mesh.hpp"
 #include "client/local_player.hpp"
 #include "graphics/buffer.hpp"
-#include "graphics/image.hpp"
 #include "graphics/pipeline.hpp"
 #include "math/mat.hpp"
 #include "math/vec.hpp"
 #include "rc.hpp"
 #include "render_graph/node.hpp"
+#include "render_graph/symbolic_resource.hpp"
 #include <cstddef>
 #include <optional>
 
 namespace fpsparty::client::passes {
 
 struct Gbuffer_pass_inputs {
-  rc::Strong<graphics::Image> albedo_render_target;
-  rc::Strong<graphics::Image> normal_render_target;
-  rc::Strong<graphics::Image> motion_vector_render_target;
-  rc::Strong<graphics::Image> depth_gradient_render_target;
-  rc::Strong<graphics::Image> depth_render_target;
+  render_graph::Symbolic_image albedo_render_target;
+  render_graph::Symbolic_image normal_render_target;
+  render_graph::Symbolic_image motion_vector_render_target;
+  render_graph::Symbolic_image depth_gradient_render_target;
+  render_graph::Symbolic_image depth_render_target;
   math::ivec2 framebuffer_size;
   std::size_t scene_uniform_offset;
   Client const *client;
   Local_player *local_player;
+  // Host-write-only from this pass's perspective (map()'d directly, no
+  // GPU write here) -- unlike Sky_irradiance_pass's GPU write into this
+  // same buffer's disjoint Sky_irradiance sub-struct, so this pass never
+  // needs a symbol/barrier for it.
   rc::Strong<graphics::Buffer> scene_uniform_buffer;
   float animation_time;
   Grid_mesh *grid_mesh;
