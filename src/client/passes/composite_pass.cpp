@@ -17,9 +17,10 @@ void Composite_pass::declare(render_graph::Builder &builder) {
   _swapchain_handle = builder.write(
     _inputs.swapchain_image, render_graph::access::color_attachment_write);
   _radiance_handle = builder.read(
-    _inputs.radiance_descriptor, render_graph::access::fragment_sampled_read);
+    _inputs.radiance_render_target,
+    render_graph::access::fragment_sampled_read);
   _crosshair_mask_handle = builder.read(
-    _inputs.crosshair_mask_descriptor,
+    _inputs.crosshair_mask_render_target,
     render_graph::access::fragment_sampled_read);
 }
 
@@ -47,8 +48,10 @@ void Composite_pass::execute(
   recorder.bind_index_buffer(_inputs.index_buffer, graphics::Index_type::u16);
   recorder.push_descriptors(
     0,
-    {resources.get_descriptor(_radiance_handle),
-     resources.get_descriptor(_crosshair_mask_handle)});
+    {{.image = resources.get_image(_radiance_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_crosshair_mask_handle),
+      .kind = graphics::Descriptor_kind::sampled}});
   recorder.push_data(4, std::as_bytes(std::span{&_inputs.frame_number, 1}));
   recorder.draw_indexed({
     .index_count = static_cast<u32>(_index_count),

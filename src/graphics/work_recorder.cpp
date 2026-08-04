@@ -343,15 +343,17 @@ void Work_recorder::push_data(
 
 void Work_recorder::push_descriptors(
   std::uint32_t push_offset,
-  std::initializer_list<rc::Strong<Descriptor const>> descriptors) noexcept {
+  std::initializer_list<Descriptor_info> descriptors) noexcept {
   auto handles = std::array<u16, 32>{};
   assert(descriptors.size() <= handles.size());
   auto count = std::size_t{};
   for (auto const &descriptor : descriptors) {
-    auto const handle = descriptor->get_handle();
+    auto const handle = descriptor.kind == Descriptor_kind::sampled
+                           ? descriptor.image->get_sampled_descriptor_index()
+                           : descriptor.image->get_storage_descriptor_index();
     assert(handle <= 0xffff);
     handles[count++] = static_cast<u16>(handle);
-    add_reference(descriptor);
+    add_reference(descriptor.image);
   }
   // vkCmdPushConstants requires a 4-byte-aligned size; the zero pad is
   // guaranteed by the value initialization above.
@@ -373,10 +375,6 @@ Work_recorder::Work_recorder(detail::Work_resource resource) noexcept
 
 void Work_recorder::add_reference(rc::Strong<Buffer const> buffer) {
   _resource.buffers.emplace_back(std::move(buffer));
-}
-
-void Work_recorder::add_reference(rc::Strong<Descriptor const> descriptor) {
-  _resource.descriptors.emplace_back(std::move(descriptor));
 }
 
 void Work_recorder::add_reference(rc::Strong<Image const> image) {

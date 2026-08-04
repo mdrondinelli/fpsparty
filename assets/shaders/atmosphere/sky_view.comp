@@ -47,7 +47,8 @@ vec3 transmittance_along_ray(vec3 ro, vec3 rd) {
   const float cos_zenith = dot(normalize(ro), rd);
   const vec2 lut_texcoord = pack_transmittance_lut_params(h, cos_zenith);
   return texture(
-    sampled_images[push_constants.transmittance_texture],
+    sampler2D(
+      sampled_images[push_constants.transmittance_texture], SAMPLER_LINEAR_CLAMP),
     lut_texcoord).rgb;
 }
 

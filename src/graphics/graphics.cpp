@@ -213,31 +213,7 @@ rc::Strong<Buffer> Graphics::create_index_buffer(std::size_t size) {
 }
 
 rc::Strong<Image> Graphics::create_image(Image_create_info const &info) {
-  return _image_factory.create(info);
-}
-
-rc::Strong<Descriptor> Graphics::create_sampled_image_descriptor(
-  rc::Strong<Image const> image, Sampler sampler) {
-  auto const handle = _descriptor_heap.alloc_sampled_image(*image, sampler);
-  return _descriptor_factory.create(
-    detail::Descriptor_create_info{
-      .heap = &_descriptor_heap,
-      .image = std::move(image),
-      .type = Descriptor_type::sampled_image,
-      .handle = handle,
-    });
-}
-
-rc::Strong<Descriptor>
-Graphics::create_storage_image_descriptor(rc::Strong<Image> image) {
-  auto const handle = _descriptor_heap.alloc_storage_image(*image);
-  return _descriptor_factory.create(
-    detail::Descriptor_create_info{
-      .heap = &_descriptor_heap,
-      .image = std::move(image),
-      .type = Descriptor_type::storage_image,
-      .handle = handle,
-    });
+  return _image_factory.create(info, _descriptor_heap);
 }
 
 Work_recorder Graphics::record_transient_work() {

@@ -25,7 +25,6 @@ void reset_work_resource(Work_resource &resource) {
   device.resetFences({*resource.vk_fence});
   device.resetCommandPool(*resource.vk_command_pool);
   resource.buffers.clear();
-  resource.descriptors.clear();
   resource.images.clear();
   resource.pipelines.clear();
   resource.compute_pipelines.clear();

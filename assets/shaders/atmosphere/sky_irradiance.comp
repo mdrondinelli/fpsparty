@@ -79,7 +79,10 @@ void main() {
   // path when it isn't needed).
   shared_irradiance[sample_index] =
     pi *
-    textureLod(sampled_images[push_constants.sky_view_lut], sky_view_texcoord(rd), 0.0)
+    textureLod(
+      sampler2D(sampled_images[push_constants.sky_view_lut], SAMPLER_LAT_LONG),
+      sky_view_texcoord(rd),
+      0.0)
       .rgb /
     float(work_group_size);
   uint stride = 1u;

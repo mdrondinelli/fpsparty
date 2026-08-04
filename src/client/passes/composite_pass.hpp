@@ -24,8 +24,8 @@ struct Composite_pass_inputs {
   rc::Strong<graphics::Pipeline> pipeline;
   rc::Strong<graphics::Buffer> index_buffer;
   render_graph::Symbolic_image swapchain_image;
-  render_graph::Symbolic_descriptor radiance_descriptor;
-  render_graph::Symbolic_descriptor crosshair_mask_descriptor;
+  render_graph::Symbolic_image radiance_render_target;
+  render_graph::Symbolic_image crosshair_mask_render_target;
   math::ivec2 framebuffer_size;
   u32 frame_number;
 };

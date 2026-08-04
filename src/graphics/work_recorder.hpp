@@ -5,7 +5,6 @@
 #include "graphics/compare_op.hpp"
 #include "graphics/compute_pipeline.hpp"
 #include "graphics/cull_mode.hpp"
-#include "graphics/descriptor.hpp"
 #include "graphics/front_face.hpp"
 #include "graphics/image.hpp"
 #include "graphics/image_layout.hpp"
@@ -81,6 +80,13 @@ struct Indirect_dispatch_info {
   u64 offset;
 };
 
+enum class Descriptor_kind { sampled, storage };
+
+struct Descriptor_info {
+  rc::Strong<Image const> image;
+  Descriptor_kind kind;
+};
+
 class Work_recorder {
 public:
   void copy_buffer(
@@ -153,19 +159,18 @@ public:
 
   void push_data(u32 push_offset, std::span<std::byte const> data) noexcept;
 
-  // Packs the descriptors' handles as contiguous 16-bit indices starting at
-  // push_offset, zero-padded to the 4-byte push granularity. push_offset must
-  // be 4-aligned and the pad bytes must not overlap a used field.
+  // Packs the descriptors' indices (sampled or storage, per each entry's
+  // kind) as contiguous 16-bit indices starting at push_offset,
+  // zero-padded to the 4-byte push granularity. push_offset must be
+  // 4-aligned and the pad bytes must not overlap a used field.
   void push_descriptors(
     u32 push_offset,
-    std::initializer_list<rc::Strong<Descriptor const>> descriptors) noexcept;
+    std::initializer_list<Descriptor_info> descriptors) noexcept;
 
   void push_buffer_reference(
     u32 push_offset, rc::Strong<Buffer> base, u64 offset = 0) noexcept;
 
   void add_reference(rc::Strong<Buffer const> buffer);
-
-  void add_reference(rc::Strong<Descriptor const> descriptor);
 
   void add_reference(rc::Strong<Image const> image);
 

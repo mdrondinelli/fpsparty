@@ -2,7 +2,6 @@
 #define FPSPARTY_RENDER_GRAPH_RESOURCES_HPP
 
 #include "graphics/buffer.hpp"
-#include "graphics/descriptor.hpp"
 #include "graphics/image.hpp"
 #include "rc.hpp"
 #include "render_graph/builder.hpp"
@@ -20,9 +19,6 @@ class Graph;
 // rather than silently returning a wrong value.
 class Resources {
 public:
-  rc::Strong<graphics::Descriptor> const &
-  get_descriptor(Resource_handle handle) const;
-
   rc::Strong<graphics::Image> const & get_image(Resource_handle handle) const;
 
   rc::Strong<graphics::Buffer> const &

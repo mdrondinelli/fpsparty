@@ -2,7 +2,6 @@
 #define FPSPARTY_RENDER_GRAPH_GRAPH_HPP
 
 #include "graphics/buffer.hpp"
-#include "graphics/descriptor.hpp"
 #include "graphics/image.hpp"
 #include "graphics/work_recorder.hpp"
 #include "rc.hpp"
@@ -35,17 +34,13 @@ public:
 
   Symbolic_image allocate_image_symbol() noexcept;
   Symbolic_buffer allocate_buffer_symbol() noexcept;
-  Symbolic_descriptor allocate_descriptor_symbol() noexcept;
 
   void execute(
     graphics::Work_recorder &recorder,
     std::initializer_list<
       std::pair<Symbolic_image, rc::Strong<graphics::Image>>> images,
     std::initializer_list<
-      std::pair<Symbolic_buffer, rc::Strong<graphics::Buffer>>> buffers,
-    std::initializer_list<
-      std::pair<Symbolic_descriptor, rc::Strong<graphics::Descriptor>>>
-      descriptors);
+      std::pair<Symbolic_buffer, rc::Strong<graphics::Buffer>>> buffers);
 
 private:
   friend class Resources;
@@ -56,20 +51,14 @@ private:
   rc::Strong<graphics::Buffer> const &
   resolve_buffer(Symbolic_buffer symbol) const;
 
-  rc::Strong<graphics::Descriptor> const &
-  resolve_descriptor(Symbolic_descriptor symbol) const;
-
   std::vector<Node *> _nodes{};
   Builder _builder{};
   u32 _next_image_symbol{};
   u32 _next_buffer_symbol{};
-  u32 _next_descriptor_symbol{};
   std::unordered_map<Symbolic_image, rc::Strong<graphics::Image>>
     _provided_images{};
   std::unordered_map<Symbolic_buffer, rc::Strong<graphics::Buffer>>
     _provided_buffers{};
-  std::unordered_map<Symbolic_descriptor, rc::Strong<graphics::Descriptor>>
-    _provided_descriptors{};
   std::unordered_map<rc::Strong<graphics::Image const>, Access>
     _last_image_write{};
   std::unordered_map<rc::Strong<graphics::Buffer const>, Access>

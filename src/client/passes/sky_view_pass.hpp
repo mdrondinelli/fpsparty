@@ -2,7 +2,7 @@
 #define FPSPARTY_CLIENT_PASSES_SKY_VIEW_PASS_HPP
 
 #include "graphics/compute_pipeline.hpp"
-#include "graphics/descriptor.hpp"
+#include "graphics/image.hpp"
 #include "math/vec.hpp"
 #include "rc.hpp"
 #include "render_graph/node.hpp"
@@ -18,12 +18,12 @@ public:
   // Called once per frame, before Graph::add_pass -- mirrors the
   // arguments record_sky_view_pass used to take directly.
   //
-  // transmittance_lut_sampled_descriptor is a plain reference, not a
-  // symbol: it's written once at startup and never again, so no Node in
-  // any frame's graph ever needs a barrier for it.
+  // transmittance_lut is a plain reference, not a symbol: it's written
+  // once at startup and never again, so no Node in any frame's graph
+  // ever needs a barrier for it.
   void update(
-    rc::Strong<graphics::Descriptor> transmittance_lut_sampled_descriptor,
-    render_graph::Symbolic_descriptor sky_view_lut_storage_descriptor,
+    rc::Strong<graphics::Image const> transmittance_lut,
+    render_graph::Symbolic_image sky_view_lut,
     math::vec3 camera_position,
     math::vec3 sun_direction,
     math::vec3 sun_irradiance);
@@ -37,8 +37,8 @@ public:
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   math::ivec2 _lut_size;
-  rc::Strong<graphics::Descriptor> _transmittance_lut_sampled_descriptor{};
-  render_graph::Symbolic_descriptor _sky_view_lut_storage_descriptor{};
+  rc::Strong<graphics::Image const> _transmittance_lut{};
+  render_graph::Symbolic_image _sky_view_lut{};
   math::vec3 _camera_position{};
   math::vec3 _sun_direction{};
   math::vec3 _sun_irradiance{};

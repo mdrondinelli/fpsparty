@@ -26,14 +26,6 @@ struct Symbolic_buffer {
   operator==(Symbolic_buffer lhs, Symbolic_buffer rhs) noexcept = default;
 };
 
-struct Symbolic_descriptor {
-  u32 id{};
-
-  friend bool
-  operator==(Symbolic_descriptor lhs, Symbolic_descriptor rhs) noexcept =
-    default;
-};
-
 } // namespace fpsparty::render_graph
 
 namespace std {
@@ -46,12 +38,6 @@ template <> struct hash<fpsparty::render_graph::Symbolic_image> {
 template <> struct hash<fpsparty::render_graph::Symbolic_buffer> {
   std::size_t
   operator()(fpsparty::render_graph::Symbolic_buffer s) const noexcept {
-    return std::hash<fpsparty::u32>{}(s.id);
-  }
-};
-template <> struct hash<fpsparty::render_graph::Symbolic_descriptor> {
-  std::size_t
-  operator()(fpsparty::render_graph::Symbolic_descriptor s) const noexcept {
     return std::hash<fpsparty::u32>{}(s.id);
   }
 };

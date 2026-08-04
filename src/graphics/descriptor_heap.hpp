@@ -25,7 +25,7 @@ public:
 
   Descriptor_heap &operator=(Descriptor_heap const &other) = delete;
 
-  u32 alloc_sampled_image(Image const &image, Sampler sampler);
+  u32 alloc_sampled_image(Image const &image);
 
   void free_sampled_image(u32 handle) noexcept;
 

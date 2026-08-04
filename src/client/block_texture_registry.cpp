@@ -1,5 +1,7 @@
 #include "block_texture_registry.hpp"
 
+#include <algorithm>
+#include <cassert>
 #include <cstring>
 
 namespace fpsparty::client {
@@ -20,20 +22,18 @@ u32 Block_texture_registry::add(rc::Strong<graphics::Image> image) {
     if (retval + 1 > capacity) {
       reserve(capacity * 2);
     }
-    auto descriptor = _graphics->create_sampled_image_descriptor(image);
     auto const memory = _descriptor_index_buffer->map();
-    auto const handle = descriptor->get_handle();
+    auto const handle = image->get_sampled_descriptor_index();
     std::memcpy(
       memory.get().data() + sizeof(u32) * retval, &handle, sizeof(handle));
     _images.push_back(std::move(image));
-    _descriptors.push_back(std::move(descriptor));
     return retval;
   }
 }
 
 void Block_texture_registry::add_references(graphics::Work_recorder &recorder) {
-  for (auto const &descriptor : _descriptors) {
-    recorder.add_reference(descriptor);
+  for (auto const &image : _images) {
+    recorder.add_reference(image);
   }
 }
 
@@ -53,10 +53,10 @@ void Block_texture_registry::reserve(u32 capacity) {
     .usage = graphics::Buffer_usage_flag_bits::shader_device_address,
     .mapping_mode = graphics::Mapping_mode::write_only,
   });
-  if (!_descriptors.empty()) {
+  if (!_images.empty()) {
     auto const memory = _descriptor_index_buffer->map();
-    for (auto i = std::size_t{}; i != _descriptors.size(); ++i) {
-      auto const handle = _descriptors[i]->get_handle();
+    for (auto i = std::size_t{}; i != _images.size(); ++i) {
+      auto const handle = _images[i]->get_sampled_descriptor_index();
       std::memcpy(
         memory.get().data() + sizeof(u32) * i, &handle, sizeof(handle));
     }

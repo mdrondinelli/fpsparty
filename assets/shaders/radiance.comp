@@ -33,7 +33,9 @@ void main() {
     const vec2 lut_texcoord =
       pack_sky_view_lut_params(longitude(rd), camera_position.y, zenith(rd));
     const vec3 radiance =
-      texture(sampled_images[push_constants.sky_view_lut], lut_texcoord).rgb;
+      texture(
+        sampler2D(sampled_images[push_constants.sky_view_lut], SAMPLER_LAT_LONG),
+        lut_texcoord).rgb;
     imageStore(
       storage_images[push_constants.radiance_image],
       pixel,

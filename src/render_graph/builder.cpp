@@ -2,14 +2,6 @@
 
 namespace fpsparty::render_graph {
 
-Resource_handle Builder::read(Symbolic_descriptor descriptor, Access access) {
-  return add(descriptor, access, false);
-}
-
-Resource_handle Builder::write(Symbolic_descriptor descriptor, Access access) {
-  return add(descriptor, access, true);
-}
-
 Resource_handle Builder::read(Symbolic_image image, Access access) {
   return add(image, access, false);
 }

@@ -24,7 +24,9 @@ void main() {
   // disappear). in_texture is a per-fragment varying, genuinely
   // non-uniform, so this one has to stay inline.
   const vec3 base_color =
-    texture(sampled_images[nonuniformEXT(in_texture)], in_texcoord).rgb;
+    texture(
+      sampler2D(sampled_images[nonuniformEXT(in_texture)], SAMPLER_NEAREST),
+      in_texcoord).rgb;
   const vec3 n = vec3(
     push_constants.normal_x,
     push_constants.normal_y,

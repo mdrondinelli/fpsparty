@@ -14,14 +14,19 @@ namespace {
 
 auto constexpr combined_image_count = std::uint32_t{1024};
 auto constexpr storage_image_count = std::uint32_t{1024};
+// Fixed, immutable set matching the Sampler enum -- written once at
+// construction, never allocated/freed individually.
+auto constexpr sampler_count =
+  std::uint32_t{5}; // must match Sampler's enumerator count
 auto constexpr combined_image_binding = std::uint32_t{0};
 auto constexpr storage_image_binding = std::uint32_t{1};
+auto constexpr sampler_binding = std::uint32_t{2};
 
 vk::UniqueDescriptorSetLayout make_descriptor_set_layout() {
   auto const bindings = std::array{
     vk::DescriptorSetLayoutBinding{
       .binding = combined_image_binding,
-      .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+      .descriptorType = vk::DescriptorType::eSampledImage,
       .descriptorCount = combined_image_count,
       .stageFlags = vk::ShaderStageFlagBits::eAll,
     },
@@ -31,10 +36,17 @@ vk::UniqueDescriptorSetLayout make_descriptor_set_layout() {
       .descriptorCount = storage_image_count,
       .stageFlags = vk::ShaderStageFlagBits::eAll,
     },
+    vk::DescriptorSetLayoutBinding{
+      .binding = sampler_binding,
+      .descriptorType = vk::DescriptorType::eSampler,
+      .descriptorCount = sampler_count,
+      .stageFlags = vk::ShaderStageFlagBits::eAll,
+    },
   };
   constexpr auto image_binding_flags =
     vk::DescriptorBindingFlagBits::eUpdateUnusedWhilePending;
   auto const binding_flags = std::array{
+    vk::DescriptorBindingFlags{image_binding_flags},
     vk::DescriptorBindingFlags{image_binding_flags},
     vk::DescriptorBindingFlags{image_binding_flags},
   };
@@ -53,12 +65,16 @@ vk::UniqueDescriptorSetLayout make_descriptor_set_layout() {
 vk::UniqueDescriptorPool make_descriptor_pool() {
   auto const pool_sizes = std::array{
     vk::DescriptorPoolSize{
-      .type = vk::DescriptorType::eCombinedImageSampler,
+      .type = vk::DescriptorType::eSampledImage,
       .descriptorCount = combined_image_count,
     },
     vk::DescriptorPoolSize{
       .type = vk::DescriptorType::eStorageImage,
       .descriptorCount = storage_image_count,
+    },
+    vk::DescriptorPoolSize{
+      .type = vk::DescriptorType::eSampler,
+      .descriptorCount = sampler_count,
     },
   };
   return Global_vulkan_state::get().device().createDescriptorPoolUnique({
@@ -168,10 +184,8 @@ void write_image(
   std::uint32_t binding,
   std::uint32_t index,
   vk::DescriptorType descriptor_type,
-  Image const &image,
-  vk::Sampler sampler) {
+  Image const &image) {
   auto const image_info = vk::DescriptorImageInfo{
-    .sampler = sampler,
     .imageView = get_image_vk_image_view(image),
     .imageLayout = vk::ImageLayout::eGeneral,
   };
@@ -181,6 +195,20 @@ void write_image(
     .dstArrayElement = index,
     .descriptorCount = 1,
     .descriptorType = descriptor_type,
+    .pImageInfo = &image_info,
+  };
+  Global_vulkan_state::get().device().updateDescriptorSets({write}, {});
+}
+
+void write_sampler(
+  vk::DescriptorSet descriptor_set, std::uint32_t index, vk::Sampler sampler) {
+  auto const image_info = vk::DescriptorImageInfo{.sampler = sampler};
+  auto const write = vk::WriteDescriptorSet{
+    .dstSet = descriptor_set,
+    .dstBinding = sampler_binding,
+    .dstArrayElement = index,
+    .descriptorCount = 1,
+    .descriptorType = vk::DescriptorType::eSampler,
     .pImageInfo = &image_info,
   };
   Global_vulkan_state::get().device().updateDescriptorSets({write}, {});
@@ -213,9 +241,8 @@ Descriptor_heap::Descriptor_heap(Descriptor_heap_create_info const &)
       _vk_descriptor_set,
       combined_image_binding,
       i,
-      vk::DescriptorType::eCombinedImageSampler,
-      *_null_image,
-      *_vk_samplers[static_cast<std::size_t>(Sampler::nearest)]);
+      vk::DescriptorType::eSampledImage,
+      *_null_image);
   }
   for (auto i = std::uint32_t{}; i != storage_image_count; ++i) {
     write_image(
@@ -223,12 +250,15 @@ Descriptor_heap::Descriptor_heap(Descriptor_heap_create_info const &)
       storage_image_binding,
       i,
       vk::DescriptorType::eStorageImage,
-      *_null_image,
-      {});
+      *_null_image);
+  }
+  assert(_vk_samplers.size() == sampler_count);
+  for (auto i = std::uint32_t{}; i != sampler_count; ++i) {
+    write_sampler(_vk_descriptor_set, i, *_vk_samplers[i]);
   }
 }
 
-u32 Descriptor_heap::alloc_sampled_image(Image const &image, Sampler sampler) {
+u32 Descriptor_heap::alloc_sampled_image(Image const &image) {
   if (_combined_image_free_list.empty()) {
     throw std::runtime_error{"Descriptor heap is out of space"};
   }
@@ -238,9 +268,8 @@ u32 Descriptor_heap::alloc_sampled_image(Image const &image, Sampler sampler) {
     _vk_descriptor_set,
     combined_image_binding,
     handle,
-    vk::DescriptorType::eCombinedImageSampler,
-    image,
-    *_vk_samplers[static_cast<std::size_t>(sampler)]);
+    vk::DescriptorType::eSampledImage,
+    image);
   return handle;
 }
 
@@ -250,9 +279,8 @@ void Descriptor_heap::free_sampled_image(u32 handle) noexcept {
     _vk_descriptor_set,
     combined_image_binding,
     handle,
-    vk::DescriptorType::eCombinedImageSampler,
-    *_null_image,
-    *_vk_samplers[static_cast<std::size_t>(Sampler::nearest)]);
+    vk::DescriptorType::eSampledImage,
+    *_null_image);
   _combined_image_free_list.push_back(handle);
 }
 
@@ -267,8 +295,7 @@ u32 Descriptor_heap::alloc_storage_image(Image const &image) {
     storage_image_binding,
     handle,
     vk::DescriptorType::eStorageImage,
-    image,
-    {});
+    image);
   return handle;
 }
 
@@ -279,8 +306,7 @@ void Descriptor_heap::free_storage_image(u32 handle) noexcept {
     storage_image_binding,
     handle,
     vk::DescriptorType::eStorageImage,
-    *_null_image,
-    {});
+    *_null_image);
   _storage_image_free_list.push_back(handle);
 }
 

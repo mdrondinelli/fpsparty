@@ -5,7 +5,6 @@
 #include "client/grid_mesh.hpp"
 #include "client/local_player.hpp"
 #include "graphics/compute_pipeline.hpp"
-#include "graphics/descriptor.hpp"
 #include "math/vec.hpp"
 #include "rc.hpp"
 #include "render_graph/node.hpp"
@@ -17,16 +16,15 @@ struct Radiance_pass_inputs {
   Client const *client;
   Local_player *local_player;
   Grid_mesh *grid_mesh;
+  // has_camera() writes into this via a storage-descriptor index derived
+  // from the same image resources resolves for _radiance_handle -- no
+  // separate field/symbol needed for that, unlike the old Descriptor-
+  // based design where sampled/storage were two distinct objects.
   render_graph::Symbolic_image radiance_render_target;
-  // Used directly, never declared: the write into it (via imageStore in
-  // the shader) happens in the same execute() call that writes
-  // radiance_render_target itself (through the symbol above), so no
-  // other Node ever needs a barrier keyed on this specific descriptor.
-  rc::Strong<graphics::Descriptor> radiance_render_target_storage_descriptor;
-  render_graph::Symbolic_descriptor albedo_descriptor;
-  render_graph::Symbolic_descriptor depth_descriptor;
-  render_graph::Symbolic_descriptor sky_view_lut_sampled_descriptor;
-  render_graph::Symbolic_descriptor distant_irradiance_filtered_descriptor;
+  render_graph::Symbolic_image albedo_render_target;
+  render_graph::Symbolic_image depth_render_target;
+  render_graph::Symbolic_image sky_view_lut;
+  render_graph::Symbolic_image distant_irradiance_filtered;
   math::ivec2 framebuffer_size;
 };
 

@@ -1,4 +1,5 @@
 #include "image.hpp"
+#include "graphics/descriptor_heap.hpp"
 #include "graphics/global_vulkan_state.hpp"
 #include "graphics/image_format.hpp"
 #include <cassert>
@@ -65,6 +66,12 @@ Image::Image(Image_create_info const &info) {
   _array_layer_count = info.array_layer_count;
 }
 
+Image::Image(
+  Image_create_info const &info, detail::Descriptor_heap &descriptor_heap)
+    : Image{info} {
+  allocate_descriptors(descriptor_heap, info.usage);
+}
+
 Image::Image(detail::External_image_create_info const &info)
     : _vk_image{info.image},
       _vk_image_view{info.image_view},
@@ -76,7 +83,26 @@ Image::Image(detail::External_image_create_info const &info)
   assert(_vk_image_view);
 }
 
+void Image::allocate_descriptors(
+  detail::Descriptor_heap &descriptor_heap, Image_usage_flags usage) {
+  _descriptor_heap = &descriptor_heap;
+  if (usage & Image_usage_flag_bits::sampled) {
+    _sampled_descriptor_handle = descriptor_heap.alloc_sampled_image(*this);
+  }
+  if (usage & Image_usage_flag_bits::storage) {
+    _storage_descriptor_handle = descriptor_heap.alloc_storage_image(*this);
+  }
+}
+
 Image::~Image() {
+  if (_descriptor_heap) {
+    if (_sampled_descriptor_handle) {
+      _descriptor_heap->free_sampled_image(*_sampled_descriptor_handle);
+    }
+    if (_storage_descriptor_handle) {
+      _descriptor_heap->free_storage_image(*_storage_descriptor_handle);
+    }
+  }
   if (_vma_allocation) {
     Global_vulkan_state::get().device().destroyImageView(_vk_image_view);
     Global_vulkan_state::get().device().destroyImage(_vk_image);

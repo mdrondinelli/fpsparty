@@ -38,14 +38,13 @@ void Radiance_pass::declare(render_graph::Builder &builder) {
     // distant_irradiance_filtered: written by the last Distant_irradiance_
     // spatial_filter_pass iteration.
     _albedo_handle = builder.read(
-      _inputs.albedo_descriptor, render_graph::access::compute_sampled_read);
+      _inputs.albedo_render_target, render_graph::access::compute_sampled_read);
     _depth_handle = builder.read(
-      _inputs.depth_descriptor, render_graph::access::compute_sampled_read);
+      _inputs.depth_render_target, render_graph::access::compute_sampled_read);
     _sky_view_lut_handle = builder.read(
-      _inputs.sky_view_lut_sampled_descriptor,
-      render_graph::access::compute_sampled_read);
+      _inputs.sky_view_lut, render_graph::access::compute_sampled_read);
     _distant_irradiance_filtered_handle = builder.read(
-      _inputs.distant_irradiance_filtered_descriptor,
+      _inputs.distant_irradiance_filtered,
       render_graph::access::compute_sampled_read);
   }
   _radiance_handle = builder.write(
@@ -96,11 +95,16 @@ void Radiance_pass::execute(
   recorder.push_data(48, std::as_bytes(std::span{&zoom_vec, 1}));
   recorder.push_descriptors(
     56,
-    {resources.get_descriptor(_albedo_handle),
-     resources.get_descriptor(_depth_handle),
-     resources.get_descriptor(_sky_view_lut_handle),
-     _inputs.radiance_render_target_storage_descriptor,
-     resources.get_descriptor(_distant_irradiance_filtered_handle)});
+    {{.image = resources.get_image(_albedo_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_depth_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_sky_view_lut_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_radiance_handle),
+      .kind = graphics::Descriptor_kind::storage},
+     {.image = resources.get_image(_distant_irradiance_filtered_handle),
+      .kind = graphics::Descriptor_kind::sampled}});
   auto const group_count_x =
     static_cast<std::uint32_t>((_inputs.framebuffer_size.x() + 7) / 8);
   auto const group_count_y =

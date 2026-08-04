@@ -13,11 +13,9 @@
 
 #include "buffer.hpp"
 #include "compute_pipeline.hpp"
-#include "descriptor.hpp"
 #include "descriptor_heap.hpp"
 #include "image.hpp"
 #include "pipeline.hpp"
-#include "sampler.hpp"
 #include "work.hpp"
 #include "work_queue.hpp"
 #include "work_recorder.hpp"
@@ -60,12 +58,6 @@ public:
   rc::Strong<Buffer> create_index_buffer(std::size_t size);
 
   rc::Strong<Image> create_image(Image_create_info const &info);
-
-  rc::Strong<Descriptor> create_sampled_image_descriptor(
-    rc::Strong<Image const> image, Sampler sampler = Sampler::nearest);
-
-  rc::Strong<Descriptor>
-  create_storage_image_descriptor(rc::Strong<Image> image);
 
   Work_recorder record_transient_work();
 
@@ -111,7 +103,6 @@ private:
   rc::Factory<Compute_pipeline> _compute_pipeline_factory{};
   rc::Factory<Buffer> _buffer_factory{};
   rc::Factory<Image> _image_factory{};
-  rc::Factory<Descriptor> _descriptor_factory{};
   vk::Format _swapchain_image_format{};
   vk::Extent2D _swapchain_image_extent{};
   vk::PresentModeKHR _swapchain_present_mode{};

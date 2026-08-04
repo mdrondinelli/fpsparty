@@ -4,12 +4,6 @@
 
 namespace fpsparty::render_graph {
 
-rc::Strong<graphics::Descriptor> const &
-Resources::get_descriptor(Resource_handle handle) const {
-  return _graph->resolve_descriptor(std::get<Symbolic_descriptor>(
-    _builder->_entries.at(handle.index).payload));
-}
-
 rc::Strong<graphics::Image> const &
 Resources::get_image(Resource_handle handle) const {
   return _graph->resolve_image(

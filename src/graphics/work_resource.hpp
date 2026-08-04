@@ -10,7 +10,6 @@
 
 #include "buffer.hpp"
 #include "compute_pipeline.hpp"
-#include "descriptor.hpp"
 #include "image.hpp"
 #include "pipeline.hpp"
 #include "work_done_callback.hpp"
@@ -25,7 +24,6 @@ struct Work_resource {
   // timeline semaphore -- see Work::timeline_value.
   u64 timeline_value{};
   std::vector<rc::Strong<Buffer const>> buffers{};
-  std::vector<rc::Strong<Descriptor const>> descriptors{};
   std::vector<rc::Strong<Image const>> images{};
   std::vector<rc::Strong<Pipeline const>> pipelines{};
   std::vector<rc::Strong<Compute_pipeline const>> compute_pipelines{};

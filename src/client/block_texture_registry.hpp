@@ -32,7 +32,6 @@ private:
   graphics::Graphics *_graphics;
   rc::Strong<graphics::Buffer> _descriptor_index_buffer;
   std::vector<rc::Strong<graphics::Image>> _images;
-  std::vector<rc::Strong<graphics::Descriptor>> _descriptors;
 };
 
 } // namespace fpsparty::client

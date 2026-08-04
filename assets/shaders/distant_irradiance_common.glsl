@@ -35,7 +35,7 @@ vec3 eval_incident_irradiance_sun(
 vec3 eval_incident_irradiance_sky(vec3 w_i, vec3 n, Scene scene, uint sky_view_lut) {
   const vec3 L_i =
     textureLod(
-      sampled_images[sky_view_lut],
+      sampler2D(sampled_images[sky_view_lut], SAMPLER_LAT_LONG),
       pack_sky_view_lut_params(
         longitude(w_i), scene.camera_basis[3][1], zenith(w_i)),
       0.0).rgb;

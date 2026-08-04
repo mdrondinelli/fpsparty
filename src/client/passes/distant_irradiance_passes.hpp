@@ -3,7 +3,7 @@
 
 #include "graphics/buffer.hpp"
 #include "graphics/compute_pipeline.hpp"
-#include "graphics/descriptor.hpp"
+#include "graphics/image.hpp"
 #include "int.hpp"
 #include "math/vec.hpp"
 #include "rc.hpp"
@@ -18,12 +18,12 @@ namespace fpsparty::client::passes {
 // zeroed here too, immediately before the dispatch that appends to them --
 // an internal detail, not a cross-pass dependency, so not declared).
 struct Distant_irradiance_pass1_inputs {
-  render_graph::Symbolic_descriptor normal_descriptor;
-  render_graph::Symbolic_descriptor depth_descriptor;
+  render_graph::Symbolic_image normal_render_target;
+  render_graph::Symbolic_image depth_render_target;
   // Never written within any frame's graph (created once at startup) --
   // no symbol, held directly.
-  rc::Strong<graphics::Descriptor> transmittance_lut_sampled_descriptor;
-  render_graph::Symbolic_descriptor sky_view_lut_sampled_descriptor;
+  rc::Strong<graphics::Image const> transmittance_lut;
+  render_graph::Symbolic_image sky_view_lut;
   render_graph::Symbolic_buffer scene_uniform_buffer;
   std::size_t scene_uniform_offset;
   render_graph::Symbolic_buffer sun_sample_buffer;
@@ -84,16 +84,15 @@ private:
 };
 
 // Shared by both trace passes below. previous_*/rt_entity_buffer/
-// rt_block_grid_buffer/transmittance_lut_sampled_descriptor stay plain:
-// the previous_* fields reference last frame's already-retired work (the
-// cross-frame timeline-semaphore wait protects those, not this frame's
-// Graph barriers), and the rest are never written within any frame's
-// graph.
+// rt_block_grid_buffer/transmittance_lut stay plain: the previous_*
+// fields reference last frame's already-retired work (the cross-frame
+// timeline-semaphore wait protects those, not this frame's Graph
+// barriers), and the rest are never written within any frame's graph.
 struct Distant_irradiance_trace_pass_inputs {
-  render_graph::Symbolic_descriptor normal_descriptor;
-  render_graph::Symbolic_descriptor depth_descriptor;
-  render_graph::Symbolic_descriptor distant_irradiance_storage_descriptor;
-  rc::Strong<graphics::Descriptor> transmittance_lut_sampled_descriptor;
+  render_graph::Symbolic_image normal_render_target;
+  render_graph::Symbolic_image depth_render_target;
+  render_graph::Symbolic_image distant_irradiance_render_target;
+  rc::Strong<graphics::Image const> transmittance_lut;
   render_graph::Symbolic_buffer scene_uniform_buffer;
   std::size_t scene_uniform_offset;
   render_graph::Symbolic_buffer sample_buffer;
@@ -102,13 +101,14 @@ struct Distant_irradiance_trace_pass_inputs {
   render_graph::Symbolic_buffer rt_entity_binning_buffer;
   std::size_t rt_entity_binning_grid_offset;
   std::size_t rt_entity_binning_nodes_offset;
-  rc::Strong<graphics::Descriptor> previous_depth_descriptor;
-  rc::Strong<graphics::Descriptor> previous_distant_irradiance_descriptor;
-  render_graph::Symbolic_descriptor motion_vector_descriptor;
-  rc::Strong<graphics::Descriptor> previous_normal_descriptor;
+  rc::Strong<graphics::Image const> previous_depth_render_target;
+  rc::Strong<graphics::Image const> previous_distant_irradiance_render_target;
+  render_graph::Symbolic_image motion_vector_render_target;
+  rc::Strong<graphics::Image const> previous_normal_render_target;
   u32 history_valid;
-  render_graph::Symbolic_descriptor luminance_storage_descriptor;
-  rc::Strong<graphics::Descriptor> previous_luminance_descriptor;
+  render_graph::Symbolic_image distant_irradiance_luminance_render_target;
+  rc::Strong<graphics::Image const>
+    previous_distant_irradiance_luminance_render_target;
 };
 
 class Distant_irradiance_trace_sun_pass : public render_graph::Node {
@@ -144,7 +144,7 @@ public:
 
   void update(
     Distant_irradiance_trace_pass_inputs inputs,
-    render_graph::Symbolic_descriptor sky_view_lut_sampled_descriptor);
+    render_graph::Symbolic_image sky_view_lut);
 
   void declare(render_graph::Builder &builder) override;
 
@@ -155,7 +155,7 @@ public:
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Distant_irradiance_trace_pass_inputs _inputs{};
-  render_graph::Symbolic_descriptor _sky_view_lut_sampled_descriptor{};
+  render_graph::Symbolic_image _sky_view_lut{};
   render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _motion_vector_handle{};
@@ -168,9 +168,9 @@ private:
 };
 
 struct Distant_irradiance_variance_pass_inputs {
-  render_graph::Symbolic_descriptor depth_descriptor;
-  render_graph::Symbolic_descriptor luminance_descriptor;
-  render_graph::Symbolic_descriptor variance_storage_descriptor;
+  render_graph::Symbolic_image depth_render_target;
+  render_graph::Symbolic_image distant_irradiance_luminance_render_target;
+  render_graph::Symbolic_image distant_irradiance_variance_render_target;
   math::ivec2 framebuffer_size;
 };
 
@@ -198,13 +198,13 @@ private:
 // One a-trous iteration; instantiated 5x (steps 1/2/4/8/16) with different
 // in/out descriptor pairs each frame.
 struct Distant_irradiance_spatial_filter_pass_inputs {
-  render_graph::Symbolic_descriptor depth_descriptor;
-  render_graph::Symbolic_descriptor normal_descriptor;
-  render_graph::Symbolic_descriptor depth_gradient_descriptor;
-  render_graph::Symbolic_descriptor color_in_descriptor;
-  render_graph::Symbolic_descriptor variance_in_descriptor;
-  render_graph::Symbolic_descriptor color_out_storage_descriptor;
-  render_graph::Symbolic_descriptor variance_out_storage_descriptor;
+  render_graph::Symbolic_image depth_render_target;
+  render_graph::Symbolic_image normal_render_target;
+  render_graph::Symbolic_image depth_gradient_render_target;
+  render_graph::Symbolic_image color_in;
+  render_graph::Symbolic_image variance_in;
+  render_graph::Symbolic_image color_out;
+  render_graph::Symbolic_image variance_out;
   math::ivec2 framebuffer_size;
 };
 

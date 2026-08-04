@@ -21,7 +21,7 @@ public:
     rc::Strong<graphics::Compute_pipeline> pipeline);
 
   void update(
-    render_graph::Symbolic_descriptor sky_view_lut_sampled_descriptor,
+    render_graph::Symbolic_image sky_view_lut,
     render_graph::Symbolic_buffer scene_uniform_buffer,
     float camera_altitude,
     std::size_t scene_uniform_sky_irradiance_offset);
@@ -34,7 +34,7 @@ public:
 
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
-  render_graph::Symbolic_descriptor _sky_view_lut_sampled_descriptor{};
+  render_graph::Symbolic_image _sky_view_lut{};
   render_graph::Symbolic_buffer _scene_uniform_buffer{};
   float _camera_altitude{};
   std::size_t _scene_uniform_sky_irradiance_offset{};

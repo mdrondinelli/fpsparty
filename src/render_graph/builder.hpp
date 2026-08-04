@@ -18,10 +18,6 @@ class Resources;
 // a concrete resource, only the opaque symbol identifying it.
 class Builder {
 public:
-  Resource_handle read(Symbolic_descriptor descriptor, Access access);
-
-  Resource_handle write(Symbolic_descriptor descriptor, Access access);
-
   Resource_handle read(Symbolic_image image, Access access);
 
   Resource_handle write(Symbolic_image image, Access access);
@@ -34,8 +30,7 @@ private:
   friend class Graph;
   friend class Resources;
 
-  using Payload =
-    std::variant<Symbolic_descriptor, Symbolic_image, Symbolic_buffer>;
+  using Payload = std::variant<Symbolic_image, Symbolic_buffer>;
 
   struct Entry {
     Payload payload;
