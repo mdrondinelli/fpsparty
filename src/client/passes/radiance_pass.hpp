@@ -31,9 +31,8 @@ struct Radiance_pass_inputs {
 // the target to sky_color instead of dispatching with no valid view/grid.
 class Radiance_pass : public render_graph::Node {
 public:
-  explicit Radiance_pass(rc::Strong<graphics::Compute_pipeline> pipeline);
-
-  void update(Radiance_pass_inputs inputs);
+  Radiance_pass(
+    rc::Strong<graphics::Compute_pipeline> pipeline, Radiance_pass_inputs inputs);
 
   void declare(render_graph::Builder &builder) override;
 
@@ -45,7 +44,7 @@ private:
   bool has_camera() const;
 
   rc::Strong<graphics::Compute_pipeline> _pipeline;
-  Radiance_pass_inputs _inputs{};
+  Radiance_pass_inputs _inputs;
   render_graph::Resource_handle _radiance_handle{};
   render_graph::Resource_handle _albedo_handle{};
   render_graph::Resource_handle _depth_handle{};

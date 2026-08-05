@@ -16,15 +16,15 @@ Gbuffer_pass::Gbuffer_pass(
   rc::Strong<graphics::Pipeline> grid_pipeline,
   rc::Strong<graphics::Pipeline> mesh_pipeline,
   std::size_t cube_index_count,
-  float z_near)
+  float z_near,
+  std::optional<math::mat4> previous_view_projection_matrix,
+  Gbuffer_pass_inputs inputs)
     : _grid_pipeline{std::move(grid_pipeline)},
       _mesh_pipeline{std::move(mesh_pipeline)},
       _cube_index_count{cube_index_count},
-      _z_near{z_near} {}
-
-void Gbuffer_pass::update(Gbuffer_pass_inputs inputs) {
-  _inputs = std::move(inputs);
-}
+      _z_near{z_near},
+      _previous_view_projection_matrix{previous_view_projection_matrix},
+      _inputs{std::move(inputs)} {}
 
 void Gbuffer_pass::declare(render_graph::Builder &builder) {
   _albedo_handle = builder.write(

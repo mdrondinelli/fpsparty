@@ -27,12 +27,9 @@ math::ivec2 dispatch_group_count(math::ivec2 framebuffer_size) {
 } // namespace
 
 Distant_irradiance_pass1::Distant_irradiance_pass1(
-  rc::Strong<graphics::Compute_pipeline> pipeline)
-    : _pipeline{std::move(pipeline)} {}
-
-void Distant_irradiance_pass1::update(Distant_irradiance_pass1_inputs inputs) {
-  _inputs = std::move(inputs);
-}
+  rc::Strong<graphics::Compute_pipeline> pipeline,
+  Distant_irradiance_pass1_inputs inputs)
+    : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
 void Distant_irradiance_pass1::declare(render_graph::Builder &builder) {
   // normal/depth: written by Gbuffer_pass. sky_view_lut: written by
@@ -93,13 +90,9 @@ void Distant_irradiance_pass1::execute(
 }
 
 Distant_irradiance_indirect_args_pass::Distant_irradiance_indirect_args_pass(
-  rc::Strong<graphics::Compute_pipeline> pipeline)
-    : _pipeline{std::move(pipeline)} {}
-
-void Distant_irradiance_indirect_args_pass::update(
-  Distant_irradiance_indirect_args_pass_inputs inputs) {
-  _inputs = std::move(inputs);
-}
+  rc::Strong<graphics::Compute_pipeline> pipeline,
+  Distant_irradiance_indirect_args_pass_inputs inputs)
+    : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
 void Distant_irradiance_indirect_args_pass::declare(
   render_graph::Builder &builder) {
@@ -132,13 +125,9 @@ auto constexpr trace_read_access = render_graph::Access{
 } // namespace
 
 Distant_irradiance_trace_sun_pass::Distant_irradiance_trace_sun_pass(
-  rc::Strong<graphics::Compute_pipeline> pipeline)
-    : _pipeline{std::move(pipeline)} {}
-
-void Distant_irradiance_trace_sun_pass::update(
-  Distant_irradiance_trace_pass_inputs inputs) {
-  _inputs = std::move(inputs);
-}
+  rc::Strong<graphics::Compute_pipeline> pipeline,
+  Distant_irradiance_trace_pass_inputs inputs)
+    : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
 void Distant_irradiance_trace_sun_pass::declare(render_graph::Builder &builder) {
   // See Distant_irradiance_pass1::declare's comment -- same reasoning for
@@ -217,15 +206,12 @@ void Distant_irradiance_trace_sun_pass::execute(
 }
 
 Distant_irradiance_trace_sky_pass::Distant_irradiance_trace_sky_pass(
-  rc::Strong<graphics::Compute_pipeline> pipeline)
-    : _pipeline{std::move(pipeline)} {}
-
-void Distant_irradiance_trace_sky_pass::update(
+  rc::Strong<graphics::Compute_pipeline> pipeline,
   Distant_irradiance_trace_pass_inputs inputs,
-  render_graph::Symbolic_image sky_view_lut) {
-  _inputs = std::move(inputs);
-  _sky_view_lut = sky_view_lut;
-}
+  render_graph::Symbolic_image sky_view_lut)
+    : _pipeline{std::move(pipeline)},
+      _inputs{std::move(inputs)},
+      _sky_view_lut{sky_view_lut} {}
 
 void Distant_irradiance_trace_sky_pass::declare(render_graph::Builder &builder) {
   // See Distant_irradiance_pass1::declare's comment.
@@ -306,19 +292,20 @@ void Distant_irradiance_trace_sky_pass::execute(
 }
 
 Distant_irradiance_variance_pass::Distant_irradiance_variance_pass(
-  rc::Strong<graphics::Compute_pipeline> pipeline)
-    : _pipeline{std::move(pipeline)} {}
-
-void Distant_irradiance_variance_pass::update(
-  Distant_irradiance_variance_pass_inputs inputs) {
-  _inputs = std::move(inputs);
-}
+  rc::Strong<graphics::Compute_pipeline> pipeline,
+  Distant_irradiance_variance_pass_inputs inputs)
+    : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
 void Distant_irradiance_variance_pass::declare(render_graph::Builder &builder) {
-  // depth: written by Gbuffer_pass -- see Distant_irradiance_pass1::
-  // declare's comment.
+  // depth/normal: written by Gbuffer_pass -- see Distant_irradiance_
+  // pass1::declare's comment.
   _depth_handle = builder.read(
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);
+  _normal_handle = builder.read(
+    _inputs.normal_render_target, render_graph::access::compute_sampled_read);
+  _depth_gradient_handle = builder.read(
+    _inputs.depth_gradient_render_target,
+    render_graph::access::compute_sampled_read);
   _luminance_handle = builder.read(
     _inputs.distant_irradiance_luminance_render_target,
     render_graph::access::compute_sampled_read);
@@ -334,6 +321,10 @@ void Distant_irradiance_variance_pass::execute(
     0,
     {{.image = resources.get_image(_depth_handle),
       .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_normal_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_depth_gradient_handle),
+      .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_luminance_handle),
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_variance_handle),
@@ -343,13 +334,12 @@ void Distant_irradiance_variance_pass::execute(
 }
 
 Distant_irradiance_spatial_filter_pass::Distant_irradiance_spatial_filter_pass(
-  rc::Strong<graphics::Compute_pipeline> pipeline, u32 step_size)
-    : _pipeline{std::move(pipeline)}, _step_size{step_size} {}
-
-void Distant_irradiance_spatial_filter_pass::update(
-  Distant_irradiance_spatial_filter_pass_inputs inputs) {
-  _inputs = std::move(inputs);
-}
+  rc::Strong<graphics::Compute_pipeline> pipeline,
+  u32 step_size,
+  Distant_irradiance_spatial_filter_pass_inputs inputs)
+    : _pipeline{std::move(pipeline)},
+      _step_size{step_size},
+      _inputs{std::move(inputs)} {}
 
 void Distant_irradiance_spatial_filter_pass::declare(
   render_graph::Builder &builder) {

@@ -34,10 +34,9 @@ struct Distant_irradiance_pass1_inputs {
 
 class Distant_irradiance_pass1 : public render_graph::Node {
 public:
-  explicit Distant_irradiance_pass1(
-    rc::Strong<graphics::Compute_pipeline> pipeline);
-
-  void update(Distant_irradiance_pass1_inputs inputs);
+  Distant_irradiance_pass1(
+    rc::Strong<graphics::Compute_pipeline> pipeline,
+    Distant_irradiance_pass1_inputs inputs);
 
   void declare(render_graph::Builder &builder) override;
 
@@ -47,7 +46,7 @@ public:
 
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
-  Distant_irradiance_pass1_inputs _inputs{};
+  Distant_irradiance_pass1_inputs _inputs;
   render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _sky_view_lut_handle{};
@@ -65,10 +64,9 @@ struct Distant_irradiance_indirect_args_pass_inputs {
 
 class Distant_irradiance_indirect_args_pass : public render_graph::Node {
 public:
-  explicit Distant_irradiance_indirect_args_pass(
-    rc::Strong<graphics::Compute_pipeline> pipeline);
-
-  void update(Distant_irradiance_indirect_args_pass_inputs inputs);
+  Distant_irradiance_indirect_args_pass(
+    rc::Strong<graphics::Compute_pipeline> pipeline,
+    Distant_irradiance_indirect_args_pass_inputs inputs);
 
   void declare(render_graph::Builder &builder) override;
 
@@ -78,7 +76,7 @@ public:
 
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
-  Distant_irradiance_indirect_args_pass_inputs _inputs{};
+  Distant_irradiance_indirect_args_pass_inputs _inputs;
   render_graph::Resource_handle _sun_sample_handle{};
   render_graph::Resource_handle _sky_sample_handle{};
 };
@@ -112,10 +110,9 @@ struct Distant_irradiance_trace_pass_inputs {
 
 class Distant_irradiance_trace_sun_pass : public render_graph::Node {
 public:
-  explicit Distant_irradiance_trace_sun_pass(
-    rc::Strong<graphics::Compute_pipeline> pipeline);
-
-  void update(Distant_irradiance_trace_pass_inputs inputs);
+  Distant_irradiance_trace_sun_pass(
+    rc::Strong<graphics::Compute_pipeline> pipeline,
+    Distant_irradiance_trace_pass_inputs inputs);
 
   void declare(render_graph::Builder &builder) override;
 
@@ -125,7 +122,7 @@ public:
 
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
-  Distant_irradiance_trace_pass_inputs _inputs{};
+  Distant_irradiance_trace_pass_inputs _inputs;
   render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _motion_vector_handle{};
@@ -138,10 +135,8 @@ private:
 
 class Distant_irradiance_trace_sky_pass : public render_graph::Node {
 public:
-  explicit Distant_irradiance_trace_sky_pass(
-    rc::Strong<graphics::Compute_pipeline> pipeline);
-
-  void update(
+  Distant_irradiance_trace_sky_pass(
+    rc::Strong<graphics::Compute_pipeline> pipeline,
     Distant_irradiance_trace_pass_inputs inputs,
     render_graph::Symbolic_image sky_view_lut);
 
@@ -153,8 +148,8 @@ public:
 
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
-  Distant_irradiance_trace_pass_inputs _inputs{};
-  render_graph::Symbolic_image _sky_view_lut{};
+  Distant_irradiance_trace_pass_inputs _inputs;
+  render_graph::Symbolic_image _sky_view_lut;
   render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _motion_vector_handle{};
@@ -168,6 +163,8 @@ private:
 
 struct Distant_irradiance_variance_pass_inputs {
   render_graph::Symbolic_image depth_render_target;
+  render_graph::Symbolic_image normal_render_target;
+  render_graph::Symbolic_image depth_gradient_render_target;
   render_graph::Symbolic_image distant_irradiance_luminance_render_target;
   render_graph::Symbolic_image distant_irradiance_variance_render_target;
   math::ivec2 framebuffer_size;
@@ -175,10 +172,9 @@ struct Distant_irradiance_variance_pass_inputs {
 
 class Distant_irradiance_variance_pass : public render_graph::Node {
 public:
-  explicit Distant_irradiance_variance_pass(
-    rc::Strong<graphics::Compute_pipeline> pipeline);
-
-  void update(Distant_irradiance_variance_pass_inputs inputs);
+  Distant_irradiance_variance_pass(
+    rc::Strong<graphics::Compute_pipeline> pipeline,
+    Distant_irradiance_variance_pass_inputs inputs);
 
   void declare(render_graph::Builder &builder) override;
 
@@ -188,8 +184,10 @@ public:
 
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
-  Distant_irradiance_variance_pass_inputs _inputs{};
+  Distant_irradiance_variance_pass_inputs _inputs;
   render_graph::Resource_handle _depth_handle{};
+  render_graph::Resource_handle _normal_handle{};
+  render_graph::Resource_handle _depth_gradient_handle{};
   render_graph::Resource_handle _luminance_handle{};
   render_graph::Resource_handle _variance_handle{};
 };
@@ -210,9 +208,9 @@ struct Distant_irradiance_spatial_filter_pass_inputs {
 class Distant_irradiance_spatial_filter_pass : public render_graph::Node {
 public:
   Distant_irradiance_spatial_filter_pass(
-    rc::Strong<graphics::Compute_pipeline> pipeline, u32 step_size);
-
-  void update(Distant_irradiance_spatial_filter_pass_inputs inputs);
+    rc::Strong<graphics::Compute_pipeline> pipeline,
+    u32 step_size,
+    Distant_irradiance_spatial_filter_pass_inputs inputs);
 
   void declare(render_graph::Builder &builder) override;
 
@@ -223,7 +221,7 @@ public:
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   u32 _step_size;
-  Distant_irradiance_spatial_filter_pass_inputs _inputs{};
+  Distant_irradiance_spatial_filter_pass_inputs _inputs;
   render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _depth_gradient_handle{};

@@ -6,18 +6,16 @@
 namespace fpsparty::client::passes {
 
 Sky_irradiance_pass::Sky_irradiance_pass(
-  rc::Strong<graphics::Compute_pipeline> pipeline)
-    : _pipeline{std::move(pipeline)} {}
-
-void Sky_irradiance_pass::update(
+  rc::Strong<graphics::Compute_pipeline> pipeline,
   render_graph::Symbolic_image sky_view_lut,
   render_graph::Symbolic_buffer scene_uniform_buffer,
   float camera_altitude,
-  std::size_t scene_uniform_sky_irradiance_offset) {
-  _sky_view_lut = sky_view_lut;
-  _scene_uniform_buffer = scene_uniform_buffer;
-  _camera_altitude = camera_altitude;
-  _scene_uniform_sky_irradiance_offset = scene_uniform_sky_irradiance_offset;
+  std::size_t scene_uniform_sky_irradiance_offset)
+    : _pipeline{std::move(pipeline)},
+      _sky_view_lut{sky_view_lut},
+      _scene_uniform_buffer{scene_uniform_buffer},
+      _camera_altitude{camera_altitude},
+      _scene_uniform_sky_irradiance_offset{scene_uniform_sky_irradiance_offset} {
 }
 
 void Sky_irradiance_pass::declare(render_graph::Builder &builder) {

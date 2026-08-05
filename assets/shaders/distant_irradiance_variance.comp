@@ -1,6 +1,8 @@
 #version 450
 
 #include "descriptors.glsl"
+#include "distant_irradiance_spatial_filter.glsl"
+#include "octahedral.glsl"
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -8,11 +10,14 @@ layout(local_size_x = 8, local_size_y = 8) in;
 // sky.comp (temporal accumulation done): reads this frame's luminance
 // moments, derives per-pixel variance, and blurs it with a 5x5 gaussian
 // (separable 1,4,6,4,1 binomial weights, same kernel as distant_irradiance_
-// spatial_filter.comp's a-trous filter) before writing out.
+// spatial_filter.comp's a-trous filter), weighted by the same depth/normal
+// edge-stopping functions the a-trous filter uses, before writing out.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) uint16_t depth_texture;
-  layout(offset = 2) uint16_t distant_irradiance_luminance_texture;
-  layout(offset = 4) uint16_t distant_irradiance_variance_image;
+  layout(offset = 2) uint16_t normal_texture;
+  layout(offset = 4) uint16_t depth_gradient_texture;
+  layout(offset = 6) uint16_t distant_irradiance_luminance_texture;
+  layout(offset = 8) uint16_t distant_irradiance_variance_image;
 } push_constants;
 
 const float gaussian_weights[5] =
@@ -47,6 +52,10 @@ void main() {
       vec4(0.0));
     return;
   }
+  const vec3 n_p = oct_decode(
+    texelFetch(sampled_images[push_constants.normal_texture], pixel, 0).rg);
+  const vec2 gradient_z_p = texelFetch(
+    sampled_images[push_constants.depth_gradient_texture], pixel, 0).rg;
   const ivec2 max_coord = size - ivec2(1);
   float weight_sum = 0.0;
   float result = 0.0;
@@ -58,8 +67,13 @@ void main() {
       if (depth == 0.0) {
         continue;
       }
+      const vec3 n_q = oct_decode(
+        texelFetch(sampled_images[push_constants.normal_texture], coord, 0)
+          .rg);
       const float weight =
-        gaussian_weights[dx + 2] * gaussian_weights[dy + 2];
+        gaussian_weights[dx + 2] * gaussian_weights[dy + 2] *
+        depth_weight(vec2(pixel), vec2(coord), center_depth, depth, gradient_z_p) *
+        normal_weight(n_p, n_q);
       weight_sum += weight;
       result += weight * variance_at(coord);
     }

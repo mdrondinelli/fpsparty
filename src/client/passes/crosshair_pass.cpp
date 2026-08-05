@@ -7,17 +7,16 @@
 namespace fpsparty::client::passes {
 
 Crosshair_pass::Crosshair_pass(
-  rc::Strong<graphics::Pipeline> pipeline, std::size_t index_count)
-    : _pipeline{std::move(pipeline)}, _index_count{index_count} {}
-
-void Crosshair_pass::update(
+  rc::Strong<graphics::Pipeline> pipeline,
+  std::size_t index_count,
   rc::Strong<graphics::Buffer> index_buffer,
   render_graph::Symbolic_image mask_render_target,
-  math::ivec2 framebuffer_size) {
-  _index_buffer = std::move(index_buffer);
-  _mask_render_target = mask_render_target;
-  _framebuffer_size = framebuffer_size;
-}
+  math::ivec2 framebuffer_size)
+    : _pipeline{std::move(pipeline)},
+      _index_count{index_count},
+      _index_buffer{std::move(index_buffer)},
+      _mask_render_target{mask_render_target},
+      _framebuffer_size{framebuffer_size} {}
 
 void Crosshair_pass::declare(render_graph::Builder &builder) {
   _mask_handle = builder.write(

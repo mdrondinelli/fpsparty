@@ -22,12 +22,12 @@ struct Rt_entity_binning_pass_inputs {
 
 class Rt_entity_binning_pass : public render_graph::Node {
 public:
-  explicit Rt_entity_binning_pass(
-    rc::Strong<graphics::Compute_pipeline> pipeline);
-
-  // Returns false if there's nothing to bin this frame (no session, or
-  // grid mesh not uploaded yet) -- caller should skip add_pass then.
-  bool update(Rt_entity_binning_pass_inputs inputs);
+  // Caller decides whether there's anything to bin this frame (session
+  // present, grid mesh uploaded) before constructing -- see
+  // Application::render.
+  Rt_entity_binning_pass(
+    rc::Strong<graphics::Compute_pipeline> pipeline,
+    Rt_entity_binning_pass_inputs inputs);
 
   void declare(render_graph::Builder &builder) override;
 
@@ -37,7 +37,7 @@ public:
 
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
-  Rt_entity_binning_pass_inputs _inputs{};
+  Rt_entity_binning_pass_inputs _inputs;
   render_graph::Resource_handle _binning_buffer_handle{};
 };
 

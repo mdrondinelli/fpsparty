@@ -6,12 +6,9 @@
 
 namespace fpsparty::client::passes {
 
-Composite_pass::Composite_pass(std::size_t index_count)
-    : _index_count{index_count} {}
-
-void Composite_pass::update(Composite_pass_inputs inputs) {
-  _inputs = std::move(inputs);
-}
+Composite_pass::Composite_pass(
+  std::size_t index_count, Composite_pass_inputs inputs)
+    : _index_count{index_count}, _inputs{std::move(inputs)} {}
 
 void Composite_pass::declare(render_graph::Builder &builder) {
   _swapchain_handle = builder.write(

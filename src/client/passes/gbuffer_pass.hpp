@@ -41,13 +41,19 @@ struct Gbuffer_pass_inputs {
 // fields into scene_uniform_buffer via map().
 class Gbuffer_pass : public render_graph::Node {
 public:
+  // previous_view_projection_matrix: last frame's Gbuffer_pass::
+  // get_view_projection_matrix() (empty on the first frame with a
+  // camera) -- this pass's own cross-frame state, since it's read then
+  // overwritten every frame for temporal reprojection and so can't live
+  // in a Node rebuilt from scratch each frame; the caller carries it
+  // between frames instead.
   Gbuffer_pass(
     rc::Strong<graphics::Pipeline> grid_pipeline,
     rc::Strong<graphics::Pipeline> mesh_pipeline,
     std::size_t cube_index_count,
-    float z_near);
-
-  void update(Gbuffer_pass_inputs inputs);
+    float z_near,
+    std::optional<math::mat4> previous_view_projection_matrix,
+    Gbuffer_pass_inputs inputs);
 
   void declare(render_graph::Builder &builder) override;
 
@@ -55,13 +61,18 @@ public:
     graphics::Work_recorder &recorder,
     render_graph::Resources &resources) override;
 
+  // Valid after execute() has run; pass into next frame's constructor.
+  std::optional<math::mat4> const &get_view_projection_matrix() const noexcept {
+    return _previous_view_projection_matrix;
+  }
+
 private:
   rc::Strong<graphics::Pipeline> _grid_pipeline;
   rc::Strong<graphics::Pipeline> _mesh_pipeline;
   std::size_t _cube_index_count;
   float _z_near;
-  Gbuffer_pass_inputs _inputs{};
-  std::optional<math::mat4> _previous_view_projection_matrix{};
+  std::optional<math::mat4> _previous_view_projection_matrix;
+  Gbuffer_pass_inputs _inputs;
   render_graph::Resource_handle _albedo_handle{};
   render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _motion_vector_handle{};

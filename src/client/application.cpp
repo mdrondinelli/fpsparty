@@ -416,56 +416,81 @@ private:
         : nullptr;
     auto const scene_uniform_offset =
       (_frame_number % max_frames_in_flight) * scene_uniform_data_size;
+    std::optional<passes::Sky_view_pass> sky_view_pass;
+    std::optional<passes::Sky_irradiance_pass> sky_irradiance_pass;
     if (camera && sun) {
-      _sky_view_pass.update(
+      sky_view_pass.emplace(
+        _sky_view_pipeline,
+        sky_view_lut_size,
         _transmittance_lut,
         _sky_view_lut_symbol,
         camera->position,
         sun->direction,
         sun->irradiance);
-      _graph.add_pass(_sky_view_pass);
-      _sky_irradiance_pass.update(
+      _graph.add_pass(*sky_view_pass);
+      sky_irradiance_pass.emplace(
+        _sky_irradiance_pipeline,
         _sky_view_lut_symbol,
         _scene_uniform_buffer_symbol,
         camera->position.y(),
         scene_uniform_offset + scene_sky_irradiance_offset);
-      _graph.add_pass(_sky_irradiance_pass);
+      _graph.add_pass(*sky_irradiance_pass);
     }
-    _gbuffer_pass.update({
-      .albedo_render_target = _albedo_render_target_symbol,
-      .normal_render_target = _normal_render_target_symbols[_frame_number % 2],
-      .motion_vector_render_target = _motion_vector_render_target_symbol,
-      .depth_gradient_render_target = _depth_gradient_render_target_symbol,
-      .depth_render_target = _depth_render_target_symbols[_frame_number % 2],
-      .framebuffer_size = framebuffer_size,
-      .scene_uniform_offset = scene_uniform_offset,
-      .client = &_client,
-      .local_player = _local_player,
-      .scene_uniform_buffer = _scene_uniform_buffer,
-      .animation_time = _animation_time,
-      .grid_mesh = _grid_mesh.get(),
-      .block_texture_registry = &_block_texture_registry,
-      .cube_vertex_buffer = _cube_vertex_buffer,
-      .cube_index_buffer = _cube_index_buffer,
-    });
-    _graph.add_pass(_gbuffer_pass);
+    auto gbuffer_pass = passes::Gbuffer_pass{
+      _grid_pipeline,
+      _mesh_pipeline,
+      cube_mesh_indices.size(),
+      z_near,
+      _previous_view_projection_matrix,
+      {
+        .albedo_render_target = _albedo_render_target_symbol,
+        .normal_render_target = _normal_render_target_symbols[_frame_number % 2],
+        .motion_vector_render_target = _motion_vector_render_target_symbol,
+        .depth_gradient_render_target = _depth_gradient_render_target_symbol,
+        .depth_render_target = _depth_render_target_symbols[_frame_number % 2],
+        .framebuffer_size = framebuffer_size,
+        .scene_uniform_offset = scene_uniform_offset,
+        .client = &_client,
+        .local_player = _local_player,
+        .scene_uniform_buffer = _scene_uniform_buffer,
+        .animation_time = _animation_time,
+        .grid_mesh = _grid_mesh.get(),
+        .block_texture_registry = &_block_texture_registry,
+        .cube_vertex_buffer = _cube_vertex_buffer,
+        .cube_index_buffer = _cube_index_buffer,
+      }};
+    _graph.add_pass(gbuffer_pass);
+    auto const rt_frame = _frame_number % max_frames_in_flight;
+    std::optional<passes::Rt_entity_binning_pass> rt_entity_binning_pass;
     {
       auto const &session = _client.get_session();
       if (session && _grid_mesh && _grid_mesh->is_uploaded()) {
         ensure_rt_entity_capacity(std::max(
           session->get_scene().get_current_frame().boxes.size(),
           std::size_t{1}));
+        rt_entity_binning_pass.emplace(
+          _rt_grid_entity_binning_pipeline,
+          passes::Rt_entity_binning_pass_inputs{
+            .client = &_client,
+            .grid_mesh = _grid_mesh.get(),
+            .entity_buffer = _rt_entity_buffers[rt_frame],
+            .binning_buffer = _rt_entity_binning_buffer_symbols[rt_frame],
+          });
+        _graph.add_pass(*rt_entity_binning_pass);
       }
     }
-    auto const rt_frame = _frame_number % max_frames_in_flight;
-    if (_rt_entity_binning_pass.update({
-          .client = &_client,
-          .grid_mesh = _grid_mesh.get(),
-          .entity_buffer = _rt_entity_buffers[rt_frame],
-          .binning_buffer = _rt_entity_binning_buffer_symbols[rt_frame],
-        })) {
-      _graph.add_pass(_rt_entity_binning_pass);
-    }
+    std::optional<passes::Distant_irradiance_pass1> distant_irradiance_pass1;
+    std::optional<passes::Distant_irradiance_indirect_args_pass>
+      distant_irradiance_indirect_args_pass;
+    std::optional<passes::Distant_irradiance_trace_sun_pass>
+      distant_irradiance_trace_sun_pass;
+    std::optional<passes::Distant_irradiance_trace_sky_pass>
+      distant_irradiance_trace_sky_pass;
+    std::optional<passes::Distant_irradiance_variance_pass>
+      distant_irradiance_variance_pass;
+    std::array<
+      std::optional<passes::Distant_irradiance_spatial_filter_pass>, 5>
+      distant_irradiance_spatial_filter_passes;
     {
       auto const &session = _client.get_session();
       auto const distant_irradiance_camera =
@@ -491,24 +516,28 @@ private:
         auto const frame = _frame_number % max_frames_in_flight;
         auto const layout =
           make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
-        _distant_irradiance_pass1.update({
-          .normal_render_target = _normal_render_target_symbols[_frame_number % 2],
-          .depth_render_target = _depth_render_target_symbols[_frame_number % 2],
-          .transmittance_lut = _transmittance_lut,
-          .sky_view_lut = _sky_view_lut_symbol,
-          .scene_uniform_buffer = _scene_uniform_buffer_symbol,
-          .scene_uniform_offset = scene_uniform_offset,
-          .sun_sample_buffer = _distant_light_sample_buffer_sun_symbol,
-          .sky_sample_buffer = _distant_light_sample_buffer_sky_symbol,
-          .framebuffer_size = framebuffer_size,
-          .frame_number = _frame_number,
-        });
-        _graph.add_pass(_distant_irradiance_pass1);
-        _distant_irradiance_indirect_args_pass.update({
-          .sun_sample_buffer = _distant_light_sample_buffer_sun_symbol,
-          .sky_sample_buffer = _distant_light_sample_buffer_sky_symbol,
-        });
-        _graph.add_pass(_distant_irradiance_indirect_args_pass);
+        distant_irradiance_pass1.emplace(
+          _distant_irradiance_pipeline,
+          passes::Distant_irradiance_pass1_inputs{
+            .normal_render_target = _normal_render_target_symbols[_frame_number % 2],
+            .depth_render_target = _depth_render_target_symbols[_frame_number % 2],
+            .transmittance_lut = _transmittance_lut,
+            .sky_view_lut = _sky_view_lut_symbol,
+            .scene_uniform_buffer = _scene_uniform_buffer_symbol,
+            .scene_uniform_offset = scene_uniform_offset,
+            .sun_sample_buffer = _distant_light_sample_buffer_sun_symbol,
+            .sky_sample_buffer = _distant_light_sample_buffer_sky_symbol,
+            .framebuffer_size = framebuffer_size,
+            .frame_number = _frame_number,
+          });
+        _graph.add_pass(*distant_irradiance_pass1);
+        distant_irradiance_indirect_args_pass.emplace(
+          _indirect_dispatch_args_pipeline,
+          passes::Distant_irradiance_indirect_args_pass_inputs{
+            .sun_sample_buffer = _distant_light_sample_buffer_sun_symbol,
+            .sky_sample_buffer = _distant_light_sample_buffer_sky_symbol,
+          });
+        _graph.add_pass(*distant_irradiance_indirect_args_pass);
         auto const shared_trace_inputs = passes::Distant_irradiance_trace_pass_inputs{
           .normal_render_target = _normal_render_target_symbols[_frame_number % 2],
           .depth_render_target = _depth_render_target_symbols[_frame_number % 2],
@@ -539,106 +568,122 @@ private:
         };
         auto sun_trace_inputs = shared_trace_inputs;
         sun_trace_inputs.sample_buffer = _distant_light_sample_buffer_sun_symbol;
-        _distant_irradiance_trace_sun_pass.update(std::move(sun_trace_inputs));
-        _graph.add_pass(_distant_irradiance_trace_sun_pass);
+        distant_irradiance_trace_sun_pass.emplace(
+          _distant_irradiance_trace_sun_pipeline, std::move(sun_trace_inputs));
+        _graph.add_pass(*distant_irradiance_trace_sun_pass);
         auto sky_trace_inputs = shared_trace_inputs;
         sky_trace_inputs.sample_buffer = _distant_light_sample_buffer_sky_symbol;
-        _distant_irradiance_trace_sky_pass.update(
-          std::move(sky_trace_inputs), _sky_view_lut_symbol);
-        _graph.add_pass(_distant_irradiance_trace_sky_pass);
-        _distant_irradiance_variance_pass.update({
-          .depth_render_target = _depth_render_target_symbols[_frame_number % 2],
-          .distant_irradiance_luminance_render_target =
-            _distant_irradiance_luminance_render_target_symbols
-              [_frame_number % 2],
-          .distant_irradiance_variance_render_target =
-            _distant_irradiance_variance_render_target_symbols[0],
-          .framebuffer_size = framebuffer_size,
-        });
-        _graph.add_pass(_distant_irradiance_variance_pass);
-        auto const update_spatial_filter =
-          [&](passes::Distant_irradiance_spatial_filter_pass &pass,
+        distant_irradiance_trace_sky_pass.emplace(
+          _distant_irradiance_trace_sky_pipeline,
+          std::move(sky_trace_inputs),
+          _sky_view_lut_symbol);
+        _graph.add_pass(*distant_irradiance_trace_sky_pass);
+        distant_irradiance_variance_pass.emplace(
+          _distant_irradiance_variance_pipeline,
+          passes::Distant_irradiance_variance_pass_inputs{
+            .depth_render_target = _depth_render_target_symbols[_frame_number % 2],
+            .normal_render_target = _normal_render_target_symbols[_frame_number % 2],
+            .depth_gradient_render_target = _depth_gradient_render_target_symbol,
+            .distant_irradiance_luminance_render_target =
+              _distant_irradiance_luminance_render_target_symbols
+                [_frame_number % 2],
+            .distant_irradiance_variance_render_target =
+              _distant_irradiance_variance_render_target_symbols[0],
+            .framebuffer_size = framebuffer_size,
+          });
+        _graph.add_pass(*distant_irradiance_variance_pass);
+        auto const emplace_spatial_filter =
+          [&](std::size_t index,
               render_graph::Symbolic_image color_in,
               render_graph::Symbolic_image color_out,
               render_graph::Symbolic_image variance_in,
               render_graph::Symbolic_image variance_out) {
-            pass.update({
-              .depth_render_target =
-                _depth_render_target_symbols[_frame_number % 2],
-              .normal_render_target =
-                _normal_render_target_symbols[_frame_number % 2],
-              .depth_gradient_render_target =
-                _depth_gradient_render_target_symbol,
-              .color_in = color_in,
-              .variance_in = variance_in,
-              .color_out = color_out,
-              .variance_out = variance_out,
-              .framebuffer_size = framebuffer_size,
-            });
-            _graph.add_pass(pass);
+            distant_irradiance_spatial_filter_passes[index].emplace(
+              _distant_irradiance_spatial_filter_pipeline,
+              _distant_irradiance_spatial_filter_step_sizes[index],
+              passes::Distant_irradiance_spatial_filter_pass_inputs{
+                .depth_render_target =
+                  _depth_render_target_symbols[_frame_number % 2],
+                .normal_render_target =
+                  _normal_render_target_symbols[_frame_number % 2],
+                .depth_gradient_render_target =
+                  _depth_gradient_render_target_symbol,
+                .color_in = color_in,
+                .variance_in = variance_in,
+                .color_out = color_out,
+                .variance_out = variance_out,
+                .framebuffer_size = framebuffer_size,
+              });
+            _graph.add_pass(*distant_irradiance_spatial_filter_passes[index]);
           };
-        update_spatial_filter(
-          _distant_irradiance_spatial_filter_passes[0],
+        emplace_spatial_filter(
+          0,
           _distant_irradiance_render_target_symbol,
           _distant_irradiance_history_render_target_symbols[_frame_number % 2],
           _distant_irradiance_variance_render_target_symbols[0],
           _distant_irradiance_variance_render_target_symbols[1]);
-        update_spatial_filter(
-          _distant_irradiance_spatial_filter_passes[1],
+        emplace_spatial_filter(
+          1,
           _distant_irradiance_history_render_target_symbols[_frame_number % 2],
           _distant_irradiance_filtered_render_target_symbols[1],
           _distant_irradiance_variance_render_target_symbols[1],
           _distant_irradiance_variance_render_target_symbols[0]);
-        update_spatial_filter(
-          _distant_irradiance_spatial_filter_passes[2],
+        emplace_spatial_filter(
+          2,
           _distant_irradiance_filtered_render_target_symbols[1],
           _distant_irradiance_filtered_render_target_symbols[0],
           _distant_irradiance_variance_render_target_symbols[0],
           _distant_irradiance_variance_render_target_symbols[1]);
-        update_spatial_filter(
-          _distant_irradiance_spatial_filter_passes[3],
+        emplace_spatial_filter(
+          3,
           _distant_irradiance_filtered_render_target_symbols[0],
           _distant_irradiance_filtered_render_target_symbols[1],
           _distant_irradiance_variance_render_target_symbols[1],
           _distant_irradiance_variance_render_target_symbols[0]);
         // 5 iterations total, steps 1/2/4/8/16 -- the standard SVGF
         // configuration, giving an effective 65x65 pixel filter footprint.
-        update_spatial_filter(
-          _distant_irradiance_spatial_filter_passes[4],
+        emplace_spatial_filter(
+          4,
           _distant_irradiance_filtered_render_target_symbols[1],
           _distant_irradiance_filtered_render_target_symbols[0],
           _distant_irradiance_variance_render_target_symbols[0],
           _distant_irradiance_variance_render_target_symbols[1]);
       }
     }
-    _radiance_pass.update({
-      .client = &_client,
-      .local_player = _local_player,
-      .grid_mesh = _grid_mesh.get(),
-      .radiance_render_target = _radiance_render_target_symbol,
-      .albedo_render_target = _albedo_render_target_symbol,
-      .depth_render_target = _depth_render_target_symbols[_frame_number % 2],
-      .sky_view_lut = _sky_view_lut_symbol,
-      .distant_irradiance_filtered =
-        _distant_irradiance_filtered_render_target_symbols[0],
-      .framebuffer_size = framebuffer_size,
-    });
-    _graph.add_pass(_radiance_pass);
-    _crosshair_pass.update(
+    auto radiance_pass = passes::Radiance_pass{
+      _radiance_pipeline,
+      {
+        .client = &_client,
+        .local_player = _local_player,
+        .grid_mesh = _grid_mesh.get(),
+        .radiance_render_target = _radiance_render_target_symbol,
+        .albedo_render_target = _albedo_render_target_symbol,
+        .depth_render_target = _depth_render_target_symbols[_frame_number % 2],
+        .sky_view_lut = _sky_view_lut_symbol,
+        .distant_irradiance_filtered =
+          _distant_irradiance_filtered_render_target_symbols[0],
+        .framebuffer_size = framebuffer_size,
+      }};
+    _graph.add_pass(radiance_pass);
+    auto crosshair_pass = passes::Crosshair_pass{
+      _crosshair_pipeline,
+      crosshair_indices.size(),
       _crosshair_index_buffer,
       _crosshair_mask_render_target_symbol,
-      framebuffer_size);
-    _graph.add_pass(_crosshair_pass);
-    _composite_pass.update({
-      .pipeline = get_composite_pipeline(swapchain_image->get_format()),
-      .index_buffer = _composite_index_buffer,
-      .swapchain_image = _swapchain_image_symbol,
-      .radiance_render_target = _radiance_render_target_symbol,
-      .crosshair_mask_render_target = _crosshair_mask_render_target_symbol,
-      .framebuffer_size = framebuffer_size,
-      .frame_number = _frame_number,
-    });
-    _graph.add_pass(_composite_pass);
+      framebuffer_size};
+    _graph.add_pass(crosshair_pass);
+    auto composite_pass = passes::Composite_pass{
+      composite_indices.size(),
+      {
+        .pipeline = get_composite_pipeline(swapchain_image->get_format()),
+        .index_buffer = _composite_index_buffer,
+        .swapchain_image = _swapchain_image_symbol,
+        .radiance_render_target = _radiance_render_target_symbol,
+        .crosshair_mask_render_target = _crosshair_mask_render_target_symbol,
+        .framebuffer_size = framebuffer_size,
+        .frame_number = _frame_number,
+      }};
+    _graph.add_pass(composite_pass);
     _graph.execute(
       work_recorder,
       {
@@ -678,6 +723,7 @@ private:
         {_rt_entity_binning_buffer_symbols[0], _rt_entity_binning_buffers[0]},
         {_rt_entity_binning_buffer_symbols[1], _rt_entity_binning_buffers[1]},
       });
+    _previous_view_projection_matrix = gbuffer_pass.get_view_projection_matrix();
     _previous_frame_work = _graphics.submit_frame_work(
       std::move(work_recorder), _previous_frame_work);
   }
@@ -1477,13 +1523,9 @@ private:
   graphics::Shader _radiance_compute_shader;
   rc::Strong<graphics::Pipeline> _grid_pipeline{};
   rc::Strong<graphics::Pipeline> _mesh_pipeline{};
-  passes::Gbuffer_pass _gbuffer_pass{
-    _grid_pipeline, _mesh_pipeline, cube_mesh_indices.size(), z_near};
   rc::Strong<graphics::Pipeline> _crosshair_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _sky_view_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _sky_irradiance_pipeline{};
-  passes::Sky_view_pass _sky_view_pass{_sky_view_pipeline, sky_view_lut_size};
-  passes::Sky_irradiance_pass _sky_irradiance_pass{_sky_irradiance_pipeline};
   render_graph::Graph _graph{};
   // Symbolic ids for every render-graph-tracked resource -- see
   // render_graph/symbolic_resource.hpp. Allocated once here; the bulk
@@ -1534,35 +1576,16 @@ private:
     _rt_entity_binning_buffer_symbols{
       _graph.allocate_buffer_symbol(), _graph.allocate_buffer_symbol()};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_pipeline{};
-  passes::Distant_irradiance_pass1 _distant_irradiance_pass1{
-    _distant_irradiance_pipeline};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_trace_sun_pipeline{};
-  passes::Distant_irradiance_trace_sun_pass _distant_irradiance_trace_sun_pass{
-    _distant_irradiance_trace_sun_pipeline};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_trace_sky_pipeline{};
-  passes::Distant_irradiance_trace_sky_pass _distant_irradiance_trace_sky_pass{
-    _distant_irradiance_trace_sky_pipeline};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_variance_pipeline{};
-  passes::Distant_irradiance_variance_pass _distant_irradiance_variance_pass{
-    _distant_irradiance_variance_pipeline};
   rc::Strong<graphics::Compute_pipeline>
     _distant_irradiance_spatial_filter_pipeline{};
-  passes::Distant_irradiance_spatial_filter_pass
-    _distant_irradiance_spatial_filter_passes[5]{
-      {_distant_irradiance_spatial_filter_pipeline, 1u},
-      {_distant_irradiance_spatial_filter_pipeline, 2u},
-      {_distant_irradiance_spatial_filter_pipeline, 4u},
-      {_distant_irradiance_spatial_filter_pipeline, 8u},
-      {_distant_irradiance_spatial_filter_pipeline, 16u},
-    };
+  static auto constexpr _distant_irradiance_spatial_filter_step_sizes =
+    std::array<u32, 5>{1u, 2u, 4u, 8u, 16u};
   rc::Strong<graphics::Compute_pipeline> _indirect_dispatch_args_pipeline{};
-  passes::Distant_irradiance_indirect_args_pass
-    _distant_irradiance_indirect_args_pass{_indirect_dispatch_args_pipeline};
   rc::Strong<graphics::Compute_pipeline> _rt_grid_entity_binning_pipeline{};
-  passes::Rt_entity_binning_pass _rt_entity_binning_pass{
-    _rt_grid_entity_binning_pipeline};
   rc::Strong<graphics::Compute_pipeline> _radiance_pipeline{};
-  passes::Radiance_pass _radiance_pass{_radiance_pipeline};
   rc::Strong<graphics::Pipeline> _composite_pipeline{};
   std::optional<graphics::Image_format> _composite_pipeline_color_format{};
   rc::Strong<graphics::Image> _transmittance_lut{};
@@ -1581,10 +1604,7 @@ private:
   rc::Strong<graphics::Buffer> _cube_vertex_buffer{};
   rc::Strong<graphics::Buffer> _cube_index_buffer{};
   rc::Strong<graphics::Buffer> _crosshair_index_buffer{};
-  passes::Crosshair_pass _crosshair_pass{
-    _crosshair_pipeline, crosshair_indices.size()};
   rc::Strong<graphics::Buffer> _composite_index_buffer{};
-  passes::Composite_pass _composite_pass{composite_indices.size()};
   u32 _frame_number{};
   // Makes this frame's GPU execution wait on last frame's, so a ping-
   // ponged resource's "previous frame" slot is guaranteed visible before

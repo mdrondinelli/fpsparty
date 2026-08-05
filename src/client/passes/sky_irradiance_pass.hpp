@@ -17,10 +17,8 @@ namespace fpsparty::client::passes {
 // now inserts automatically from the declared write/read.
 class Sky_irradiance_pass : public render_graph::Node {
 public:
-  explicit Sky_irradiance_pass(
-    rc::Strong<graphics::Compute_pipeline> pipeline);
-
-  void update(
+  Sky_irradiance_pass(
+    rc::Strong<graphics::Compute_pipeline> pipeline,
     render_graph::Symbolic_image sky_view_lut,
     render_graph::Symbolic_buffer scene_uniform_buffer,
     float camera_altitude,
@@ -34,10 +32,10 @@ public:
 
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
-  render_graph::Symbolic_image _sky_view_lut{};
-  render_graph::Symbolic_buffer _scene_uniform_buffer{};
-  float _camera_altitude{};
-  std::size_t _scene_uniform_sky_irradiance_offset{};
+  render_graph::Symbolic_image _sky_view_lut;
+  render_graph::Symbolic_buffer _scene_uniform_buffer;
+  float _camera_altitude;
+  std::size_t _scene_uniform_sky_irradiance_offset;
   render_graph::Resource_handle _sky_view_lut_handle{};
   render_graph::Resource_handle _scene_uniform_buffer_handle{};
 };

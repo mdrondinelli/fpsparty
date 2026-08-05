@@ -29,9 +29,7 @@ struct Composite_pass_inputs {
 
 class Composite_pass : public render_graph::Node {
 public:
-  explicit Composite_pass(std::size_t index_count);
-
-  void update(Composite_pass_inputs inputs);
+  Composite_pass(std::size_t index_count, Composite_pass_inputs inputs);
 
   void declare(render_graph::Builder &builder) override;
 
@@ -41,7 +39,7 @@ public:
 
 private:
   std::size_t _index_count;
-  Composite_pass_inputs _inputs{};
+  Composite_pass_inputs _inputs;
   render_graph::Resource_handle _swapchain_handle{};
   render_graph::Resource_handle _radiance_handle{};
   render_graph::Resource_handle _crosshair_mask_handle{};

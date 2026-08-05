@@ -6,21 +6,20 @@
 namespace fpsparty::client::passes {
 
 Sky_view_pass::Sky_view_pass(
-  rc::Strong<graphics::Compute_pipeline> pipeline, math::ivec2 lut_size)
-    : _pipeline{std::move(pipeline)}, _lut_size{lut_size} {}
-
-void Sky_view_pass::update(
+  rc::Strong<graphics::Compute_pipeline> pipeline,
+  math::ivec2 lut_size,
   rc::Strong<graphics::Image const> transmittance_lut,
   render_graph::Symbolic_image sky_view_lut,
   math::vec3 camera_position,
   math::vec3 sun_direction,
-  math::vec3 sun_irradiance) {
-  _transmittance_lut = std::move(transmittance_lut);
-  _sky_view_lut = sky_view_lut;
-  _camera_position = camera_position;
-  _sun_direction = sun_direction;
-  _sun_irradiance = sun_irradiance;
-}
+  math::vec3 sun_irradiance)
+    : _pipeline{std::move(pipeline)},
+      _lut_size{lut_size},
+      _transmittance_lut{std::move(transmittance_lut)},
+      _sky_view_lut{sky_view_lut},
+      _camera_position{camera_position},
+      _sun_direction{sun_direction},
+      _sun_irradiance{sun_irradiance} {}
 
 void Sky_view_pass::declare(render_graph::Builder &builder) {
   _sky_view_lut_handle =

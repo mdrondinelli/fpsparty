@@ -11,14 +11,9 @@
 namespace fpsparty::client::passes {
 
 Rt_entity_binning_pass::Rt_entity_binning_pass(
-  rc::Strong<graphics::Compute_pipeline> pipeline)
-    : _pipeline{std::move(pipeline)} {}
-
-bool Rt_entity_binning_pass::update(Rt_entity_binning_pass_inputs inputs) {
-  _inputs = std::move(inputs);
-  auto const &session = _inputs.client->get_session();
-  return session && _inputs.grid_mesh && _inputs.grid_mesh->is_uploaded();
-}
+  rc::Strong<graphics::Compute_pipeline> pipeline,
+  Rt_entity_binning_pass_inputs inputs)
+    : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
 void Rt_entity_binning_pass::declare(render_graph::Builder &builder) {
   _binning_buffer_handle = builder.write(

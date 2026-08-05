@@ -12,12 +12,9 @@ namespace {
 auto const sky_color = math::vec4{0.4196f, 0.6196f, 0.7451f, 1.0f};
 } // namespace
 
-Radiance_pass::Radiance_pass(rc::Strong<graphics::Compute_pipeline> pipeline)
-    : _pipeline{std::move(pipeline)} {}
-
-void Radiance_pass::update(Radiance_pass_inputs inputs) {
-  _inputs = std::move(inputs);
-}
+Radiance_pass::Radiance_pass(
+  rc::Strong<graphics::Compute_pipeline> pipeline, Radiance_pass_inputs inputs)
+    : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
 bool Radiance_pass::has_camera() const {
   auto const &session = _inputs.client->get_session();
