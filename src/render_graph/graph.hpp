@@ -16,18 +16,13 @@
 
 namespace fpsparty::render_graph {
 
-// Runs a sequence of Nodes in the order they were added, inserting a
-// barrier before each one covering whatever it reads that an earlier
-// node (in this same execute() call) wrote. Execution order is
-// declaration order -- this does not topologically sort or reorder
-// passes, only computes barriers from the declared accesses.
+// Runs Nodes in add_pass() order (declaration order, not topologically
+// sorted), inserting one barrier before each node covering whatever it
+// reads that an earlier node in the same execute() call wrote.
 //
-// Nodes declare against symbolic resources, never concrete ones --
-// execute() itself takes this frame's complete symbol->resource binding
-// for each resource kind, as part of the same call that runs the graph,
-// so there's no separate "bound but not yet executed" state and no way
-// to run against a partially-bound frame. Cleared after execute()
-// returns, ready for the next frame's add_pass calls.
+// Nodes declare against symbolic resources. execute() resolves every
+// symbol from the images/buffers arguments passed to that same call.
+// State clears after execute() returns.
 class Graph {
 public:
   void add_pass(Node &node);

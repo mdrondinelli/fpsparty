@@ -27,9 +27,8 @@ void Composite_pass::declare(render_graph::Builder &builder) {
 void Composite_pass::execute(
   graphics::Work_recorder &recorder, render_graph::Resources &resources) {
   auto const &swapchain_image = resources.get_image(_swapchain_handle);
-  // Freshly acquired each frame (unlike every other render target here,
-  // which transitions once at creation and stays general forever) -- so
-  // it needs its own transition, not just a memory barrier.
+  // Freshly acquired each frame -- needs its own layout transition, not
+  // just a memory barrier.
   recorder.transition_image_layout(
     {},
     render_graph::access::color_attachment_write,

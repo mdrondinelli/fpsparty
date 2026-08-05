@@ -43,11 +43,8 @@ struct Image_create_info {
 };
 
 // Sampled/storage descriptors (per Image_create_info::usage) are
-// allocated and made resident in the bindless descriptor heap as part of
-// construction, and freed as part of destruction -- an image is only
-// ever given a usage because something intends to access it that way, so
-// there's no separate "create the descriptor later" step, and no
-// independent descriptor lifetime/refcount to manage.
+// allocated and made resident in the bindless descriptor heap at
+// construction, and freed at destruction.
 class Image {
 public:
   explicit Image(Image_create_info const &info);

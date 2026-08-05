@@ -12,10 +12,8 @@ namespace fpsparty::render_graph {
 class Graph;
 class Resources;
 
-// Passed to Node::declare -- records each symbolic resource a pass
-// touches so Graph::execute can resolve it to a concrete resource and
-// compute the barrier needed before the pass runs. declare() never sees
-// a concrete resource, only the opaque symbol identifying it.
+// Passed to Node::declare. Records each symbolic resource a pass reads
+// or writes, for Graph::execute to resolve and barrier against.
 class Builder {
 public:
   Resource_handle read(Symbolic_image image, Access access);

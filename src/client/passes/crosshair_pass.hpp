@@ -16,13 +16,9 @@ public:
   Crosshair_pass(
     rc::Strong<graphics::Pipeline> pipeline, std::size_t index_count);
 
-  // index_buffer isn't a constructor parameter even though it's just as
-  // stable as pipeline -- unlike pipeline (assigned via this Application's
-  // own constructor's member-initializer-list, so already valid by the
-  // time this Node's default member initializer runs), it's assigned in
-  // the constructor *body*, which runs after every member (including this
-  // one) is already constructed -- capturing it by value up front would
-  // silently capture an empty buffer forever.
+  // index_buffer is assigned in Application's constructor body, after
+  // this Node's members are already initialized -- must not be captured
+  // by value in a constructor/default member initializer.
   void update(
     rc::Strong<graphics::Buffer> index_buffer,
     render_graph::Symbolic_image mask_render_target,

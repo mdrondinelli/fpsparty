@@ -16,13 +16,8 @@ layout(location = 2) out vec3 out_motion_vector;
 layout(location = 3) out vec2 out_depth_gradient;
 
 void main() {
-  // Inline, not a helper: nonuniformEXT is a source-level qualifier on the
-  // index expression at the point of the array access -- routing it
-  // through a function call severs that (confirmed via spirv-dis: the
-  // SampledImageArrayNonUniformIndexing capability and the NonUniform
-  // decoration chain into the actual OpImageSampleImplicitLod both
-  // disappear). in_texture is a per-fragment varying, genuinely
-  // non-uniform, so this one has to stay inline.
+  // in_texture is genuinely non-uniform -- keep nonuniformEXT's access
+  // inline, not behind a shared helper (see descriptors.glsl).
   const vec3 base_color =
     texture(
       sampler2D(sampled_images[nonuniformEXT(in_texture)], SAMPLER_NEAREST),

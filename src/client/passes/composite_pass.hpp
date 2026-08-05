@@ -13,16 +13,13 @@
 namespace fpsparty::client::passes {
 
 struct Composite_pass_inputs {
-  // Neither pipeline (format-dependent, see Application::get_composite_
-  // pipeline) nor index_buffer (assigned in Application's constructor
-  // *body*, like Crosshair_pass's -- see its header comment) are stable
-  // enough to be constructor parameters. swapchain_image has no backing
-  // Application member at all (freshly acquired by Graphics::
-  // record_frame_work every frame) so it stays a per-frame value here
-  // too, just a symbolic one -- allocated once, provided fresh every
-  // frame.
+  // pipeline: format-dependent, see Application::get_composite_pipeline.
+  // index_buffer: assigned in Application's constructor body -- see
+  // Crosshair_pass's header comment.
   rc::Strong<graphics::Pipeline> pipeline;
   rc::Strong<graphics::Buffer> index_buffer;
+  // No backing Application member: freshly acquired by Graphics::
+  // record_frame_work every frame.
   render_graph::Symbolic_image swapchain_image;
   render_graph::Symbolic_image radiance_render_target;
   render_graph::Symbolic_image crosshair_mask_render_target;

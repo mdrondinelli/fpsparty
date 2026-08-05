@@ -16,10 +16,8 @@ struct Radiance_pass_inputs {
   Client const *client;
   Local_player *local_player;
   Grid_mesh *grid_mesh;
-  // has_camera() writes into this via a storage-descriptor index derived
-  // from the same image resources resolves for _radiance_handle -- no
-  // separate field/symbol needed for that, unlike the old Descriptor-
-  // based design where sampled/storage were two distinct objects.
+  // has_camera() writes via a storage-descriptor index derived from the
+  // same image resources resolves for _radiance_handle.
   render_graph::Symbolic_image radiance_render_target;
   render_graph::Symbolic_image albedo_render_target;
   render_graph::Symbolic_image depth_render_target;

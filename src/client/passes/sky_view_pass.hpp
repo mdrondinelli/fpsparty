@@ -15,12 +15,10 @@ public:
   Sky_view_pass(
     rc::Strong<graphics::Compute_pipeline> pipeline, math::ivec2 lut_size);
 
-  // Called once per frame, before Graph::add_pass -- mirrors the
-  // arguments record_sky_view_pass used to take directly.
+  // Called once per frame, before Graph::add_pass.
   //
-  // transmittance_lut is a plain reference, not a symbol: it's written
-  // once at startup and never again, so no Node in any frame's graph
-  // ever needs a barrier for it.
+  // transmittance_lut is unsymbolized: written once at startup, never
+  // again, so no barrier is ever needed for it.
   void update(
     rc::Strong<graphics::Image const> transmittance_lut,
     render_graph::Symbolic_image sky_view_lut,

@@ -27,10 +27,7 @@ struct Gbuffer_pass_inputs {
   std::size_t scene_uniform_offset;
   Client const *client;
   Local_player *local_player;
-  // Host-write-only from this pass's perspective (map()'d directly, no
-  // GPU write here) -- unlike Sky_irradiance_pass's GPU write into this
-  // same buffer's disjoint Sky_irradiance sub-struct, so this pass never
-  // needs a symbol/barrier for it.
+  // Host-written only (map()) -- never declared, no symbol.
   rc::Strong<graphics::Buffer> scene_uniform_buffer;
   float animation_time;
   Grid_mesh *grid_mesh;
@@ -40,10 +37,8 @@ struct Gbuffer_pass_inputs {
 };
 
 // Renders the G-buffer (albedo/normal/motion-vector/depth-gradient/depth)
-// for the grid and entity boxes, and writes this frame's Scene camera/sun
-// fields into scene_uniform_buffer (CPU-side, via map() -- unrelated to
-// the GPU-side write sky_irradiance_pass does into the same buffer's
-// Sky_irradiance sub-struct, on disjoint bytes).
+// for the grid and entity boxes, and writes this frame's camera/sun
+// fields into scene_uniform_buffer via map().
 class Gbuffer_pass : public render_graph::Node {
 public:
   Gbuffer_pass(

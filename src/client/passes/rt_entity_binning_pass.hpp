@@ -14,12 +14,8 @@ namespace fpsparty::client::passes {
 struct Rt_entity_binning_pass_inputs {
   Client const *client;
   Grid_mesh *grid_mesh;
-  // This frame's _rt_entity_buffers[frame] -- resizing it to fit this
-  // frame's entity count (ensure_rt_entity_capacity) stays Application's
-  // job, out of the graph's scope, same as render-target creation. Never
-  // read via anything but this pass's host map()/a direct
-  // push_buffer_reference in the trace passes, so it never needs a
-  // symbol/barrier.
+  // Never declared: read only via this pass's host map() and a direct
+  // push_buffer_reference in the trace passes.
   rc::Strong<graphics::Buffer> entity_buffer;
   render_graph::Symbolic_buffer binning_buffer;
 };

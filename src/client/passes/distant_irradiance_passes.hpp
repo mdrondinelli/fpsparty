@@ -84,10 +84,9 @@ private:
 };
 
 // Shared by both trace passes below. previous_*/rt_entity_buffer/
-// rt_block_grid_buffer/transmittance_lut stay plain: the previous_*
-// fields reference last frame's already-retired work (the cross-frame
-// timeline-semaphore wait protects those, not this frame's Graph
-// barriers), and the rest are never written within any frame's graph.
+// rt_block_grid_buffer/transmittance_lut are unsymbolized: previous_*
+// fields hold last frame's already-retired data (no this-frame barrier
+// applies), the rest are never written within any frame's graph.
 struct Distant_irradiance_trace_pass_inputs {
   render_graph::Symbolic_image normal_render_target;
   render_graph::Symbolic_image depth_render_target;

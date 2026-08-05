@@ -11,12 +11,10 @@ namespace fpsparty::render_graph {
 
 class Graph;
 
-// Passed to Node::execute -- resolves a Resource_handle from this same
-// pass's declare() call back to the concrete resource Graph::execute
-// resolved its symbol against this frame. Calling the accessor that
-// doesn't match how the handle was declared (e.g. get_buffer on a handle
-// from builder.write(image, ...)) is a caller bug; std::get throws
-// rather than silently returning a wrong value.
+// Passed to Node::execute. Resolves a Resource_handle from this same
+// declare() call to its concrete resource. Calling the accessor for the
+// wrong kind (e.g. get_buffer on a handle from builder.write(image,
+// ...)) throws.
 class Resources {
 public:
   rc::Strong<graphics::Image> const & get_image(Resource_handle handle) const;

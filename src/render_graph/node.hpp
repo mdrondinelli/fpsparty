@@ -7,16 +7,15 @@
 
 namespace fpsparty::render_graph {
 
-// A render pass. Owned by the caller (e.g. as an Application member or a
-// local it keeps alive across the call to Graph::execute) -- Graph only
-// holds a non-owning pointer to it for the duration of one execute() call.
+// A render pass. Owned by the caller; Graph holds a non-owning pointer
+// for the duration of one execute() call.
 class Node {
 public:
   virtual ~Node() = default;
 
-  // Called once per Graph::execute(), before execute() -- declare every
-  // resource this pass reads/writes via builder.read/write, and stash the
-  // returned handles (as member variables) for use in execute() below.
+  // Called once per execute(), before this node's execute(). Declare
+  // every resource read/written via builder.read/write and store the
+  // returned handles for use in execute().
   virtual void declare(Builder &builder) = 0;
 
   virtual void

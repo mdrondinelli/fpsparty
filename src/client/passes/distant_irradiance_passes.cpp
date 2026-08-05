@@ -36,15 +36,11 @@ void Distant_irradiance_pass1::update(Distant_irradiance_pass1_inputs inputs) {
 
 void Distant_irradiance_pass1::declare(render_graph::Builder &builder) {
   // normal/depth: written by Gbuffer_pass. sky_view_lut: written by
-  // Sky_view_pass. scene_uniform_buffer: written (GPU-side, the Sky_
-  // irradiance sub-struct) by Sky_irradiance_pass -- whole-buffer
-  // granularity, so this is conservative about the rest of the buffer
-  // (gbuffer's own writes into it are host-side, no GPU barrier needed for
-  // those). All three are only written this frame if this pass is running
-  // at all (see the camera/sun/grid_mesh gating around every add_pass call
-  // for these), so declaring the read even when there's nothing to
-  // barrier against this particular frame is harmless -- Graph just won't
-  // find a same-batch writer and won't insert one.
+  // Sky_view_pass. scene_uniform_buffer: written GPU-side (the Sky_
+  // irradiance sub-struct) by Sky_irradiance_pass, declared at whole-
+  // buffer granularity. Declaring these reads is a no-op on frames where
+  // the writer didn't run this batch -- Graph finds no matching writer
+  // and skips the barrier.
   _normal_handle = builder.read(
     _inputs.normal_render_target, render_graph::access::compute_sampled_read);
   _depth_handle = builder.read(
