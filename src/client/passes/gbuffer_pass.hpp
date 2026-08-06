@@ -19,10 +19,10 @@ namespace fpsparty::client::passes {
 
 struct Gbuffer_pass_inputs {
   render_graph::Symbolic_image albedo_render_target;
-  render_graph::Symbolic_image normal_render_target;
+  // Normal (oct-encoded) + linear depth + isotropic depth gradient,
+  // fused into one target -- see gbuffer.glsl.
+  render_graph::Symbolic_image depth_normal_render_target;
   render_graph::Symbolic_image motion_vector_render_target;
-  render_graph::Symbolic_image depth_gradient_render_target;
-  render_graph::Symbolic_image depth_render_target;
   math::ivec2 framebuffer_size;
   std::size_t scene_uniform_offset;
   Client const *client;
@@ -34,11 +34,15 @@ struct Gbuffer_pass_inputs {
   Block_texture_registry *block_texture_registry;
   rc::Strong<graphics::Buffer> cube_vertex_buffer;
   rc::Strong<graphics::Buffer> cube_index_buffer;
+  // Hardware depth test/write only -- nothing samples it, so unlike the
+  // targets above it's never declared, no symbol (same reasoning as
+  // transmittance_lut elsewhere).
+  rc::Strong<graphics::Image> depth_attachment;
 };
 
-// Renders the G-buffer (albedo/normal/motion-vector/depth-gradient/depth)
-// for the grid and entity boxes, and writes this frame's camera/sun
-// fields into scene_uniform_buffer via map().
+// Renders the G-buffer (albedo/depth-normal/motion-vector) for the grid
+// and entity boxes, and writes this frame's camera/sun fields into
+// scene_uniform_buffer via map().
 class Gbuffer_pass : public render_graph::Node {
 public:
   // previous_view_projection_matrix: last frame's Gbuffer_pass::
@@ -74,10 +78,8 @@ private:
   std::optional<math::mat4> _previous_view_projection_matrix;
   Gbuffer_pass_inputs _inputs;
   render_graph::Resource_handle _albedo_handle{};
-  render_graph::Resource_handle _normal_handle{};
+  render_graph::Resource_handle _depth_normal_handle{};
   render_graph::Resource_handle _motion_vector_handle{};
-  render_graph::Resource_handle _depth_gradient_handle{};
-  render_graph::Resource_handle _depth_handle{};
 };
 
 } // namespace fpsparty::client::passes

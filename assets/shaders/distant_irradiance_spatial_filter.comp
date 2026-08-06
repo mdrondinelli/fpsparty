@@ -3,7 +3,7 @@
 #include "color.glsl"
 #include "descriptors.glsl"
 #include "distant_irradiance_spatial_filter.glsl"
-#include "octahedral.glsl"
+#include "gbuffer.glsl"
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -17,13 +17,11 @@ layout(local_size_x = 8, local_size_y = 8) in;
 // Dispatched once per iteration with different textures/step_size rather
 // than duplicated -- nothing about the logic differs between iterations.
 layout(push_constant) uniform Push_constants {
-  layout(offset = 0) uint16_t depth_texture;
-  layout(offset = 2) uint16_t normal_texture;
-  layout(offset = 4) uint16_t depth_gradient_texture;
-  layout(offset = 6) uint16_t distant_irradiance_texture;
-  layout(offset = 8) uint16_t distant_irradiance_variance_texture;
-  layout(offset = 10) uint16_t distant_irradiance_filtered_image;
-  layout(offset = 12) uint16_t distant_irradiance_variance_image;
+  layout(offset = 0) uint16_t depth_normal_texture;
+  layout(offset = 2) uint16_t distant_irradiance_texture;
+  layout(offset = 4) uint16_t distant_irradiance_variance_texture;
+  layout(offset = 6) uint16_t distant_irradiance_filtered_image;
+  layout(offset = 8) uint16_t distant_irradiance_variance_image;
   layout(offset = 16) uint step_size;
 } push_constants;
 
@@ -37,9 +35,9 @@ void main() {
   if (pixel.x >= size.x || pixel.y >= size.y) {
     return;
   }
-  const float depth_p =
-    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
-  if (depth_p == 0.0) {
+  const Gbuffer_sample gp = gbuffer_decode(
+    texelFetch(sampled_images[push_constants.depth_normal_texture], pixel, 0));
+  if (gp.linear_depth == 0.0) {
     imageStore(
       storage_images[push_constants.distant_irradiance_filtered_image],
       pixel,
@@ -51,10 +49,9 @@ void main() {
     return;
   }
   const vec2 p = vec2(pixel);
-  const vec3 n_p = oct_decode(
-    texelFetch(sampled_images[push_constants.normal_texture], pixel, 0).rg);
-  const vec2 gradient_z_p = texelFetch(
-    sampled_images[push_constants.depth_gradient_texture], pixel, 0).rg;
+  const vec3 n_p = gp.normal;
+  const float depth_p = gp.linear_depth;
+  const float gradient_z_p = gp.gradient;
   const vec3 color_p = texelFetch(
     sampled_images[push_constants.distant_irradiance_texture], pixel, 0).rgb;
   const float l_p = luminance(color_p);
@@ -72,15 +69,14 @@ void main() {
     for (int dx = -2; dx <= 2; ++dx) {
       const ivec2 coord =
         clamp(pixel + ivec2(dx, dy) * step_size, ivec2(0), max_coord);
-      const float depth_q =
-        texelFetch(sampled_images[push_constants.depth_texture], coord, 0).r;
-      if (depth_q == 0.0) {
+      const Gbuffer_sample gq = gbuffer_decode(
+        texelFetch(sampled_images[push_constants.depth_normal_texture], coord, 0));
+      if (gq.linear_depth == 0.0) {
         continue;
       }
       const vec2 q = vec2(coord);
-      const vec3 n_q = oct_decode(
-        texelFetch(sampled_images[push_constants.normal_texture], coord, 0)
-          .rg);
+      const vec3 n_q = gq.normal;
+      const float depth_q = gq.linear_depth;
       const vec3 color_q = texelFetch(
         sampled_images[push_constants.distant_irradiance_texture],
         coord,

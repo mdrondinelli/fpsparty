@@ -3,17 +3,16 @@
 #include "atmosphere/sky_irradiance.glsl"
 #include "color.glsl"
 #include "distant_irradiance_common.glsl"
-#include "octahedral.glsl"
+#include "gbuffer.glsl"
 #include "random.glsl"
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
-  layout(offset = 8) uint16_t normal_texture;
-  layout(offset = 10) uint16_t depth_texture;
-  layout(offset = 12) uint16_t transmittance_texture;
-  layout(offset = 14) uint16_t sky_view_lut;
+  layout(offset = 8) uint16_t depth_normal_texture;
+  layout(offset = 10) uint16_t transmittance_texture;
+  layout(offset = 12) uint16_t sky_view_lut;
   layout(offset = 16) Sky_irradiance sky_irradiance;
   layout(offset = 24) Distant_light_samples sun_samples;
   layout(offset = 32) Distant_light_samples sky_samples;
@@ -26,16 +25,16 @@ shared uint sky_offset;
 void main() {
   const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
   const ivec2 size =
-    textureSize(sampled_images[push_constants.depth_texture], 0);
+    textureSize(sampled_images[push_constants.depth_normal_texture], 0);
   const uint pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
   bool valid = pixel.x < size.x && pixel.y < size.y;
-  float depth = 0.0;
+  Gbuffer_sample g;
   bool is_sun = false;
   vec2 uv = vec2(0.0);
   if (valid) {
-    depth =
-      texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).r;
-    valid = depth != 0.0;
+    g = gbuffer_decode(
+      texelFetch(sampled_images[push_constants.depth_normal_texture], pixel, 0));
+    valid = g.linear_depth != 0.0;
   }
   if (valid) {
     const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
@@ -44,13 +43,10 @@ void main() {
       -ndc.y * push_constants.scene.zoom.y,
       1.0);
     const vec3 camera_position = push_constants.scene.camera_basis[3].xyz;
-    const float view_z = push_constants.scene.z_near / depth;
     const vec3 world_position =
       camera_position +
-      mat3(push_constants.scene.camera_basis) * (view_ray * view_z);
-    const vec3 n = oct_decode(
-      texelFetch(
-        sampled_images[push_constants.normal_texture], pixel, 0).rg);
+      mat3(push_constants.scene.camera_basis) * (view_ray * g.linear_depth);
+    const vec3 n = g.normal;
     const vec3 sun_direction = push_constants.scene.sun_direction;
     const vec3 sun_irradiance = push_constants.scene.sun_irradiance;
     const vec3 sun_transmittance =

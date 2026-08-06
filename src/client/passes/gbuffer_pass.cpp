@@ -29,31 +29,26 @@ Gbuffer_pass::Gbuffer_pass(
 void Gbuffer_pass::declare(render_graph::Builder &builder) {
   _albedo_handle = builder.write(
     _inputs.albedo_render_target, render_graph::access::color_attachment_write);
-  _normal_handle = builder.write(
-    _inputs.normal_render_target, render_graph::access::color_attachment_write);
+  _depth_normal_handle = builder.write(
+    _inputs.depth_normal_render_target,
+    render_graph::access::color_attachment_write);
   _motion_vector_handle = builder.write(
     _inputs.motion_vector_render_target,
     render_graph::access::color_attachment_write);
-  _depth_gradient_handle = builder.write(
-    _inputs.depth_gradient_render_target,
-    render_graph::access::color_attachment_write);
-  _depth_handle = builder.write(
-    _inputs.depth_render_target, render_graph::access::depth_attachment_write);
 }
 
 void Gbuffer_pass::execute(
   graphics::Work_recorder &recorder, render_graph::Resources &resources) {
   auto const gbuffer_color_attachments = std::array{
     graphics::Color_attachment_info{.image = resources.get_image(_albedo_handle)},
-    graphics::Color_attachment_info{.image = resources.get_image(_normal_handle)},
+    graphics::Color_attachment_info{
+      .image = resources.get_image(_depth_normal_handle)},
     graphics::Color_attachment_info{
       .image = resources.get_image(_motion_vector_handle)},
-    graphics::Color_attachment_info{
-      .image = resources.get_image(_depth_gradient_handle)},
   };
   recorder.begin_rendering({
     .color_attachments = gbuffer_color_attachments,
-    .depth_image = resources.get_image(_depth_handle),
+    .depth_image = _inputs.depth_attachment,
   });
   recorder.set_viewport(_inputs.framebuffer_size);
   recorder.set_scissor(_inputs.framebuffer_size);

@@ -2,8 +2,8 @@
 #define FPSPARTY_DISTANT_IRRADIANCE_COMMON_GLSL
 
 #include "descriptors.glsl"
+#include "gbuffer.glsl"
 #include "numbers.glsl"
-#include "octahedral.glsl"
 #include "scene.glsl"
 #include "atmosphere/atmosphere.glsl"
 
@@ -62,10 +62,8 @@ Distant_irradiance_history apply_distant_irradiance_history(
     vec3 n,
     ivec2 pixel,
     ivec2 size,
-    float z_near,
     uint motion_vector_texture,
-    uint previous_depth_texture,
-    uint previous_normal_texture,
+    uint previous_depth_normal_texture,
     uint previous_distant_irradiance_texture,
     uint previous_distant_irradiance_luminance_texture,
     uint history_valid) {
@@ -80,7 +78,8 @@ Distant_irradiance_history apply_distant_irradiance_history(
       any(greaterThan(previous_uv, vec2(1.0)))) {
     return Distant_irradiance_history(current_color, current_luminance_moments);
   }
-  const float previous_linear_depth = z_near / motion_and_previous_depth.z;
+  // motion_and_previous_depth.z is already linear -- see motion_vector().
+  const float previous_linear_depth = motion_and_previous_depth.z;
 
   const vec2 texel = previous_uv * vec2(size) - 0.5;
   const ivec2 base = ivec2(floor(texel));
@@ -99,16 +98,13 @@ Distant_irradiance_history apply_distant_irradiance_history(
   vec2 luminance_sum = vec2(0.0);
   for (int i = 0; i < 4; ++i) {
     const ivec2 coord = clamp(base + offsets[i], ivec2(0), max_coord);
-    const float history_depth =
-      texelFetch(sampled_images[previous_depth_texture], coord, 0).r;
-    const float history_linear_depth = z_near / history_depth;
-    if (abs(previous_linear_depth - history_linear_depth) >
-        distant_irradiance_history_depth_reject_ratio * history_linear_depth) {
+    const Gbuffer_sample history = gbuffer_decode(
+      texelFetch(sampled_images[previous_depth_normal_texture], coord, 0));
+    if (abs(previous_linear_depth - history.linear_depth) >
+        distant_irradiance_history_depth_reject_ratio * history.linear_depth) {
       continue;
     }
-    const vec3 history_normal = oct_decode(
-      texelFetch(sampled_images[previous_normal_texture], coord, 0).rg);
-    if (dot(n, history_normal) < distant_irradiance_history_normal_reject_cos) {
+    if (dot(n, history.normal) < distant_irradiance_history_normal_reject_cos) {
       continue;
     }
     weight_sum += weights[i];

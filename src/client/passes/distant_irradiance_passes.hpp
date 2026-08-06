@@ -18,8 +18,9 @@ namespace fpsparty::client::passes {
 // zeroed here too, immediately before the dispatch that appends to them --
 // an internal detail, not a cross-pass dependency, so not declared).
 struct Distant_irradiance_pass1_inputs {
-  render_graph::Symbolic_image normal_render_target;
-  render_graph::Symbolic_image depth_render_target;
+  // Normal (oct-encoded) + linear depth + isotropic depth gradient,
+  // fused into one target -- see gbuffer.glsl.
+  render_graph::Symbolic_image depth_normal_render_target;
   // Never written within any frame's graph (created once at startup) --
   // no symbol, held directly.
   rc::Strong<graphics::Image const> transmittance_lut;
@@ -47,8 +48,7 @@ public:
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Distant_irradiance_pass1_inputs _inputs;
-  render_graph::Resource_handle _normal_handle{};
-  render_graph::Resource_handle _depth_handle{};
+  render_graph::Resource_handle _depth_normal_handle{};
   render_graph::Resource_handle _sky_view_lut_handle{};
   render_graph::Resource_handle _scene_uniform_handle{};
   render_graph::Resource_handle _sun_sample_handle{};
@@ -86,8 +86,7 @@ private:
 // fields hold last frame's already-retired data (no this-frame barrier
 // applies), the rest are never written within any frame's graph.
 struct Distant_irradiance_trace_pass_inputs {
-  render_graph::Symbolic_image normal_render_target;
-  render_graph::Symbolic_image depth_render_target;
+  render_graph::Symbolic_image depth_normal_render_target;
   render_graph::Symbolic_image distant_irradiance_render_target;
   rc::Strong<graphics::Image const> transmittance_lut;
   render_graph::Symbolic_buffer scene_uniform_buffer;
@@ -98,10 +97,9 @@ struct Distant_irradiance_trace_pass_inputs {
   render_graph::Symbolic_buffer rt_entity_binning_buffer;
   std::size_t rt_entity_binning_grid_offset;
   std::size_t rt_entity_binning_nodes_offset;
-  rc::Strong<graphics::Image const> previous_depth_render_target;
+  rc::Strong<graphics::Image const> previous_depth_normal_render_target;
   rc::Strong<graphics::Image const> previous_distant_irradiance_render_target;
   render_graph::Symbolic_image motion_vector_render_target;
-  rc::Strong<graphics::Image const> previous_normal_render_target;
   u32 history_valid;
   render_graph::Symbolic_image distant_irradiance_luminance_render_target;
   rc::Strong<graphics::Image const>
@@ -123,8 +121,7 @@ public:
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Distant_irradiance_trace_pass_inputs _inputs;
-  render_graph::Resource_handle _normal_handle{};
-  render_graph::Resource_handle _depth_handle{};
+  render_graph::Resource_handle _depth_normal_handle{};
   render_graph::Resource_handle _motion_vector_handle{};
   render_graph::Resource_handle _scene_uniform_handle{};
   render_graph::Resource_handle _rt_entity_binning_handle{};
@@ -150,8 +147,7 @@ private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Distant_irradiance_trace_pass_inputs _inputs;
   render_graph::Symbolic_image _sky_view_lut;
-  render_graph::Resource_handle _normal_handle{};
-  render_graph::Resource_handle _depth_handle{};
+  render_graph::Resource_handle _depth_normal_handle{};
   render_graph::Resource_handle _motion_vector_handle{};
   render_graph::Resource_handle _sky_view_lut_handle{};
   render_graph::Resource_handle _scene_uniform_handle{};
@@ -162,9 +158,7 @@ private:
 };
 
 struct Distant_irradiance_variance_pass_inputs {
-  render_graph::Symbolic_image depth_render_target;
-  render_graph::Symbolic_image normal_render_target;
-  render_graph::Symbolic_image depth_gradient_render_target;
+  render_graph::Symbolic_image depth_normal_render_target;
   render_graph::Symbolic_image distant_irradiance_luminance_render_target;
   render_graph::Symbolic_image distant_irradiance_variance_render_target;
   math::ivec2 framebuffer_size;
@@ -185,9 +179,7 @@ public:
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Distant_irradiance_variance_pass_inputs _inputs;
-  render_graph::Resource_handle _depth_handle{};
-  render_graph::Resource_handle _normal_handle{};
-  render_graph::Resource_handle _depth_gradient_handle{};
+  render_graph::Resource_handle _depth_normal_handle{};
   render_graph::Resource_handle _luminance_handle{};
   render_graph::Resource_handle _variance_handle{};
 };
@@ -195,9 +187,7 @@ private:
 // One a-trous iteration; instantiated 5x (steps 1/2/4/8/16) with different
 // in/out descriptor pairs each frame.
 struct Distant_irradiance_spatial_filter_pass_inputs {
-  render_graph::Symbolic_image depth_render_target;
-  render_graph::Symbolic_image normal_render_target;
-  render_graph::Symbolic_image depth_gradient_render_target;
+  render_graph::Symbolic_image depth_normal_render_target;
   render_graph::Symbolic_image color_in;
   render_graph::Symbolic_image variance_in;
   render_graph::Symbolic_image color_out;
@@ -222,9 +212,7 @@ private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   u32 _step_size;
   Distant_irradiance_spatial_filter_pass_inputs _inputs;
-  render_graph::Resource_handle _depth_handle{};
-  render_graph::Resource_handle _normal_handle{};
-  render_graph::Resource_handle _depth_gradient_handle{};
+  render_graph::Resource_handle _depth_normal_handle{};
   render_graph::Resource_handle _color_in_handle{};
   render_graph::Resource_handle _variance_in_handle{};
   render_graph::Resource_handle _color_out_handle{};
