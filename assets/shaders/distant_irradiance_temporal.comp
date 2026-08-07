@@ -1,0 +1,74 @@
+#version 450
+
+#include "descriptors.glsl"
+#include "distant_irradiance_common.glsl"
+#include "gbuffer.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// Runs after distant_irradiance_trace_sun.comp / distant_irradiance_trace_
+// sky.comp (raw, unblended per-pixel estimates written): reprojects and
+// temporally accumulates them against last frame's history via apply_
+// distant_irradiance_history, writing this frame's accumulated color +
+// luminance moments. Kept as its own full-screen pass (rather than folded
+// into the trace shaders, as it used to be) so the a-trous spatial filter
+// downstream can read the accumulated result without ever writing back
+// into it -- and so a future spatial pre-filter pass could be inserted
+// between trace and this pass just by repointing the raw inputs below.
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) uint history_valid;
+  layout(offset = 4) uint16_t depth_normal_texture;
+  layout(offset = 6) uint16_t raw_distant_irradiance_texture;
+  layout(offset = 8) uint16_t raw_distant_irradiance_luminance_texture;
+  layout(offset = 10) uint16_t previous_depth_normal_texture;
+  layout(offset = 12) uint16_t previous_distant_irradiance_texture;
+  layout(offset = 14) uint16_t previous_distant_irradiance_luminance_texture;
+  layout(offset = 16) uint16_t motion_vector_texture;
+  layout(offset = 18) uint16_t distant_irradiance_image;
+  layout(offset = 20) uint16_t distant_irradiance_luminance_image;
+} push_constants;
+
+void main() {
+  const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  const ivec2 size = imageSize(
+    storage_images[push_constants.distant_irradiance_image]);
+  if (pixel.x >= size.x || pixel.y >= size.y) {
+    return;
+  }
+  const Gbuffer_sample g = gbuffer_decode(
+    texelFetch(sampled_images[push_constants.depth_normal_texture], pixel, 0));
+  if (g.linear_depth == 0.0) {
+    imageStore(
+      storage_images[push_constants.distant_irradiance_image], pixel, vec4(0.0));
+    imageStore(
+      storage_images[push_constants.distant_irradiance_luminance_image],
+      pixel,
+      vec4(0.0));
+    return;
+  }
+  const vec3 raw_color = texelFetch(
+    sampled_images[push_constants.raw_distant_irradiance_texture], pixel, 0).rgb;
+  const vec2 raw_luminance_moments = texelFetch(
+    sampled_images[push_constants.raw_distant_irradiance_luminance_texture],
+    pixel,
+    0).rg;
+  const Distant_irradiance_history result = apply_distant_irradiance_history(
+    raw_color,
+    raw_luminance_moments,
+    g.normal,
+    pixel,
+    size,
+    push_constants.motion_vector_texture,
+    push_constants.previous_depth_normal_texture,
+    push_constants.previous_distant_irradiance_texture,
+    push_constants.previous_distant_irradiance_luminance_texture,
+    push_constants.history_valid);
+  imageStore(
+    storage_images[push_constants.distant_irradiance_image],
+    pixel,
+    vec4(result.color, result.history_length));
+  imageStore(
+    storage_images[push_constants.distant_irradiance_luminance_image],
+    pixel,
+    vec4(result.luminance_moments, 0.0, 0.0));
+}

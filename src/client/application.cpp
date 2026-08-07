@@ -223,6 +223,8 @@ public:
           "./assets/shaders/distant_irradiance_trace_sun.comp.spv")},
         _distant_irradiance_trace_sky_compute_shader{graphics::load_shader(
           "./assets/shaders/distant_irradiance_trace_sky.comp.spv")},
+        _distant_irradiance_temporal_compute_shader{graphics::load_shader(
+          "./assets/shaders/distant_irradiance_temporal.comp.spv")},
         _distant_irradiance_variance_compute_shader{graphics::load_shader(
           "./assets/shaders/distant_irradiance_variance.comp.spv")},
         _distant_irradiance_spatial_filter_compute_shader{
@@ -249,6 +251,9 @@ public:
         _distant_irradiance_trace_sky_pipeline{
           _graphics.create_compute_pipeline(
             {.shader = &_distant_irradiance_trace_sky_compute_shader})},
+        _distant_irradiance_temporal_pipeline{
+          _graphics.create_compute_pipeline(
+            {.shader = &_distant_irradiance_temporal_compute_shader})},
         _distant_irradiance_variance_pipeline{
           _graphics.create_compute_pipeline(
             {.shader = &_distant_irradiance_variance_compute_shader})},
@@ -376,7 +381,7 @@ private:
       get_color_render_target(
         work_recorder,
         _depth_normal_render_targets[i],
-        graphics::Image_format::r16g16b16a16_sfloat,
+        graphics::Image_format::r32g32b32a32_sfloat,
         framebuffer_extent);
     }
     get_color_render_target(
@@ -479,6 +484,8 @@ private:
       distant_irradiance_trace_sun_pass;
     std::optional<passes::Distant_irradiance_trace_sky_pass>
       distant_irradiance_trace_sky_pass;
+    std::optional<passes::Distant_irradiance_temporal_pass>
+      distant_irradiance_temporal_pass;
     std::optional<passes::Distant_irradiance_variance_pass>
       distant_irradiance_variance_pass;
     std::array<
@@ -534,7 +541,8 @@ private:
         auto const shared_trace_inputs = passes::Distant_irradiance_trace_pass_inputs{
           .depth_normal_render_target =
             _depth_normal_render_target_symbols[_frame_number % 2],
-          .distant_irradiance_render_target = _distant_irradiance_render_target_symbol,
+          .raw_distant_irradiance_render_target =
+            _distant_irradiance_raw_render_target_symbol,
           .transmittance_lut = _transmittance_lut,
           .scene_uniform_buffer = _scene_uniform_buffer_symbol,
           .scene_uniform_offset = scene_uniform_offset,
@@ -544,18 +552,8 @@ private:
           .rt_entity_binning_buffer = _rt_entity_binning_buffer_symbols[frame],
           .rt_entity_binning_grid_offset = layout.grid_offset,
           .rt_entity_binning_nodes_offset = layout.nodes_offset,
-          .previous_depth_normal_render_target =
-            _depth_normal_render_targets[(_frame_number + 1) % 2],
-          .previous_distant_irradiance_render_target =
-            _distant_irradiance_history_render_targets[(_frame_number + 1) % 2],
-          .motion_vector_render_target = _motion_vector_render_target_symbol,
-          .history_valid = history_valid,
-          .distant_irradiance_luminance_render_target =
-            _distant_irradiance_luminance_render_target_symbols
-              [_frame_number % 2],
-          .previous_distant_irradiance_luminance_render_target =
-            _distant_irradiance_luminance_render_targets
-              [(_frame_number + 1) % 2],
+          .raw_distant_irradiance_luminance_render_target =
+            _distant_irradiance_raw_luminance_render_target_symbol,
         };
         auto sun_trace_inputs = shared_trace_inputs;
         sun_trace_inputs.sample_buffer = _distant_light_sample_buffer_sun_symbol;
@@ -569,6 +567,32 @@ private:
           std::move(sky_trace_inputs),
           _sky_view_lut_symbol);
         _graph.add_pass(*distant_irradiance_trace_sky_pass);
+        distant_irradiance_temporal_pass.emplace(
+          _distant_irradiance_temporal_pipeline,
+          passes::Distant_irradiance_temporal_pass_inputs{
+            .depth_normal_render_target =
+              _depth_normal_render_target_symbols[_frame_number % 2],
+            .previous_depth_normal_render_target =
+              _depth_normal_render_targets[(_frame_number + 1) % 2],
+            .motion_vector_render_target = _motion_vector_render_target_symbol,
+            .raw_distant_irradiance_render_target =
+              _distant_irradiance_raw_render_target_symbol,
+            .raw_distant_irradiance_luminance_render_target =
+              _distant_irradiance_raw_luminance_render_target_symbol,
+            .previous_distant_irradiance_render_target =
+              _distant_irradiance_render_targets[(_frame_number + 1) % 2],
+            .previous_distant_irradiance_luminance_render_target =
+              _distant_irradiance_luminance_render_targets
+                [(_frame_number + 1) % 2],
+            .history_valid = history_valid,
+            .distant_irradiance_render_target =
+              _distant_irradiance_render_target_symbols[_frame_number % 2],
+            .distant_irradiance_luminance_render_target =
+              _distant_irradiance_luminance_render_target_symbols
+                [_frame_number % 2],
+            .framebuffer_size = framebuffer_size,
+          });
+        _graph.add_pass(*distant_irradiance_temporal_pass);
         distant_irradiance_variance_pass.emplace(
           _distant_irradiance_variance_pipeline,
           passes::Distant_irradiance_variance_pass_inputs{
@@ -604,13 +628,13 @@ private:
           };
         emplace_spatial_filter(
           0,
-          _distant_irradiance_render_target_symbol,
-          _distant_irradiance_history_render_target_symbols[_frame_number % 2],
+          _distant_irradiance_render_target_symbols[_frame_number % 2],
+          _distant_irradiance_filtered_render_target_symbols[0],
           _distant_irradiance_variance_render_target_symbols[0],
           _distant_irradiance_variance_render_target_symbols[1]);
         emplace_spatial_filter(
           1,
-          _distant_irradiance_history_render_target_symbols[_frame_number % 2],
+          _distant_irradiance_filtered_render_target_symbols[0],
           _distant_irradiance_filtered_render_target_symbols[1],
           _distant_irradiance_variance_render_target_symbols[1],
           _distant_irradiance_variance_render_target_symbols[0]);
@@ -681,11 +705,14 @@ private:
         {_radiance_render_target_symbol, _radiance_render_target},
         {_crosshair_mask_render_target_symbol, _crosshair_mask_render_target},
         {_swapchain_image_symbol, swapchain_image},
-        {_distant_irradiance_render_target_symbol, _distant_irradiance_render_target},
-        {_distant_irradiance_history_render_target_symbols[0],
-         _distant_irradiance_history_render_targets[0]},
-        {_distant_irradiance_history_render_target_symbols[1],
-         _distant_irradiance_history_render_targets[1]},
+        {_distant_irradiance_raw_render_target_symbol,
+         _distant_irradiance_raw_render_target},
+        {_distant_irradiance_raw_luminance_render_target_symbol,
+         _distant_irradiance_raw_luminance_render_target},
+        {_distant_irradiance_render_target_symbols[0],
+         _distant_irradiance_render_targets[0]},
+        {_distant_irradiance_render_target_symbols[1],
+         _distant_irradiance_render_targets[1]},
         {_distant_irradiance_luminance_render_target_symbols[0],
          _distant_irradiance_luminance_render_targets[0]},
         {_distant_irradiance_luminance_render_target_symbols[1],
@@ -978,11 +1005,11 @@ private:
 
   void get_distant_irradiance_render_targets(
     graphics::Work_recorder &work_recorder, math::ivec3 extent) {
-    auto const create_images = !_distant_irradiance_render_target ||
-      _distant_irradiance_render_target->get_extent() != extent;
+    auto const create_images = !_distant_irradiance_raw_render_target ||
+      _distant_irradiance_raw_render_target->get_extent() != extent;
     if (create_images) {
       _last_distant_irradiance_frame.reset();
-      _distant_irradiance_render_target = _graphics.create_image({
+      _distant_irradiance_raw_render_target = _graphics.create_image({
         .dimensionality = 2,
         .format = graphics::Image_format::r16g16b16a16_sfloat,
         .extent = extent,
@@ -996,9 +1023,24 @@ private:
         compute_shader_storage_write_scope,
         graphics::Image_layout::undefined,
         graphics::Image_layout::general,
-        _distant_irradiance_render_target);
+        _distant_irradiance_raw_render_target);
+      _distant_irradiance_raw_luminance_render_target = _graphics.create_image({
+        .dimensionality = 2,
+        .format = graphics::Image_format::r32g32_sfloat,
+        .extent = extent,
+        .mip_level_count = 1,
+        .array_layer_count = 1,
+        .usage = graphics::Image_usage_flag_bits::sampled |
+                 graphics::Image_usage_flag_bits::storage,
+      });
+      work_recorder.transition_image_layout(
+        {},
+        compute_shader_storage_write_scope,
+        graphics::Image_layout::undefined,
+        graphics::Image_layout::general,
+        _distant_irradiance_raw_luminance_render_target);
       for (auto i = std::size_t{}; i != 2; ++i) {
-        _distant_irradiance_history_render_targets[i] = _graphics.create_image({
+        _distant_irradiance_render_targets[i] = _graphics.create_image({
           .dimensionality = 2,
           .format = graphics::Image_format::r16g16b16a16_sfloat,
           .extent = extent,
@@ -1012,7 +1054,7 @@ private:
           compute_shader_storage_write_scope,
           graphics::Image_layout::undefined,
           graphics::Image_layout::general,
-          _distant_irradiance_history_render_targets[i]);
+          _distant_irradiance_render_targets[i]);
         _distant_irradiance_luminance_render_targets[i] =
           _graphics.create_image({
             .dimensionality = 2,
@@ -1270,7 +1312,7 @@ private:
       };
     auto const color_attachment_formats = std::array{
       graphics::Image_format::r16g16b16a16_sfloat,
-      graphics::Image_format::r16g16b16a16_sfloat,
+      graphics::Image_format::r32g32b32a32_sfloat,
       graphics::Image_format::r16g16b16a16_sfloat,
     };
     auto pipeline = _graphics.create_pipeline({
@@ -1305,7 +1347,7 @@ private:
       };
     auto const color_attachment_formats = std::array{
       graphics::Image_format::r16g16b16a16_sfloat,
-      graphics::Image_format::r16g16b16a16_sfloat,
+      graphics::Image_format::r32g32b32a32_sfloat,
       graphics::Image_format::r16g16b16a16_sfloat,
     };
     auto pipeline = _graphics.create_pipeline({
@@ -1455,16 +1497,19 @@ private:
   std::array<rc::Strong<graphics::Image>, 2> _depth_normal_render_targets{};
   rc::Strong<graphics::Image> _motion_vector_render_target{};
   rc::Strong<graphics::Image> _radiance_render_target{};
-  // This frame's raw trace-pass output; read once, by spatial-filter
-  // iteration 0.
-  rc::Strong<graphics::Image> _distant_irradiance_render_target{};
-  // Ping-pong pair: [_frame_number % 2] is spatial-filter iteration 0's
-  // output this frame; the other is temporal color history -- see
-  // apply_distant_irradiance_history.
+  // This frame's raw, unblended trace-pass output; single-buffered, fully
+  // recomputed every frame, read once (by the temporal accumulation pass)
+  // -- see distant_irradiance_temporal.comp.
+  rc::Strong<graphics::Image> _distant_irradiance_raw_render_target{};
+  rc::Strong<graphics::Image> _distant_irradiance_raw_luminance_render_target{};
+  // Temporally accumulated color + history_length (in .a), ping-ponged:
+  // [_frame_number % 2] is written this frame by the temporal pass; the
+  // other holds last frame's data for reprojection -- see apply_distant_
+  // irradiance_history. Never written by the a-trous spatial filter.
   std::array<rc::Strong<graphics::Image>, 2>
-    _distant_irradiance_history_render_targets{};
-  // Luminance/luminance^2 moments, ping-ponged and gated by
-  // _last_distant_irradiance_frame.
+    _distant_irradiance_render_targets{};
+  // Temporally accumulated luminance/luminance^2 moments, ping-ponged and
+  // gated by _last_distant_irradiance_frame.
   std::array<rc::Strong<graphics::Image>, 2>
     _distant_irradiance_luminance_render_targets{};
   std::optional<u32> _last_distant_irradiance_frame{};
@@ -1499,6 +1544,7 @@ private:
   graphics::Shader _distant_irradiance_compute_shader;
   graphics::Shader _distant_irradiance_trace_sun_compute_shader;
   graphics::Shader _distant_irradiance_trace_sky_compute_shader;
+  graphics::Shader _distant_irradiance_temporal_compute_shader;
   graphics::Shader _distant_irradiance_variance_compute_shader;
   graphics::Shader _distant_irradiance_spatial_filter_compute_shader;
   graphics::Shader _indirect_dispatch_args_compute_shader;
@@ -1526,10 +1572,13 @@ private:
     _graph.allocate_image_symbol()};
   render_graph::Symbolic_image _radiance_render_target_symbol{
     _graph.allocate_image_symbol()};
-  render_graph::Symbolic_image _distant_irradiance_render_target_symbol{
+  render_graph::Symbolic_image _distant_irradiance_raw_render_target_symbol{
     _graph.allocate_image_symbol()};
+  render_graph::Symbolic_image
+    _distant_irradiance_raw_luminance_render_target_symbol{
+      _graph.allocate_image_symbol()};
   std::array<render_graph::Symbolic_image, 2>
-    _distant_irradiance_history_render_target_symbols{
+    _distant_irradiance_render_target_symbols{
       _graph.allocate_image_symbol(), _graph.allocate_image_symbol()};
   std::array<render_graph::Symbolic_image, 2>
     _distant_irradiance_luminance_render_target_symbols{
@@ -1558,6 +1607,7 @@ private:
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_trace_sun_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_trace_sky_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _distant_irradiance_temporal_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_variance_pipeline{};
   rc::Strong<graphics::Compute_pipeline>
     _distant_irradiance_spatial_filter_pipeline{};

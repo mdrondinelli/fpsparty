@@ -81,13 +81,15 @@ private:
   render_graph::Resource_handle _sky_sample_handle{};
 };
 
-// Shared by both trace passes below. previous_*/rt_entity_buffer/
-// rt_block_grid_buffer/transmittance_lut are unsymbolized: previous_*
-// fields hold last frame's already-retired data (no this-frame barrier
-// applies), the rest are never written within any frame's graph.
+// Shared by both trace passes below. rt_entity_buffer/rt_block_grid_
+// buffer/transmittance_lut are unsymbolized: never written within any
+// frame's graph. Trace only produces this frame's raw, unblended
+// estimate now -- no history/reprojection here, no previous_*/motion_
+// vector fields -- see Distant_irradiance_temporal_pass_inputs below
+// for where temporal accumulation happens.
 struct Distant_irradiance_trace_pass_inputs {
   render_graph::Symbolic_image depth_normal_render_target;
-  render_graph::Symbolic_image distant_irradiance_render_target;
+  render_graph::Symbolic_image raw_distant_irradiance_render_target;
   rc::Strong<graphics::Image const> transmittance_lut;
   render_graph::Symbolic_buffer scene_uniform_buffer;
   std::size_t scene_uniform_offset;
@@ -97,13 +99,7 @@ struct Distant_irradiance_trace_pass_inputs {
   render_graph::Symbolic_buffer rt_entity_binning_buffer;
   std::size_t rt_entity_binning_grid_offset;
   std::size_t rt_entity_binning_nodes_offset;
-  rc::Strong<graphics::Image const> previous_depth_normal_render_target;
-  rc::Strong<graphics::Image const> previous_distant_irradiance_render_target;
-  render_graph::Symbolic_image motion_vector_render_target;
-  u32 history_valid;
-  render_graph::Symbolic_image distant_irradiance_luminance_render_target;
-  rc::Strong<graphics::Image const>
-    previous_distant_irradiance_luminance_render_target;
+  render_graph::Symbolic_image raw_distant_irradiance_luminance_render_target;
 };
 
 class Distant_irradiance_trace_sun_pass : public render_graph::Node {
@@ -122,7 +118,6 @@ private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Distant_irradiance_trace_pass_inputs _inputs;
   render_graph::Resource_handle _depth_normal_handle{};
-  render_graph::Resource_handle _motion_vector_handle{};
   render_graph::Resource_handle _scene_uniform_handle{};
   render_graph::Resource_handle _rt_entity_binning_handle{};
   render_graph::Resource_handle _sample_handle{};
@@ -148,11 +143,53 @@ private:
   Distant_irradiance_trace_pass_inputs _inputs;
   render_graph::Symbolic_image _sky_view_lut;
   render_graph::Resource_handle _depth_normal_handle{};
-  render_graph::Resource_handle _motion_vector_handle{};
   render_graph::Resource_handle _sky_view_lut_handle{};
   render_graph::Resource_handle _scene_uniform_handle{};
   render_graph::Resource_handle _rt_entity_binning_handle{};
   render_graph::Resource_handle _sample_handle{};
+  render_graph::Resource_handle _distant_irradiance_handle{};
+  render_graph::Resource_handle _luminance_handle{};
+};
+
+// Reprojects and temporally accumulates the raw trace output against last
+// frame's accumulated history -- see distant_irradiance_temporal.comp.
+// previous_* fields are unsymbolized: last frame's already-retired data,
+// no this-frame barrier applies (same convention the trace passes used to
+// use for these before this pass existed).
+struct Distant_irradiance_temporal_pass_inputs {
+  render_graph::Symbolic_image depth_normal_render_target;
+  rc::Strong<graphics::Image const> previous_depth_normal_render_target;
+  render_graph::Symbolic_image motion_vector_render_target;
+  render_graph::Symbolic_image raw_distant_irradiance_render_target;
+  render_graph::Symbolic_image raw_distant_irradiance_luminance_render_target;
+  rc::Strong<graphics::Image const> previous_distant_irradiance_render_target;
+  rc::Strong<graphics::Image const>
+    previous_distant_irradiance_luminance_render_target;
+  u32 history_valid;
+  render_graph::Symbolic_image distant_irradiance_render_target;
+  render_graph::Symbolic_image distant_irradiance_luminance_render_target;
+  math::ivec2 framebuffer_size;
+};
+
+class Distant_irradiance_temporal_pass : public render_graph::Node {
+public:
+  Distant_irradiance_temporal_pass(
+    rc::Strong<graphics::Compute_pipeline> pipeline,
+    Distant_irradiance_temporal_pass_inputs inputs);
+
+  void declare(render_graph::Builder &builder) override;
+
+  void execute(
+    graphics::Work_recorder &recorder,
+    render_graph::Resources &resources) override;
+
+private:
+  rc::Strong<graphics::Compute_pipeline> _pipeline;
+  Distant_irradiance_temporal_pass_inputs _inputs;
+  render_graph::Resource_handle _depth_normal_handle{};
+  render_graph::Resource_handle _motion_vector_handle{};
+  render_graph::Resource_handle _raw_distant_irradiance_handle{};
+  render_graph::Resource_handle _raw_luminance_handle{};
   render_graph::Resource_handle _distant_irradiance_handle{};
   render_graph::Resource_handle _luminance_handle{};
 };

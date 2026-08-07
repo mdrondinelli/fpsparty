@@ -133,9 +133,6 @@ void Distant_irradiance_trace_sun_pass::declare(render_graph::Builder &builder) 
   _depth_normal_handle = builder.read(
     _inputs.depth_normal_render_target,
     render_graph::access::compute_sampled_read);
-  _motion_vector_handle = builder.read(
-    _inputs.motion_vector_render_target,
-    render_graph::access::compute_sampled_read);
   _scene_uniform_handle = builder.read(
     _inputs.scene_uniform_buffer, render_graph::access::compute_storage_read);
   _rt_entity_binning_handle = builder.read(
@@ -143,10 +140,10 @@ void Distant_irradiance_trace_sun_pass::declare(render_graph::Builder &builder) 
     render_graph::access::compute_storage_read);
   _sample_handle = builder.read(_inputs.sample_buffer, trace_read_access);
   _distant_irradiance_handle = builder.write(
-    _inputs.distant_irradiance_render_target,
+    _inputs.raw_distant_irradiance_render_target,
     render_graph::access::compute_storage_write);
   _luminance_handle = builder.write(
-    _inputs.distant_irradiance_luminance_render_target,
+    _inputs.raw_distant_irradiance_luminance_render_target,
     render_graph::access::compute_storage_write);
 }
 
@@ -180,20 +177,8 @@ void Distant_irradiance_trace_sun_pass::execute(
     56, rt_entity_binning_buffer, _inputs.rt_entity_binning_nodes_offset);
   recorder.push_descriptors(
     64,
-    {{.image = _inputs.previous_depth_normal_render_target,
-      .kind = graphics::Descriptor_kind::sampled},
-     {.image = _inputs.previous_distant_irradiance_render_target,
-      .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_motion_vector_handle),
-      .kind = graphics::Descriptor_kind::sampled}});
-  recorder.push_data(
-    72, std::as_bytes(std::span{&_inputs.history_valid, 1}));
-  recorder.push_descriptors(
-    76,
     {{.image = resources.get_image(_luminance_handle),
-      .kind = graphics::Descriptor_kind::storage},
-     {.image = _inputs.previous_distant_irradiance_luminance_render_target,
-      .kind = graphics::Descriptor_kind::sampled}});
+      .kind = graphics::Descriptor_kind::storage}});
   recorder.dispatch_indirect({.buffer = sample_buffer, .offset = 0});
 }
 
@@ -210,9 +195,6 @@ void Distant_irradiance_trace_sky_pass::declare(render_graph::Builder &builder) 
   _depth_normal_handle = builder.read(
     _inputs.depth_normal_render_target,
     render_graph::access::compute_sampled_read);
-  _motion_vector_handle = builder.read(
-    _inputs.motion_vector_render_target,
-    render_graph::access::compute_sampled_read);
   _sky_view_lut_handle = builder.read(
     _sky_view_lut, render_graph::access::compute_sampled_read);
   _scene_uniform_handle = builder.read(
@@ -222,10 +204,10 @@ void Distant_irradiance_trace_sky_pass::declare(render_graph::Builder &builder) 
     render_graph::access::compute_storage_read);
   _sample_handle = builder.read(_inputs.sample_buffer, trace_read_access);
   _distant_irradiance_handle = builder.write(
-    _inputs.distant_irradiance_render_target,
+    _inputs.raw_distant_irradiance_render_target,
     render_graph::access::compute_storage_write);
   _luminance_handle = builder.write(
-    _inputs.distant_irradiance_luminance_render_target,
+    _inputs.raw_distant_irradiance_luminance_render_target,
     render_graph::access::compute_storage_write);
 }
 
@@ -261,21 +243,67 @@ void Distant_irradiance_trace_sky_pass::execute(
     64, rt_entity_binning_buffer, _inputs.rt_entity_binning_nodes_offset);
   recorder.push_descriptors(
     72,
-    {{.image = _inputs.previous_depth_normal_render_target,
+    {{.image = resources.get_image(_luminance_handle),
+      .kind = graphics::Descriptor_kind::storage}});
+  recorder.dispatch_indirect({.buffer = sample_buffer, .offset = 0});
+}
+
+Distant_irradiance_temporal_pass::Distant_irradiance_temporal_pass(
+  rc::Strong<graphics::Compute_pipeline> pipeline,
+  Distant_irradiance_temporal_pass_inputs inputs)
+    : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
+
+void Distant_irradiance_temporal_pass::declare(render_graph::Builder &builder) {
+  // depth_normal/motion_vector: written by Gbuffer_pass -- see Distant_
+  // irradiance_pass1::declare's comment. previous_*: last frame's already-
+  // retired data, no this-frame barrier applies.
+  _depth_normal_handle = builder.read(
+    _inputs.depth_normal_render_target,
+    render_graph::access::compute_sampled_read);
+  _motion_vector_handle = builder.read(
+    _inputs.motion_vector_render_target,
+    render_graph::access::compute_sampled_read);
+  _raw_distant_irradiance_handle = builder.read(
+    _inputs.raw_distant_irradiance_render_target,
+    render_graph::access::compute_sampled_read);
+  _raw_luminance_handle = builder.read(
+    _inputs.raw_distant_irradiance_luminance_render_target,
+    render_graph::access::compute_sampled_read);
+  _distant_irradiance_handle = builder.write(
+    _inputs.distant_irradiance_render_target,
+    render_graph::access::compute_storage_write);
+  _luminance_handle = builder.write(
+    _inputs.distant_irradiance_luminance_render_target,
+    render_graph::access::compute_storage_write);
+}
+
+void Distant_irradiance_temporal_pass::execute(
+  graphics::Work_recorder &recorder, render_graph::Resources &resources) {
+  recorder.bind_compute_pipeline(_pipeline);
+  recorder.push_data(
+    0, std::as_bytes(std::span{&_inputs.history_valid, 1}));
+  recorder.push_descriptors(
+    4,
+    {{.image = resources.get_image(_depth_normal_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_raw_distant_irradiance_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_raw_luminance_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = _inputs.previous_depth_normal_render_target,
       .kind = graphics::Descriptor_kind::sampled},
      {.image = _inputs.previous_distant_irradiance_render_target,
       .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_motion_vector_handle),
-      .kind = graphics::Descriptor_kind::sampled}});
-  recorder.push_data(
-    80, std::as_bytes(std::span{&_inputs.history_valid, 1}));
-  recorder.push_descriptors(
-    84,
-    {{.image = resources.get_image(_luminance_handle),
-      .kind = graphics::Descriptor_kind::storage},
      {.image = _inputs.previous_distant_irradiance_luminance_render_target,
-      .kind = graphics::Descriptor_kind::sampled}});
-  recorder.dispatch_indirect({.buffer = sample_buffer, .offset = 0});
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_motion_vector_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_distant_irradiance_handle),
+      .kind = graphics::Descriptor_kind::storage},
+     {.image = resources.get_image(_luminance_handle),
+      .kind = graphics::Descriptor_kind::storage}});
+  auto const group_count = dispatch_group_count(_inputs.framebuffer_size);
+  recorder.dispatch(group_count.x(), group_count.y(), 1);
 }
 
 Distant_irradiance_variance_pass::Distant_irradiance_variance_pass(
