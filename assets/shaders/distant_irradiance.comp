@@ -10,9 +10,10 @@ layout(local_size_x = 8, local_size_y = 8) in;
 
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
-  layout(offset = 8) uint16_t depth_normal_texture;
+  layout(offset = 8) uint16_t depth_texture;
   layout(offset = 10) uint16_t transmittance_texture;
   layout(offset = 12) uint16_t sky_view_lut;
+  layout(offset = 14) uint16_t normal_texture;
   layout(offset = 16) Sky_irradiance sky_irradiance;
   layout(offset = 24) Distant_light_samples sun_samples;
   layout(offset = 32) Distant_light_samples sky_samples;
@@ -25,7 +26,7 @@ shared uint sky_offset;
 void main() {
   const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
   const ivec2 size =
-    textureSize(sampled_images[push_constants.depth_normal_texture], 0);
+    textureSize(sampled_images[push_constants.depth_texture], 0);
   const uint pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
   bool valid = pixel.x < size.x && pixel.y < size.y;
   Gbuffer_sample g;
@@ -33,7 +34,10 @@ void main() {
   vec2 uv = vec2(0.0);
   if (valid) {
     g = gbuffer_decode(
-      texelFetch(sampled_images[push_constants.depth_normal_texture], pixel, 0));
+      texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).x,
+      push_constants.scene.z_near,
+      texelFetch(sampled_images[push_constants.normal_texture], pixel, 0).xy,
+      0.0);
     valid = g.linear_depth != 0.0;
   }
   if (valid) {

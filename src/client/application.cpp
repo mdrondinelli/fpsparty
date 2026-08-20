@@ -380,10 +380,15 @@ private:
     for (auto i = std::size_t{}; i != 2; ++i) {
       get_color_render_target(
         work_recorder,
-        _depth_normal_render_targets[i],
-        graphics::Image_format::r32g32b32a32_sfloat,
+        _normal_render_targets[i],
+        graphics::Image_format::r16g16_sfloat,
         framebuffer_extent);
     }
+    get_color_render_target(
+      work_recorder,
+      _gradient_render_target,
+      graphics::Image_format::r32_sfloat,
+      framebuffer_extent);
     get_color_render_target(
       work_recorder,
       _motion_vector_render_target,
@@ -401,7 +406,7 @@ private:
       _crosshair_mask_render_target,
       graphics::Image_format::r8_unorm,
       framebuffer_extent);
-    get_depth_attachment(work_recorder, framebuffer_extent);
+    get_depth_attachments(work_recorder, framebuffer_extent);
     auto const &session = _client.get_session();
     auto const camera =
       session && _local_player && _local_player->player_entity_id &&
@@ -442,8 +447,8 @@ private:
       _previous_view_projection_matrix,
       {
         .albedo_render_target = _albedo_render_target_symbol,
-        .depth_normal_render_target =
-          _depth_normal_render_target_symbols[_frame_number % 2],
+        .normal_render_target = _normal_render_target_symbols[_frame_number % 2],
+        .gradient_render_target = _gradient_render_target_symbol,
         .motion_vector_render_target = _motion_vector_render_target_symbol,
         .framebuffer_size = framebuffer_size,
         .scene_uniform_offset = scene_uniform_offset,
@@ -455,7 +460,8 @@ private:
         .block_texture_registry = &_block_texture_registry,
         .cube_vertex_buffer = _cube_vertex_buffer,
         .cube_index_buffer = _cube_index_buffer,
-        .depth_attachment = _depth_attachment,
+        .depth_attachment_render_target =
+          _depth_attachment_symbols[_frame_number % 2],
       }};
     _graph.add_pass(gbuffer_pass);
     auto const rt_frame = _frame_number % max_frames_in_flight;
@@ -519,8 +525,9 @@ private:
         distant_irradiance_pass1.emplace(
           _distant_irradiance_pipeline,
           passes::Distant_irradiance_pass1_inputs{
-            .depth_normal_render_target =
-              _depth_normal_render_target_symbols[_frame_number % 2],
+            .depth_render_target = _depth_attachment_symbols[_frame_number % 2],
+            .normal_render_target =
+              _normal_render_target_symbols[_frame_number % 2],
             .transmittance_lut = _transmittance_lut,
             .sky_view_lut = _sky_view_lut_symbol,
             .scene_uniform_buffer = _scene_uniform_buffer_symbol,
@@ -539,8 +546,9 @@ private:
           });
         _graph.add_pass(*distant_irradiance_indirect_args_pass);
         auto const shared_trace_inputs = passes::Distant_irradiance_trace_pass_inputs{
-          .depth_normal_render_target =
-            _depth_normal_render_target_symbols[_frame_number % 2],
+          .depth_render_target = _depth_attachment_symbols[_frame_number % 2],
+          .normal_render_target =
+            _normal_render_target_symbols[_frame_number % 2],
           .raw_distant_irradiance_render_target =
             _distant_irradiance_raw_render_target_symbol,
           .transmittance_lut = _transmittance_lut,
@@ -570,10 +578,14 @@ private:
         distant_irradiance_temporal_pass.emplace(
           _distant_irradiance_temporal_pipeline,
           passes::Distant_irradiance_temporal_pass_inputs{
-            .depth_normal_render_target =
-              _depth_normal_render_target_symbols[_frame_number % 2],
-            .previous_depth_normal_render_target =
-              _depth_normal_render_targets[(_frame_number + 1) % 2],
+            .depth_render_target = _depth_attachment_symbols[_frame_number % 2],
+            .normal_render_target =
+              _normal_render_target_symbols[_frame_number % 2],
+            .previous_depth_render_target =
+              _depth_attachments[(_frame_number + 1) % 2],
+            .previous_normal_render_target =
+              _normal_render_targets[(_frame_number + 1) % 2],
+            .z_near = z_near,
             .motion_vector_render_target = _motion_vector_render_target_symbol,
             .raw_distant_irradiance_render_target =
               _distant_irradiance_raw_render_target_symbol,
@@ -596,8 +608,7 @@ private:
         distant_irradiance_variance_pass.emplace(
           _distant_irradiance_variance_pipeline,
           passes::Distant_irradiance_variance_pass_inputs{
-            .depth_normal_render_target =
-              _depth_normal_render_target_symbols[_frame_number % 2],
+            .depth_render_target = _depth_attachment_symbols[_frame_number % 2],
             .distant_irradiance_luminance_render_target =
               _distant_irradiance_luminance_render_target_symbols
                 [_frame_number % 2],
@@ -616,8 +627,12 @@ private:
               _distant_irradiance_spatial_filter_pipeline,
               _distant_irradiance_spatial_filter_step_sizes[index],
               passes::Distant_irradiance_spatial_filter_pass_inputs{
-                .depth_normal_render_target =
-                  _depth_normal_render_target_symbols[_frame_number % 2],
+                .depth_render_target =
+                  _depth_attachment_symbols[_frame_number % 2],
+                .normal_render_target =
+                  _normal_render_target_symbols[_frame_number % 2],
+                .gradient_render_target = _gradient_render_target_symbol,
+                .z_near = z_near,
                 .color_in = color_in,
                 .variance_in = variance_in,
                 .color_out = color_out,
@@ -668,8 +683,7 @@ private:
         .grid_mesh = _grid_mesh.get(),
         .radiance_render_target = _radiance_render_target_symbol,
         .albedo_render_target = _albedo_render_target_symbol,
-        .depth_normal_render_target =
-          _depth_normal_render_target_symbols[_frame_number % 2],
+        .depth_render_target = _depth_attachment_symbols[_frame_number % 2],
         .sky_view_lut = _sky_view_lut_symbol,
         .distant_irradiance_filtered =
           _distant_irradiance_filtered_render_target_symbols[0],
@@ -699,8 +713,11 @@ private:
       work_recorder,
       {
         {_albedo_render_target_symbol, _albedo_render_target},
-        {_depth_normal_render_target_symbols[0], _depth_normal_render_targets[0]},
-        {_depth_normal_render_target_symbols[1], _depth_normal_render_targets[1]},
+        {_depth_attachment_symbols[0], _depth_attachments[0]},
+        {_depth_attachment_symbols[1], _depth_attachments[1]},
+        {_normal_render_target_symbols[0], _normal_render_targets[0]},
+        {_normal_render_target_symbols[1], _normal_render_targets[1]},
+        {_gradient_render_target_symbol, _gradient_render_target},
         {_motion_vector_render_target_symbol, _motion_vector_render_target},
         {_radiance_render_target_symbol, _radiance_render_target},
         {_crosshair_mask_render_target_symbol, _crosshair_mask_render_target},
@@ -954,28 +971,32 @@ private:
     }
   }
 
-  // Hardware depth test/write only -- nothing samples this (depth/normal
-  // consumers all read the fused depth_normal target instead), so unlike
-  // every other render target here it's not ping-ponged or sampled-usage.
-  void get_depth_attachment(
+  // Hardware depth test/write target, now sampled directly by readers
+  // (reverse-Z reconstruction -- see gbuffer.glsl) instead of duplicating
+  // depth into a color-attachment channel, so -- unlike before -- it's
+  // ping-ponged and sampled-usage like every other G-buffer target.
+  void get_depth_attachments(
     graphics::Work_recorder &work_recorder, math::ivec3 extent) {
-    auto const create_image =
-      !_depth_attachment || _depth_attachment->get_extent() != extent;
-    if (create_image) {
-      _depth_attachment = _graphics.create_image({
-        .dimensionality = 2,
-        .format = graphics::Image_format::d32_sfloat,
-        .extent = extent,
-        .mip_level_count = 1,
-        .array_layer_count = 1,
-        .usage = graphics::Image_usage_flag_bits::depth_attachment,
-      });
-      work_recorder.transition_image_layout(
-        {},
-        depth_attachment_scope,
-        graphics::Image_layout::undefined,
-        graphics::Image_layout::general,
-        _depth_attachment);
+    auto const create_images =
+      !_depth_attachments[0] || _depth_attachments[0]->get_extent() != extent;
+    if (create_images) {
+      for (auto i = std::size_t{}; i != 2; ++i) {
+        _depth_attachments[i] = _graphics.create_image({
+          .dimensionality = 2,
+          .format = graphics::Image_format::d32_sfloat,
+          .extent = extent,
+          .mip_level_count = 1,
+          .array_layer_count = 1,
+          .usage = graphics::Image_usage_flag_bits::sampled |
+                   graphics::Image_usage_flag_bits::depth_attachment,
+        });
+        work_recorder.transition_image_layout(
+          {},
+          depth_attachment_scope,
+          graphics::Image_layout::undefined,
+          graphics::Image_layout::general,
+          _depth_attachments[i]);
+      }
     }
   }
 
@@ -1312,7 +1333,8 @@ private:
       };
     auto const color_attachment_formats = std::array{
       graphics::Image_format::r16g16b16a16_sfloat,
-      graphics::Image_format::r32g32b32a32_sfloat,
+      graphics::Image_format::r16g16_sfloat,
+      graphics::Image_format::r32_sfloat,
       graphics::Image_format::r16g16b16a16_sfloat,
     };
     auto pipeline = _graphics.create_pipeline({
@@ -1347,7 +1369,8 @@ private:
       };
     auto const color_attachment_formats = std::array{
       graphics::Image_format::r16g16b16a16_sfloat,
-      graphics::Image_format::r32g32b32a32_sfloat,
+      graphics::Image_format::r16g16_sfloat,
+      graphics::Image_format::r32_sfloat,
       graphics::Image_format::r16g16b16a16_sfloat,
     };
     auto pipeline = _graphics.create_pipeline({
@@ -1487,14 +1510,21 @@ private:
   glfw::Unique_window _glfw_window{};
   vk::UniqueSurfaceKHR _vk_surface{};
   graphics::Graphics _graphics{};
-  // Hardware depth test/write only -- see get_depth_attachment.
-  rc::Strong<graphics::Image> _depth_attachment{};
+  // Hardware depth test/write target, sampled directly by readers
+  // (reverse-Z reconstruction, see gbuffer.glsl) -- see
+  // get_depth_attachments. Ping-pong pair: [_frame_number % 2] is written
+  // this frame, the other holds last frame's data for temporal
+  // reprojection.
+  std::array<rc::Strong<graphics::Image>, 2> _depth_attachments{};
   rc::Strong<graphics::Image> _albedo_render_target{};
-  // Normal (oct-encoded) + linear depth + isotropic depth gradient, fused
-  // into one target (see gbuffer.glsl). Ping-pong pair: [_frame_number %
-  // 2] is written this frame, the other holds last frame's data for
-  // temporal reprojection.
-  std::array<rc::Strong<graphics::Image>, 2> _depth_normal_render_targets{};
+  // Oct-encoded normal (r16g16_sfloat), ping-ponged like the depth
+  // attachment above -- see gbuffer.glsl.
+  std::array<rc::Strong<graphics::Image>, 2> _normal_render_targets{};
+  // Isotropic depth gradient (r32_sfloat) -- current-frame only, never
+  // read as "previous" (only the a-trous filter uses it, and only for
+  // this frame's own pixels), so unlike depth/normal it's not
+  // ping-ponged.
+  rc::Strong<graphics::Image> _gradient_render_target{};
   rc::Strong<graphics::Image> _motion_vector_render_target{};
   rc::Strong<graphics::Image> _radiance_render_target{};
   // This frame's raw, unblended trace-pass output; single-buffered, fully
@@ -1565,9 +1595,12 @@ private:
   // pass's header for which fields those are.
   render_graph::Symbolic_image _albedo_render_target_symbol{
     _graph.allocate_image_symbol()};
-  std::array<render_graph::Symbolic_image, 2>
-    _depth_normal_render_target_symbols{
-      _graph.allocate_image_symbol(), _graph.allocate_image_symbol()};
+  std::array<render_graph::Symbolic_image, 2> _depth_attachment_symbols{
+    _graph.allocate_image_symbol(), _graph.allocate_image_symbol()};
+  std::array<render_graph::Symbolic_image, 2> _normal_render_target_symbols{
+    _graph.allocate_image_symbol(), _graph.allocate_image_symbol()};
+  render_graph::Symbolic_image _gradient_render_target_symbol{
+    _graph.allocate_image_symbol()};
   render_graph::Symbolic_image _motion_vector_render_target_symbol{
     _graph.allocate_image_symbol()};
   render_graph::Symbolic_image _radiance_render_target_symbol{

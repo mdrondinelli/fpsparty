@@ -10,7 +10,7 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 0, row_major) mat4x3 camera_basis;
   layout(offset = 48) vec2 zoom;
   layout(offset = 56) uint16_t albedo_texture;
-  layout(offset = 58) uint16_t depth_normal_texture;
+  layout(offset = 58) uint16_t depth_texture;
   layout(offset = 60) uint16_t sky_view_lut;
   layout(offset = 62) uint16_t radiance_image;
   layout(offset = 64) uint16_t distant_irradiance_texture;
@@ -23,7 +23,7 @@ void main() {
     return;
   }
   const float depth =
-    texelFetch(sampled_images[push_constants.depth_normal_texture], pixel, 0).z;
+    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).x;
   if (depth == 0.0) {
     const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
     const vec3 view_ray = vec3(

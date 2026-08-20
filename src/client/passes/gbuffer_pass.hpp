@@ -19,9 +19,11 @@ namespace fpsparty::client::passes {
 
 struct Gbuffer_pass_inputs {
   render_graph::Symbolic_image albedo_render_target;
-  // Normal (oct-encoded) + linear depth + isotropic depth gradient,
-  // fused into one target -- see gbuffer.glsl.
-  render_graph::Symbolic_image depth_normal_render_target;
+  // Oct-encoded normal (r16g16_sfloat) and isotropic depth gradient
+  // (r32_sfloat) -- see gbuffer.glsl. Linear depth itself comes from
+  // depth_attachment_render_target below, not a color-attachment channel.
+  render_graph::Symbolic_image normal_render_target;
+  render_graph::Symbolic_image gradient_render_target;
   render_graph::Symbolic_image motion_vector_render_target;
   math::ivec2 framebuffer_size;
   std::size_t scene_uniform_offset;
@@ -34,10 +36,10 @@ struct Gbuffer_pass_inputs {
   Block_texture_registry *block_texture_registry;
   rc::Strong<graphics::Buffer> cube_vertex_buffer;
   rc::Strong<graphics::Buffer> cube_index_buffer;
-  // Hardware depth test/write only -- nothing samples it, so unlike the
-  // targets above it's never declared, no symbol (same reasoning as
-  // transmittance_lut elsewhere).
-  rc::Strong<graphics::Image> depth_attachment;
+  // Hardware depth test/write target -- now sampled and ping-ponged like
+  // the other targets above (readers reconstruct linear depth from this
+  // directly, see gbuffer.glsl), so unlike before it IS declared/tracked.
+  render_graph::Symbolic_image depth_attachment_render_target;
 };
 
 // Renders the G-buffer (albedo/depth-normal/motion-vector) for the grid
@@ -78,8 +80,10 @@ private:
   std::optional<math::mat4> _previous_view_projection_matrix;
   Gbuffer_pass_inputs _inputs;
   render_graph::Resource_handle _albedo_handle{};
-  render_graph::Resource_handle _depth_normal_handle{};
+  render_graph::Resource_handle _normal_handle{};
+  render_graph::Resource_handle _gradient_handle{};
   render_graph::Resource_handle _motion_vector_handle{};
+  render_graph::Resource_handle _depth_attachment_handle{};
 };
 
 } // namespace fpsparty::client::passes

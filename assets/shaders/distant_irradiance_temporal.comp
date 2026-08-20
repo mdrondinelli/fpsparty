@@ -17,15 +17,18 @@ layout(local_size_x = 8, local_size_y = 8) in;
 // between trace and this pass just by repointing the raw inputs below.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) uint history_valid;
-  layout(offset = 4) uint16_t depth_normal_texture;
-  layout(offset = 6) uint16_t raw_distant_irradiance_texture;
-  layout(offset = 8) uint16_t raw_distant_irradiance_luminance_texture;
-  layout(offset = 10) uint16_t previous_depth_normal_texture;
-  layout(offset = 12) uint16_t previous_distant_irradiance_texture;
-  layout(offset = 14) uint16_t previous_distant_irradiance_luminance_texture;
-  layout(offset = 16) uint16_t motion_vector_texture;
-  layout(offset = 18) uint16_t distant_irradiance_image;
-  layout(offset = 20) uint16_t distant_irradiance_luminance_image;
+  layout(offset = 4) float z_near;
+  layout(offset = 8) uint16_t depth_texture;
+  layout(offset = 10) uint16_t normal_texture;
+  layout(offset = 12) uint16_t raw_distant_irradiance_texture;
+  layout(offset = 14) uint16_t raw_distant_irradiance_luminance_texture;
+  layout(offset = 16) uint16_t previous_depth_texture;
+  layout(offset = 18) uint16_t previous_normal_texture;
+  layout(offset = 20) uint16_t previous_distant_irradiance_texture;
+  layout(offset = 22) uint16_t previous_distant_irradiance_luminance_texture;
+  layout(offset = 24) uint16_t motion_vector_texture;
+  layout(offset = 26) uint16_t distant_irradiance_image;
+  layout(offset = 28) uint16_t distant_irradiance_luminance_image;
 } push_constants;
 
 void main() {
@@ -36,7 +39,10 @@ void main() {
     return;
   }
   const Gbuffer_sample g = gbuffer_decode(
-    texelFetch(sampled_images[push_constants.depth_normal_texture], pixel, 0));
+    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).x,
+    push_constants.z_near,
+    texelFetch(sampled_images[push_constants.normal_texture], pixel, 0).xy,
+    0.0);
   if (g.linear_depth == 0.0) {
     imageStore(
       storage_images[push_constants.distant_irradiance_image], pixel, vec4(0.0));
@@ -59,7 +65,9 @@ void main() {
     pixel,
     size,
     push_constants.motion_vector_texture,
-    push_constants.previous_depth_normal_texture,
+    push_constants.previous_depth_texture,
+    push_constants.previous_normal_texture,
+    push_constants.z_near,
     push_constants.previous_distant_irradiance_texture,
     push_constants.previous_distant_irradiance_luminance_texture,
     push_constants.history_valid);

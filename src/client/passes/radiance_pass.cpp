@@ -27,7 +27,7 @@ bool Radiance_pass::has_camera() const {
 
 void Radiance_pass::declare(render_graph::Builder &builder) {
   if (has_camera()) {
-    // albedo/depth_normal: written by Gbuffer_pass. sky_view_lut: written
+    // albedo/depth: written by Gbuffer_pass. sky_view_lut: written
     // by Sky_view_pass, if it ran this frame (its own gating -- camera &&
     // sun -- can be true even when this pass's gating -- camera &&
     // grid_mesh uploaded -- is, without sun; declaring the read
@@ -36,8 +36,8 @@ void Radiance_pass::declare(render_graph::Builder &builder) {
     // Distant_irradiance_spatial_filter_pass iteration.
     _albedo_handle = builder.read(
       _inputs.albedo_render_target, render_graph::access::compute_sampled_read);
-    _depth_normal_handle = builder.read(
-      _inputs.depth_normal_render_target,
+    _depth_handle = builder.read(
+      _inputs.depth_render_target,
       render_graph::access::compute_sampled_read);
     _sky_view_lut_handle = builder.read(
       _inputs.sky_view_lut, render_graph::access::compute_sampled_read);
@@ -95,7 +95,7 @@ void Radiance_pass::execute(
     56,
     {{.image = resources.get_image(_albedo_handle),
       .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_depth_normal_handle),
+     {.image = resources.get_image(_depth_handle),
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_sky_view_lut_handle),
       .kind = graphics::Descriptor_kind::sampled},

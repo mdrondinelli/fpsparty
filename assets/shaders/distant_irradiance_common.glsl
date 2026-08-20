@@ -71,7 +71,9 @@ Distant_irradiance_history apply_distant_irradiance_history(
     ivec2 pixel,
     ivec2 size,
     uint motion_vector_texture,
-    uint previous_depth_normal_texture,
+    uint previous_depth_texture,
+    uint previous_normal_texture,
+    float z_near,
     uint previous_distant_irradiance_texture,
     uint previous_distant_irradiance_luminance_texture,
     uint history_valid) {
@@ -110,9 +112,12 @@ Distant_irradiance_history apply_distant_irradiance_history(
   for (int i = 0; i < 4; ++i) {
     const ivec2 coord = clamp(base + offsets[i], ivec2(0), max_coord);
     const Gbuffer_sample history = gbuffer_decode(
-      texelFetch(sampled_images[previous_depth_normal_texture], coord, 0));
+      texelFetch(sampled_images[previous_depth_texture], coord, 0).x,
+      z_near,
+      texelFetch(sampled_images[previous_normal_texture], coord, 0).xy,
+      0.0);
     if (abs(previous_linear_depth - history.linear_depth) >
-        distant_irradiance_history_depth_reject_ratio * history.linear_depth) {
+        distant_irradiance_history_depth_reject_ratio * previous_linear_depth) {
       continue;
     }
     if (dot(n, history.normal) < distant_irradiance_history_normal_reject_cos) {

@@ -18,9 +18,11 @@ namespace fpsparty::client::passes {
 // zeroed here too, immediately before the dispatch that appends to them --
 // an internal detail, not a cross-pass dependency, so not declared).
 struct Distant_irradiance_pass1_inputs {
-  // Normal (oct-encoded) + linear depth + isotropic depth gradient,
-  // fused into one target -- see gbuffer.glsl.
-  render_graph::Symbolic_image depth_normal_render_target;
+  // Hardware depth attachment (reverse-Z, sampled directly -- see
+  // gbuffer.glsl) and oct-encoded normal (r16g16_sfloat). No gradient
+  // needed here.
+  render_graph::Symbolic_image depth_render_target;
+  render_graph::Symbolic_image normal_render_target;
   // Never written within any frame's graph (created once at startup) --
   // no symbol, held directly.
   rc::Strong<graphics::Image const> transmittance_lut;
@@ -48,7 +50,8 @@ public:
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Distant_irradiance_pass1_inputs _inputs;
-  render_graph::Resource_handle _depth_normal_handle{};
+  render_graph::Resource_handle _depth_handle{};
+  render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _sky_view_lut_handle{};
   render_graph::Resource_handle _scene_uniform_handle{};
   render_graph::Resource_handle _sun_sample_handle{};
@@ -86,9 +89,11 @@ private:
 // frame's graph. Trace only produces this frame's raw, unblended
 // estimate now -- no history/reprojection here, no previous_*/motion_
 // vector fields -- see Distant_irradiance_temporal_pass_inputs below
-// for where temporal accumulation happens.
+// for where temporal accumulation happens. No gradient needed here
+// either -- only the a-trous filter uses it.
 struct Distant_irradiance_trace_pass_inputs {
-  render_graph::Symbolic_image depth_normal_render_target;
+  render_graph::Symbolic_image depth_render_target;
+  render_graph::Symbolic_image normal_render_target;
   render_graph::Symbolic_image raw_distant_irradiance_render_target;
   rc::Strong<graphics::Image const> transmittance_lut;
   render_graph::Symbolic_buffer scene_uniform_buffer;
@@ -117,7 +122,8 @@ public:
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Distant_irradiance_trace_pass_inputs _inputs;
-  render_graph::Resource_handle _depth_normal_handle{};
+  render_graph::Resource_handle _depth_handle{};
+  render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _scene_uniform_handle{};
   render_graph::Resource_handle _rt_entity_binning_handle{};
   render_graph::Resource_handle _sample_handle{};
@@ -142,7 +148,8 @@ private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Distant_irradiance_trace_pass_inputs _inputs;
   render_graph::Symbolic_image _sky_view_lut;
-  render_graph::Resource_handle _depth_normal_handle{};
+  render_graph::Resource_handle _depth_handle{};
+  render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _sky_view_lut_handle{};
   render_graph::Resource_handle _scene_uniform_handle{};
   render_graph::Resource_handle _rt_entity_binning_handle{};
@@ -155,10 +162,16 @@ private:
 // frame's accumulated history -- see distant_irradiance_temporal.comp.
 // previous_* fields are unsymbolized: last frame's already-retired data,
 // no this-frame barrier applies (same convention the trace passes used to
-// use for these before this pass existed).
+// use for these before this pass existed). No gradient needed -- the
+// history-reject check only compares depth and normal.
 struct Distant_irradiance_temporal_pass_inputs {
-  render_graph::Symbolic_image depth_normal_render_target;
-  rc::Strong<graphics::Image const> previous_depth_normal_render_target;
+  render_graph::Symbolic_image depth_render_target;
+  render_graph::Symbolic_image normal_render_target;
+  rc::Strong<graphics::Image const> previous_depth_render_target;
+  rc::Strong<graphics::Image const> previous_normal_render_target;
+  // Needed to reconstruct linear depth from the reverse-Z hardware depth
+  // values above -- see gbuffer.glsl.
+  float z_near;
   render_graph::Symbolic_image motion_vector_render_target;
   render_graph::Symbolic_image raw_distant_irradiance_render_target;
   render_graph::Symbolic_image raw_distant_irradiance_luminance_render_target;
@@ -186,7 +199,8 @@ public:
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Distant_irradiance_temporal_pass_inputs _inputs;
-  render_graph::Resource_handle _depth_normal_handle{};
+  render_graph::Resource_handle _depth_handle{};
+  render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _motion_vector_handle{};
   render_graph::Resource_handle _raw_distant_irradiance_handle{};
   render_graph::Resource_handle _raw_luminance_handle{};
@@ -195,7 +209,9 @@ private:
 };
 
 struct Distant_irradiance_variance_pass_inputs {
-  render_graph::Symbolic_image depth_normal_render_target;
+  // Only depth is needed (sky-mask check) -- normal/gradient aren't used
+  // here.
+  render_graph::Symbolic_image depth_render_target;
   render_graph::Symbolic_image distant_irradiance_luminance_render_target;
   render_graph::Symbolic_image distant_irradiance_variance_render_target;
   math::ivec2 framebuffer_size;
@@ -216,15 +232,21 @@ public:
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Distant_irradiance_variance_pass_inputs _inputs;
-  render_graph::Resource_handle _depth_normal_handle{};
+  render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _luminance_handle{};
   render_graph::Resource_handle _variance_handle{};
 };
 
 // One a-trous iteration; instantiated 5x (steps 1/2/4/8/16) with different
-// in/out descriptor pairs each frame.
+// in/out descriptor pairs each frame. The only pass that needs the
+// gradient texture.
 struct Distant_irradiance_spatial_filter_pass_inputs {
-  render_graph::Symbolic_image depth_normal_render_target;
+  render_graph::Symbolic_image depth_render_target;
+  render_graph::Symbolic_image normal_render_target;
+  render_graph::Symbolic_image gradient_render_target;
+  // Needed to reconstruct linear depth from the reverse-Z hardware depth
+  // values above -- see gbuffer.glsl.
+  float z_near;
   render_graph::Symbolic_image color_in;
   render_graph::Symbolic_image variance_in;
   render_graph::Symbolic_image color_out;
@@ -249,7 +271,9 @@ private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   u32 _step_size;
   Distant_irradiance_spatial_filter_pass_inputs _inputs;
-  render_graph::Resource_handle _depth_normal_handle{};
+  render_graph::Resource_handle _depth_handle{};
+  render_graph::Resource_handle _normal_handle{};
+  render_graph::Resource_handle _gradient_handle{};
   render_graph::Resource_handle _color_in_handle{};
   render_graph::Resource_handle _variance_in_handle{};
   render_graph::Resource_handle _color_out_handle{};

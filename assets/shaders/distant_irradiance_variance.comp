@@ -14,7 +14,7 @@ layout(local_size_x = 8, local_size_y = 8) in;
 // (1,2,1)x(1,2,1)/16 weighting, so 4 texture() taps replace the naive 9
 // texelFetch taps.
 layout(push_constant) uniform Push_constants {
-  layout(offset = 0) uint16_t depth_normal_texture;
+  layout(offset = 0) uint16_t depth_texture;
   layout(offset = 2) uint16_t distant_irradiance_luminance_texture;
   layout(offset = 4) uint16_t distant_irradiance_variance_image;
 } push_constants;
@@ -30,7 +30,7 @@ void main() {
   // moments written this frame -- distant_irradiance.comp skips those
   // pixels entirely -- so the texture holds stale/unrelated data there.
   const float depth = texelFetch(
-    sampled_images[push_constants.depth_normal_texture], pixel, 0).z;
+    sampled_images[push_constants.depth_texture], pixel, 0).x;
   if (depth == 0.0) {
     imageStore(
       storage_images[push_constants.distant_irradiance_variance_image],

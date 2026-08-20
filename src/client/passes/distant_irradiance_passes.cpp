@@ -32,15 +32,16 @@ Distant_irradiance_pass1::Distant_irradiance_pass1(
     : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
 void Distant_irradiance_pass1::declare(render_graph::Builder &builder) {
-  // depth_normal: written by Gbuffer_pass. sky_view_lut: written by
+  // depth/normal: written by Gbuffer_pass. sky_view_lut: written by
   // Sky_view_pass. scene_uniform_buffer: written GPU-side (the Sky_
   // irradiance sub-struct) by Sky_irradiance_pass, declared at whole-
   // buffer granularity. Declaring these reads is a no-op on frames where
   // the writer didn't run this batch -- Graph finds no matching writer
   // and skips the barrier.
-  _depth_normal_handle = builder.read(
-    _inputs.depth_normal_render_target,
-    render_graph::access::compute_sampled_read);
+  _depth_handle = builder.read(
+    _inputs.depth_render_target, render_graph::access::compute_sampled_read);
+  _normal_handle = builder.read(
+    _inputs.normal_render_target, render_graph::access::compute_sampled_read);
   _sky_view_lut_handle = builder.read(
     _inputs.sky_view_lut, render_graph::access::compute_sampled_read);
   _scene_uniform_handle = builder.read(
@@ -68,11 +69,13 @@ void Distant_irradiance_pass1::execute(
     0, scene_uniform_buffer, _inputs.scene_uniform_offset);
   recorder.push_descriptors(
     8,
-    {{.image = resources.get_image(_depth_normal_handle),
+    {{.image = resources.get_image(_depth_handle),
       .kind = graphics::Descriptor_kind::sampled},
      {.image = _inputs.transmittance_lut,
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_sky_view_lut_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_normal_handle),
       .kind = graphics::Descriptor_kind::sampled}});
   recorder.push_buffer_reference(
     16,
@@ -130,9 +133,10 @@ void Distant_irradiance_trace_sun_pass::declare(render_graph::Builder &builder) 
   // See Distant_irradiance_pass1::declare's comment -- same reasoning for
   // all of these (Gbuffer_pass/Sky_irradiance_pass/Rt_entity_binning_pass
   // writes).
-  _depth_normal_handle = builder.read(
-    _inputs.depth_normal_render_target,
-    render_graph::access::compute_sampled_read);
+  _depth_handle = builder.read(
+    _inputs.depth_render_target, render_graph::access::compute_sampled_read);
+  _normal_handle = builder.read(
+    _inputs.normal_render_target, render_graph::access::compute_sampled_read);
   _scene_uniform_handle = builder.read(
     _inputs.scene_uniform_buffer, render_graph::access::compute_storage_read);
   _rt_entity_binning_handle = builder.read(
@@ -158,11 +162,13 @@ void Distant_irradiance_trace_sun_pass::execute(
     0, scene_uniform_buffer, _inputs.scene_uniform_offset);
   recorder.push_descriptors(
     8,
-    {{.image = resources.get_image(_depth_normal_handle),
+    {{.image = resources.get_image(_depth_handle),
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_distant_irradiance_handle),
       .kind = graphics::Descriptor_kind::storage},
      {.image = _inputs.transmittance_lut,
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_normal_handle),
       .kind = graphics::Descriptor_kind::sampled}});
   recorder.push_buffer_reference(
     16,
@@ -192,9 +198,10 @@ Distant_irradiance_trace_sky_pass::Distant_irradiance_trace_sky_pass(
 
 void Distant_irradiance_trace_sky_pass::declare(render_graph::Builder &builder) {
   // See Distant_irradiance_pass1::declare's comment.
-  _depth_normal_handle = builder.read(
-    _inputs.depth_normal_render_target,
-    render_graph::access::compute_sampled_read);
+  _depth_handle = builder.read(
+    _inputs.depth_render_target, render_graph::access::compute_sampled_read);
+  _normal_handle = builder.read(
+    _inputs.normal_render_target, render_graph::access::compute_sampled_read);
   _sky_view_lut_handle = builder.read(
     _sky_view_lut, render_graph::access::compute_sampled_read);
   _scene_uniform_handle = builder.read(
@@ -222,13 +229,15 @@ void Distant_irradiance_trace_sky_pass::execute(
     0, scene_uniform_buffer, _inputs.scene_uniform_offset);
   recorder.push_descriptors(
     8,
-    {{.image = resources.get_image(_depth_normal_handle),
+    {{.image = resources.get_image(_depth_handle),
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_distant_irradiance_handle),
       .kind = graphics::Descriptor_kind::storage},
      {.image = _inputs.transmittance_lut,
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_sky_view_lut_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_normal_handle),
       .kind = graphics::Descriptor_kind::sampled}});
   recorder.push_buffer_reference(
     24,
@@ -254,12 +263,13 @@ Distant_irradiance_temporal_pass::Distant_irradiance_temporal_pass(
     : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
 void Distant_irradiance_temporal_pass::declare(render_graph::Builder &builder) {
-  // depth_normal/motion_vector: written by Gbuffer_pass -- see Distant_
+  // depth/normal/motion_vector: written by Gbuffer_pass -- see Distant_
   // irradiance_pass1::declare's comment. previous_*: last frame's already-
   // retired data, no this-frame barrier applies.
-  _depth_normal_handle = builder.read(
-    _inputs.depth_normal_render_target,
-    render_graph::access::compute_sampled_read);
+  _depth_handle = builder.read(
+    _inputs.depth_render_target, render_graph::access::compute_sampled_read);
+  _normal_handle = builder.read(
+    _inputs.normal_render_target, render_graph::access::compute_sampled_read);
   _motion_vector_handle = builder.read(
     _inputs.motion_vector_render_target,
     render_graph::access::compute_sampled_read);
@@ -282,15 +292,20 @@ void Distant_irradiance_temporal_pass::execute(
   recorder.bind_compute_pipeline(_pipeline);
   recorder.push_data(
     0, std::as_bytes(std::span{&_inputs.history_valid, 1}));
+  recorder.push_data(4, std::as_bytes(std::span{&_inputs.z_near, 1}));
   recorder.push_descriptors(
-    4,
-    {{.image = resources.get_image(_depth_normal_handle),
+    8,
+    {{.image = resources.get_image(_depth_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_normal_handle),
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_raw_distant_irradiance_handle),
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_raw_luminance_handle),
       .kind = graphics::Descriptor_kind::sampled},
-     {.image = _inputs.previous_depth_normal_render_target,
+     {.image = _inputs.previous_depth_render_target,
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = _inputs.previous_normal_render_target,
       .kind = graphics::Descriptor_kind::sampled},
      {.image = _inputs.previous_distant_irradiance_render_target,
       .kind = graphics::Descriptor_kind::sampled},
@@ -312,11 +327,10 @@ Distant_irradiance_variance_pass::Distant_irradiance_variance_pass(
     : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
 void Distant_irradiance_variance_pass::declare(render_graph::Builder &builder) {
-  // depth_normal: written by Gbuffer_pass -- see Distant_irradiance_
-  // pass1::declare's comment.
-  _depth_normal_handle = builder.read(
-    _inputs.depth_normal_render_target,
-    render_graph::access::compute_sampled_read);
+  // depth: written by Gbuffer_pass -- see Distant_irradiance_pass1::
+  // declare's comment.
+  _depth_handle = builder.read(
+    _inputs.depth_render_target, render_graph::access::compute_sampled_read);
   _luminance_handle = builder.read(
     _inputs.distant_irradiance_luminance_render_target,
     render_graph::access::compute_sampled_read);
@@ -330,7 +344,7 @@ void Distant_irradiance_variance_pass::execute(
   recorder.bind_compute_pipeline(_pipeline);
   recorder.push_descriptors(
     0,
-    {{.image = resources.get_image(_depth_normal_handle),
+    {{.image = resources.get_image(_depth_handle),
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_luminance_handle),
       .kind = graphics::Descriptor_kind::sampled},
@@ -350,10 +364,14 @@ Distant_irradiance_spatial_filter_pass::Distant_irradiance_spatial_filter_pass(
 
 void Distant_irradiance_spatial_filter_pass::declare(
   render_graph::Builder &builder) {
-  // depth_normal: written by Gbuffer_pass -- see Distant_irradiance_
-  // pass1::declare's comment.
-  _depth_normal_handle = builder.read(
-    _inputs.depth_normal_render_target,
+  // depth/normal/gradient: written by Gbuffer_pass -- see Distant_
+  // irradiance_pass1::declare's comment.
+  _depth_handle = builder.read(
+    _inputs.depth_render_target, render_graph::access::compute_sampled_read);
+  _normal_handle = builder.read(
+    _inputs.normal_render_target, render_graph::access::compute_sampled_read);
+  _gradient_handle = builder.read(
+    _inputs.gradient_render_target,
     render_graph::access::compute_sampled_read);
   _color_in_handle = builder.read(
     _inputs.color_in, render_graph::access::compute_sampled_read);
@@ -370,7 +388,11 @@ void Distant_irradiance_spatial_filter_pass::execute(
   recorder.bind_compute_pipeline(_pipeline);
   recorder.push_descriptors(
     0,
-    {{.image = resources.get_image(_depth_normal_handle),
+    {{.image = resources.get_image(_depth_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_normal_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_gradient_handle),
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_color_in_handle),
       .kind = graphics::Descriptor_kind::sampled},
@@ -381,6 +403,7 @@ void Distant_irradiance_spatial_filter_pass::execute(
      {.image = resources.get_image(_variance_out_handle),
       .kind = graphics::Descriptor_kind::storage}});
   recorder.push_data(16, std::as_bytes(std::span{&_step_size, 1}));
+  recorder.push_data(20, std::as_bytes(std::span{&_inputs.z_near, 1}));
   auto const group_count = dispatch_group_count(_inputs.framebuffer_size);
   recorder.dispatch(group_count.x(), group_count.y(), 1);
 }

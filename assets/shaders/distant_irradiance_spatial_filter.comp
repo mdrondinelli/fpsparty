@@ -17,12 +17,15 @@ layout(local_size_x = 8, local_size_y = 8) in;
 // Dispatched once per iteration with different textures/step_size rather
 // than duplicated -- nothing about the logic differs between iterations.
 layout(push_constant) uniform Push_constants {
-  layout(offset = 0) uint16_t depth_normal_texture;
-  layout(offset = 2) uint16_t distant_irradiance_texture;
-  layout(offset = 4) uint16_t distant_irradiance_variance_texture;
-  layout(offset = 6) uint16_t distant_irradiance_filtered_image;
-  layout(offset = 8) uint16_t distant_irradiance_variance_image;
+  layout(offset = 0) uint16_t depth_texture;
+  layout(offset = 2) uint16_t normal_texture;
+  layout(offset = 4) uint16_t gradient_texture;
+  layout(offset = 6) uint16_t distant_irradiance_texture;
+  layout(offset = 8) uint16_t distant_irradiance_variance_texture;
+  layout(offset = 10) uint16_t distant_irradiance_filtered_image;
+  layout(offset = 12) uint16_t distant_irradiance_variance_image;
   layout(offset = 16) uint step_size;
+  layout(offset = 20) float z_near;
 } push_constants;
 
 const float kernel_1d[5] =
@@ -36,7 +39,10 @@ void main() {
     return;
   }
   const Gbuffer_sample gp = gbuffer_decode(
-    texelFetch(sampled_images[push_constants.depth_normal_texture], pixel, 0));
+    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).x,
+    push_constants.z_near,
+    texelFetch(sampled_images[push_constants.normal_texture], pixel, 0).xy,
+    texelFetch(sampled_images[push_constants.gradient_texture], pixel, 0).x);
   if (gp.linear_depth == 0.0) {
     imageStore(
       storage_images[push_constants.distant_irradiance_filtered_image],
@@ -70,7 +76,10 @@ void main() {
       const ivec2 coord =
         clamp(pixel + ivec2(dx, dy) * step_size, ivec2(0), max_coord);
       const Gbuffer_sample gq = gbuffer_decode(
-        texelFetch(sampled_images[push_constants.depth_normal_texture], coord, 0));
+        texelFetch(sampled_images[push_constants.depth_texture], coord, 0).x,
+        push_constants.z_near,
+        texelFetch(sampled_images[push_constants.normal_texture], coord, 0).xy,
+        0.0);
       if (gq.linear_depth == 0.0) {
         continue;
       }

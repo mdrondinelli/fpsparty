@@ -12,11 +12,12 @@ layout(local_size_x = 64) in;
 // Sky half of pass 2 (distant_irradiance_trace_sun.comp is the other half).
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
-  layout(offset = 8) uint16_t depth_normal_texture;
+  layout(offset = 8) uint16_t depth_texture;
   layout(offset = 10) uint16_t distant_irradiance_image;
   layout(offset = 12) uint16_t transmittance_texture;
   layout(offset = 14) uint16_t sky_view_lut;
-  // offset 16: 8 bytes unused (Sky_irradiance needs 8-byte alignment).
+  layout(offset = 16) uint16_t normal_texture;
+  // offset 18: 6 bytes unused (Sky_irradiance needs 8-byte alignment).
   layout(offset = 24) Sky_irradiance sky_irradiance;
   layout(offset = 32) Distant_light_samples sky_samples;
   layout(offset = 40) Rt_block_grid rt_block_grid;
@@ -44,7 +45,10 @@ void main() {
     -ndc.y * push_constants.scene.zoom.y,
     1.0);
   const Gbuffer_sample g = gbuffer_decode(
-    texelFetch(sampled_images[push_constants.depth_normal_texture], pixel, 0));
+    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).x,
+    push_constants.scene.z_near,
+    texelFetch(sampled_images[push_constants.normal_texture], pixel, 0).xy,
+    0.0);
   const vec3 shading_position =
     view_ray_origin +
     mat3(push_constants.scene.camera_basis) *

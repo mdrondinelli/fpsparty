@@ -20,7 +20,8 @@ struct Radiance_pass_inputs {
   // same image resources resolves for _radiance_handle.
   render_graph::Symbolic_image radiance_render_target;
   render_graph::Symbolic_image albedo_render_target;
-  render_graph::Symbolic_image depth_normal_render_target;
+  // Only depth is needed (sky-mask check) -- normal isn't used here.
+  render_graph::Symbolic_image depth_render_target;
   render_graph::Symbolic_image sky_view_lut;
   render_graph::Symbolic_image distant_irradiance_filtered;
   math::ivec2 framebuffer_size;
@@ -47,7 +48,7 @@ private:
   Radiance_pass_inputs _inputs;
   render_graph::Resource_handle _radiance_handle{};
   render_graph::Resource_handle _albedo_handle{};
-  render_graph::Resource_handle _depth_normal_handle{};
+  render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _sky_view_lut_handle{};
   render_graph::Resource_handle _distant_irradiance_filtered_handle{};
 };

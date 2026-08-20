@@ -10,6 +10,7 @@ enum class Image_format {
   b8g8r8a8_unorm = static_cast<int>(vk::Format::eB8G8R8A8Unorm),
   b8g8r8a8_srgb = static_cast<int>(vk::Format::eB8G8R8A8Srgb),
   r16_sfloat = static_cast<int>(vk::Format::eR16Sfloat),
+  r32_sfloat = static_cast<int>(vk::Format::eR32Sfloat),
   r16g16_snorm = static_cast<int>(vk::Format::eR16G16Snorm),
   r16g16_sfloat = static_cast<int>(vk::Format::eR16G16Sfloat),
   r32g32_sfloat = static_cast<int>(vk::Format::eR32G32Sfloat),
@@ -29,6 +30,7 @@ get_image_format_vk_image_aspect_flags(Image_format format) {
   case Image_format::b8g8r8a8_unorm:
   case Image_format::b8g8r8a8_srgb:
   case Image_format::r16_sfloat:
+  case Image_format::r32_sfloat:
   case Image_format::r16g16_snorm:
   case Image_format::r16g16_sfloat:
   case Image_format::r32g32_sfloat:
