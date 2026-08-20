@@ -24,7 +24,7 @@ float normal_weight(vec3 n_p, vec3 n_q) {
   return pow(max(0.0, dot(n_p, n_q)), normal_weight_sigma_n);
 }
 
-const float luminance_weight_sigma_l = 10.0;
+const float luminance_weight_sigma_l = 4.0;
 const float luminance_weight_epsilon = 1e-4;
 
 // Luminance edge-stopping weight between sample luminances l_p and l_q,
