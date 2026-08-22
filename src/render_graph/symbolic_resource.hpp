@@ -8,7 +8,7 @@
 namespace fpsparty::render_graph {
 
 // Opaque per-logical-resource identity, allocated by Graph::allocate_*_
-// symbol() and handed to every consuming Node's constructor/update().
+// symbol() and handed to every consuming Node's constructor.
 // Graph::execute resolves it against its images/buffers arguments.
 struct Symbolic_image {
   u32 id{};
