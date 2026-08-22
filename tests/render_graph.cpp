@@ -19,6 +19,10 @@ constexpr auto indirect_read = Access{
   .stage_mask = graphics::Pipeline_stage_flag_bits::draw_indirect,
   .access_mask = graphics::Access_flag_bits::indirect_command_read,
 };
+constexpr auto fragment_read = Access{
+  .stage_mask = graphics::Pipeline_stage_flag_bits::fragment_shader,
+  .access_mask = graphics::Access_flag_bits::shader_sampled_read,
+};
 constexpr auto color_write = Access{
   .stage_mask = graphics::Pipeline_stage_flag_bits::color_attachment_output,
   .access_mask = graphics::Access_flag_bits::color_attachment_write,
@@ -203,4 +207,68 @@ TEST_CASE("an empty graph schedules nothing") {
   auto const schedule = fixture.build();
   CHECK(schedule.levels.empty());
   CHECK(schedule.barriers.empty());
+}
+
+TEST_CASE("a disjoint writer does not hide an earlier conflicting writer") {
+  auto fixture = Graph_fixture{};
+  // Three accesses to one resource: P0 and P2 touch the same region, P1 a
+  // different one. Both disjoint promises are true, but P2 still depends
+  // on P0 and nothing has ordered them.
+  auto const p0 =
+    fixture.add({{.resource = 0, .access = compute_write, .is_write = true}});
+  auto const p1 =
+    fixture.add({{.resource = 0, .access = compute_write, .is_write = true}});
+  auto const p2 =
+    fixture.add({{.resource = 0, .access = compute_read, .is_write = false}});
+  fixture.set_disjoint(p0, p1, 0);
+  fixture.set_disjoint(p1, p2, 0);
+  auto const schedule = fixture.build();
+  CHECK(schedule.levels == std::vector<u32>{0, 0, 1});
+  REQUIRE(schedule.barriers.size() == 1);
+  CHECK(accesses(schedule.barriers[0].src) == accesses(compute_write));
+  CHECK(accesses(schedule.barriers[0].dst) == accesses(compute_read));
+}
+
+TEST_CASE("a pass that reads and writes keeps both scopes for later writers") {
+  auto fixture = Graph_fixture{};
+  // Reading in one stage and writing in another: a later writer needs a
+  // memory dependency on the write and an execution dependency on the
+  // read, so both stages belong in src.
+  fixture.add({
+    {.resource = 0, .access = fragment_read, .is_write = false},
+    {.resource = 0, .access = compute_write, .is_write = true},
+  });
+  fixture.add({{.resource = 0, .access = compute_write, .is_write = true}});
+  auto const schedule = fixture.build();
+  REQUIRE(schedule.levels == std::vector<u32>{0, 1});
+  REQUIRE(schedule.barriers.size() == 1);
+  CHECK(
+    stages(schedule.barriers[0].src) ==
+    (stages(fragment_read) | stages(compute_write)));
+  CHECK(accesses(schedule.barriers[0].src) == accesses(compute_write));
+}
+
+TEST_CASE("declaration order within a pass does not change synchronization") {
+  auto const build = [](bool read_first) {
+    auto fixture = Graph_fixture{};
+    auto entries = std::vector<Scheduled_access>{
+      {.resource = 0, .access = fragment_read, .is_write = false},
+      {.resource = 0, .access = compute_write, .is_write = true},
+    };
+    if (!read_first) {
+      std::swap(entries[0], entries[1]);
+    }
+    fixture.add(std::move(entries));
+    fixture.add({{.resource = 0, .access = compute_write, .is_write = true}});
+    return fixture.build();
+  };
+  auto const read_first = build(true);
+  auto const write_first = build(false);
+  REQUIRE(read_first.barriers.size() == write_first.barriers.size());
+  CHECK(read_first.levels == write_first.levels);
+  CHECK(
+    stages(read_first.barriers[0].src) == stages(write_first.barriers[0].src));
+  CHECK(
+    accesses(read_first.barriers[0].src) ==
+    accesses(write_first.barriers[0].src));
 }

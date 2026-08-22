@@ -29,12 +29,22 @@ struct Hazard {
   Access dst{};
 };
 
-// Per resource, who wrote it last and who has read it since.
+// Per resource, the accesses still outstanding. A write only supersedes
+// the accesses it is not disjoint from, so a write to one region leaves
+// accesses to other regions of the same resource outstanding.
 struct Resource_state {
-  bool has_writer{};
-  u32 writer{};
-  Access writer_access{};
+  std::vector<std::pair<u32, Access>> writers{};
   std::vector<std::pair<u32, Access>> readers{};
+};
+
+// One pass's accesses to one resource, merged so that declaration order
+// within the pass cannot change the result.
+struct Pass_access {
+  u32 resource{};
+  Access read{};
+  Access write{};
+  bool has_read{};
+  bool has_write{};
 };
 
 } // namespace
@@ -60,54 +70,93 @@ Schedule build_schedule(
   // level assignment below relies on.
   auto hazards = std::vector<Hazard>{};
   auto states = std::unordered_map<u32, Resource_state>{};
+  auto merged = std::vector<Pass_access>{};
   for (auto pass = u32{}; pass != pass_count; ++pass) {
-    // Decide every hazard against state from earlier passes before
-    // applying this pass's own accesses, so a pass that both reads and
-    // writes one resource doesn't depend on itself.
+    // Merge first: a pass that reads and writes one resource must end up
+    // with both scopes regardless of which it declared first.
+    merged.clear();
     for (auto const &entry : passes[pass].accesses) {
-      auto const it = states.find(entry.resource);
+      auto const existing = std::ranges::find(
+        merged, entry.resource, &Pass_access::resource);
+      auto &access = existing != merged.end()
+                       ? *existing
+                       : merged.emplace_back(Pass_access{
+                           .resource = entry.resource,
+                         });
+      if (entry.is_write) {
+        access.write =
+          access.has_write ? access.write | entry.access : entry.access;
+        access.has_write = true;
+      } else {
+        access.read =
+          access.has_read ? access.read | entry.access : entry.access;
+        access.has_read = true;
+      }
+    }
+
+    // Decide every hazard against state from earlier passes, so a pass
+    // that both reads and writes one resource doesn't depend on itself.
+    for (auto const &access : merged) {
+      auto const it = states.find(access.resource);
       if (it == states.end()) {
         continue;
       }
       auto const &state = it->second;
-      // Read after write, and write after write: both need the producer's
-      // writes made available to the consumer.
-      if (state.has_writer && !is_disjoint(state.writer, pass, entry.resource)) {
-        hazards.push_back({
-          .producer = state.writer,
-          .consumer = pass,
-          .src = state.writer_access,
-          .dst = entry.access,
-        });
+      for (auto const &[writer, writer_access] : state.writers) {
+        if (is_disjoint(writer, pass, access.resource)) {
+          continue;
+        }
+        // Read after write, and write after write: both need the
+        // producer's writes made available to the consumer.
+        if (access.has_read) {
+          hazards.push_back({
+            .producer = writer,
+            .consumer = pass,
+            .src = writer_access,
+            .dst = access.read,
+          });
+        }
+        if (access.has_write) {
+          hazards.push_back({
+            .producer = writer,
+            .consumer = pass,
+            .src = writer_access,
+            .dst = access.write,
+          });
+        }
       }
-      if (!entry.is_write) {
+      if (!access.has_write) {
         continue;
       }
       // Write after read only needs execution ordering, so the access
       // masks stay empty and no cache work is asked for.
       for (auto const &[reader, reader_access] : state.readers) {
-        if (is_disjoint(reader, pass, entry.resource)) {
+        if (is_disjoint(reader, pass, access.resource)) {
           continue;
         }
         hazards.push_back({
           .producer = reader,
           .consumer = pass,
           .src = {.stage_mask = reader_access.stage_mask, .access_mask = {}},
-          .dst = {.stage_mask = entry.access.stage_mask, .access_mask = {}},
+          .dst = {.stage_mask = access.write.stage_mask, .access_mask = {}},
         });
       }
     }
-    for (auto const &entry : passes[pass].accesses) {
-      auto &state = states[entry.resource];
-      if (!entry.is_write) {
-        state.readers.push_back({pass, entry.access});
-      } else if (state.has_writer && state.writer == pass) {
-        state.writer_access = state.writer_access | entry.access;
-      } else {
-        state.has_writer = true;
-        state.writer = pass;
-        state.writer_access = entry.access;
-        state.readers.clear();
+
+    for (auto const &access : merged) {
+      auto &state = states[access.resource];
+      if (access.has_write) {
+        // Anything this write supersedes is now reachable through it, so
+        // only the disjoint accesses stay outstanding.
+        auto const superseded = [&](std::pair<u32, Access> const &other) {
+          return !is_disjoint(other.first, pass, access.resource);
+        };
+        std::erase_if(state.writers, superseded);
+        std::erase_if(state.readers, superseded);
+        state.writers.push_back({pass, access.write});
+      }
+      if (access.has_read) {
+        state.readers.push_back({pass, access.read});
       }
     }
   }
