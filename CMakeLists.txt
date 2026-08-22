@@ -201,6 +201,13 @@ target_link_libraries(ppm-tests ppm Catch2::Catch2WithMain)
 add_test(NAME ppm-tests COMMAND ppm-tests)
 
 add_executable(
+  render-graph-tests
+  tests/render_graph.cpp
+)
+target_link_libraries(render-graph-tests render_graph Catch2::Catch2WithMain)
+add_test(NAME render-graph-tests COMMAND render-graph-tests)
+
+add_executable(
   int-map-tests
   tests/int_map.cpp
 )
@@ -287,6 +294,7 @@ add_library(
   src/render_graph/builder.cpp
   src/render_graph/graph.cpp
   src/render_graph/resources.cpp
+  src/render_graph/schedule.cpp
 )
 target_include_directories(
   render_graph
@@ -329,6 +337,7 @@ set(fpsparty_targets
   ppm
   ppm-tests
   int-map-tests
+  render-graph-tests
   server
   graphics
   render_graph

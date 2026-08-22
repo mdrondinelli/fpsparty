@@ -567,14 +567,26 @@ private:
         sun_trace_inputs.sample_buffer = _distant_light_sample_buffer_sun_symbol;
         distant_irradiance_trace_sun_pass.emplace(
           _distant_irradiance_trace_sun_pipeline, std::move(sun_trace_inputs));
-        _graph.add_pass(*distant_irradiance_trace_sun_pass);
+        auto const sun_trace_handle =
+          _graph.add_pass(*distant_irradiance_trace_sun_pass);
         auto sky_trace_inputs = shared_trace_inputs;
         sky_trace_inputs.sample_buffer = _distant_light_sample_buffer_sky_symbol;
         distant_irradiance_trace_sky_pass.emplace(
           _distant_irradiance_trace_sky_pipeline,
           std::move(sky_trace_inputs),
           _sky_view_lut_symbol);
-        _graph.add_pass(*distant_irradiance_trace_sky_pass);
+        auto const sky_trace_handle =
+          _graph.add_pass(*distant_irradiance_trace_sky_pass);
+        // Pass 1 puts each pixel in exactly one sample list, so the two
+        // traces write disjoint texels of both shared targets.
+        _graph.set_disjoint(
+          sun_trace_handle,
+          sky_trace_handle,
+          _distant_irradiance_raw_render_target_symbol);
+        _graph.set_disjoint(
+          sun_trace_handle,
+          sky_trace_handle,
+          _distant_irradiance_raw_luminance_render_target_symbol);
         distant_irradiance_temporal_pass.emplace(
           _distant_irradiance_temporal_pipeline,
           passes::Distant_irradiance_temporal_pass_inputs{
