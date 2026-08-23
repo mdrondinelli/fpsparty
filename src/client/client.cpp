@@ -14,7 +14,8 @@ Client::Client(Client_create_info const &info)
 
 void Client::update(float duration) {
   assert(duration > 0.0f);
-  auto const tracy_frame_name = "Client::update";
+  // Unused when Tracy is compiled out -- FrameMarkStart/End vanish.
+  [[maybe_unused]] auto const tracy_frame_name = "Client::update";
   try {
     FrameMarkStart(tracy_frame_name);
     if (is_connected()) {

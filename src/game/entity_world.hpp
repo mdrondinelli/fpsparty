@@ -52,7 +52,8 @@ public:
       assert(new_bucket_count >= min_bucket_count);
       assert(std::has_single_bit(new_bucket_count));
       auto replacement = Hash_table{new_bucket_count};
-      auto live_entry_count = std::uint32_t{};
+      // Only read by the assert below, so it disappears under NDEBUG.
+      [[maybe_unused]] auto live_entry_count = std::uint32_t{};
       for (auto const &bucket : buckets()) {
         if (!bucket.empty()) {
           ++live_entry_count;

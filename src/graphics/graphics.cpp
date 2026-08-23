@@ -103,12 +103,12 @@ std::vector<vk::UniqueImageView> make_swapchain_image_views(
 
 vk::UniqueSemaphore make_semaphore(
   char const *
-#ifndef FPSPARTY_VULKAN_NDEBUG
+#ifdef FPSPARTY_VULKAN_DEBUG_NAMES
     debug_name
 #endif
 ) {
   auto retval = Global_vulkan_state::get().device().createSemaphoreUnique({});
-#ifndef FPSPARTY_VULKAN_NDEBUG
+#ifdef FPSPARTY_VULKAN_DEBUG_NAMES
   Global_vulkan_state::get().device().setDebugUtilsObjectNameEXT({
     .objectType = vk::ObjectType::eSemaphore,
     .objectHandle = std::bit_cast<std::uint64_t>(*retval),

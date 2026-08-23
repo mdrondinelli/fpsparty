@@ -44,7 +44,8 @@ public:
 
   void rehash(u64 new_bucket_count) {
     auto replacement = Hash_table{new_bucket_count};
-    auto live_entry_count = u64{};
+    // Only read by the assert below, so it disappears under NDEBUG.
+    [[maybe_unused]] auto live_entry_count = u64{};
     for (auto const &bucket : buckets()) {
       if (!bucket.empty()) {
         ++live_entry_count;
@@ -86,7 +87,8 @@ public:
 
   u64 bucket_count() const noexcept { return _bucket_count; }
 
-  static auto constexpr min_bucket_count = u64{1} << 1;
+  // Only read by an assert, so it goes unreferenced under NDEBUG.
+  [[maybe_unused]] static auto constexpr min_bucket_count = u64{1} << 1;
   static auto constexpr max_load_factor = 0.85;
 
 private:

@@ -73,27 +73,33 @@ Component_frame_index::Component_frame_index(Component_frame const &frame) {
   assert(frame.humanoids.size() <= std::numeric_limits<u32>::max());
   assert(frame.items.size() <= std::numeric_limits<u32>::max());
   for (auto i = u32{}; i != frame.cameras.size(); ++i) {
-    auto const b = camera_indices.try_emplace(frame.cameras[i].key, i);
+    [[maybe_unused]] auto const b =
+      camera_indices.try_emplace(frame.cameras[i].key, i);
     assert(b.second);
   }
   for (auto i = u32{}; i != frame.distant_lights.size(); ++i) {
-    auto const b = distant_light_indices.try_emplace(frame.distant_lights[i].key, i);
+    [[maybe_unused]] auto const b =
+      distant_light_indices.try_emplace(frame.distant_lights[i].key, i);
     assert(b.second);
   }
   for (auto i = u32{}; i != frame.point_lights.size(); ++i) {
-    auto const b = point_light_indices.try_emplace(frame.point_lights[i].key, i);
+    [[maybe_unused]] auto const b =
+      point_light_indices.try_emplace(frame.point_lights[i].key, i);
     assert(b.second);
   }
   for (auto i = u32{}; i != frame.boxes.size(); ++i) {
-    auto const b = box_indices.try_emplace(frame.boxes[i].key, i);
+    [[maybe_unused]] auto const b =
+      box_indices.try_emplace(frame.boxes[i].key, i);
     assert(b.second);
   }
   for (auto i = u32{}; i != frame.humanoids.size(); ++i) {
-    auto const b = humanoid_indices.try_emplace(frame.humanoids[i].entity_id, i);
+    [[maybe_unused]] auto const b =
+      humanoid_indices.try_emplace(frame.humanoids[i].entity_id, i);
     assert(b.second);
   }
   for (auto i = u32{}; i != frame.items.size(); ++i) {
-    auto const b = item_indices.try_emplace(frame.items[i].entity_id, i);
+    [[maybe_unused]] auto const b =
+      item_indices.try_emplace(frame.items[i].entity_id, i);
     assert(b.second);
   }
 }

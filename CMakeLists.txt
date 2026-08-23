@@ -2,7 +2,79 @@ cmake_minimum_required(VERSION 3.22.0)
 project(fpsparty VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_compile_definitions(TRACY_ENABLE)
+# The non-MSVC build passes -stdlib=libc++ and links libc++abi
+# unconditionally, so it needs Clang. Fail with one sentence rather than a
+# wall of unrelated errors.
+if (NOT MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  message(FATAL_ERROR
+    "fpsparty requires Clang (builds against libc++), got "
+    "${CMAKE_CXX_COMPILER_ID}. Configure with a preset, or pass "
+    "-DCMAKE_CXX_COMPILER=clang++-21 -DCMAKE_C_COMPILER=clang-21.")
+endif()
+
+# Four configurations, none of which map onto CMake's stock set.
+# Development is the daily driver -- optimized enough to stay interactive,
+# but with assertions and Vulkan validation live, so NDEBUG must stay off
+# and RelWithDebInfo will not do. Profiling matches Release codegen
+# exactly so a capture reflects what ships, plus symbols and Tracy.
+set(fpsparty_build_types Debug Development Profiling Release)
+get_property(fpsparty_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if (fpsparty_multi_config)
+  set(CMAKE_CONFIGURATION_TYPES "${fpsparty_build_types}" CACHE STRING "" FORCE)
+elseif (NOT CMAKE_BUILD_TYPE)
+  # Configuring without a preset lands on Development rather than on
+  # whatever an empty CMAKE_BUILD_TYPE happens to mean.
+  set(CMAKE_BUILD_TYPE Development CACHE STRING "" FORCE)
+  message(STATUS "No build type set; defaulting to Development.")
+endif()
+set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS ${fpsparty_build_types})
+
+if (MSVC)
+  set(fpsparty_flags_debug "/Od /Zi")
+  set(fpsparty_flags_development "/O2 /Zi")
+  set(fpsparty_flags_profiling "/O2 /Zi /DNDEBUG")
+  set(fpsparty_flags_release "/O2 /DNDEBUG")
+else()
+  set(fpsparty_flags_debug "-O0 -g")
+  set(fpsparty_flags_development "-O2 -g")
+  set(fpsparty_flags_profiling "-O3 -g -DNDEBUG")
+  set(fpsparty_flags_release "-O3 -DNDEBUG")
+endif()
+foreach(lang C CXX)
+  set(CMAKE_${lang}_FLAGS_DEBUG
+    "${fpsparty_flags_debug}" CACHE STRING "" FORCE)
+  set(CMAKE_${lang}_FLAGS_DEVELOPMENT
+    "${fpsparty_flags_development}" CACHE STRING "" FORCE)
+  set(CMAKE_${lang}_FLAGS_PROFILING
+    "${fpsparty_flags_profiling}" CACHE STRING "" FORCE)
+  set(CMAKE_${lang}_FLAGS_RELEASE
+    "${fpsparty_flags_release}" CACHE STRING "" FORCE)
+endforeach()
+# The custom configurations need linker flag variables to exist, or link
+# rules come out empty-handed for them.
+foreach(kind EXE SHARED MODULE STATIC)
+  set(CMAKE_${kind}_LINKER_FLAGS_DEVELOPMENT "" CACHE STRING "" FORCE)
+  set(CMAKE_${kind}_LINKER_FLAGS_PROFILING "" CACHE STRING "" FORCE)
+endforeach()
+
+# Vulkan validation layers plus a debug messenger. Costs real frame time,
+# so profiling builds leave it off.
+option(FPSPARTY_VULKAN_VALIDATION "Enable Vulkan validation layers" OFF)
+# Object names and command labels via VK_EXT_debug_utils. Wanted in
+# profiling builds too -- captures are where the names pay off -- so it is
+# gated separately from validation.
+option(FPSPARTY_VULKAN_DEBUG_NAMES "Enable Vulkan object names and labels" OFF)
+option(FPSPARTY_TRACY "Enable Tracy profiler instrumentation" OFF)
+
+if (FPSPARTY_TRACY)
+  add_compile_definitions(TRACY_ENABLE)
+endif()
+if (FPSPARTY_VULKAN_VALIDATION)
+  add_compile_definitions(FPSPARTY_VULKAN_VALIDATION)
+endif()
+if (FPSPARTY_VULKAN_DEBUG_NAMES)
+  add_compile_definitions(FPSPARTY_VULKAN_DEBUG_NAMES)
+endif()
 
 # dependencies
 add_subdirectory(extern/glfw-3.4)
@@ -356,7 +428,7 @@ else()
   target_compile_options(spirv-reflect PRIVATE ${extern_compile_options})
   target_compile_options(Catch2 PRIVATE ${extern_compile_options})
   target_compile_options(Catch2WithMain PRIVATE ${extern_compile_options})
-  set(fpsparty_compile_options -Wall -Wextra -Wpedantic -Werror -stdlib=libc++ -O3)
+  set(fpsparty_compile_options -Wall -Wextra -Wpedantic -Werror -stdlib=libc++)
   foreach(target ${fpsparty_targets})
     target_compile_options(${target} PRIVATE ${fpsparty_compile_options})
   endforeach()

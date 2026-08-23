@@ -327,7 +327,8 @@ private:
     return std::unique_ptr<Entry[]>{new Entry[bucket_count]};
   }
 
-  static void assert_valid_key(K key) noexcept {
+  // key is only read by the assert, so it goes unused under NDEBUG.
+  static void assert_valid_key([[maybe_unused]] K key) noexcept {
     if constexpr (sentinel_key.enabled) {
       assert(key != sentinel_key.key);
     }

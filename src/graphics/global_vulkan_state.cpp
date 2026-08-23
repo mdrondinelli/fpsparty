@@ -22,13 +22,17 @@ vk::UniqueInstance make_vk_instance() {
     .pEngineName = "FPS Party",
     .apiVersion = vk::ApiVersion14,
   };
-#ifndef FPSPARTY_VULKAN_NDEBUG
+  // Validation layers and debug-utils are gated separately: a profiling
+  // build wants object names and command labels in a capture without
+  // paying for validation, which perturbs the timings it exists to
+  // measure.
+#ifdef FPSPARTY_VULKAN_VALIDATION
   std::cout << "Enabling Vulkan validation layers.\n";
   auto const layers = std::array{"VK_LAYER_KHRONOS_validation"};
 #endif
-#ifndef FPSPARTY_VULKAN_NDEBUG
+#ifdef FPSPARTY_VULKAN_DEBUG_NAMES
   const auto glfw_extensions = glfw::get_required_instance_extensions();
-  std::cout << "Enabling Vulkan debug extension.\n";
+  std::cout << "Enabling Vulkan debug utils extension.\n";
   auto extensions = std::vector<char const *>(std::from_range, glfw_extensions);
   extensions.push_back(vk::EXTDebugUtilsExtensionName);
 #else
@@ -36,7 +40,7 @@ vk::UniqueInstance make_vk_instance() {
 #endif
   const auto create_info = vk::InstanceCreateInfo{
     .pApplicationInfo = &app_info,
-#ifndef FPSPARTY_VULKAN_NDEBUG
+#ifdef FPSPARTY_VULKAN_VALIDATION
     .enabledLayerCount = static_cast<std::uint32_t>(layers.size()),
     .ppEnabledLayerNames = layers.data(),
 #endif
