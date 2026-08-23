@@ -1,6 +1,5 @@
 #include "client/passes/distant_irradiance_passes.hpp"
 #include "client/scene_uniform_layout.hpp"
-#include "graphics/synchronization_scope.hpp"
 #include "render_graph/access.hpp"
 #include <span>
 #include <utility>
@@ -8,16 +7,6 @@
 namespace fpsparty::client::passes {
 
 namespace {
-auto constexpr transfer_write_scope = graphics::Synchronization_scope{
-  .stage_mask = graphics::Pipeline_stage_flag_bits::transfer,
-  .access_mask = graphics::Access_flag_bits::transfer_write,
-};
-auto constexpr compute_shader_storage_write_scope =
-  graphics::Synchronization_scope{
-    .stage_mask = graphics::Pipeline_stage_flag_bits::compute_shader,
-    .access_mask = graphics::Access_flag_bits::shader_storage_write,
-  };
-
 math::ivec2 dispatch_group_count(math::ivec2 framebuffer_size) {
   return {
     (framebuffer_size.x() + 7) / 8,
@@ -25,6 +14,27 @@ math::ivec2 dispatch_group_count(math::ivec2 framebuffer_size) {
   };
 }
 } // namespace
+
+Distant_irradiance_sample_clear_pass::Distant_irradiance_sample_clear_pass(
+  Distant_irradiance_sample_clear_pass_inputs inputs)
+    : _inputs{std::move(inputs)} {}
+
+void Distant_irradiance_sample_clear_pass::declare(
+  render_graph::Builder &builder) {
+  _sun_sample_handle = builder.write(
+    _inputs.sun_sample_buffer, render_graph::access::transfer_write);
+  _sky_sample_handle = builder.write(
+    _inputs.sky_sample_buffer, render_graph::access::transfer_write);
+}
+
+void Distant_irradiance_sample_clear_pass::execute(
+  graphics::Work_recorder &recorder, render_graph::Resources &resources) {
+  // Only the counts need clearing, not the sample data -- pass 2 only
+  // reads indices below whatever count pass 1 ends up with. The count
+  // field sits 12 bytes in (see get_distant_light_sample_buffer).
+  recorder.fill_buffer(resources.get_buffer(_sun_sample_handle), 12, 4, 0u);
+  recorder.fill_buffer(resources.get_buffer(_sky_sample_handle), 12, 4, 0u);
+}
 
 Distant_irradiance_pass1::Distant_irradiance_pass1(
   rc::Strong<graphics::Compute_pipeline> pipeline,
@@ -57,13 +67,6 @@ void Distant_irradiance_pass1::execute(
   auto const &scene_uniform_buffer = resources.get_buffer(_scene_uniform_handle);
   auto const &sun_sample_buffer = resources.get_buffer(_sun_sample_handle);
   auto const &sky_sample_buffer = resources.get_buffer(_sky_sample_handle);
-  // Only the atomic counts need clearing (not the sample data itself) --
-  // pass 2 only ever reads indices below whatever count this pass ends up
-  // with. The count field sits 12 bytes in (see get_distant_light_sample_
-  // buffer).
-  recorder.fill_buffer(sun_sample_buffer, 12, 4, 0u);
-  recorder.fill_buffer(sky_sample_buffer, 12, 4, 0u);
-  recorder.barrier(transfer_write_scope, compute_shader_storage_write_scope);
   recorder.bind_compute_pipeline(_pipeline);
   recorder.push_buffer_reference(
     0, scene_uniform_buffer, _inputs.scene_uniform_offset);

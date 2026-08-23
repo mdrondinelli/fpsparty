@@ -39,6 +39,11 @@ constexpr Access indirect_command_read{
   .access_mask = graphics::Access_flag_bits::indirect_command_read,
 };
 
+constexpr Access transfer_write{
+  .stage_mask = graphics::Pipeline_stage_flag_bits::transfer,
+  .access_mask = graphics::Access_flag_bits::transfer_write,
+};
+
 constexpr Access depth_attachment_write{
   .stage_mask = graphics::Pipeline_stage_flag_bits::early_fragment_tests |
                 graphics::Pipeline_stage_flag_bits::late_fragment_tests,

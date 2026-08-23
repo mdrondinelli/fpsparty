@@ -13,6 +13,32 @@
 
 namespace fpsparty::client::passes {
 
+// Zeroes both sample buffers' atomic counts, so pass 1 can append into
+// them. Its own pass rather than part of pass 1 so that the graph places
+// the barrier between the clear and the appends -- passes never emit
+// barriers themselves, see render_graph::Node.
+struct Distant_irradiance_sample_clear_pass_inputs {
+  render_graph::Symbolic_buffer sun_sample_buffer;
+  render_graph::Symbolic_buffer sky_sample_buffer;
+};
+
+class Distant_irradiance_sample_clear_pass : public render_graph::Node {
+public:
+  explicit Distant_irradiance_sample_clear_pass(
+    Distant_irradiance_sample_clear_pass_inputs inputs);
+
+  void declare(render_graph::Builder &builder) override;
+
+  void execute(
+    graphics::Work_recorder &recorder,
+    render_graph::Resources &resources) override;
+
+private:
+  Distant_irradiance_sample_clear_pass_inputs _inputs;
+  render_graph::Resource_handle _sun_sample_handle{};
+  render_graph::Resource_handle _sky_sample_handle{};
+};
+
 // Pass 1: RIS-picks sun vs sky per pixel, appending each pixel to
 // whichever of the two sample buffers it picked (their atomic counts are
 // zeroed here too, immediately before the dispatch that appends to them --

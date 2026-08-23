@@ -483,6 +483,8 @@ private:
         _graph.add_pass(*rt_entity_binning_pass);
       }
     }
+    std::optional<passes::Distant_irradiance_sample_clear_pass>
+      distant_irradiance_sample_clear_pass;
     std::optional<passes::Distant_irradiance_pass1> distant_irradiance_pass1;
     std::optional<passes::Distant_irradiance_indirect_args_pass>
       distant_irradiance_indirect_args_pass;
@@ -522,6 +524,12 @@ private:
         auto const frame = _frame_number % max_frames_in_flight;
         auto const layout =
           make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
+        distant_irradiance_sample_clear_pass.emplace(
+          passes::Distant_irradiance_sample_clear_pass_inputs{
+            .sun_sample_buffer = _distant_light_sample_buffer_sun_symbol,
+            .sky_sample_buffer = _distant_light_sample_buffer_sky_symbol,
+          });
+        _graph.add_pass(*distant_irradiance_sample_clear_pass);
         distant_irradiance_pass1.emplace(
           _distant_irradiance_pipeline,
           passes::Distant_irradiance_pass1_inputs{
