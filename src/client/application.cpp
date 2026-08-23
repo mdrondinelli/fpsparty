@@ -217,8 +217,9 @@ public:
           "./assets/shaders/atmosphere/sky_view.comp.spv")},
         _sky_irradiance_compute_shader{graphics::load_shader(
           "./assets/shaders/atmosphere/sky_irradiance.comp.spv")},
-        _distant_irradiance_compute_shader{
-          graphics::load_shader("./assets/shaders/distant_irradiance.comp.spv")},
+        _distant_irradiance_light_pick_compute_shader{
+          graphics::load_shader(
+            "./assets/shaders/distant_irradiance_light_pick.comp.spv")},
         _distant_irradiance_trace_sun_compute_shader{graphics::load_shader(
           "./assets/shaders/distant_irradiance_trace_sun.comp.spv")},
         _distant_irradiance_trace_sky_compute_shader{graphics::load_shader(
@@ -243,8 +244,8 @@ public:
           {.shader = &_sky_view_compute_shader})},
         _sky_irradiance_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_sky_irradiance_compute_shader})},
-        _distant_irradiance_pipeline{_graphics.create_compute_pipeline(
-          {.shader = &_distant_irradiance_compute_shader})},
+        _distant_irradiance_light_pick_pipeline{_graphics.create_compute_pipeline(
+          {.shader = &_distant_irradiance_light_pick_compute_shader})},
         _distant_irradiance_trace_sun_pipeline{
           _graphics.create_compute_pipeline(
             {.shader = &_distant_irradiance_trace_sun_compute_shader})},
@@ -485,7 +486,7 @@ private:
     }
     std::optional<passes::Distant_irradiance_sample_clear_pass>
       distant_irradiance_sample_clear_pass;
-    std::optional<passes::Distant_irradiance_pass1> distant_irradiance_pass1;
+    std::optional<passes::Distant_irradiance_light_pick_pass> distant_irradiance_light_pick_pass;
     std::optional<passes::Distant_irradiance_indirect_args_pass>
       distant_irradiance_indirect_args_pass;
     std::optional<passes::Distant_irradiance_trace_sun_pass>
@@ -530,9 +531,9 @@ private:
             .sky_sample_buffer = _distant_light_sample_buffer_sky_symbol,
           });
         _graph.add_pass(*distant_irradiance_sample_clear_pass);
-        distant_irradiance_pass1.emplace(
-          _distant_irradiance_pipeline,
-          passes::Distant_irradiance_pass1_inputs{
+        distant_irradiance_light_pick_pass.emplace(
+          _distant_irradiance_light_pick_pipeline,
+          passes::Distant_irradiance_light_pick_pass_inputs{
             .depth_render_target = _depth_attachment_symbols[_frame_number % 2],
             .normal_render_target =
               _normal_render_target_symbols[_frame_number % 2],
@@ -545,7 +546,7 @@ private:
             .framebuffer_size = framebuffer_size,
             .frame_number = _frame_number,
           });
-        _graph.add_pass(*distant_irradiance_pass1);
+        _graph.add_pass(*distant_irradiance_light_pick_pass);
         distant_irradiance_indirect_args_pass.emplace(
           _indirect_dispatch_args_pipeline,
           passes::Distant_irradiance_indirect_args_pass_inputs{
@@ -1166,9 +1167,10 @@ private:
     }
   }
 
-  // Worst-case-sized buffers for distant_irradiance.comp (pass 1) to append
-  // Distant_light_sample records into and distant_irradiance_trace_sun.comp /
-  // distant_irradiance_trace_sky.comp (pass 2) to read them back from -- see
+  // Worst-case-sized buffers for distant_irradiance_light_pick.comp to
+  // append Distant_light_sample records into and the trace shaders,
+  // distant_irradiance_trace_sun.comp / distant_irradiance_trace_sky.comp,
+  // to read back -- see
   // distant_irradiance_common.glsl. Layout: a 12-byte VkDispatchIndirectCommand
   // {x, y, z} (written every frame by indirect_dispatch_args.comp from the
   // count below, then read by the trace pass's dispatch_indirect) followed
@@ -1177,12 +1179,13 @@ private:
   // into the buffer, not at its start. Each buffer is sized for every pixel
   // picking that buffer's technique (12-byte indirect command + 4-byte count
   // header plus one Distant_light_sample -- packed pixel + uv, 8 bytes --
-  // per pixel), since pass 1 can send any pixel to either buffer and never
-  // produces more than one sample per pixel total; the two buffers' counts
-  // can never both hit their individual worst case at once, but each must
-  // be able to alone. count is reset to 0 every frame via fill_buffer, not
-  // recreated -- no need to fully clear the sample data itself, since pass
-  // 2 only ever reads indices below whatever count pass 1 ends up with.
+  // per pixel), since light picking can send any pixel to either buffer
+  // and never produces more than one sample per pixel total; the two
+  // buffers' counts can never both hit their individual worst case at
+  // once, but each must be able to alone. count is reset to 0 every frame
+  // via fill_buffer, not recreated -- no need to clear the sample data
+  // itself, since the trace shaders only read indices below whatever
+  // count light picking ends up with.
   void get_distant_light_sample_buffer(math::ivec3 extent) {
     auto const create_buffers = !_distant_light_sample_buffer_sun ||
       _distant_light_sample_buffer_extent != extent;
@@ -1591,7 +1594,7 @@ private:
   graphics::Shader _composite_fragment_shader;
   graphics::Shader _sky_view_compute_shader;
   graphics::Shader _sky_irradiance_compute_shader;
-  graphics::Shader _distant_irradiance_compute_shader;
+  graphics::Shader _distant_irradiance_light_pick_compute_shader;
   graphics::Shader _distant_irradiance_trace_sun_compute_shader;
   graphics::Shader _distant_irradiance_trace_sky_compute_shader;
   graphics::Shader _distant_irradiance_temporal_compute_shader;
@@ -1657,7 +1660,7 @@ private:
   std::array<render_graph::Symbolic_buffer, max_frames_in_flight>
     _rt_entity_binning_buffer_symbols{
       _graph.allocate_buffer_symbol(), _graph.allocate_buffer_symbol()};
-  rc::Strong<graphics::Compute_pipeline> _distant_irradiance_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _distant_irradiance_light_pick_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_trace_sun_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_trace_sky_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_temporal_pipeline{};

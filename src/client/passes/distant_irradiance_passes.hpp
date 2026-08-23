@@ -13,10 +13,10 @@
 
 namespace fpsparty::client::passes {
 
-// Zeroes both sample buffers' atomic counts, so pass 1 can append into
-// them. Its own pass rather than part of pass 1 so that the graph places
-// the barrier between the clear and the appends -- passes never emit
-// barriers themselves, see render_graph::Node.
+// Zeroes both sample buffers' atomic counts, so light picking can append
+// into them. Its own pass rather than part of that one so that the graph
+// places the barrier between the clear and the appends -- passes never
+// emit barriers themselves, see render_graph::Node.
 struct Distant_irradiance_sample_clear_pass_inputs {
   render_graph::Symbolic_buffer sun_sample_buffer;
   render_graph::Symbolic_buffer sky_sample_buffer;
@@ -39,11 +39,13 @@ private:
   render_graph::Resource_handle _sky_sample_handle{};
 };
 
-// Pass 1: RIS-picks sun vs sky per pixel, appending each pixel to
-// whichever of the two sample buffers it picked (their atomic counts are
-// zeroed here too, immediately before the dispatch that appends to them --
-// an internal detail, not a cross-pass dependency, so not declared).
-struct Distant_irradiance_pass1_inputs {
+// Pass 1: light picking. Chooses sun or sky per pixel with probability
+// proportional to each one's analytically integrated unshadowed
+// contribution, and appends the pixel to that light's sample buffer.
+// The trace passes divide by the selection probability with no MIS
+// weight, which is unbiased only because the two emitters are disjoint --
+// the sky view LUT carries in-scattered light, never the solar disc.
+struct Distant_irradiance_light_pick_pass_inputs {
   // Hardware depth attachment (reverse-Z, sampled directly -- see
   // gbuffer.glsl) and oct-encoded normal (r16g16_sfloat). No gradient
   // needed here.
@@ -61,11 +63,11 @@ struct Distant_irradiance_pass1_inputs {
   u32 frame_number;
 };
 
-class Distant_irradiance_pass1 : public render_graph::Node {
+class Distant_irradiance_light_pick_pass : public render_graph::Node {
 public:
-  Distant_irradiance_pass1(
+  Distant_irradiance_light_pick_pass(
     rc::Strong<graphics::Compute_pipeline> pipeline,
-    Distant_irradiance_pass1_inputs inputs);
+    Distant_irradiance_light_pick_pass_inputs inputs);
 
   void declare(render_graph::Builder &builder) override;
 
@@ -75,7 +77,7 @@ public:
 
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
-  Distant_irradiance_pass1_inputs _inputs;
+  Distant_irradiance_light_pick_pass_inputs _inputs;
   render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _sky_view_lut_handle{};
@@ -84,8 +86,8 @@ private:
   render_graph::Resource_handle _sky_sample_handle{};
 };
 
-// Turns pass 1's atomic sample counts into indirect dispatch args for the
-// trace passes below, in place in the same two buffers.
+// Turns the light-pick pass's atomic sample counts into indirect dispatch
+// args for the trace passes below, in place in the same two buffers.
 struct Distant_irradiance_indirect_args_pass_inputs {
   render_graph::Symbolic_buffer sun_sample_buffer;
   render_graph::Symbolic_buffer sky_sample_buffer;

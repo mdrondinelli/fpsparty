@@ -29,19 +29,19 @@ void Distant_irradiance_sample_clear_pass::declare(
 
 void Distant_irradiance_sample_clear_pass::execute(
   graphics::Work_recorder &recorder, render_graph::Resources &resources) {
-  // Only the counts need clearing, not the sample data -- pass 2 only
-  // reads indices below whatever count pass 1 ends up with. The count
-  // field sits 12 bytes in (see get_distant_light_sample_buffer).
+  // Only the counts need clearing, not the sample data -- the trace
+  // shaders only read indices below whatever count light picking ends up
+  // with. The count sits 12 bytes in (see get_distant_light_sample_buffer).
   recorder.fill_buffer(resources.get_buffer(_sun_sample_handle), 12, 4, 0u);
   recorder.fill_buffer(resources.get_buffer(_sky_sample_handle), 12, 4, 0u);
 }
 
-Distant_irradiance_pass1::Distant_irradiance_pass1(
+Distant_irradiance_light_pick_pass::Distant_irradiance_light_pick_pass(
   rc::Strong<graphics::Compute_pipeline> pipeline,
-  Distant_irradiance_pass1_inputs inputs)
+  Distant_irradiance_light_pick_pass_inputs inputs)
     : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
-void Distant_irradiance_pass1::declare(render_graph::Builder &builder) {
+void Distant_irradiance_light_pick_pass::declare(render_graph::Builder &builder) {
   // depth/normal: written by Gbuffer_pass. sky_view_lut: written by
   // Sky_view_pass. scene_uniform_buffer: written GPU-side (the Sky_
   // irradiance sub-struct) by Sky_irradiance_pass, declared at whole-
@@ -62,7 +62,7 @@ void Distant_irradiance_pass1::declare(render_graph::Builder &builder) {
     _inputs.sky_sample_buffer, render_graph::access::compute_storage_write);
 }
 
-void Distant_irradiance_pass1::execute(
+void Distant_irradiance_light_pick_pass::execute(
   graphics::Work_recorder &recorder, render_graph::Resources &resources) {
   auto const &scene_uniform_buffer = resources.get_buffer(_scene_uniform_handle);
   auto const &sun_sample_buffer = resources.get_buffer(_sun_sample_handle);
@@ -133,7 +133,7 @@ Distant_irradiance_trace_sun_pass::Distant_irradiance_trace_sun_pass(
     : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
 void Distant_irradiance_trace_sun_pass::declare(render_graph::Builder &builder) {
-  // See Distant_irradiance_pass1::declare's comment -- same reasoning for
+  // See Distant_irradiance_light_pick_pass::declare's comment -- same reasoning for
   // all of these (Gbuffer_pass/Sky_irradiance_pass/Rt_entity_binning_pass
   // writes).
   _depth_handle = builder.read(
@@ -200,7 +200,7 @@ Distant_irradiance_trace_sky_pass::Distant_irradiance_trace_sky_pass(
       _sky_view_lut{sky_view_lut} {}
 
 void Distant_irradiance_trace_sky_pass::declare(render_graph::Builder &builder) {
-  // See Distant_irradiance_pass1::declare's comment.
+  // See Distant_irradiance_light_pick_pass::declare's comment.
   _depth_handle = builder.read(
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);
   _normal_handle = builder.read(
@@ -330,7 +330,7 @@ Distant_irradiance_variance_pass::Distant_irradiance_variance_pass(
     : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
 void Distant_irradiance_variance_pass::declare(render_graph::Builder &builder) {
-  // depth: written by Gbuffer_pass -- see Distant_irradiance_pass1::
+  // depth: written by Gbuffer_pass -- see Distant_irradiance_light_pick_pass::
   // declare's comment.
   _depth_handle = builder.read(
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);

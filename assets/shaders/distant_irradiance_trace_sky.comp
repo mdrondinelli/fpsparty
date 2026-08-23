@@ -9,7 +9,8 @@
 
 layout(local_size_x = 64) in;
 
-// Sky half of pass 2 (distant_irradiance_trace_sun.comp is the other half).
+// Sky half of the trace stage (distant_irradiance_trace_sun.comp is the
+// other half).
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
   layout(offset = 8) uint16_t depth_texture;
@@ -73,7 +74,7 @@ void main() {
   const float cos_theta = max(dot(n, w_i), 0.0);
   const float pdf = cos_theta > 0.0 ? cos_theta / pi : 0.0;
 
-  // Re-derived from pass 1 (see distant_irradiance.comp).
+  // Re-derived from distant_irradiance_light_pick.comp.
   const vec3 sun_direction = push_constants.scene.sun_direction;
   const vec3 sun_irradiance = push_constants.scene.sun_irradiance;
   const vec3 sun_transmittance =

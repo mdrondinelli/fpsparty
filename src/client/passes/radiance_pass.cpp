@@ -31,7 +31,7 @@ void Radiance_pass::declare(render_graph::Builder &builder) {
     // by Sky_view_pass, if it ran this frame (its own gating -- camera &&
     // sun -- can be true even when this pass's gating -- camera &&
     // grid_mesh uploaded -- is, without sun; declaring the read
-    // regardless is harmless, see Distant_irradiance_pass1::declare's
+    // regardless is harmless, see Distant_irradiance_light_pick_pass::declare's
     // comment). distant_irradiance_filtered: written by the last
     // Distant_irradiance_spatial_filter_pass iteration.
     _albedo_handle = builder.read(

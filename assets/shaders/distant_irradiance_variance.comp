@@ -27,7 +27,7 @@ void main() {
     return;
   }
   // A pixel with no geometry (depth == 0, e.g. sky) never had its luminance
-  // moments written this frame -- distant_irradiance.comp skips those
+  // moments written this frame -- light picking skips those
   // pixels entirely -- so the texture holds stale/unrelated data there.
   const float depth = texelFetch(
     sampled_images[push_constants.depth_texture], pixel, 0).x;
