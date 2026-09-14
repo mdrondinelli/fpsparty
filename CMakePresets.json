@@ -1,0 +1,80 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "clang++-21",
+        "CMAKE_C_COMPILER": "clang-21"
+      }
+    },
+    {
+      "name": "debug",
+      "inherits": "base",
+      "displayName": "Debug",
+      "description": "Unoptimized, for stepping through code. Slow to run; prefer development unless -O2 has inlined away what you need to inspect.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "FPSPARTY_VULKAN_VALIDATION": "ON",
+        "FPSPARTY_VULKAN_DEBUG_NAMES": "ON",
+        "FPSPARTY_TRACY": "OFF"
+      }
+    },
+    {
+      "name": "development",
+      "inherits": "base",
+      "displayName": "Development",
+      "description": "The daily driver. Optimized enough to stay interactive, with assertions and Vulkan validation live.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Development",
+        "FPSPARTY_VULKAN_VALIDATION": "ON",
+        "FPSPARTY_VULKAN_DEBUG_NAMES": "ON",
+        "FPSPARTY_TRACY": "OFF"
+      }
+    },
+    {
+      "name": "profiling",
+      "inherits": "base",
+      "displayName": "Profiling",
+      "description": "Release codegen plus symbols, Tracy, and Vulkan object names. Validation is off so it does not perturb the timings being measured.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Profiling",
+        "FPSPARTY_VULKAN_VALIDATION": "OFF",
+        "FPSPARTY_VULKAN_DEBUG_NAMES": "ON",
+        "FPSPARTY_TRACY": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "inherits": "base",
+      "displayName": "Release",
+      "description": "What ships. No validation, no names, no instrumentation.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "FPSPARTY_VULKAN_VALIDATION": "OFF",
+        "FPSPARTY_VULKAN_DEBUG_NAMES": "OFF",
+        "FPSPARTY_TRACY": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {"name": "debug", "configurePreset": "debug"},
+    {"name": "development", "configurePreset": "development"},
+    {"name": "profiling", "configurePreset": "profiling"},
+    {"name": "release", "configurePreset": "release"}
+  ],
+  "testPresets": [
+    {"name": "debug", "configurePreset": "debug", "output": {"outputOnFailure": true}},
+    {"name": "development", "configurePreset": "development", "output": {"outputOnFailure": true}},
+    {"name": "profiling", "configurePreset": "profiling", "output": {"outputOnFailure": true}},
+    {"name": "release", "configurePreset": "release", "output": {"outputOnFailure": true}}
+  ]
+}
