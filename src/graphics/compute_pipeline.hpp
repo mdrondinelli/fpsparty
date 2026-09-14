@@ -5,6 +5,8 @@
 
 #include <vulkan/vulkan.hpp>
 
+#include "debug_name.hpp"
+#include "no_unique_address.hpp"
 #include "shader.hpp"
 
 namespace fpsparty::graphics {
@@ -18,6 +20,7 @@ get_compute_pipeline_vk_pipeline(Compute_pipeline const &pipeline) noexcept;
 struct Compute_pipeline_create_info {
   Shader *shader;
   vk::PipelineLayout layout{};
+  FPSPARTY_NO_UNIQUE_ADDRESS Debug_name debug_name{};
 };
 
 class Compute_pipeline {

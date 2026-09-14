@@ -1,11 +1,13 @@
 #ifndef FPSPARTY_GRAPHICS_PIPELINE_HPP
 #define FPSPARTY_GRAPHICS_PIPELINE_HPP
 
+#include "graphics/debug_name.hpp"
 #include "graphics/image_format.hpp"
 #include "graphics/primitive_topology.hpp"
 #include "graphics/shader.hpp"
 #include "graphics/shader_stage.hpp"
 #include "int.hpp"
+#include "no_unique_address.hpp"
 #include "rc.hpp"
 #include <span>
 #include <vulkan/vulkan.hpp>
@@ -40,6 +42,7 @@ struct Pipeline_create_info {
   Pipeline_depth_state_create_info depth_state;
   Pipeline_color_state_create_info color_state;
   vk::PipelineLayout layout{};
+  FPSPARTY_NO_UNIQUE_ADDRESS Debug_name debug_name{};
 };
 
 class Pipeline {

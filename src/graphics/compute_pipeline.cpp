@@ -2,6 +2,8 @@
 
 #include "global_vulkan_state.hpp"
 
+#include <bit>
+
 namespace fpsparty::graphics {
 
 Compute_pipeline::Compute_pipeline(Compute_pipeline_create_info const &info) {
@@ -20,6 +22,10 @@ Compute_pipeline::Compute_pipeline(Compute_pipeline_create_info const &info) {
           .layout = info.layout,
         }})
       .value[0]);
+  detail::set_debug_name(
+    vk::ObjectType::ePipeline,
+    std::bit_cast<u64>(*_vk_pipeline),
+    info.debug_name);
 }
 
 } // namespace fpsparty::graphics

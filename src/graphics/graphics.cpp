@@ -1,5 +1,6 @@
 #include "graphics.hpp"
 #include "glfw.hpp"
+#include "graphics/debug_name.hpp"
 #include "graphics/global_vulkan_state.hpp"
 #include "graphics/image.hpp"
 #include "graphics/work_recorder.hpp"
@@ -101,20 +102,10 @@ std::vector<vk::UniqueImageView> make_swapchain_image_views(
   return retval;
 }
 
-vk::UniqueSemaphore make_semaphore(
-  char const *
-#ifdef FPSPARTY_VULKAN_DEBUG_NAMES
-    debug_name
-#endif
-) {
+vk::UniqueSemaphore make_semaphore(Debug_name debug_name) {
   auto retval = Global_vulkan_state::get().device().createSemaphoreUnique({});
-#ifdef FPSPARTY_VULKAN_DEBUG_NAMES
-  Global_vulkan_state::get().device().setDebugUtilsObjectNameEXT({
-    .objectType = vk::ObjectType::eSemaphore,
-    .objectHandle = std::bit_cast<std::uint64_t>(*retval),
-    .pObjectName = debug_name,
-  });
-#endif
+  detail::set_debug_name(
+    vk::ObjectType::eSemaphore, std::bit_cast<u64>(*retval), debug_name);
   return retval;
 }
 

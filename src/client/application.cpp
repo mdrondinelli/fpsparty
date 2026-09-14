@@ -241,32 +241,32 @@ public:
         _mesh_pipeline{make_mesh_pipeline()},
         _crosshair_pipeline{make_crosshair_pipeline()},
         _sky_view_pipeline{_graphics.create_compute_pipeline(
-          {.shader = &_sky_view_compute_shader})},
+          {.shader = &_sky_view_compute_shader, .debug_name = "sky_view"})},
         _sky_irradiance_pipeline{_graphics.create_compute_pipeline(
-          {.shader = &_sky_irradiance_compute_shader})},
+          {.shader = &_sky_irradiance_compute_shader, .debug_name = "sky_irradiance"})},
         _distant_irradiance_light_pick_pipeline{_graphics.create_compute_pipeline(
-          {.shader = &_distant_irradiance_light_pick_compute_shader})},
+          {.shader = &_distant_irradiance_light_pick_compute_shader, .debug_name = "distant_irradiance_light_pick"})},
         _distant_irradiance_trace_sun_pipeline{
           _graphics.create_compute_pipeline(
-            {.shader = &_distant_irradiance_trace_sun_compute_shader})},
+            {.shader = &_distant_irradiance_trace_sun_compute_shader, .debug_name = "distant_irradiance_trace_sun"})},
         _distant_irradiance_trace_sky_pipeline{
           _graphics.create_compute_pipeline(
-            {.shader = &_distant_irradiance_trace_sky_compute_shader})},
+            {.shader = &_distant_irradiance_trace_sky_compute_shader, .debug_name = "distant_irradiance_trace_sky"})},
         _distant_irradiance_temporal_pipeline{
           _graphics.create_compute_pipeline(
-            {.shader = &_distant_irradiance_temporal_compute_shader})},
+            {.shader = &_distant_irradiance_temporal_compute_shader, .debug_name = "distant_irradiance_temporal"})},
         _distant_irradiance_variance_pipeline{
           _graphics.create_compute_pipeline(
-            {.shader = &_distant_irradiance_variance_compute_shader})},
+            {.shader = &_distant_irradiance_variance_compute_shader, .debug_name = "distant_irradiance_variance"})},
         _distant_irradiance_spatial_filter_pipeline{
           _graphics.create_compute_pipeline(
-            {.shader = &_distant_irradiance_spatial_filter_compute_shader})},
+            {.shader = &_distant_irradiance_spatial_filter_compute_shader, .debug_name = "distant_irradiance_spatial_filter"})},
         _indirect_dispatch_args_pipeline{_graphics.create_compute_pipeline(
-          {.shader = &_indirect_dispatch_args_compute_shader})},
+          {.shader = &_indirect_dispatch_args_compute_shader, .debug_name = "indirect_dispatch_args"})},
         _rt_grid_entity_binning_pipeline{_graphics.create_compute_pipeline(
-          {.shader = &_rt_grid_entity_binning_compute_shader})},
+          {.shader = &_rt_grid_entity_binning_compute_shader, .debug_name = "rt_grid_entity_binning"})},
         _radiance_pipeline{_graphics.create_compute_pipeline(
-          {.shader = &_radiance_compute_shader})},
+          {.shader = &_radiance_compute_shader, .debug_name = "radiance"})},
         _texture_manager{{.graphics = &_graphics}},
         _block_texture_registry{{.graphics = &_graphics}},
         _scene_uniform_buffer{_graphics.create_buffer({
@@ -916,7 +916,8 @@ private:
     auto transmittance_shader = graphics::load_shader(
       "./assets/shaders/atmosphere/transmittance.comp.spv");
     auto transmittance_pipeline =
-      _graphics.create_compute_pipeline({.shader = &transmittance_shader});
+      _graphics.create_compute_pipeline(
+        {.shader = &transmittance_shader, .debug_name = "transmittance"});
     _transmittance_lut = _graphics.create_image({
       .dimensionality = 2,
       .format = graphics::Image_format::r16g16b16a16_sfloat,
@@ -1374,6 +1375,7 @@ private:
         {
           .color_attachment_formats = color_attachment_formats,
         },
+      .debug_name = "grid",
     });
     return pipeline;
   }
@@ -1410,6 +1412,7 @@ private:
         {
           .color_attachment_formats = color_attachment_formats,
         },
+      .debug_name = "mesh",
     });
     return pipeline;
   }
@@ -1441,6 +1444,7 @@ private:
         {
           .color_attachment_formats = {&color_attachment_format, 1},
         },
+      .debug_name = "crosshair",
     });
     return pipeline;
   }
@@ -1473,6 +1477,7 @@ private:
         {
           .color_attachment_formats = {&color_attachment_format, 1},
         },
+      .debug_name = "composite",
     });
     return pipeline;
   }
