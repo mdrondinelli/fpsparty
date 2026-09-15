@@ -7,12 +7,13 @@
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
-// One iteration of the 5x5 a-trous edge-aware filter on the distant
+// One iteration of the 3x3 a-trous edge-aware filter on the distant
 // irradiance color, combining the depth/normal/luminance edge-stopping
 // weights (distant_irradiance_spatial_filter.glsl) with the standard
-// a-trous B3-spline kernel. Also propagates variance for the next
-// iteration's luminance_weight tolerance, reusing this iteration's own
-// per-tap h(q)*w(p,q) weight:
+// a-trous kernel. The depth and luminance weights are both exp(-x), so
+// their exponents are summed and exponentiated once per tap.
+// Also propagates variance for the next iteration's luminance_weight
+// tolerance, reusing this iteration's own per-tap h(q)*w(p,q) weight:
 // Var(c_{i+1}(p)) = sum(h(q)*w(p,q))^2 * Var(c_i(q)) / (sum(h(q)*w(p,q)))^2.
 // Dispatched once per iteration with different textures/step_size rather
 // than duplicated -- nothing about the logic differs between iterations.
@@ -28,8 +29,13 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 20) float z_near;
 } push_constants;
 
-const float kernel_1d[5] =
-  float[5](1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0 / 16.0);
+// The 3-tap a-trous kernel {1, 2, 1} / 4, as a formula in |d| rather than
+// an array lookup. Exact at d = 0 and 1 (both terms are powers of two),
+// and register-only: indexing a const array from a loop the compiler does
+// not unroll puts it in function-local storage.
+float kernel_1d(int d) {
+  return (2.0 - float(abs(d))) * (1.0 / 4.0);
+}
 
 void main() {
   const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
@@ -54,10 +60,8 @@ void main() {
       vec4(0.0));
     return;
   }
-  const vec2 p = vec2(pixel);
   const vec3 n_p = gp.normal;
   const float depth_p = gp.linear_depth;
-  const float gradient_z_p = gp.gradient;
   const vec3 color_p = texelFetch(
     sampled_images[push_constants.distant_irradiance_texture], pixel, 0).rgb;
   const float l_p = luminance(color_p);
@@ -65,14 +69,18 @@ void main() {
     sampled_images[push_constants.distant_irradiance_variance_texture],
     pixel,
     0).r;
+  // Everything depending only on p, lifted out of the tap loop.
+  const float sigma_gradient_z_p = depth_weight_sigma_z * gp.gradient;
+  const float luminance_rcp_scale = luminance_weight_rcp_scale(variance_p);
 
   const ivec2 max_coord = size - ivec2(1);
   const int step_size = int(push_constants.step_size);
   vec3 color_numerator = vec3(0.0);
   float weight_sum = 0.0;
   float variance_numerator = 0.0;
-  for (int dy = -2; dy <= 2; ++dy) {
-    for (int dx = -2; dx <= 2; ++dx) {
+  for (int dy = -1; dy <= 1; ++dy) {
+    const float kernel_y = kernel_1d(dy);
+    for (int dx = -1; dx <= 1; ++dx) {
       const ivec2 coord =
         clamp(pixel + ivec2(dx, dy) * step_size, ivec2(0), max_coord);
       const Gbuffer_sample gq = gbuffer_decode(
@@ -83,7 +91,6 @@ void main() {
       if (gq.linear_depth == 0.0) {
         continue;
       }
-      const vec2 q = vec2(coord);
       const vec3 n_q = gq.normal;
       const float depth_q = gq.linear_depth;
       const vec3 color_q = texelFetch(
@@ -91,11 +98,15 @@ void main() {
         coord,
         0).rgb;
       const float l_q = luminance(color_q);
+      const float depth_rcp_scale = depth_weight_rcp_scale(
+        sigma_gradient_z_p, length(vec2(coord - pixel)));
+      const float exponent =
+        depth_weight_exponent(depth_p, depth_q, depth_rcp_scale) +
+        luminance_weight_exponent(l_p, l_q, luminance_rcp_scale);
       const float weight =
-        kernel_1d[dx + 2] * kernel_1d[dy + 2] *
-        depth_weight(p, q, depth_p, depth_q, gradient_z_p) *
-        normal_weight(n_p, n_q) *
-        luminance_weight(l_p, l_q, variance_p);
+        kernel_1d(dx) * kernel_y *
+        exp(-exponent) *
+        normal_weight(n_p, n_q);
       const float variance_q = texelFetch(
         sampled_images[push_constants.distant_irradiance_variance_texture],
         coord,

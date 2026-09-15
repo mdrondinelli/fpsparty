@@ -686,8 +686,6 @@ private:
           _distant_irradiance_filtered_render_target_symbols[1],
           _distant_irradiance_variance_render_target_symbols[1],
           _distant_irradiance_variance_render_target_symbols[0]);
-        // 5 iterations total, steps 1/2/4/8/16 -- the standard SVGF
-        // configuration, giving an effective 65x65 pixel filter footprint.
         emplace_spatial_filter(
           4,
           _distant_irradiance_filtered_render_target_symbols[1],
