@@ -569,6 +569,7 @@ private:
             _grid_mesh->get_rt_block_material_grid_offset(),
           .rt_entity_buffer = _rt_entity_buffers[frame],
           .rt_entity_binning_buffer = _rt_entity_binning_buffer_symbols[frame],
+          .rt_entity_binning_mask_offset = layout.mask_offset,
           .rt_entity_binning_grid_offset = layout.grid_offset,
           .rt_entity_binning_nodes_offset = layout.nodes_offset,
           .raw_distant_irradiance_luminance_render_target =

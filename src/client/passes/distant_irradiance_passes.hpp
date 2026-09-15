@@ -133,6 +133,7 @@ struct Distant_irradiance_trace_pass_inputs {
   std::size_t rt_block_material_grid_offset;
   rc::Strong<graphics::Buffer> rt_entity_buffer;
   render_graph::Symbolic_buffer rt_entity_binning_buffer;
+  std::size_t rt_entity_binning_mask_offset;
   std::size_t rt_entity_binning_grid_offset;
   std::size_t rt_entity_binning_nodes_offset;
   render_graph::Symbolic_image raw_distant_irradiance_luminance_render_target;

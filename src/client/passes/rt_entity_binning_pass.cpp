@@ -65,6 +65,7 @@ void Rt_entity_binning_pass::execute(
   recorder.push_buffer_reference(8, _inputs.entity_buffer);
   recorder.push_buffer_reference(16, binning_buffer, layout.grid_offset);
   recorder.push_buffer_reference(24, binning_buffer, layout.nodes_offset);
+  recorder.push_buffer_reference(32, binning_buffer, layout.mask_offset);
   recorder.dispatch(_inputs.grid_mesh->get_rt_chunk_count(), 1, 1);
 }
 

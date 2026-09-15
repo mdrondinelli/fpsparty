@@ -90,14 +90,28 @@ restrict buffer Rt_entity_nodes {
 };
 
 layout(std430, buffer_reference, buffer_reference_align = 8)
-restrict buffer Rt_entity_grid {
+restrict buffer Rt_entity_head_grid {
   int heads[];
+};
+
+// One bit per cell: whether that cell's entity list holds anything. Eight
+// bytes per chunk against the head grid's 256, so the answer the
+// traversal almost always gets -- nothing here -- comes out of a sector
+// that covers three neighbouring chunks too. The head grid is only
+// touched once a bit says otherwise.
+struct Rt_entity_mask_chunk {
+  uint words[2];
+};
+
+layout(std430, buffer_reference, buffer_reference_align = 4)
+restrict buffer Rt_entity_mask_grid {
+  Rt_entity_mask_chunk chunks[];
 };
 
 // Returns false when cell_coords falls outside the grid, which terminates
 // a ray. The chunk and cell indices are returned separately: together they
 // address the materials, and chunk * 64 + cell is the flat cell index
-// entity_grid.heads uses.
+// entity_head_grid.heads uses.
 bool rt_block_shape_grid_get(
     Rt_block_shape_grid block_shape_grid,
     ivec3 cell_coords,
@@ -146,7 +160,8 @@ bool trace_ray(
     Rt_block_shape_grid block_shape_grid,
     Rt_block_material_grid block_material_grid,
     Rt_entities entities,
-    Rt_entity_grid entity_grid,
+    Rt_entity_head_grid entity_head_grid,
+    Rt_entity_mask_grid entity_mask_grid,
     Rt_entity_nodes entity_nodes,
     vec3 origin,
     vec3 dir,
@@ -220,8 +235,10 @@ bool trace_ray(
         closest_emissivity = color * float(material.emissivity_scale);
       }
     }
-    if (trace_entities) {
-      int node_index = entity_grid.heads[chunk_index * 64u + cell_index];
+    if (trace_entities &&
+        (entity_mask_grid.chunks[chunk_index].words[cell_index >> 5u] &
+         (1u << (cell_index & 31u))) != 0u) {
+      int node_index = entity_head_grid.heads[chunk_index * 64u + cell_index];
       // Bounded by entities.count (not just `!= -1`): a valid, acyclic list
       // can't have more distinct nodes than there are entities, so this
       // guarantees termination even if a corrupted `next` pointer ever
@@ -294,7 +311,8 @@ bool trace_ray(
     Rt_block_shape_grid block_shape_grid,
     Rt_block_material_grid block_material_grid,
     Rt_entities entities,
-    Rt_entity_grid entity_grid,
+    Rt_entity_head_grid entity_head_grid,
+    Rt_entity_mask_grid entity_mask_grid,
     Rt_entity_nodes entity_nodes,
     vec3 origin,
     vec3 dir,
@@ -304,7 +322,8 @@ bool trace_ray(
     block_shape_grid,
     block_material_grid,
     entities,
-    entity_grid,
+    entity_head_grid,
+    entity_mask_grid,
     entity_nodes,
     origin,
     dir,
