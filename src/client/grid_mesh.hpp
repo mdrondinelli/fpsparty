@@ -39,6 +39,8 @@ public:
 
   rc::Strong<graphics::Buffer> const &get_rt_block_grid_buffer() const noexcept;
 
+  u32 get_rt_block_material_grid_offset() const noexcept;
+
   u32 get_rt_chunk_count() const noexcept;
 
 private:
@@ -54,6 +56,9 @@ private:
   rc::Strong<graphics::Buffer> _draw_buffer{};
   rc::Strong<graphics::Buffer> _rt_block_grid_buffer{};
   u32 _rt_block_grid_chunk_count{};
+  // Byte offset of the material chunks within _rt_block_grid_buffer; see
+  // the buffer layout comment in grid_mesh.cpp.
+  u32 _rt_block_material_grid_offset{};
   rc::Strong<graphics::Work> _upload_work{};
   std::array<std::array<Indirect_draw_info, 2>, 3> _draw_infos;
 };

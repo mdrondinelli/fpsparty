@@ -565,6 +565,8 @@ private:
           .scene_uniform_offset = scene_uniform_offset,
           .sample_buffer = {},
           .rt_block_grid_buffer = _grid_mesh->get_rt_block_grid_buffer(),
+          .rt_block_material_grid_offset =
+            _grid_mesh->get_rt_block_material_grid_offset(),
           .rt_entity_buffer = _rt_entity_buffers[frame],
           .rt_entity_binning_buffer = _rt_entity_binning_buffer_symbols[frame],
           .rt_entity_binning_grid_offset = layout.grid_offset,

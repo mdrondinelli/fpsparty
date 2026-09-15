@@ -26,14 +26,15 @@ vec3 rt_color_palette[] = {
   color_code(0x5a4336), // dirt
 };
 
-struct Rt_block_cell {
-  uint8_t shape_index;
+// Everything a cell needs for shading, but not for traversal. Split out of
+// the shape index so that stepping the grid touches as little memory as
+// possible: traversal reads one byte per cell, so a whole 4x4x4 chunk's
+// shapes are 64 bytes whatever direction the ray runs. Materials are read
+// at most once per ray, at the hit, so paying a second fetch there is
+// cheap next to the up-to-trace_max_steps shape fetches.
+struct Rt_block_material {
+  float16_t emissivity_scale;
   uint8_t color_index;
-  float emissivity_scale;
-};
-
-struct Rt_block_chunk {
-  Rt_block_cell cells[64];
 };
 
 struct Rt_grid_entity {
@@ -48,11 +49,32 @@ struct Rt_entity_node {
   int next;
 };
 
+// One chunk's shape indices, the traversal's whole working set for that
+// chunk: 64 bytes, so a chunk occupies two 32-byte sectors and a ray
+// crossing it touches those two whatever direction it runs. Keeping the
+// chunk a type rather than a stride means the 64 cannot drift apart from
+// the 4x4x4 the index math assumes.
+struct Rt_block_shape_chunk {
+  uint8_t shapes[64];
+};
+
+// Same chunking for the materials, so a hit reads one chunk's worth.
+struct Rt_block_material_chunk {
+  Rt_block_material materials[64];
+};
+
 layout(std430, buffer_reference, buffer_reference_align = 4)
-restrict readonly buffer Rt_block_grid {
+restrict readonly buffer Rt_block_shape_grid {
   int min_chunk_x, min_chunk_y, min_chunk_z;
   int chunk_count_x, chunk_count_y, chunk_count_z;
-  Rt_block_chunk chunks[];
+  Rt_block_shape_chunk chunks[];
+};
+
+// Materials for the same chunks, in the same order. Lives in the same
+// allocation as the shapes, at an offset the caller pushes.
+layout(std430, buffer_reference, buffer_reference_align = 4)
+restrict readonly buffer Rt_block_material_grid {
+  Rt_block_material_chunk chunks[];
 };
 
 layout(std430, buffer_reference, buffer_reference_align = 16)
@@ -72,22 +94,27 @@ restrict buffer Rt_entity_grid {
   int heads[];
 };
 
-bool rt_block_grid_get_cell(
-    Rt_block_grid block_grid,
+// Returns false when cell_coords falls outside the grid, which terminates
+// a ray. The chunk and cell indices are returned separately: together they
+// address the materials, and chunk * 64 + cell is the flat cell index
+// entity_grid.heads uses.
+bool rt_block_shape_grid_get(
+    Rt_block_shape_grid block_shape_grid,
     ivec3 cell_coords,
-    out Rt_block_cell out_cell,
+    out uint out_shape_index,
+    out uint out_chunk_index,
     out uint out_cell_index) {
   const ivec3 chunk_coords = cell_coords >> 2;
   const ivec3 local_chunk =
     chunk_coords - ivec3(
-      block_grid.min_chunk_x,
-      block_grid.min_chunk_y,
-      block_grid.min_chunk_z);
+      block_shape_grid.min_chunk_x,
+      block_shape_grid.min_chunk_y,
+      block_shape_grid.min_chunk_z);
   const ivec3 chunk_counts =
     ivec3(
-      block_grid.chunk_count_x,
-      block_grid.chunk_count_y,
-      block_grid.chunk_count_z);
+      block_shape_grid.chunk_count_x,
+      block_shape_grid.chunk_count_y,
+      block_shape_grid.chunk_count_z);
   if (
       any(lessThan(local_chunk, ivec3(0))) ||
       any(greaterThanEqual(local_chunk, chunk_counts))) {
@@ -99,8 +126,9 @@ bool rt_block_grid_get_cell(
   const ivec3 local_cell = cell_coords - (chunk_coords << 2);
   const uint cell_index =
     uint(local_cell.z * 16 + local_cell.y * 4 + local_cell.x);
-  out_cell = block_grid.chunks[chunk_index].cells[cell_index];
-  out_cell_index = chunk_index * 64 + cell_index;
+  out_chunk_index = chunk_index;
+  out_cell_index = cell_index;
+  out_shape_index = uint(block_shape_grid.chunks[chunk_index].shapes[cell_index]);
   return true;
 }
 
@@ -115,7 +143,8 @@ struct Rt_hit {
 };
 
 bool trace_ray(
-    Rt_block_grid block_grid,
+    Rt_block_shape_grid block_shape_grid,
+    Rt_block_material_grid block_material_grid,
     Rt_entities entities,
     Rt_entity_grid entity_grid,
     Rt_entity_nodes entity_nodes,
@@ -149,30 +178,32 @@ bool trace_ray(
   float entry_t = 0.0;
   vec3 entry_normal = -dir;
   for (int i = 0; i < trace_max_steps; ++i) {
-    Rt_block_cell rt_block_cell;
+    uint shape_index;
+    uint chunk_index;
     uint cell_index;
-    if (!rt_block_grid_get_cell(
-        block_grid, cell_coords, rt_block_cell, cell_index)) {
+    if (!rt_block_shape_grid_get(
+        block_shape_grid, cell_coords, shape_index, chunk_index, cell_index)) {
       // oob -> terminate ray
       return false;
     }
     const float next_t = min(t_max.x, min(t_max.y, t_max.z));
-    if (rt_block_cell.shape_index == 1) {
+    if (shape_index == 1) {
       hit.t = entry_t;
       // ties between axes can leave a diagonal entry normal
       hit.normal = normalize(entry_normal);
-      const vec3 color = rt_color_palette[rt_block_cell.color_index];
+      const Rt_block_material material =
+        block_material_grid.chunks[chunk_index].materials[cell_index];
+      const vec3 color = rt_color_palette[material.color_index];
       hit.albedo = color;
-      hit.emissivity = color * rt_block_cell.emissivity_scale;
+      hit.emissivity = color * float(material.emissivity_scale);
       return true;
     }
     float closest_t = 1.0 / 0.0;
     vec3 closest_normal;
     vec3 closest_albedo;
     vec3 closest_emissivity;
-    if (rt_block_cell.shape_index > 1) {
-      const Rt_block_shape shape =
-        rt_block_shapes[rt_block_cell.shape_index];
+    if (shape_index > 1) {
+      const Rt_block_shape shape = rt_block_shapes[shape_index];
       const vec3 shape_space_center = mix(shape.min, shape.max, 0.5);
       const vec3 world_space_center = cell_coords + shape_space_center;
       const vec3 half_extents = (shape.max - shape.min) * 0.5;
@@ -182,13 +213,15 @@ bool trace_ray(
       if (!isinf(t_hit)) {
         closest_t = t_hit;
         closest_normal = hit_normal;
-        const vec3 color = rt_color_palette[rt_block_cell.color_index];
+        const Rt_block_material material =
+          block_material_grid.chunks[chunk_index].materials[cell_index];
+        const vec3 color = rt_color_palette[material.color_index];
         closest_albedo = color;
-        closest_emissivity = color * rt_block_cell.emissivity_scale;
+        closest_emissivity = color * float(material.emissivity_scale);
       }
     }
     if (trace_entities) {
-      int node_index = entity_grid.heads[cell_index];
+      int node_index = entity_grid.heads[chunk_index * 64u + cell_index];
       // Bounded by entities.count (not just `!= -1`): a valid, acyclic list
       // can't have more distinct nodes than there are entities, so this
       // guarantees termination even if a corrupted `next` pointer ever
@@ -258,7 +291,8 @@ bool trace_ray(
 }
 
 bool trace_ray(
-    Rt_block_grid block_grid,
+    Rt_block_shape_grid block_shape_grid,
+    Rt_block_material_grid block_material_grid,
     Rt_entities entities,
     Rt_entity_grid entity_grid,
     Rt_entity_nodes entity_nodes,
@@ -267,7 +301,8 @@ bool trace_ray(
     bool trace_entities) {
   Rt_hit hit;
   return trace_ray(
-    block_grid,
+    block_shape_grid,
+    block_material_grid,
     entities,
     entity_grid,
     entity_nodes,

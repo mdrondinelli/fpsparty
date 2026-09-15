@@ -20,11 +20,13 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 14) uint16_t normal_texture;
   layout(offset = 16) Sky_irradiance sky_irradiance;
   layout(offset = 24) Distant_light_samples sun_samples;
-  layout(offset = 32) Rt_block_grid rt_block_grid;
+  layout(offset = 32) Rt_block_shape_grid rt_block_shape_grid;
   layout(offset = 40) Rt_entities entities;
   layout(offset = 48) Rt_entity_grid entity_grid;
   layout(offset = 56) Rt_entity_nodes entity_nodes;
   layout(offset = 64) uint16_t distant_irradiance_luminance_image;
+  // offset 66: 6 bytes unused (buffer references need 8-byte alignment).
+  layout(offset = 72) Rt_block_material_grid rt_block_material_grid;
 } push_constants;
 
 void main() {
@@ -66,7 +68,8 @@ void main() {
       w_i);
   const vec3 shadow_ray_origin = offset_ray_origin(shading_position, n);
   const bool shadow_ray_hit = trace_ray(
-    push_constants.rt_block_grid,
+    push_constants.rt_block_shape_grid,
+    push_constants.rt_block_material_grid,
     push_constants.entities,
     push_constants.entity_grid,
     push_constants.entity_nodes,

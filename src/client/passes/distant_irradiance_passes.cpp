@@ -179,6 +179,8 @@ void Distant_irradiance_trace_sun_pass::execute(
     _inputs.scene_uniform_offset + scene_sky_irradiance_offset);
   recorder.push_buffer_reference(24, sample_buffer, 12);
   recorder.push_buffer_reference(32, _inputs.rt_block_grid_buffer);
+  recorder.push_buffer_reference(
+    72, _inputs.rt_block_grid_buffer, _inputs.rt_block_material_grid_offset);
   recorder.push_buffer_reference(40, _inputs.rt_entity_buffer);
   recorder.push_buffer_reference(
     48, rt_entity_binning_buffer, _inputs.rt_entity_binning_grid_offset);
@@ -248,6 +250,8 @@ void Distant_irradiance_trace_sky_pass::execute(
     _inputs.scene_uniform_offset + scene_sky_irradiance_offset);
   recorder.push_buffer_reference(32, sample_buffer, 12);
   recorder.push_buffer_reference(40, _inputs.rt_block_grid_buffer);
+  recorder.push_buffer_reference(
+    80, _inputs.rt_block_grid_buffer, _inputs.rt_block_material_grid_offset);
   recorder.push_buffer_reference(48, _inputs.rt_entity_buffer);
   recorder.push_buffer_reference(
     56, rt_entity_binning_buffer, _inputs.rt_entity_binning_grid_offset);
