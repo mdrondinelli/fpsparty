@@ -25,6 +25,8 @@ void Distant_irradiance_sample_clear_pass::declare(
     _inputs.sun_sample_buffer, render_graph::access::transfer_write);
   _sky_sample_handle = builder.write(
     _inputs.sky_sample_buffer, render_graph::access::transfer_write);
+  _brdf_sample_handle = builder.write(
+    _inputs.brdf_sample_buffer, render_graph::access::transfer_write);
 }
 
 void Distant_irradiance_sample_clear_pass::execute(
@@ -34,6 +36,7 @@ void Distant_irradiance_sample_clear_pass::execute(
   // with. The count sits 12 bytes in (see get_distant_light_sample_buffer).
   recorder.fill_buffer(resources.get_buffer(_sun_sample_handle), 12, 4, 0u);
   recorder.fill_buffer(resources.get_buffer(_sky_sample_handle), 12, 4, 0u);
+  recorder.fill_buffer(resources.get_buffer(_brdf_sample_handle), 12, 4, 0u);
 }
 
 Distant_irradiance_light_pick_pass::Distant_irradiance_light_pick_pass(
@@ -60,6 +63,8 @@ void Distant_irradiance_light_pick_pass::declare(render_graph::Builder &builder)
     _inputs.sun_sample_buffer, render_graph::access::compute_storage_write);
   _sky_sample_handle = builder.write(
     _inputs.sky_sample_buffer, render_graph::access::compute_storage_write);
+  _brdf_sample_handle = builder.write(
+    _inputs.brdf_sample_buffer, render_graph::access::compute_storage_write);
 }
 
 void Distant_irradiance_light_pick_pass::execute(
@@ -67,6 +72,7 @@ void Distant_irradiance_light_pick_pass::execute(
   auto const &scene_uniform_buffer = resources.get_buffer(_scene_uniform_handle);
   auto const &sun_sample_buffer = resources.get_buffer(_sun_sample_handle);
   auto const &sky_sample_buffer = resources.get_buffer(_sky_sample_handle);
+  auto const &brdf_sample_buffer = resources.get_buffer(_brdf_sample_handle);
   recorder.bind_compute_pipeline(_pipeline);
   recorder.push_buffer_reference(
     0, scene_uniform_buffer, _inputs.scene_uniform_offset);
@@ -88,6 +94,7 @@ void Distant_irradiance_light_pick_pass::execute(
   recorder.push_buffer_reference(32, sky_sample_buffer, 12);
   recorder.push_data(
     40, std::as_bytes(std::span{&_inputs.frame_number, 1}));
+  recorder.push_buffer_reference(48, brdf_sample_buffer, 12);
   auto const group_count = dispatch_group_count(_inputs.framebuffer_size);
   recorder.dispatch(group_count.x(), group_count.y(), 1);
 }
@@ -107,6 +114,10 @@ void Distant_irradiance_indirect_args_pass::declare(
     _inputs.sun_sample_buffer, render_graph::access::compute_storage_write);
   _sky_sample_handle = builder.write(
     _inputs.sky_sample_buffer, render_graph::access::compute_storage_write);
+  builder.read(
+    _inputs.brdf_sample_buffer, render_graph::access::compute_storage_read);
+  _brdf_sample_handle = builder.write(
+    _inputs.brdf_sample_buffer, render_graph::access::compute_storage_write);
 }
 
 void Distant_irradiance_indirect_args_pass::execute(
@@ -115,6 +126,8 @@ void Distant_irradiance_indirect_args_pass::execute(
   recorder.push_buffer_reference(0, resources.get_buffer(_sun_sample_handle));
   recorder.dispatch(1, 1, 1);
   recorder.push_buffer_reference(0, resources.get_buffer(_sky_sample_handle));
+  recorder.dispatch(1, 1, 1);
+  recorder.push_buffer_reference(0, resources.get_buffer(_brdf_sample_handle));
   recorder.dispatch(1, 1, 1);
 }
 
@@ -149,9 +162,6 @@ void Distant_irradiance_trace_sun_pass::declare(render_graph::Builder &builder) 
   _distant_irradiance_handle = builder.write(
     _inputs.raw_distant_irradiance_render_target,
     render_graph::access::compute_storage_write);
-  _luminance_handle = builder.write(
-    _inputs.raw_distant_irradiance_luminance_render_target,
-    render_graph::access::compute_storage_write);
 }
 
 void Distant_irradiance_trace_sun_pass::execute(
@@ -173,10 +183,6 @@ void Distant_irradiance_trace_sun_pass::execute(
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_normal_handle),
       .kind = graphics::Descriptor_kind::sampled}});
-  recorder.push_buffer_reference(
-    16,
-    scene_uniform_buffer,
-    _inputs.scene_uniform_offset + scene_sky_irradiance_offset);
   recorder.push_buffer_reference(24, sample_buffer, 12);
   recorder.push_buffer_reference(32, _inputs.rt_block_grid_buffer);
   recorder.push_buffer_reference(
@@ -188,10 +194,6 @@ void Distant_irradiance_trace_sun_pass::execute(
     48, rt_entity_binning_buffer, _inputs.rt_entity_binning_grid_offset);
   recorder.push_buffer_reference(
     56, rt_entity_binning_buffer, _inputs.rt_entity_binning_nodes_offset);
-  recorder.push_descriptors(
-    64,
-    {{.image = resources.get_image(_luminance_handle),
-      .kind = graphics::Descriptor_kind::storage}});
   recorder.dispatch_indirect({.buffer = sample_buffer, .offset = 0});
 }
 
@@ -220,9 +222,6 @@ void Distant_irradiance_trace_sky_pass::declare(render_graph::Builder &builder) 
   _distant_irradiance_handle = builder.write(
     _inputs.raw_distant_irradiance_render_target,
     render_graph::access::compute_storage_write);
-  _luminance_handle = builder.write(
-    _inputs.raw_distant_irradiance_luminance_render_target,
-    render_graph::access::compute_storage_write);
 }
 
 void Distant_irradiance_trace_sky_pass::execute(
@@ -246,10 +245,6 @@ void Distant_irradiance_trace_sky_pass::execute(
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_normal_handle),
       .kind = graphics::Descriptor_kind::sampled}});
-  recorder.push_buffer_reference(
-    24,
-    scene_uniform_buffer,
-    _inputs.scene_uniform_offset + scene_sky_irradiance_offset);
   recorder.push_buffer_reference(32, sample_buffer, 12);
   recorder.push_buffer_reference(40, _inputs.rt_block_grid_buffer);
   recorder.push_buffer_reference(
@@ -261,10 +256,69 @@ void Distant_irradiance_trace_sky_pass::execute(
     56, rt_entity_binning_buffer, _inputs.rt_entity_binning_grid_offset);
   recorder.push_buffer_reference(
     64, rt_entity_binning_buffer, _inputs.rt_entity_binning_nodes_offset);
+  recorder.dispatch_indirect({.buffer = sample_buffer, .offset = 0});
+}
+
+Distant_irradiance_trace_brdf_pass::Distant_irradiance_trace_brdf_pass(
+  rc::Strong<graphics::Compute_pipeline> pipeline,
+  Distant_irradiance_trace_pass_inputs inputs,
+  render_graph::Symbolic_image sky_view_lut)
+    : _pipeline{std::move(pipeline)},
+      _inputs{std::move(inputs)},
+      _sky_view_lut{sky_view_lut} {}
+
+void Distant_irradiance_trace_brdf_pass::declare(
+  render_graph::Builder &builder) {
+  // See Distant_irradiance_light_pick_pass::declare's comment.
+  _depth_handle = builder.read(
+    _inputs.depth_render_target, render_graph::access::compute_sampled_read);
+  _normal_handle = builder.read(
+    _inputs.normal_render_target, render_graph::access::compute_sampled_read);
+  _sky_view_lut_handle = builder.read(
+    _sky_view_lut, render_graph::access::compute_sampled_read);
+  _scene_uniform_handle = builder.read(
+    _inputs.scene_uniform_buffer, render_graph::access::compute_storage_read);
+  _rt_entity_binning_handle = builder.read(
+    _inputs.rt_entity_binning_buffer,
+    render_graph::access::compute_storage_read);
+  _sample_handle = builder.read(_inputs.sample_buffer, trace_read_access);
+  _distant_irradiance_handle = builder.write(
+    _inputs.raw_distant_irradiance_render_target,
+    render_graph::access::compute_storage_write);
+}
+
+void Distant_irradiance_trace_brdf_pass::execute(
+  graphics::Work_recorder &recorder, render_graph::Resources &resources) {
+  auto const &scene_uniform_buffer = resources.get_buffer(_scene_uniform_handle);
+  auto const &sample_buffer = resources.get_buffer(_sample_handle);
+  auto const &rt_entity_binning_buffer =
+    resources.get_buffer(_rt_entity_binning_handle);
+  recorder.bind_compute_pipeline(_pipeline);
+  recorder.push_buffer_reference(
+    0, scene_uniform_buffer, _inputs.scene_uniform_offset);
   recorder.push_descriptors(
-    72,
-    {{.image = resources.get_image(_luminance_handle),
-      .kind = graphics::Descriptor_kind::storage}});
+    8,
+    {{.image = resources.get_image(_depth_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_distant_irradiance_handle),
+      .kind = graphics::Descriptor_kind::storage},
+     {.image = _inputs.transmittance_lut,
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_sky_view_lut_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_normal_handle),
+      .kind = graphics::Descriptor_kind::sampled}});
+  recorder.push_buffer_reference(24, sample_buffer, 12);
+  recorder.push_buffer_reference(32, _inputs.rt_block_grid_buffer);
+  recorder.push_buffer_reference(
+    64, _inputs.rt_block_grid_buffer, _inputs.rt_block_material_grid_offset);
+  recorder.push_buffer_reference(
+    72, rt_entity_binning_buffer, _inputs.rt_entity_binning_mask_offset);
+  recorder.push_buffer_reference(40, _inputs.rt_entity_buffer);
+  recorder.push_buffer_reference(
+    48, rt_entity_binning_buffer, _inputs.rt_entity_binning_grid_offset);
+  recorder.push_buffer_reference(
+    56, rt_entity_binning_buffer, _inputs.rt_entity_binning_nodes_offset);
   recorder.dispatch_indirect({.buffer = sample_buffer, .offset = 0});
 }
 
@@ -274,9 +328,9 @@ Distant_irradiance_temporal_pass::Distant_irradiance_temporal_pass(
     : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
 void Distant_irradiance_temporal_pass::declare(render_graph::Builder &builder) {
-  // depth/normal/motion_vector: written by Gbuffer_pass -- see Distant_
-  // irradiance_pass1::declare's comment. previous_*: last frame's already-
-  // retired data, no this-frame barrier applies.
+  // depth/normal/motion_vector: written by Gbuffer_pass -- see
+  // Distant_irradiance_light_pick_pass::declare's comment. previous_*:
+  // last frame's already-retired data, no this-frame barrier applies.
   _depth_handle = builder.read(
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);
   _normal_handle = builder.read(
@@ -287,8 +341,8 @@ void Distant_irradiance_temporal_pass::declare(render_graph::Builder &builder) {
   _raw_distant_irradiance_handle = builder.read(
     _inputs.raw_distant_irradiance_render_target,
     render_graph::access::compute_sampled_read);
-  _raw_luminance_handle = builder.read(
-    _inputs.raw_distant_irradiance_luminance_render_target,
+  _raw_brdf_distant_irradiance_handle = builder.read(
+    _inputs.raw_brdf_distant_irradiance_render_target,
     render_graph::access::compute_sampled_read);
   _distant_irradiance_handle = builder.write(
     _inputs.distant_irradiance_render_target,
@@ -312,7 +366,7 @@ void Distant_irradiance_temporal_pass::execute(
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_raw_distant_irradiance_handle),
       .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_raw_luminance_handle),
+     {.image = resources.get_image(_raw_brdf_distant_irradiance_handle),
       .kind = graphics::Descriptor_kind::sampled},
      {.image = _inputs.previous_depth_render_target,
       .kind = graphics::Descriptor_kind::sampled},
@@ -375,8 +429,8 @@ Distant_irradiance_spatial_filter_pass::Distant_irradiance_spatial_filter_pass(
 
 void Distant_irradiance_spatial_filter_pass::declare(
   render_graph::Builder &builder) {
-  // depth/normal/gradient: written by Gbuffer_pass -- see Distant_
-  // irradiance_pass1::declare's comment.
+  // depth/normal/gradient: written by Gbuffer_pass -- see
+  // Distant_irradiance_light_pick_pass::declare's comment.
   _depth_handle = builder.read(
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);
   _normal_handle = builder.read(

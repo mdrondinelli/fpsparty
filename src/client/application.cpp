@@ -224,6 +224,8 @@ public:
           "./assets/shaders/distant_irradiance_trace_sun.comp.spv")},
         _distant_irradiance_trace_sky_compute_shader{graphics::load_shader(
           "./assets/shaders/distant_irradiance_trace_sky.comp.spv")},
+        _distant_irradiance_trace_brdf_compute_shader{graphics::load_shader(
+          "./assets/shaders/distant_irradiance_trace_brdf.comp.spv")},
         _distant_irradiance_temporal_compute_shader{graphics::load_shader(
           "./assets/shaders/distant_irradiance_temporal.comp.spv")},
         _distant_irradiance_variance_compute_shader{graphics::load_shader(
@@ -252,6 +254,10 @@ public:
         _distant_irradiance_trace_sky_pipeline{
           _graphics.create_compute_pipeline(
             {.shader = &_distant_irradiance_trace_sky_compute_shader, .debug_name = "distant_irradiance_trace_sky"})},
+        _distant_irradiance_trace_brdf_pipeline{
+          _graphics.create_compute_pipeline(
+            {.shader = &_distant_irradiance_trace_brdf_compute_shader,
+             .debug_name = "distant_irradiance_trace_brdf"})},
         _distant_irradiance_temporal_pipeline{
           _graphics.create_compute_pipeline(
             {.shader = &_distant_irradiance_temporal_compute_shader, .debug_name = "distant_irradiance_temporal"})},
@@ -493,6 +499,8 @@ private:
       distant_irradiance_trace_sun_pass;
     std::optional<passes::Distant_irradiance_trace_sky_pass>
       distant_irradiance_trace_sky_pass;
+    std::optional<passes::Distant_irradiance_trace_brdf_pass>
+      distant_irradiance_trace_brdf_pass;
     std::optional<passes::Distant_irradiance_temporal_pass>
       distant_irradiance_temporal_pass;
     std::optional<passes::Distant_irradiance_variance_pass>
@@ -529,6 +537,7 @@ private:
           passes::Distant_irradiance_sample_clear_pass_inputs{
             .sun_sample_buffer = _distant_light_sample_buffer_sun_symbol,
             .sky_sample_buffer = _distant_light_sample_buffer_sky_symbol,
+            .brdf_sample_buffer = _distant_light_sample_buffer_brdf_symbol,
           });
         _graph.add_pass(*distant_irradiance_sample_clear_pass);
         distant_irradiance_light_pick_pass.emplace(
@@ -543,6 +552,7 @@ private:
             .scene_uniform_offset = scene_uniform_offset,
             .sun_sample_buffer = _distant_light_sample_buffer_sun_symbol,
             .sky_sample_buffer = _distant_light_sample_buffer_sky_symbol,
+            .brdf_sample_buffer = _distant_light_sample_buffer_brdf_symbol,
             .framebuffer_size = framebuffer_size,
             .frame_number = _frame_number,
           });
@@ -552,6 +562,7 @@ private:
           passes::Distant_irradiance_indirect_args_pass_inputs{
             .sun_sample_buffer = _distant_light_sample_buffer_sun_symbol,
             .sky_sample_buffer = _distant_light_sample_buffer_sky_symbol,
+            .brdf_sample_buffer = _distant_light_sample_buffer_brdf_symbol,
           });
         _graph.add_pass(*distant_irradiance_indirect_args_pass);
         auto const shared_trace_inputs = passes::Distant_irradiance_trace_pass_inputs{
@@ -572,8 +583,6 @@ private:
           .rt_entity_binning_mask_offset = layout.mask_offset,
           .rt_entity_binning_grid_offset = layout.grid_offset,
           .rt_entity_binning_nodes_offset = layout.nodes_offset,
-          .raw_distant_irradiance_luminance_render_target =
-            _distant_irradiance_raw_luminance_render_target_symbol,
         };
         auto sun_trace_inputs = shared_trace_inputs;
         sun_trace_inputs.sample_buffer = _distant_light_sample_buffer_sun_symbol;
@@ -595,10 +604,18 @@ private:
           sun_trace_handle,
           sky_trace_handle,
           _distant_irradiance_raw_render_target_symbol);
-        _graph.set_disjoint(
-          sun_trace_handle,
-          sky_trace_handle,
-          _distant_irradiance_raw_luminance_render_target_symbol);
+        // Technique B: one BRDF ray per valid pixel, into its own target,
+        // so it conflicts with neither trace above.
+        auto brdf_trace_inputs = shared_trace_inputs;
+        brdf_trace_inputs.sample_buffer =
+          _distant_light_sample_buffer_brdf_symbol;
+        brdf_trace_inputs.raw_distant_irradiance_render_target =
+          _distant_irradiance_raw_brdf_render_target_symbol;
+        distant_irradiance_trace_brdf_pass.emplace(
+          _distant_irradiance_trace_brdf_pipeline,
+          std::move(brdf_trace_inputs),
+          _sky_view_lut_symbol);
+        _graph.add_pass(*distant_irradiance_trace_brdf_pass);
         distant_irradiance_temporal_pass.emplace(
           _distant_irradiance_temporal_pipeline,
           passes::Distant_irradiance_temporal_pass_inputs{
@@ -613,8 +630,8 @@ private:
             .motion_vector_render_target = _motion_vector_render_target_symbol,
             .raw_distant_irradiance_render_target =
               _distant_irradiance_raw_render_target_symbol,
-            .raw_distant_irradiance_luminance_render_target =
-              _distant_irradiance_raw_luminance_render_target_symbol,
+            .raw_brdf_distant_irradiance_render_target =
+              _distant_irradiance_raw_brdf_render_target_symbol,
             .previous_distant_irradiance_render_target =
               _distant_irradiance_render_targets[(_frame_number + 1) % 2],
             .previous_distant_irradiance_luminance_render_target =
@@ -746,8 +763,8 @@ private:
         {_swapchain_image_symbol, swapchain_image},
         {_distant_irradiance_raw_render_target_symbol,
          _distant_irradiance_raw_render_target},
-        {_distant_irradiance_raw_luminance_render_target_symbol,
-         _distant_irradiance_raw_luminance_render_target},
+        {_distant_irradiance_raw_brdf_render_target_symbol,
+         _distant_irradiance_raw_brdf_render_target},
         {_distant_irradiance_render_target_symbols[0],
          _distant_irradiance_render_targets[0]},
         {_distant_irradiance_render_target_symbols[1],
@@ -770,6 +787,8 @@ private:
         {_scene_uniform_buffer_symbol, _scene_uniform_buffer},
         {_distant_light_sample_buffer_sun_symbol, _distant_light_sample_buffer_sun},
         {_distant_light_sample_buffer_sky_symbol, _distant_light_sample_buffer_sky},
+        {_distant_light_sample_buffer_brdf_symbol,
+         _distant_light_sample_buffer_brdf},
         {_rt_entity_binning_buffer_symbols[0], _rt_entity_binning_buffers[0]},
         {_rt_entity_binning_buffer_symbols[1], _rt_entity_binning_buffers[1]},
       });
@@ -1068,9 +1087,11 @@ private:
         graphics::Image_layout::undefined,
         graphics::Image_layout::general,
         _distant_irradiance_raw_render_target);
-      _distant_irradiance_raw_luminance_render_target = _graphics.create_image({
+      // Technique B's raw estimate. Same format as technique A's -- the
+      // temporal pass sums the two.
+      _distant_irradiance_raw_brdf_render_target = _graphics.create_image({
         .dimensionality = 2,
-        .format = graphics::Image_format::r32g32_sfloat,
+        .format = graphics::Image_format::r16g16b16a16_sfloat,
         .extent = extent,
         .mip_level_count = 1,
         .array_layer_count = 1,
@@ -1082,7 +1103,7 @@ private:
         compute_shader_storage_write_scope,
         graphics::Image_layout::undefined,
         graphics::Image_layout::general,
-        _distant_irradiance_raw_luminance_render_target);
+        _distant_irradiance_raw_brdf_render_target);
       for (auto i = std::size_t{}; i != 2; ++i) {
         _distant_irradiance_render_targets[i] = _graphics.create_image({
           .dimensionality = 2,
@@ -1195,8 +1216,19 @@ private:
       auto const pixel_count =
         static_cast<std::size_t>(extent.x()) *
         static_cast<std::size_t>(extent.y());
-      auto const buffer_size = std::size_t{16} + pixel_count * std::size_t{8};
+      // 12 bytes is Distant_light_sample under scalar layout -- pixel, uv,
+      // and the picked probability the traces need to form their MIS
+      // denominators. The 16 is the indirect dispatch args plus the count.
+      auto const buffer_size = std::size_t{16} + pixel_count * std::size_t{12};
       _distant_light_sample_buffer_sun = _graphics.create_buffer({
+        .size = buffer_size,
+        .usage = graphics::Buffer_usage_flag_bits::shader_device_address |
+                 graphics::Buffer_usage_flag_bits::transfer_dst |
+                 graphics::Buffer_usage_flag_bits::indirect_buffer,
+        .mapping_mode = graphics::Mapping_mode::none,
+        .min_alignment = 4,
+      });
+      _distant_light_sample_buffer_brdf = _graphics.create_buffer({
         .size = buffer_size,
         .usage = graphics::Buffer_usage_flag_bits::shader_device_address |
                  graphics::Buffer_usage_flag_bits::transfer_dst |
@@ -1560,7 +1592,7 @@ private:
   // recomputed every frame, read once (by the temporal accumulation pass)
   // -- see distant_irradiance_temporal.comp.
   rc::Strong<graphics::Image> _distant_irradiance_raw_render_target{};
-  rc::Strong<graphics::Image> _distant_irradiance_raw_luminance_render_target{};
+  rc::Strong<graphics::Image> _distant_irradiance_raw_brdf_render_target{};
   // Temporally accumulated color + history_length (in .a), ping-ponged:
   // [_frame_number % 2] is written this frame by the temporal pass; the
   // other holds last frame's data for reprojection -- see apply_distant_
@@ -1588,6 +1620,7 @@ private:
     _distant_irradiance_filtered_render_targets{};
   rc::Strong<graphics::Buffer> _distant_light_sample_buffer_sun{};
   rc::Strong<graphics::Buffer> _distant_light_sample_buffer_sky{};
+  rc::Strong<graphics::Buffer> _distant_light_sample_buffer_brdf{};
   math::ivec3 _distant_light_sample_buffer_extent{};
   rc::Strong<graphics::Image> _crosshair_mask_render_target{};
   graphics::Shader _grid_vertex_shader;
@@ -1603,6 +1636,7 @@ private:
   graphics::Shader _distant_irradiance_light_pick_compute_shader;
   graphics::Shader _distant_irradiance_trace_sun_compute_shader;
   graphics::Shader _distant_irradiance_trace_sky_compute_shader;
+  graphics::Shader _distant_irradiance_trace_brdf_compute_shader;
   graphics::Shader _distant_irradiance_temporal_compute_shader;
   graphics::Shader _distant_irradiance_variance_compute_shader;
   graphics::Shader _distant_irradiance_spatial_filter_compute_shader;
@@ -1637,7 +1671,7 @@ private:
   render_graph::Symbolic_image _distant_irradiance_raw_render_target_symbol{
     _graph.allocate_image_symbol()};
   render_graph::Symbolic_image
-    _distant_irradiance_raw_luminance_render_target_symbol{
+    _distant_irradiance_raw_brdf_render_target_symbol{
       _graph.allocate_image_symbol()};
   std::array<render_graph::Symbolic_image, 2>
     _distant_irradiance_render_target_symbols{
@@ -1661,6 +1695,8 @@ private:
     _graph.allocate_buffer_symbol()};
   render_graph::Symbolic_buffer _distant_light_sample_buffer_sun_symbol{
     _graph.allocate_buffer_symbol()};
+  render_graph::Symbolic_buffer _distant_light_sample_buffer_brdf_symbol{
+    _graph.allocate_buffer_symbol()};
   render_graph::Symbolic_buffer _distant_light_sample_buffer_sky_symbol{
     _graph.allocate_buffer_symbol()};
   std::array<render_graph::Symbolic_buffer, max_frames_in_flight>
@@ -1669,6 +1705,8 @@ private:
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_light_pick_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_trace_sun_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_trace_sky_pipeline{};
+  rc::Strong<graphics::Compute_pipeline>
+    _distant_irradiance_trace_brdf_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_temporal_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _distant_irradiance_variance_pipeline{};
   rc::Strong<graphics::Compute_pipeline>

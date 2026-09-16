@@ -3,6 +3,7 @@
 
 #include "descriptors.glsl"
 #include "gbuffer.glsl"
+#include "intersectors.glsl"
 #include "numbers.glsl"
 #include "scene.glsl"
 #include "atmosphere/atmosphere.glsl"
@@ -18,7 +19,98 @@ struct Distant_light_sample {
   uint pixel;
   // The random variables generated for the sample, packed via packUnorm2x16.
   uint uv;
+  // The probability the picker gave the sun at this pixel. Carried rather
+  // than re-derived: every trace needs it to form the MIS denominators
+  // below, and re-deriving costs a transmittance lookup and a sky
+  // irradiance sample per ray.
+  float p_sun;
 };
+
+// Direct distant lighting is estimated by multiple importance sampling over
+// two techniques, each of which can produce any direction:
+//
+//   A -- the light-picking ray. Cone-samples the sun with probability
+//        p_sun, cosine-samples otherwise, and evaluates only the light it
+//        picked.
+//   B -- the BRDF ray. Always cosine-samples, and accounts for every
+//        emitter along the direction it chose.
+//
+// One ray of each is traced per pixel, and the estimate is the sum of the
+// terms they produce:
+//
+//   E = sum over terms of  V(w) * L_l(w) * cos(w) / D_l(w)
+//
+// for the emitter l a term is evaluating, V its visibility, and D_l the
+// density below. A contributes one term, written by
+// distant_irradiance_trace_sun.comp or distant_irradiance_trace_sky.comp
+// according to the pick. B contributes one per emitter, both written by
+// distant_irradiance_trace_brdf.comp. The two techniques write separate
+// render targets, and distant_irradiance_temporal.comp sums them.
+//
+// Under the balance heuristic a technique's weight divided by its own
+// sampling density collapses to one over the summed density of every
+// technique that could have produced that direction. So no weights appear
+// anywhere -- only the densities below.
+//
+// cos_theta is max(dot(n, w_i), 0.0) for the sampled direction. Where it is
+// zero the integrand and the density vanish together, so callers skip the
+// term rather than evaluate 0/0.
+
+// A contributes p_sun / sun_solid_angle inside the cone (and cannot produce
+// the direction otherwise); B contributes the cosine density.
+float distant_irradiance_sun_density(float p_sun, float cos_theta) {
+  return p_sun / sun_solid_angle + cos_theta / pi;
+}
+
+// Both techniques cosine-sample the sky, so their densities differ only in
+// how often each fires: p_sky for A against 1 for B.
+float distant_irradiance_sky_density(float p_sun, float cos_theta) {
+  const float p_sky = 1.0 - p_sun;
+  return (1.0 + p_sky) * cos_theta / pi;
+}
+
+// Where the primary ray landed for one pixel, rebuilt from the G-buffer:
+// the three traces all start here and differ only in the direction they
+// pick and the term they contribute.
+struct Distant_irradiance_shading_point {
+  // World-space position on the surface, and the normal the cosine factor
+  // is taken against.
+  vec3 position;
+  vec3 normal;
+  // position nudged off the surface along the normal -- shadow rays start
+  // here so they do not immediately re-hit the surface they left.
+  vec3 ray_origin;
+};
+
+// A sample's pixel field is a flat row-major index into the frame.
+ivec2 distant_light_sample_pixel(
+    Distant_light_sample light_sample, ivec2 size) {
+  return ivec2(
+    int(light_sample.pixel % uint(size.x)),
+    int(light_sample.pixel / uint(size.x)));
+}
+
+Distant_irradiance_shading_point distant_irradiance_shading_point(
+    Scene scene,
+    uint depth_texture,
+    uint normal_texture,
+    ivec2 pixel,
+    ivec2 size) {
+  const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
+  const vec3 view_ray_origin = scene.camera_basis[3].xyz;
+  const vec3 view_ray_direction =
+    vec3(-ndc.x * scene.zoom.x, -ndc.y * scene.zoom.y, 1.0);
+  const Gbuffer_sample g = gbuffer_decode(
+    texelFetch(sampled_images[depth_texture], pixel, 0).x,
+    scene.z_near,
+    texelFetch(sampled_images[normal_texture], pixel, 0).xy,
+    0.0);
+  const vec3 position =
+    view_ray_origin +
+    mat3(scene.camera_basis) * (view_ray_direction * g.linear_depth);
+  return Distant_irradiance_shading_point(
+    position, g.normal, offset_ray_origin(position, g.normal));
+}
 
 layout(scalar, buffer_reference, buffer_reference_align = 4)
 restrict buffer Distant_light_samples {

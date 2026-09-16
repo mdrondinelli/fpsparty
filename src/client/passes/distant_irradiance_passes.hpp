@@ -20,6 +20,7 @@ namespace fpsparty::client::passes {
 struct Distant_irradiance_sample_clear_pass_inputs {
   render_graph::Symbolic_buffer sun_sample_buffer;
   render_graph::Symbolic_buffer sky_sample_buffer;
+  render_graph::Symbolic_buffer brdf_sample_buffer;
 };
 
 class Distant_irradiance_sample_clear_pass : public render_graph::Node {
@@ -37,14 +38,19 @@ private:
   Distant_irradiance_sample_clear_pass_inputs _inputs;
   render_graph::Resource_handle _sun_sample_handle{};
   render_graph::Resource_handle _sky_sample_handle{};
+  render_graph::Resource_handle _brdf_sample_handle{};
 };
 
-// Pass 1: light picking. Chooses sun or sky per pixel with probability
-// proportional to each one's analytically integrated unshadowed
-// contribution, and appends the pixel to that light's sample buffer.
-// The trace passes divide by the selection probability with no MIS
-// weight, which is unbiased only because the two emitters are disjoint --
-// the sky view LUT carries in-scattered light, never the solar disc.
+// Light picking, and the sample lists for both MIS techniques.
+//
+// Technique A is the picked ray: sun or sky with probability proportional
+// to each one's analytically integrated unshadowed contribution, appended
+// to that light's sample buffer. Technique B is one cosine-weighted BRDF
+// ray per valid pixel, appended unconditionally to a third buffer.
+//
+// The picked probability is stored in each sample so the traces can form
+// the MIS denominators without re-deriving it -- see
+// distant_irradiance_common.glsl.
 struct Distant_irradiance_light_pick_pass_inputs {
   // Hardware depth attachment (reverse-Z, sampled directly -- see
   // gbuffer.glsl) and oct-encoded normal (r16g16_sfloat). No gradient
@@ -59,6 +65,7 @@ struct Distant_irradiance_light_pick_pass_inputs {
   std::size_t scene_uniform_offset;
   render_graph::Symbolic_buffer sun_sample_buffer;
   render_graph::Symbolic_buffer sky_sample_buffer;
+  render_graph::Symbolic_buffer brdf_sample_buffer;
   math::ivec2 framebuffer_size;
   u32 frame_number;
 };
@@ -84,13 +91,15 @@ private:
   render_graph::Resource_handle _scene_uniform_handle{};
   render_graph::Resource_handle _sun_sample_handle{};
   render_graph::Resource_handle _sky_sample_handle{};
+  render_graph::Resource_handle _brdf_sample_handle{};
 };
 
 // Turns the light-pick pass's atomic sample counts into indirect dispatch
-// args for the trace passes below, in place in the same two buffers.
+// args for the trace passes below, in place in the same three buffers.
 struct Distant_irradiance_indirect_args_pass_inputs {
   render_graph::Symbolic_buffer sun_sample_buffer;
   render_graph::Symbolic_buffer sky_sample_buffer;
+  render_graph::Symbolic_buffer brdf_sample_buffer;
 };
 
 class Distant_irradiance_indirect_args_pass : public render_graph::Node {
@@ -110,15 +119,14 @@ private:
   Distant_irradiance_indirect_args_pass_inputs _inputs;
   render_graph::Resource_handle _sun_sample_handle{};
   render_graph::Resource_handle _sky_sample_handle{};
+  render_graph::Resource_handle _brdf_sample_handle{};
 };
 
-// Shared by both trace passes below. rt_entity_buffer/rt_block_grid_
+// Shared by all three trace passes below. rt_entity_buffer/rt_block_grid_
 // buffer/transmittance_lut are unsymbolized: never written within any
-// frame's graph. Trace only produces this frame's raw, unblended
-// estimate now -- no history/reprojection here, no previous_*/motion_
-// vector fields -- see Distant_irradiance_temporal_pass_inputs below
-// for where temporal accumulation happens. No gradient needed here
-// either -- only the a-trous filter uses it.
+// frame's graph. A trace produces one frame's raw, unblended estimate;
+// Distant_irradiance_temporal_pass sums the techniques and accumulates.
+// No gradient is needed here -- only the a-trous filter uses it.
 struct Distant_irradiance_trace_pass_inputs {
   render_graph::Symbolic_image depth_render_target;
   render_graph::Symbolic_image normal_render_target;
@@ -136,7 +144,6 @@ struct Distant_irradiance_trace_pass_inputs {
   std::size_t rt_entity_binning_mask_offset;
   std::size_t rt_entity_binning_grid_offset;
   std::size_t rt_entity_binning_nodes_offset;
-  render_graph::Symbolic_image raw_distant_irradiance_luminance_render_target;
 };
 
 class Distant_irradiance_trace_sun_pass : public render_graph::Node {
@@ -160,7 +167,6 @@ private:
   render_graph::Resource_handle _rt_entity_binning_handle{};
   render_graph::Resource_handle _sample_handle{};
   render_graph::Resource_handle _distant_irradiance_handle{};
-  render_graph::Resource_handle _luminance_handle{};
 };
 
 class Distant_irradiance_trace_sky_pass : public render_graph::Node {
@@ -187,14 +193,41 @@ private:
   render_graph::Resource_handle _rt_entity_binning_handle{};
   render_graph::Resource_handle _sample_handle{};
   render_graph::Resource_handle _distant_irradiance_handle{};
-  render_graph::Resource_handle _luminance_handle{};
+};
+
+// Technique B of the MIS estimate: one cosine-weighted BRDF ray per valid
+// pixel, accounting for every emitter along the direction it chose. See
+// distant_irradiance_trace_brdf.comp.
+class Distant_irradiance_trace_brdf_pass : public render_graph::Node {
+public:
+  Distant_irradiance_trace_brdf_pass(
+    rc::Strong<graphics::Compute_pipeline> pipeline,
+    Distant_irradiance_trace_pass_inputs inputs,
+    render_graph::Symbolic_image sky_view_lut);
+
+  void declare(render_graph::Builder &builder) override;
+
+  void execute(
+    graphics::Work_recorder &recorder,
+    render_graph::Resources &resources) override;
+
+private:
+  rc::Strong<graphics::Compute_pipeline> _pipeline;
+  Distant_irradiance_trace_pass_inputs _inputs;
+  render_graph::Symbolic_image _sky_view_lut;
+  render_graph::Resource_handle _depth_handle{};
+  render_graph::Resource_handle _normal_handle{};
+  render_graph::Resource_handle _sky_view_lut_handle{};
+  render_graph::Resource_handle _scene_uniform_handle{};
+  render_graph::Resource_handle _rt_entity_binning_handle{};
+  render_graph::Resource_handle _sample_handle{};
+  render_graph::Resource_handle _distant_irradiance_handle{};
 };
 
 // Reprojects and temporally accumulates the raw trace output against last
 // frame's accumulated history -- see distant_irradiance_temporal.comp.
 // previous_* fields are unsymbolized: last frame's already-retired data,
-// no this-frame barrier applies (same convention the trace passes used to
-// use for these before this pass existed). No gradient needed -- the
+// so no this-frame barrier applies. No gradient needed -- the
 // history-reject check only compares depth and normal.
 struct Distant_irradiance_temporal_pass_inputs {
   render_graph::Symbolic_image depth_render_target;
@@ -205,8 +238,10 @@ struct Distant_irradiance_temporal_pass_inputs {
   // values above -- see gbuffer.glsl.
   float z_near;
   render_graph::Symbolic_image motion_vector_render_target;
+  // One per MIS technique: A's picked ray and B's BRDF ray. Summed, not
+  // averaged -- each technique estimates the whole integral.
   render_graph::Symbolic_image raw_distant_irradiance_render_target;
-  render_graph::Symbolic_image raw_distant_irradiance_luminance_render_target;
+  render_graph::Symbolic_image raw_brdf_distant_irradiance_render_target;
   rc::Strong<graphics::Image const> previous_distant_irradiance_render_target;
   rc::Strong<graphics::Image const>
     previous_distant_irradiance_luminance_render_target;
@@ -235,7 +270,7 @@ private:
   render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _motion_vector_handle{};
   render_graph::Resource_handle _raw_distant_irradiance_handle{};
-  render_graph::Resource_handle _raw_luminance_handle{};
+  render_graph::Resource_handle _raw_brdf_distant_irradiance_handle{};
   render_graph::Resource_handle _distant_irradiance_handle{};
   render_graph::Resource_handle _luminance_handle{};
 };

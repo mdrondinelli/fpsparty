@@ -42,6 +42,7 @@ shaders=(
   distant_irradiance_light_pick.comp
   distant_irradiance_trace_sun.comp
   distant_irradiance_trace_sky.comp
+  distant_irradiance_trace_brdf.comp
   distant_irradiance_temporal.comp
   distant_irradiance_variance.comp
   distant_irradiance_spatial_filter.comp
