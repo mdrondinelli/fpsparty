@@ -32,14 +32,10 @@ void main() {
   const uint pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
   bool valid = pixel.x < size.x && pixel.y < size.y;
   Gbuffer_sample g;
-  bool is_sun = false;
-  // A pair of random variables per MIS technique: light_uv samples whichever
-  // light the pick chose, brdf_uv the cosine hemisphere. Drawn in a fixed
-  // order regardless of the pick, so the BRDF ray's direction never
-  // correlates with which light was picked.
-  vec2 light_uv = vec2(0.0);
+  bool is_cone = false;
+  vec2 environment_uv = vec2(0.0);
   vec2 brdf_uv = vec2(0.0);
-  float p_sun = 0.0;
+  float p_cone = 0.0;
   if (valid) {
     g = gbuffer_decode(
       texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).x,
@@ -81,11 +77,13 @@ void main() {
     if (total == 0.0) {
       valid = false;
     } else {
-      p_sun = l_sun / total;
+      // Estimate the cone mixture weight from unshadowed sun and sky
+      // irradiance.
+      p_cone = l_sun / total;
       Random random;
       random.state = lowbias32(pixel_index) ^ lowbias32(push_constants.seed);
-      is_sun = random_float(random) < p_sun;
-      light_uv = vec2(random_float(random), random_float(random));
+      is_cone = random_float(random) < p_cone;
+      environment_uv = vec2(random_float(random), random_float(random));
       brdf_uv = vec2(random_float(random), random_float(random));
     }
   }
@@ -96,7 +94,7 @@ void main() {
   }
   barrier();
   if (valid) {
-    if (is_sun) {
+    if (is_cone) {
       atomicAdd(sun_offset, 1u);
     } else {
       atomicAdd(sky_offset, 1u);
@@ -111,20 +109,22 @@ void main() {
   }
   barrier();
   if (valid) {
-    if (is_sun) {
+    if (is_cone) {
       const uint slot = atomicAdd(sun_offset, 1u);
-      push_constants.sun_samples.samples[slot].uv = packUnorm2x16(light_uv);
+      push_constants.sun_samples.samples[slot].uv =
+        packUnorm2x16(environment_uv);
       push_constants.sun_samples.samples[slot].pixel = pixel_index;
-      push_constants.sun_samples.samples[slot].p_sun = p_sun;
+      push_constants.sun_samples.samples[slot].p_cone = p_cone;
     } else {
       const uint slot = atomicAdd(sky_offset, 1u);
-      push_constants.sky_samples.samples[slot].uv = packUnorm2x16(light_uv);
+      push_constants.sky_samples.samples[slot].uv =
+        packUnorm2x16(environment_uv);
       push_constants.sky_samples.samples[slot].pixel = pixel_index;
-      push_constants.sky_samples.samples[slot].p_sun = p_sun;
+      push_constants.sky_samples.samples[slot].p_cone = p_cone;
     }
     const uint brdf_slot = atomicAdd(brdf_offset, 1u);
     push_constants.brdf_samples.samples[brdf_slot].uv = packUnorm2x16(brdf_uv);
     push_constants.brdf_samples.samples[brdf_slot].pixel = pixel_index;
-    push_constants.brdf_samples.samples[brdf_slot].p_sun = p_sun;
+    push_constants.brdf_samples.samples[brdf_slot].p_cone = p_cone;
   }
 }

@@ -217,9 +217,9 @@ public:
           "./assets/shaders/atmosphere/sky_view.comp.spv")},
         _sky_irradiance_compute_shader{graphics::load_shader(
           "./assets/shaders/atmosphere/sky_irradiance.comp.spv")},
-        _direct_light_pick_compute_shader{
+        _direct_sample_gen_compute_shader{
           graphics::load_shader(
-            "./assets/shaders/direct_light_pick.comp.spv")},
+            "./assets/shaders/direct_sample_gen.comp.spv")},
         _direct_trace_sun_compute_shader{graphics::load_shader(
           "./assets/shaders/direct_trace_sun.comp.spv")},
         _direct_trace_sky_compute_shader{graphics::load_shader(
@@ -246,8 +246,8 @@ public:
           {.shader = &_sky_view_compute_shader, .debug_name = "sky_view"})},
         _sky_irradiance_pipeline{_graphics.create_compute_pipeline(
           {.shader = &_sky_irradiance_compute_shader, .debug_name = "sky_irradiance"})},
-        _direct_light_pick_pipeline{_graphics.create_compute_pipeline(
-          {.shader = &_direct_light_pick_compute_shader, .debug_name = "direct_light_pick"})},
+        _direct_sample_gen_pipeline{_graphics.create_compute_pipeline(
+          {.shader = &_direct_sample_gen_compute_shader, .debug_name = "direct_sample_gen"})},
         _direct_trace_sun_pipeline{
           _graphics.create_compute_pipeline(
             {.shader = &_direct_trace_sun_compute_shader, .debug_name = "direct_trace_sun"})},
@@ -492,14 +492,14 @@ private:
     }
     std::optional<passes::Direct_sample_clear_pass>
       direct_sample_clear_pass;
-    std::optional<passes::Direct_light_pick_pass> direct_light_pick_pass;
+    std::optional<passes::Direct_sample_gen_pass> direct_sample_gen_pass;
     std::optional<passes::Direct_indirect_args_pass>
       direct_indirect_args_pass;
-    std::optional<passes::Direct_trace_sun_pass>
+    std::optional<passes::Direct_trace_pass>
       direct_trace_sun_pass;
-    std::optional<passes::Direct_trace_sky_pass>
+    std::optional<passes::Direct_trace_pass>
       direct_trace_sky_pass;
-    std::optional<passes::Direct_trace_brdf_pass>
+    std::optional<passes::Direct_trace_pass>
       direct_trace_brdf_pass;
     std::optional<passes::Direct_temporal_pass>
       direct_temporal_pass;
@@ -540,9 +540,9 @@ private:
             .brdf_sample_buffer = _direct_sample_buffer_brdf_symbol,
           });
         _graph.add_pass(*direct_sample_clear_pass);
-        direct_light_pick_pass.emplace(
-          _direct_light_pick_pipeline,
-          passes::Direct_light_pick_pass_inputs{
+        direct_sample_gen_pass.emplace(
+          _direct_sample_gen_pipeline,
+          passes::Direct_sample_gen_pass_inputs{
             .depth_render_target = _depth_attachment_symbols[_frame_number % 2],
             .normal_render_target =
               _normal_render_target_symbols[_frame_number % 2],
@@ -556,7 +556,7 @@ private:
             .framebuffer_size = framebuffer_size,
             .frame_number = _frame_number,
           });
-        _graph.add_pass(*direct_light_pick_pass);
+        _graph.add_pass(*direct_sample_gen_pass);
         direct_indirect_args_pass.emplace(
           _indirect_dispatch_args_pipeline,
           passes::Direct_indirect_args_pass_inputs{
@@ -572,9 +572,9 @@ private:
           .raw_direct_irradiance_render_target =
             _direct_irradiance_raw_render_target_symbol,
           .transmittance_lut = _transmittance_lut,
+          .sky_view_lut = _sky_view_lut_symbol,
           .scene_uniform_buffer = _scene_uniform_buffer_symbol,
           .scene_uniform_offset = scene_uniform_offset,
-          .sample_buffer = {},
           .rt_block_grid_buffer = _grid_mesh->get_rt_block_grid_buffer(),
           .rt_block_material_grid_offset =
             _grid_mesh->get_rt_block_material_grid_offset(),
@@ -584,38 +584,27 @@ private:
           .rt_entity_binning_grid_offset = layout.grid_offset,
           .rt_entity_binning_nodes_offset = layout.nodes_offset,
         };
-        auto sun_trace_inputs = shared_trace_inputs;
-        sun_trace_inputs.sample_buffer = _direct_sample_buffer_sun_symbol;
-        direct_trace_sun_pass.emplace(
-          _direct_trace_sun_pipeline, std::move(sun_trace_inputs));
-        auto const sun_trace_handle =
-          _graph.add_pass(*direct_trace_sun_pass);
-        auto sky_trace_inputs = shared_trace_inputs;
-        sky_trace_inputs.sample_buffer = _direct_sample_buffer_sky_symbol;
-        direct_trace_sky_pass.emplace(
-          _direct_trace_sky_pipeline,
-          std::move(sky_trace_inputs),
-          _sky_view_lut_symbol);
-        auto const sky_trace_handle =
-          _graph.add_pass(*direct_trace_sky_pass);
-        // Pass 1 puts each pixel in exactly one sample list, so the two
-        // traces write disjoint texels of both shared targets.
+        auto const trace_variants = passes::Direct_trace_variants{
+          .sun = {_direct_trace_sun_pipeline, _direct_sample_buffer_sun_symbol},
+          .sky = {_direct_trace_sky_pipeline, _direct_sample_buffer_sky_symbol},
+          .brdf = {_direct_trace_brdf_pipeline, _direct_sample_buffer_brdf_symbol},
+        };
+        auto const add_trace =
+          [&](std::optional<passes::Direct_trace_pass> &pass,
+              passes::Direct_trace_kind kind) {
+            pass.emplace(kind, trace_variants, shared_trace_inputs);
+            return _graph.add_pass(*pass);
+          };
+        auto const sun_trace_handle = add_trace(
+          direct_trace_sun_pass, passes::Direct_trace_kind::sun);
+        auto const sky_trace_handle = add_trace(
+          direct_trace_sky_pass, passes::Direct_trace_kind::sky);
+        add_trace(direct_trace_brdf_pass, passes::Direct_trace_kind::brdf);
+        // Each environment sample belongs to exactly one of these queues.
         _graph.set_disjoint(
           sun_trace_handle,
           sky_trace_handle,
           _direct_irradiance_raw_render_target_symbol);
-        // Technique B: one BRDF ray per valid pixel, into its own target,
-        // so it conflicts with neither trace above.
-        auto brdf_trace_inputs = shared_trace_inputs;
-        brdf_trace_inputs.sample_buffer =
-          _direct_sample_buffer_brdf_symbol;
-        brdf_trace_inputs.raw_direct_irradiance_render_target =
-          _direct_irradiance_raw_brdf_render_target_symbol;
-        direct_trace_brdf_pass.emplace(
-          _direct_trace_brdf_pipeline,
-          std::move(brdf_trace_inputs),
-          _sky_view_lut_symbol);
-        _graph.add_pass(*direct_trace_brdf_pass);
         direct_temporal_pass.emplace(
           _direct_temporal_pipeline,
           passes::Direct_temporal_pass_inputs{
@@ -630,8 +619,6 @@ private:
             .motion_vector_render_target = _motion_vector_render_target_symbol,
             .raw_direct_irradiance_render_target =
               _direct_irradiance_raw_render_target_symbol,
-            .raw_brdf_direct_irradiance_render_target =
-              _direct_irradiance_raw_brdf_render_target_symbol,
             .previous_direct_irradiance_render_target =
               _direct_irradiance_render_targets[(_frame_number + 1) % 2],
             .previous_direct_luminance_render_target =
@@ -763,8 +750,6 @@ private:
         {_swapchain_image_symbol, swapchain_image},
         {_direct_irradiance_raw_render_target_symbol,
          _direct_irradiance_raw_render_target},
-        {_direct_irradiance_raw_brdf_render_target_symbol,
-         _direct_irradiance_raw_brdf_render_target},
         {_direct_irradiance_render_target_symbols[0],
          _direct_irradiance_render_targets[0]},
         {_direct_irradiance_render_target_symbols[1],
@@ -1087,23 +1072,6 @@ private:
         graphics::Image_layout::undefined,
         graphics::Image_layout::general,
         _direct_irradiance_raw_render_target);
-      // Technique B's raw estimate. Same format as technique A's -- the
-      // temporal pass sums the two.
-      _direct_irradiance_raw_brdf_render_target = _graphics.create_image({
-        .dimensionality = 2,
-        .format = graphics::Image_format::r16g16b16a16_sfloat,
-        .extent = extent,
-        .mip_level_count = 1,
-        .array_layer_count = 1,
-        .usage = graphics::Image_usage_flag_bits::sampled |
-                 graphics::Image_usage_flag_bits::storage,
-      });
-      work_recorder.transition_image_layout(
-        {},
-        compute_shader_storage_write_scope,
-        graphics::Image_layout::undefined,
-        graphics::Image_layout::general,
-        _direct_irradiance_raw_brdf_render_target);
       for (auto i = std::size_t{}; i != 2; ++i) {
         _direct_irradiance_render_targets[i] = _graphics.create_image({
           .dimensionality = 2,
@@ -1190,25 +1158,7 @@ private:
     }
   }
 
-  // Worst-case-sized buffers for direct_light_pick.comp to
-  // append Direct_sample records into and the trace shaders,
-  // direct_trace_sun.comp / direct_trace_sky.comp,
-  // to read back -- see
-  // direct_common.glsl. Layout: a 12-byte VkDispatchIndirectCommand
-  // {x, y, z} (written every frame by indirect_dispatch_args.comp from the
-  // count below, then read by the trace pass's dispatch_indirect) followed
-  // by the 4-byte count and the Direct_sample array -- i.e. what the
-  // shaders see as Direct_samples (count + samples[]) starts 12 bytes
-  // into the buffer, not at its start. Each buffer is sized for every pixel
-  // picking that buffer's technique (12-byte indirect command + 4-byte count
-  // header plus one Direct_sample -- packed pixel + uv, 8 bytes --
-  // per pixel), since light picking can send any pixel to either buffer
-  // and never produces more than one sample per pixel total; the two
-  // buffers' counts can never both hit their individual worst case at
-  // once, but each must be able to alone. count is reset to 0 every frame
-  // via fill_buffer, not recreated -- no need to clear the sample data
-  // itself, since the trace shaders only read indices below whatever
-  // count light picking ends up with.
+  // Each queue has capacity for one sample per framebuffer pixel.
   void get_direct_sample_buffer(math::ivec3 extent) {
     auto const create_buffers = !_direct_sample_buffer_sun ||
       _direct_sample_buffer_extent != extent;
@@ -1216,34 +1166,21 @@ private:
       auto const pixel_count =
         static_cast<std::size_t>(extent.x()) *
         static_cast<std::size_t>(extent.y());
-      // 12 bytes is Direct_sample under scalar layout -- pixel, uv,
-      // and the picked probability the traces need to form their MIS
-      // denominators. The 16 is the indirect dispatch args plus the count.
-      auto const buffer_size = std::size_t{16} + pixel_count * std::size_t{12};
-      _direct_sample_buffer_sun = _graphics.create_buffer({
-        .size = buffer_size,
-        .usage = graphics::Buffer_usage_flag_bits::shader_device_address |
-                 graphics::Buffer_usage_flag_bits::transfer_dst |
-                 graphics::Buffer_usage_flag_bits::indirect_buffer,
-        .mapping_mode = graphics::Mapping_mode::none,
-        .min_alignment = 4,
-      });
-      _direct_sample_buffer_brdf = _graphics.create_buffer({
-        .size = buffer_size,
-        .usage = graphics::Buffer_usage_flag_bits::shader_device_address |
-                 graphics::Buffer_usage_flag_bits::transfer_dst |
-                 graphics::Buffer_usage_flag_bits::indirect_buffer,
-        .mapping_mode = graphics::Mapping_mode::none,
-        .min_alignment = 4,
-      });
-      _direct_sample_buffer_sky = _graphics.create_buffer({
-        .size = buffer_size,
-        .usage = graphics::Buffer_usage_flag_bits::shader_device_address |
-                 graphics::Buffer_usage_flag_bits::transfer_dst |
-                 graphics::Buffer_usage_flag_bits::indirect_buffer,
-        .mapping_mode = graphics::Mapping_mode::none,
-        .min_alignment = 4,
-      });
+      auto const buffer_size =
+        std::size_t{16} + pixel_count * std::size_t{12};
+      auto const create_sample_buffer = [&] {
+        return _graphics.create_buffer({
+          .size = buffer_size,
+          .usage = graphics::Buffer_usage_flag_bits::shader_device_address |
+                   graphics::Buffer_usage_flag_bits::transfer_dst |
+                   graphics::Buffer_usage_flag_bits::indirect_buffer,
+          .mapping_mode = graphics::Mapping_mode::none,
+          .min_alignment = 4,
+        });
+      };
+      _direct_sample_buffer_sun = create_sample_buffer();
+      _direct_sample_buffer_sky = create_sample_buffer();
+      _direct_sample_buffer_brdf = create_sample_buffer();
       _direct_sample_buffer_extent = extent;
     }
   }
@@ -1588,15 +1525,10 @@ private:
   rc::Strong<graphics::Image> _gradient_render_target{};
   rc::Strong<graphics::Image> _motion_vector_render_target{};
   rc::Strong<graphics::Image> _radiance_render_target{};
-  // This frame's raw, unblended trace-pass output; single-buffered, fully
-  // recomputed every frame, read once (by the temporal accumulation pass)
-  // -- see direct_temporal.comp.
+  // Per-frame sum of environment and BRDF contributions.
   rc::Strong<graphics::Image> _direct_irradiance_raw_render_target{};
-  rc::Strong<graphics::Image> _direct_irradiance_raw_brdf_render_target{};
-  // Temporally accumulated color + history_length (in .a), ping-ponged:
-  // [_frame_number % 2] is written this frame by the temporal pass; the
-  // other holds last frame's data for reprojection -- see
-  // apply_direct_irradiance_history. Never written by the a-trous spatial filter.
+  // Temporal irradiance and history length (alpha), ping-ponged across frames.
+  // Spatial filtering leaves these images unchanged.
   std::array<rc::Strong<graphics::Image>, 2>
     _direct_irradiance_render_targets{};
   // Temporally accumulated luminance/luminance^2 moments, ping-ponged and
@@ -1604,18 +1536,10 @@ private:
   std::array<rc::Strong<graphics::Image>, 2>
     _direct_luminance_render_targets{};
   std::optional<u32> _last_direct_frame{};
-  // Variance of the direct irradiance signal: slot [0] is
-  // direct_variance.comp's 3x3-blurred seed (derived from the
-  // luminance moments above); each a-trous iteration then reads one slot
-  // and writes its own propagated variance into the other. Ping-ponged
-  // within a frame only (same two images reused every frame), not across
-  // frames -- recomputed fresh every frame, not itself temporally
-  // accumulated.
+  // Variance is seeded from temporal moments, then ping-ponged within the frame.
   std::array<rc::Strong<graphics::Image>, 2>
     _direct_variance_render_targets{};
-  // 5x5 a-trous-filtered color, one slot per iteration (iteration 2 reads
-  // iteration 1's output, so they can't share an image) -- also recomputed
-  // fresh every frame.
+  // Spatial irradiance, ping-ponged across the five a-trous iterations.
   std::array<rc::Strong<graphics::Image>, 2>
     _direct_irradiance_filtered_render_targets{};
   rc::Strong<graphics::Buffer> _direct_sample_buffer_sun{};
@@ -1633,7 +1557,7 @@ private:
   graphics::Shader _composite_fragment_shader;
   graphics::Shader _sky_view_compute_shader;
   graphics::Shader _sky_irradiance_compute_shader;
-  graphics::Shader _direct_light_pick_compute_shader;
+  graphics::Shader _direct_sample_gen_compute_shader;
   graphics::Shader _direct_trace_sun_compute_shader;
   graphics::Shader _direct_trace_sky_compute_shader;
   graphics::Shader _direct_trace_brdf_compute_shader;
@@ -1670,9 +1594,6 @@ private:
     _graph.allocate_image_symbol()};
   render_graph::Symbolic_image _direct_irradiance_raw_render_target_symbol{
     _graph.allocate_image_symbol()};
-  render_graph::Symbolic_image
-    _direct_irradiance_raw_brdf_render_target_symbol{
-      _graph.allocate_image_symbol()};
   std::array<render_graph::Symbolic_image, 2>
     _direct_irradiance_render_target_symbols{
       _graph.allocate_image_symbol(), _graph.allocate_image_symbol()};
@@ -1702,7 +1623,7 @@ private:
   std::array<render_graph::Symbolic_buffer, max_frames_in_flight>
     _rt_entity_binning_buffer_symbols{
       _graph.allocate_buffer_symbol(), _graph.allocate_buffer_symbol()};
-  rc::Strong<graphics::Compute_pipeline> _direct_light_pick_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _direct_sample_gen_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _direct_trace_sun_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _direct_trace_sky_pipeline{};
   rc::Strong<graphics::Compute_pipeline>

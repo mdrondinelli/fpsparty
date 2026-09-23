@@ -13,72 +13,53 @@ const float sun_angular_radius = sun_angular_diameter / 2.0;
 const float cos_sun_angular_radius = cos(sun_angular_radius);
 const float sun_solid_angle = 2.0 * pi * (1.0 - cos_sun_angular_radius);
 
-// Represents either a sun or sky sample.
+// Sample queue identity determines which distribution generates the ray.
 struct Direct_sample {
-  // The pixel index of the sample.
-  uint pixel;
-  // The random variables generated for the sample, packed via packUnorm2x16.
-  uint uv;
-  // The probability the picker gave the sun at this pixel. Carried rather
-  // than re-derived: every trace needs it to form the MIS denominators
-  // below, and re-deriving costs a transmittance lookup and a sky
-  // irradiance sample per ray.
-  float p_sun;
+  uint pixel; // Flat row-major pixel index.
+  uint uv; // packUnorm2x16 random variables.
+  float p_cone; // Environment mixture weight, retained for MIS evaluation.
 };
 
-// Direct distant lighting is estimated by multiple importance sampling over
-// two techniques, each of which can produce any direction:
+// A sample is an (emitter, direction) pair, and direct irradiance is one
+// integral over that space. Two techniques produce pairs, one sample each:
 //
-//   A -- the light-picking ray. Cone-samples the sun with probability
-//        p_sun, cosine-samples otherwise, and evaluates only the light it
-//        picked.
-//   B -- the BRDF ray. Always cosine-samples, and accounts for every
-//        emitter along the direction it chose.
+//   environment  names the distant environment, then draws w_i from its
+//                own two-lobe mixture
+//                  p_env = p_cone * I_disc / sun_solid_angle
+//                        + (1 - p_cone) * cos_theta / pi
+//   brdf         draws w_i from cos_theta / pi and traces; the first
+//                emitter hit supplies the index
 //
-// One ray of each is traced per pixel, and the estimate is the sum of the
-// terms they produce:
+// Balance MIS over the two gives each sample the summed density at the
+// pair it landed on: p_env + p_brdf. No sum over emitters appears because
+// neither technique forgets which emitter it named -- other emitters have
+// density at other pairs, not this one.
 //
-//   E = sum over terms of  V(w) * L_l(w) * cos(w) / D_l(w)
+// The environment is one emitter, not two. Sun and sky are not separable
+// by direction (the sky's radiance inside the solar disc is in-scatter,
+// which the sun does not occlude), so they are lobes of its sampler
+// rather than emitters of their own, and every ray evaluates sky
+// everywhere plus sunlight inside the disc. Making p_cone per-pixel is
+// what that buys: mass follows the sun only where the sun can be seen.
 //
-// for the emitter l a term is evaluating, V its visibility, and D_l the
-// density below. A contributes one term, written by
-// direct_trace_sun.comp or direct_trace_sky.comp
-// according to the pick. B contributes one per emitter, both written by
-// direct_trace_brdf.comp. The two techniques write separate
-// render targets, and direct_temporal.comp sums them.
-//
-// Under the balance heuristic a technique's weight divided by its own
-// sampling density collapses to one over the summed density of every
-// technique that could have produced that direction. So no weights appear
-// anywhere -- only the densities below.
-//
-// cos_theta is max(dot(n, w_i), 0.0) for the sampled direction. Where it is
-// zero the integrand and the density vanish together, so callers skip the
-// term rather than evaluate 0/0.
-
-// A contributes p_sun / sun_solid_angle inside the cone (and cannot produce
-// the direction otherwise); B contributes the cosine density.
-float direct_sun_density(float p_sun, float cos_theta) {
-  return p_sun / sun_solid_angle + cos_theta / pi;
+// P(emitter) is part of the pair density, not a sample count. Here it is
+// 1: the distant environment is the only emitter estimated.
+bool direct_in_sun_disc(vec3 w_i, vec3 sun_direction) {
+  return dot(w_i, sun_direction) >= cos_sun_angular_radius;
 }
 
-// Both techniques cosine-sample the sky, so their densities differ only in
-// how often each fires: p_sky for A against 1 for B.
-float direct_sky_density(float p_sun, float cos_theta) {
-  const float p_sky = 1.0 - p_sun;
-  return (1.0 + p_sky) * cos_theta / pi;
+// Summed density of both techniques at a pair naming the environment.
+float direct_environment_mis_density(
+    float p_cone, float cos_theta, bool in_sun_disc) {
+  const float cone_density = in_sun_disc ? p_cone / sun_solid_angle : 0.0;
+  return cone_density + (2.0 - p_cone) * cos_theta / pi;
 }
 
-// Where the primary ray landed for one pixel, rebuilt from the G-buffer:
-// the three traces all start here and differ only in the direction they
-// pick and the term they contribute.
+// Primary surface reconstructed from the G-buffer, in world space.
 struct Direct_shading_point {
-  // World-space position on the surface, and the normal the cosine factor
-  // is taken against.
   vec3 position;
   vec3 normal;
-  // position nudged off the surface along the normal -- shadow rays start
-  // here so they do not immediately re-hit the surface they left.
+  // Offset along the normal to avoid self-intersection.
   vec3 ray_origin;
 };
 
@@ -134,22 +115,44 @@ vec3 eval_incident_irradiance_sky(vec3 w_i, vec3 n, Scene scene, uint sky_view_l
   return L_i * max(dot(n, w_i), 0.0);
 }
 
+// Visibility-weighted environment irradiance contribution after MIS.
+vec3 direct_environment_contribution(
+    Scene scene,
+    vec3 n,
+    float shading_altitude,
+    vec3 w_i,
+    float visibility,
+    float p_cone,
+    uint transmittance_texture,
+    uint sky_view_lut) {
+  const float cos_theta = max(dot(n, w_i), 0.0);
+  if (cos_theta <= 0.0) {
+    return vec3(0.0);
+  }
+  const bool in_sun_disc =
+    direct_in_sun_disc(w_i, scene.sun_direction);
+  vec3 integrand = eval_incident_irradiance_sky(w_i, n, scene, sky_view_lut);
+  if (in_sun_disc) {
+    const vec3 transmittance = transmittance_along_ray(
+      transmittance_texture,
+      vec3(0.0, r_ground + shading_altitude, 0.0),
+      w_i);
+    integrand +=
+      eval_incident_irradiance_sun(w_i, n, scene.sun_irradiance, transmittance);
+  }
+  return visibility * integrand /
+    direct_environment_mis_density(p_cone, cos_theta, in_sun_disc);
+}
+
 const float direct_history_depth_reject_ratio = 0.03;
 
 const float direct_history_normal_reject_cos = 0.9659;
 
-// History-length counter (frames survived reprojection, capped) drives the
-// blend weight -- alpha = 1 / history_length -- instead of a fixed
-// constant, so freshly-established history isn't over-blended and
-// long-lived history converges to a lower noise floor. Stored in the
-// direct irradiance color texture's otherwise-unused alpha channel.
+// History length is stored in irradiance alpha; blending uses 1 / length.
 const float max_direct_history_length = 30.0;
 
-// Applies temporal accumulation to the direct irradiance color and
-// luminance moments (R = luminance, G = luminance^2, for a future variance
-// estimate). Manual 4-tap bilinear (not hardware-filtered) so each tap can
-// be depth/normal-rejected individually, with its weight redistributed
-// among the survivors rather than corrupting the blend.
+// Bilinear reprojection rejects each tap by depth and normal, then
+// redistributes its weight among surviving taps.
 struct Direct_history {
   vec3 color;
   vec2 luminance_moments;

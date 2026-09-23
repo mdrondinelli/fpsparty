@@ -4,15 +4,8 @@
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
-// Runs after direct_trace_sun.comp / direct_trace_
-// sky.comp (temporal accumulation done): reads this frame's luminance
-// moments, blurs them with a 3x3 (1,2,1) gaussian, then derives variance
-// from the blurred moments. No edge-stopping weights -- just a plain
-// separable gaussian -- implemented as the standard 4-tap optimization:
-// sampling at the 4 texel-corner midpoints (+-0.5, +-0.5) with a linear-
-// filtering sampler makes the GPU's own bilinear interpolation do the
-// (1,2,1)x(1,2,1)/16 weighting, so 4 texture() taps replace the naive 9
-// texelFetch taps.
+// Blur temporal luminance moments with a 3x3 Gaussian, then derive variance.
+// Four bilinear samples implement the (1,2,1)x(1,2,1)/16 kernel.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) uint16_t depth_texture;
   layout(offset = 2) uint16_t direct_luminance_texture;
@@ -26,9 +19,7 @@ void main() {
   if (pixel.x >= size.x || pixel.y >= size.y) {
     return;
   }
-  // A pixel with no geometry (depth == 0, e.g. sky) never had its luminance
-  // moments written this frame -- light picking skips those
-  // pixels entirely -- so the texture holds stale/unrelated data there.
+  // Sky pixels do not need an irradiance variance estimate.
   const float depth = texelFetch(
     sampled_images[push_constants.depth_texture], pixel, 0).x;
   if (depth == 0.0) {

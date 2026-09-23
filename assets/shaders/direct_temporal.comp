@@ -7,29 +7,21 @@
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
-// Sums the MIS techniques' raw per-pixel estimates, then reprojects and
-// temporally accumulates the result against last frame's history via
-// apply_direct_history, writing this frame's accumulated color
-// and luminance moments.
-//
-// A full-screen pass of its own so the a-trous spatial filter downstream
-// reads the accumulated result without ever writing back into it, and so a
-// spatial pre-filter could be inserted between trace and here by
-// repointing the raw inputs below.
+// Reproject and accumulate irradiance and luminance moments. Spatial
+// filtering reads this history without modifying it.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) uint history_valid;
   layout(offset = 4) float z_near;
   layout(offset = 8) uint16_t depth_texture;
   layout(offset = 10) uint16_t normal_texture;
   layout(offset = 12) uint16_t raw_direct_irradiance_texture;
-  layout(offset = 14) uint16_t raw_brdf_direct_irradiance_texture;
-  layout(offset = 16) uint16_t previous_depth_texture;
-  layout(offset = 18) uint16_t previous_normal_texture;
-  layout(offset = 20) uint16_t previous_direct_irradiance_texture;
-  layout(offset = 22) uint16_t previous_direct_luminance_texture;
-  layout(offset = 24) uint16_t motion_vector_texture;
-  layout(offset = 26) uint16_t direct_irradiance_image;
-  layout(offset = 28) uint16_t direct_luminance_image;
+  layout(offset = 14) uint16_t previous_depth_texture;
+  layout(offset = 16) uint16_t previous_normal_texture;
+  layout(offset = 18) uint16_t previous_direct_irradiance_texture;
+  layout(offset = 20) uint16_t previous_direct_luminance_texture;
+  layout(offset = 22) uint16_t motion_vector_texture;
+  layout(offset = 24) uint16_t direct_irradiance_image;
+  layout(offset = 26) uint16_t direct_luminance_image;
 } push_constants;
 
 void main() {
@@ -53,19 +45,10 @@ void main() {
       vec4(0.0));
     return;
   }
-  // The two MIS techniques each estimate the whole integral, so their
-  // targets are summed, not averaged: technique A's light-picked ray and
-  // technique B's BRDF ray.
-  const vec3 raw_color =
-    texelFetch(
-      sampled_images[push_constants.raw_direct_irradiance_texture],
-      pixel,
-      0).rgb +
-    texelFetch(
-      sampled_images[push_constants.raw_brdf_direct_irradiance_texture],
-      pixel,
-      0).rgb;
-  // Moments describe the summed estimate, so they are taken after the sum.
+  const vec3 raw_color = texelFetch(
+    sampled_images[push_constants.raw_direct_irradiance_texture],
+    pixel,
+    0).rgb;
   const float raw_luminance = luminance(raw_color);
   const vec2 raw_luminance_moments =
     vec2(raw_luminance, raw_luminance * raw_luminance);

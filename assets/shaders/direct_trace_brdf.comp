@@ -1,27 +1,12 @@
 #version 450
 
-#include "color.glsl"
 #include "direct_common.glsl"
-#include "gbuffer.glsl"
 #include "rt.glsl"
 #include "sampling.glsl"
 
 layout(local_size_x = 64) in;
 
-// Technique B of the direct lighting estimate: one cosine-weighted BRDF ray
-// per valid pixel, alongside technique A's single light-picked ray
-// (direct_trace_sun.comp / direct_trace_sky.comp).
-//
-// Where A samples one light and evaluates only that light, B chooses a
-// direction and accounts for everything arriving along it -- the sky
-// always, and the sun as well when the direction falls inside the solar
-// cone. The two emitters carry their own MIS densities, so summing them
-// here is not double counting.
-//
-// It exists because A alone starves the sky exactly where the sky is all
-// there is: a surface facing the sun but standing in shadow gets p_sun near
-// one, so A almost always spends its ray on an occluded sun and the sky is
-// left to a rare, heavily amplified sample.
+// Cosine BRDF sample: accumulate environment irradiance.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
   layout(offset = 8) uint16_t depth_texture;
@@ -29,8 +14,8 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 12) uint16_t transmittance_texture;
   layout(offset = 14) uint16_t sky_view_lut;
   layout(offset = 16) uint16_t normal_texture;
-  // offset 20: 4 bytes unused (buffer references need 8-byte alignment).
-  layout(offset = 24) Direct_samples brdf_samples;
+  // offset 18: 6 bytes unused (buffer references need 8-byte alignment).
+  layout(offset = 24) Direct_samples samples;
   layout(offset = 32) Rt_block_shape_grid rt_block_shape_grid;
   layout(offset = 40) Rt_entities entities;
   layout(offset = 48) Rt_entity_head_grid entity_head_grid;
@@ -40,11 +25,11 @@ layout(push_constant) uniform Push_constants {
 } push_constants;
 
 void main() {
-  if (gl_GlobalInvocationID.x >= push_constants.brdf_samples.count) {
+  if (gl_GlobalInvocationID.x >= push_constants.samples.count) {
     return;
   }
   const Direct_sample light_sample =
-    push_constants.brdf_samples.samples[gl_GlobalInvocationID.x];
+    push_constants.samples.samples[gl_GlobalInvocationID.x];
   const ivec2 size =
     imageSize(storage_images[push_constants.direct_irradiance_image]);
   const ivec2 pixel = direct_sample_pixel(light_sample, size);
@@ -59,7 +44,7 @@ void main() {
   const vec3 w_i =
     make_basis(n) *
     square_to_cosine_hemisphere(unpackUnorm2x16(light_sample.uv));
-  const bool shadow_ray_hit = trace_ray(
+  const bool occluded = trace_ray(
     push_constants.rt_block_shape_grid,
     push_constants.rt_block_material_grid,
     push_constants.entities,
@@ -69,39 +54,20 @@ void main() {
     shading_point.ray_origin,
     w_i,
     true);
-  const float visibility = shadow_ray_hit ? 0.0 : 1.0;
-  const float cos_theta = max(dot(n, w_i), 0.0);
-
-  // Technique B's terms, one per emitter along w_i. Each divides by that
-  // emitter's density, so summing them is not double counting.
-  vec3 E = vec3(0.0);
-  if (cos_theta > 0.0) {
-    // The sky lies along every direction.
-    const vec3 sky_integrand =
-      visibility *
-      eval_incident_irradiance_sky(
-        w_i, n, push_constants.scene, push_constants.sky_view_lut);
-    E = sky_integrand /
-      direct_sky_density(light_sample.p_sun, cos_theta);
-    // The sun only when w_i lands on the disc, which subtends about half a
-    // degree -- roughly one ray in 45000. Its contribution is negligible,
-    // but dropping it would leave the sun's share of this technique
-    // unaccounted for while the sun ray's density still assumes it.
-    if (dot(w_i, push_constants.scene.sun_direction) >=
-        cos_sun_angular_radius) {
-      const vec3 transmittance = transmittance_along_ray(
-        push_constants.transmittance_texture,
-        vec3(0.0, r_ground + shading_point.position.y, 0.0),
-        w_i);
-      const vec3 sun_integrand =
-        visibility *
-        eval_incident_irradiance_sun(
-          w_i, n, push_constants.scene.sun_irradiance, transmittance);
-      E += sun_integrand /
-        direct_sun_density(light_sample.p_sun, cos_theta);
-    }
-  }
-
+  const vec3 E = direct_environment_contribution(
+    push_constants.scene,
+    n,
+    shading_point.position.y,
+    w_i,
+    occluded ? 0.0 : 1.0,
+    light_sample.p_cone,
+    push_constants.transmittance_texture,
+    push_constants.sky_view_lut);
+  // The environment traces have initialized this texel.
+  const vec3 environment_term =
+    imageLoad(storage_images[push_constants.direct_irradiance_image], pixel).rgb;
   imageStore(
-    storage_images[push_constants.direct_irradiance_image], pixel, vec4(E, 1.0));
+    storage_images[push_constants.direct_irradiance_image],
+    pixel,
+    vec4(environment_term + E, 1.0));
 }

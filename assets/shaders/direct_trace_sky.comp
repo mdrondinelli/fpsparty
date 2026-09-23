@@ -1,38 +1,35 @@
 #version 450
 
-#include "color.glsl"
 #include "direct_common.glsl"
-#include "gbuffer.glsl"
 #include "rt.glsl"
 #include "sampling.glsl"
 
 layout(local_size_x = 64) in;
 
-// Sky half of the trace stage (direct_trace_sun.comp is the
-// other half).
+// Environment cosine sample: initialize this pixel's irradiance.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
   layout(offset = 8) uint16_t depth_texture;
   layout(offset = 10) uint16_t direct_irradiance_image;
+  layout(offset = 12) uint16_t transmittance_texture;
   layout(offset = 14) uint16_t sky_view_lut;
   layout(offset = 16) uint16_t normal_texture;
-  // offset 18: 6 bytes unused (Sky_irradiance needs 8-byte alignment).
-  layout(offset = 32) Direct_samples sky_samples;
-  layout(offset = 40) Rt_block_shape_grid rt_block_shape_grid;
-  layout(offset = 48) Rt_entities entities;
-  layout(offset = 56) Rt_entity_head_grid entity_head_grid;
-  layout(offset = 64) Rt_entity_nodes entity_nodes;
-  // offset 74: 6 bytes unused (buffer references need 8-byte alignment).
-  layout(offset = 80) Rt_block_material_grid rt_block_material_grid;
-  layout(offset = 88) Rt_entity_mask_grid entity_mask_grid;
+  // offset 18: 6 bytes unused (buffer references need 8-byte alignment).
+  layout(offset = 24) Direct_samples samples;
+  layout(offset = 32) Rt_block_shape_grid rt_block_shape_grid;
+  layout(offset = 40) Rt_entities entities;
+  layout(offset = 48) Rt_entity_head_grid entity_head_grid;
+  layout(offset = 56) Rt_entity_nodes entity_nodes;
+  layout(offset = 64) Rt_block_material_grid rt_block_material_grid;
+  layout(offset = 72) Rt_entity_mask_grid entity_mask_grid;
 } push_constants;
 
 void main() {
-  if (gl_GlobalInvocationID.x >= push_constants.sky_samples.count) {
+  if (gl_GlobalInvocationID.x >= push_constants.samples.count) {
     return;
   }
   const Direct_sample light_sample =
-    push_constants.sky_samples.samples[gl_GlobalInvocationID.x];
+    push_constants.samples.samples[gl_GlobalInvocationID.x];
   const ivec2 size =
     imageSize(storage_images[push_constants.direct_irradiance_image]);
   const ivec2 pixel = direct_sample_pixel(light_sample, size);
@@ -47,7 +44,7 @@ void main() {
   const vec3 w_i =
     make_basis(n) *
     square_to_cosine_hemisphere(unpackUnorm2x16(light_sample.uv));
-  const bool shadow_ray_hit = trace_ray(
+  const bool occluded = trace_ray(
     push_constants.rt_block_shape_grid,
     push_constants.rt_block_material_grid,
     push_constants.entities,
@@ -57,19 +54,15 @@ void main() {
     shading_point.ray_origin,
     w_i,
     true);
-  // Technique A's single term, the picker having chosen the sky, so this
-  // evaluates only the sky. The density it divides by is shared with the
-  // BRDF ray, which cosine-samples the same way.
-  const float cos_theta = max(dot(n, w_i), 0.0);
-  vec3 E = vec3(0.0);
-  if (cos_theta > 0.0) {
-    const vec3 integrand =
-      (shadow_ray_hit ? 0.0 : 1.0) *
-      eval_incident_irradiance_sky(
-        w_i, n, push_constants.scene, push_constants.sky_view_lut);
-    E = integrand /
-      direct_sky_density(light_sample.p_sun, cos_theta);
-  }
+  const vec3 E = direct_environment_contribution(
+    push_constants.scene,
+    n,
+    shading_point.position.y,
+    w_i,
+    occluded ? 0.0 : 1.0,
+    light_sample.p_cone,
+    push_constants.transmittance_texture,
+    push_constants.sky_view_lut);
   imageStore(
     storage_images[push_constants.direct_irradiance_image], pixel, vec4(E, 1.0));
 }

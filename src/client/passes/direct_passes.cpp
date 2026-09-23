@@ -19,8 +19,7 @@ Direct_sample_clear_pass::Direct_sample_clear_pass(
   Direct_sample_clear_pass_inputs inputs)
     : _inputs{std::move(inputs)} {}
 
-void Direct_sample_clear_pass::declare(
-  render_graph::Builder &builder) {
+void Direct_sample_clear_pass::declare(render_graph::Builder &builder) {
   _sun_sample_handle = builder.write(
     _inputs.sun_sample_buffer, render_graph::access::transfer_write);
   _sky_sample_handle = builder.write(
@@ -31,26 +30,30 @@ void Direct_sample_clear_pass::declare(
 
 void Direct_sample_clear_pass::execute(
   graphics::Work_recorder &recorder, render_graph::Resources &resources) {
-  // Only the counts need clearing, not the sample data -- the trace
-  // shaders only read indices below whatever count light picking ends up
-  // with. The count sits 12 bytes in (see get_direct_sample_buffer).
-  recorder.fill_buffer(resources.get_buffer(_sun_sample_handle), 12, 4, 0u);
-  recorder.fill_buffer(resources.get_buffer(_sky_sample_handle), 12, 4, 0u);
-  recorder.fill_buffer(resources.get_buffer(_brdf_sample_handle), 12, 4, 0u);
+  // Records beyond the count are ignored by the trace shaders.
+  recorder.fill_buffer(
+    resources.get_buffer(_sun_sample_handle),
+    12,
+    4,
+    0u);
+  recorder.fill_buffer(
+    resources.get_buffer(_sky_sample_handle),
+    12,
+    4,
+    0u);
+  recorder.fill_buffer(
+    resources.get_buffer(_brdf_sample_handle),
+    12,
+    4,
+    0u);
 }
 
-Direct_light_pick_pass::Direct_light_pick_pass(
+Direct_sample_gen_pass::Direct_sample_gen_pass(
   rc::Strong<graphics::Compute_pipeline> pipeline,
-  Direct_light_pick_pass_inputs inputs)
+  Direct_sample_gen_pass_inputs inputs)
     : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
-void Direct_light_pick_pass::declare(render_graph::Builder &builder) {
-  // depth/normal: written by Gbuffer_pass. sky_view_lut: written by
-  // Sky_view_pass. scene_uniform_buffer: written GPU-side (the Sky_
-  // irradiance sub-struct) by Sky_irradiance_pass, declared at whole-
-  // buffer granularity. Declaring these reads is a no-op on frames where
-  // the writer didn't run this batch -- Graph finds no matching writer
-  // and skips the barrier.
+void Direct_sample_gen_pass::declare(render_graph::Builder &builder) {
   _depth_handle = builder.read(
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);
   _normal_handle = builder.read(
@@ -67,9 +70,10 @@ void Direct_light_pick_pass::declare(render_graph::Builder &builder) {
     _inputs.brdf_sample_buffer, render_graph::access::compute_storage_write);
 }
 
-void Direct_light_pick_pass::execute(
+void Direct_sample_gen_pass::execute(
   graphics::Work_recorder &recorder, render_graph::Resources &resources) {
-  auto const &scene_uniform_buffer = resources.get_buffer(_scene_uniform_handle);
+  auto const &scene_uniform_buffer =
+    resources.get_buffer(_scene_uniform_handle);
   auto const &sun_sample_buffer = resources.get_buffer(_sun_sample_handle);
   auto const &sky_sample_buffer = resources.get_buffer(_sky_sample_handle);
   auto const &brdf_sample_buffer = resources.get_buffer(_brdf_sample_handle);
@@ -92,8 +96,7 @@ void Direct_light_pick_pass::execute(
     _inputs.scene_uniform_offset + scene_sky_irradiance_offset);
   recorder.push_buffer_reference(24, sun_sample_buffer, 12);
   recorder.push_buffer_reference(32, sky_sample_buffer, 12);
-  recorder.push_data(
-    40, std::as_bytes(std::span{&_inputs.frame_number, 1}));
+  recorder.push_data(40, std::as_bytes(std::span{&_inputs.frame_number, 1}));
   recorder.push_buffer_reference(48, brdf_sample_buffer, 12);
   auto const group_count = dispatch_group_count(_inputs.framebuffer_size);
   recorder.dispatch(group_count.x(), group_count.y(), 1);
@@ -104,8 +107,7 @@ Direct_indirect_args_pass::Direct_indirect_args_pass(
   Direct_indirect_args_pass_inputs inputs)
     : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
-void Direct_indirect_args_pass::declare(
-  render_graph::Builder &builder) {
+void Direct_indirect_args_pass::declare(render_graph::Builder &builder) {
   builder.read(
     _inputs.sun_sample_buffer, render_graph::access::compute_storage_read);
   builder.read(
@@ -140,33 +142,53 @@ auto constexpr trace_read_access = render_graph::Access{
 };
 } // namespace
 
-Direct_trace_sun_pass::Direct_trace_sun_pass(
-  rc::Strong<graphics::Compute_pipeline> pipeline,
+Direct_trace_pass::Direct_trace_pass(
+  Direct_trace_kind kind,
+  Direct_trace_variants const &variants,
   Direct_trace_pass_inputs inputs)
-    : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
+    : _inputs{std::move(inputs)}, _kind{kind} {
+  auto const &variant = [&]() -> Direct_trace_variant const & {
+    switch (kind) {
+    case Direct_trace_kind::sun:
+      return variants.sun;
+    case Direct_trace_kind::sky:
+      return variants.sky;
+    case Direct_trace_kind::brdf:
+      return variants.brdf;
+    }
+    std::unreachable();
+  }();
+  _pipeline = variant.pipeline;
+  _samples = variant.samples;
+}
 
-void Direct_trace_sun_pass::declare(render_graph::Builder &builder) {
-  // See Direct_light_pick_pass::declare's comment -- same reasoning for
-  // all of these (Gbuffer_pass/Sky_irradiance_pass/Rt_entity_binning_pass
-  // writes).
+void Direct_trace_pass::declare(render_graph::Builder &builder) {
   _depth_handle = builder.read(
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);
   _normal_handle = builder.read(
     _inputs.normal_render_target, render_graph::access::compute_sampled_read);
+  _sky_view_lut_handle = builder.read(
+    _inputs.sky_view_lut, render_graph::access::compute_sampled_read);
   _scene_uniform_handle = builder.read(
     _inputs.scene_uniform_buffer, render_graph::access::compute_storage_read);
   _rt_entity_binning_handle = builder.read(
     _inputs.rt_entity_binning_buffer,
     render_graph::access::compute_storage_read);
-  _sample_handle = builder.read(_inputs.sample_buffer, trace_read_access);
+  _sample_handle = builder.read(_samples, trace_read_access);
+  if (_kind == Direct_trace_kind::brdf) {
+    builder.read(
+      _inputs.raw_direct_irradiance_render_target,
+      render_graph::access::compute_storage_read);
+  }
   _direct_irradiance_handle = builder.write(
     _inputs.raw_direct_irradiance_render_target,
     render_graph::access::compute_storage_write);
 }
 
-void Direct_trace_sun_pass::execute(
+void Direct_trace_pass::execute(
   graphics::Work_recorder &recorder, render_graph::Resources &resources) {
-  auto const &scene_uniform_buffer = resources.get_buffer(_scene_uniform_handle);
+  auto const &scene_uniform_buffer =
+    resources.get_buffer(_scene_uniform_handle);
   auto const &sample_buffer = resources.get_buffer(_sample_handle);
   auto const &rt_entity_binning_buffer =
     resources.get_buffer(_rt_entity_binning_handle);
@@ -181,144 +203,21 @@ void Direct_trace_sun_pass::execute(
       .kind = graphics::Descriptor_kind::storage},
      {.image = _inputs.transmittance_lut,
       .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_sky_view_lut_handle),
+      .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_normal_handle),
       .kind = graphics::Descriptor_kind::sampled}});
   recorder.push_buffer_reference(24, sample_buffer, 12);
   recorder.push_buffer_reference(32, _inputs.rt_block_grid_buffer);
-  recorder.push_buffer_reference(
-    72, _inputs.rt_block_grid_buffer, _inputs.rt_block_material_grid_offset);
-  recorder.push_buffer_reference(
-    80, rt_entity_binning_buffer, _inputs.rt_entity_binning_mask_offset);
   recorder.push_buffer_reference(40, _inputs.rt_entity_buffer);
   recorder.push_buffer_reference(
     48, rt_entity_binning_buffer, _inputs.rt_entity_binning_grid_offset);
   recorder.push_buffer_reference(
     56, rt_entity_binning_buffer, _inputs.rt_entity_binning_nodes_offset);
-  recorder.dispatch_indirect({.buffer = sample_buffer, .offset = 0});
-}
-
-Direct_trace_sky_pass::Direct_trace_sky_pass(
-  rc::Strong<graphics::Compute_pipeline> pipeline,
-  Direct_trace_pass_inputs inputs,
-  render_graph::Symbolic_image sky_view_lut)
-    : _pipeline{std::move(pipeline)},
-      _inputs{std::move(inputs)},
-      _sky_view_lut{sky_view_lut} {}
-
-void Direct_trace_sky_pass::declare(render_graph::Builder &builder) {
-  // See Direct_light_pick_pass::declare's comment.
-  _depth_handle = builder.read(
-    _inputs.depth_render_target, render_graph::access::compute_sampled_read);
-  _normal_handle = builder.read(
-    _inputs.normal_render_target, render_graph::access::compute_sampled_read);
-  _sky_view_lut_handle = builder.read(
-    _sky_view_lut, render_graph::access::compute_sampled_read);
-  _scene_uniform_handle = builder.read(
-    _inputs.scene_uniform_buffer, render_graph::access::compute_storage_read);
-  _rt_entity_binning_handle = builder.read(
-    _inputs.rt_entity_binning_buffer,
-    render_graph::access::compute_storage_read);
-  _sample_handle = builder.read(_inputs.sample_buffer, trace_read_access);
-  _direct_irradiance_handle = builder.write(
-    _inputs.raw_direct_irradiance_render_target,
-    render_graph::access::compute_storage_write);
-}
-
-void Direct_trace_sky_pass::execute(
-  graphics::Work_recorder &recorder, render_graph::Resources &resources) {
-  auto const &scene_uniform_buffer = resources.get_buffer(_scene_uniform_handle);
-  auto const &sample_buffer = resources.get_buffer(_sample_handle);
-  auto const &rt_entity_binning_buffer =
-    resources.get_buffer(_rt_entity_binning_handle);
-  recorder.bind_compute_pipeline(_pipeline);
-  recorder.push_buffer_reference(
-    0, scene_uniform_buffer, _inputs.scene_uniform_offset);
-  recorder.push_descriptors(
-    8,
-    {{.image = resources.get_image(_depth_handle),
-      .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_direct_irradiance_handle),
-      .kind = graphics::Descriptor_kind::storage},
-     {.image = _inputs.transmittance_lut,
-      .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_sky_view_lut_handle),
-      .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_normal_handle),
-      .kind = graphics::Descriptor_kind::sampled}});
-  recorder.push_buffer_reference(32, sample_buffer, 12);
-  recorder.push_buffer_reference(40, _inputs.rt_block_grid_buffer);
-  recorder.push_buffer_reference(
-    80, _inputs.rt_block_grid_buffer, _inputs.rt_block_material_grid_offset);
-  recorder.push_buffer_reference(
-    88, rt_entity_binning_buffer, _inputs.rt_entity_binning_mask_offset);
-  recorder.push_buffer_reference(48, _inputs.rt_entity_buffer);
-  recorder.push_buffer_reference(
-    56, rt_entity_binning_buffer, _inputs.rt_entity_binning_grid_offset);
-  recorder.push_buffer_reference(
-    64, rt_entity_binning_buffer, _inputs.rt_entity_binning_nodes_offset);
-  recorder.dispatch_indirect({.buffer = sample_buffer, .offset = 0});
-}
-
-Direct_trace_brdf_pass::Direct_trace_brdf_pass(
-  rc::Strong<graphics::Compute_pipeline> pipeline,
-  Direct_trace_pass_inputs inputs,
-  render_graph::Symbolic_image sky_view_lut)
-    : _pipeline{std::move(pipeline)},
-      _inputs{std::move(inputs)},
-      _sky_view_lut{sky_view_lut} {}
-
-void Direct_trace_brdf_pass::declare(
-  render_graph::Builder &builder) {
-  // See Direct_light_pick_pass::declare's comment.
-  _depth_handle = builder.read(
-    _inputs.depth_render_target, render_graph::access::compute_sampled_read);
-  _normal_handle = builder.read(
-    _inputs.normal_render_target, render_graph::access::compute_sampled_read);
-  _sky_view_lut_handle = builder.read(
-    _sky_view_lut, render_graph::access::compute_sampled_read);
-  _scene_uniform_handle = builder.read(
-    _inputs.scene_uniform_buffer, render_graph::access::compute_storage_read);
-  _rt_entity_binning_handle = builder.read(
-    _inputs.rt_entity_binning_buffer,
-    render_graph::access::compute_storage_read);
-  _sample_handle = builder.read(_inputs.sample_buffer, trace_read_access);
-  _direct_irradiance_handle = builder.write(
-    _inputs.raw_direct_irradiance_render_target,
-    render_graph::access::compute_storage_write);
-}
-
-void Direct_trace_brdf_pass::execute(
-  graphics::Work_recorder &recorder, render_graph::Resources &resources) {
-  auto const &scene_uniform_buffer = resources.get_buffer(_scene_uniform_handle);
-  auto const &sample_buffer = resources.get_buffer(_sample_handle);
-  auto const &rt_entity_binning_buffer =
-    resources.get_buffer(_rt_entity_binning_handle);
-  recorder.bind_compute_pipeline(_pipeline);
-  recorder.push_buffer_reference(
-    0, scene_uniform_buffer, _inputs.scene_uniform_offset);
-  recorder.push_descriptors(
-    8,
-    {{.image = resources.get_image(_depth_handle),
-      .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_direct_irradiance_handle),
-      .kind = graphics::Descriptor_kind::storage},
-     {.image = _inputs.transmittance_lut,
-      .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_sky_view_lut_handle),
-      .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_normal_handle),
-      .kind = graphics::Descriptor_kind::sampled}});
-  recorder.push_buffer_reference(24, sample_buffer, 12);
-  recorder.push_buffer_reference(32, _inputs.rt_block_grid_buffer);
   recorder.push_buffer_reference(
     64, _inputs.rt_block_grid_buffer, _inputs.rt_block_material_grid_offset);
   recorder.push_buffer_reference(
     72, rt_entity_binning_buffer, _inputs.rt_entity_binning_mask_offset);
-  recorder.push_buffer_reference(40, _inputs.rt_entity_buffer);
-  recorder.push_buffer_reference(
-    48, rt_entity_binning_buffer, _inputs.rt_entity_binning_grid_offset);
-  recorder.push_buffer_reference(
-    56, rt_entity_binning_buffer, _inputs.rt_entity_binning_nodes_offset);
   recorder.dispatch_indirect({.buffer = sample_buffer, .offset = 0});
 }
 
@@ -328,9 +227,8 @@ Direct_temporal_pass::Direct_temporal_pass(
     : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
 void Direct_temporal_pass::declare(render_graph::Builder &builder) {
-  // depth/normal/motion_vector: written by Gbuffer_pass -- see
-  // Direct_light_pick_pass::declare's comment. previous_*:
-  // last frame's already-retired data, no this-frame barrier applies.
+  // Previous-frame history is held directly; only current resources need
+  // symbols.
   _depth_handle = builder.read(
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);
   _normal_handle = builder.read(
@@ -340,9 +238,6 @@ void Direct_temporal_pass::declare(render_graph::Builder &builder) {
     render_graph::access::compute_sampled_read);
   _raw_direct_irradiance_handle = builder.read(
     _inputs.raw_direct_irradiance_render_target,
-    render_graph::access::compute_sampled_read);
-  _raw_brdf_direct_irradiance_handle = builder.read(
-    _inputs.raw_brdf_direct_irradiance_render_target,
     render_graph::access::compute_sampled_read);
   _direct_irradiance_handle = builder.write(
     _inputs.direct_irradiance_render_target,
@@ -355,8 +250,7 @@ void Direct_temporal_pass::declare(render_graph::Builder &builder) {
 void Direct_temporal_pass::execute(
   graphics::Work_recorder &recorder, render_graph::Resources &resources) {
   recorder.bind_compute_pipeline(_pipeline);
-  recorder.push_data(
-    0, std::as_bytes(std::span{&_inputs.history_valid, 1}));
+  recorder.push_data(0, std::as_bytes(std::span{&_inputs.history_valid, 1}));
   recorder.push_data(4, std::as_bytes(std::span{&_inputs.z_near, 1}));
   recorder.push_descriptors(
     8,
@@ -365,8 +259,6 @@ void Direct_temporal_pass::execute(
      {.image = resources.get_image(_normal_handle),
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_raw_direct_irradiance_handle),
-      .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_raw_brdf_direct_irradiance_handle),
       .kind = graphics::Descriptor_kind::sampled},
      {.image = _inputs.previous_depth_render_target,
       .kind = graphics::Descriptor_kind::sampled},
@@ -392,8 +284,6 @@ Direct_variance_pass::Direct_variance_pass(
     : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
 
 void Direct_variance_pass::declare(render_graph::Builder &builder) {
-  // depth: written by Gbuffer_pass -- see Direct_light_pick_pass::
-  // declare's comment.
   _depth_handle = builder.read(
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);
   _luminance_handle = builder.read(
@@ -427,19 +317,15 @@ Direct_spatial_filter_pass::Direct_spatial_filter_pass(
       _step_size{step_size},
       _inputs{std::move(inputs)} {}
 
-void Direct_spatial_filter_pass::declare(
-  render_graph::Builder &builder) {
-  // depth/normal/gradient: written by Gbuffer_pass -- see
-  // Direct_light_pick_pass::declare's comment.
+void Direct_spatial_filter_pass::declare(render_graph::Builder &builder) {
   _depth_handle = builder.read(
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);
   _normal_handle = builder.read(
     _inputs.normal_render_target, render_graph::access::compute_sampled_read);
   _gradient_handle = builder.read(
-    _inputs.gradient_render_target,
-    render_graph::access::compute_sampled_read);
-  _color_in_handle = builder.read(
-    _inputs.color_in, render_graph::access::compute_sampled_read);
+    _inputs.gradient_render_target, render_graph::access::compute_sampled_read);
+  _color_in_handle =
+    builder.read(_inputs.color_in, render_graph::access::compute_sampled_read);
   _variance_in_handle = builder.read(
     _inputs.variance_in, render_graph::access::compute_sampled_read);
   _color_out_handle = builder.write(

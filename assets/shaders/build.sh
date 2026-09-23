@@ -39,7 +39,7 @@ shaders=(
   atmosphere/sky_irradiance.comp
   radiance.comp
   indirect_dispatch_args.comp
-  direct_light_pick.comp
+  direct_sample_gen.comp
   direct_trace_sun.comp
   direct_trace_sky.comp
   direct_trace_brdf.comp

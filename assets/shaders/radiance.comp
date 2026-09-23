@@ -45,13 +45,13 @@ void main() {
   const vec4 material =
     texelFetch(
       sampled_images[push_constants.albedo_texture], pixel, 0);
-  const vec3 direct =
+  const vec3 direct_irradiance =
     texelFetch(
       sampled_images[push_constants.direct_irradiance_texture],
       pixel,
       0).rgb;
   const vec3 L_e = material.rgb * material.a;
-  const vec3 L = L_e + material.rgb / pi * direct;
+  const vec3 L = L_e + material.rgb / pi * direct_irradiance;
   imageStore(
     storage_images[push_constants.radiance_image],
     pixel,

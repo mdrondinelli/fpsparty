@@ -33,7 +33,8 @@ struct Radiance_pass_inputs {
 class Radiance_pass : public render_graph::Node {
 public:
   Radiance_pass(
-    rc::Strong<graphics::Compute_pipeline> pipeline, Radiance_pass_inputs inputs);
+    rc::Strong<graphics::Compute_pipeline> pipeline,
+    Radiance_pass_inputs inputs);
 
   void declare(render_graph::Builder &builder) override;
 
