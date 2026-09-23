@@ -18,6 +18,7 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 24) Direct_samples sun_samples;
   layout(offset = 32) Direct_samples sky_samples;
   layout(offset = 40) uint seed;
+  layout(offset = 44) uint16_t raw_direct_irradiance_image;
   layout(offset = 48) Direct_samples brdf_samples;
 } push_constants;
 
@@ -33,6 +34,7 @@ void main() {
   bool valid = pixel.x < size.x && pixel.y < size.y;
   Gbuffer_sample g;
   bool is_cone = false;
+  bool sample_environment = false;
   vec2 environment_uv = vec2(0.0);
   vec2 brdf_uv = vec2(0.0);
   float p_cone = 0.0;
@@ -74,18 +76,14 @@ void main() {
     const float l_sun = luminance(integrated_unshadowed_sun);
     const float l_sky = luminance(integrated_unshadowed_sky);
     const float total = l_sun + l_sky;
-    if (total == 0.0) {
-      valid = false;
-    } else {
-      // Estimate the cone mixture weight from unshadowed sun and sky
-      // irradiance.
-      p_cone = l_sun / total;
-      Random random;
-      random.state = lowbias32(pixel_index) ^ lowbias32(push_constants.seed);
-      is_cone = random_float(random) < p_cone;
-      environment_uv = vec2(random_float(random), random_float(random));
-      brdf_uv = vec2(random_float(random), random_float(random));
-    }
+    sample_environment = total > 0.0;
+    // Estimate the cone mixture weight from unshadowed sun and sky irradiance.
+    p_cone = sample_environment ? l_sun / total : 0.0;
+    Random random;
+    random.state = lowbias32(pixel_index) ^ lowbias32(push_constants.seed);
+    is_cone = random_float(random) < p_cone;
+    environment_uv = vec2(random_float(random), random_float(random));
+    brdf_uv = vec2(random_float(random), random_float(random));
   }
   if (gl_LocalInvocationIndex == 0u) {
     sun_offset = 0u;
@@ -93,12 +91,14 @@ void main() {
     brdf_offset = 0u;
   }
   barrier();
-  if (valid) {
+  if (sample_environment) {
     if (is_cone) {
       atomicAdd(sun_offset, 1u);
     } else {
       atomicAdd(sky_offset, 1u);
     }
+  }
+  if (valid) {
     atomicAdd(brdf_offset, 1u);
   }
   barrier();
@@ -108,7 +108,7 @@ void main() {
     brdf_offset = atomicAdd(push_constants.brdf_samples.count, brdf_offset);
   }
   barrier();
-  if (valid) {
+  if (sample_environment) {
     if (is_cone) {
       const uint slot = atomicAdd(sun_offset, 1u);
       push_constants.sun_samples.samples[slot].uv =
@@ -122,9 +122,16 @@ void main() {
       push_constants.sky_samples.samples[slot].pixel = pixel_index;
       push_constants.sky_samples.samples[slot].p_cone = p_cone;
     }
+  }
+  if (valid) {
     const uint brdf_slot = atomicAdd(brdf_offset, 1u);
     push_constants.brdf_samples.samples[brdf_slot].uv = packUnorm2x16(brdf_uv);
     push_constants.brdf_samples.samples[brdf_slot].pixel = pixel_index;
     push_constants.brdf_samples.samples[brdf_slot].p_cone = p_cone;
+  }
+  // BRDF accumulation requires an initialized texel even without an environment ray.
+  if (valid && !sample_environment) {
+    imageStore(
+      storage_images[push_constants.raw_direct_irradiance_image], pixel, vec4(0.0));
   }
 }

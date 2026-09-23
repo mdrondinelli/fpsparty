@@ -52,6 +52,7 @@ struct Direct_sample_gen_pass_inputs {
   render_graph::Symbolic_buffer sun_sample_buffer;
   render_graph::Symbolic_buffer sky_sample_buffer;
   render_graph::Symbolic_buffer brdf_sample_buffer;
+  render_graph::Symbolic_image raw_direct_irradiance_render_target;
   math::ivec2 framebuffer_size;
   u32 frame_number;
 };
@@ -78,6 +79,7 @@ private:
   render_graph::Resource_handle _sun_sample_handle{};
   render_graph::Resource_handle _sky_sample_handle{};
   render_graph::Resource_handle _brdf_sample_handle{};
+  render_graph::Resource_handle _raw_direct_irradiance_handle{};
 };
 
 // Turns the sample-generation pass's atomic sample counts into indirect

@@ -553,6 +553,7 @@ private:
             .sun_sample_buffer = _direct_sample_buffer_sun_symbol,
             .sky_sample_buffer = _direct_sample_buffer_sky_symbol,
             .brdf_sample_buffer = _direct_sample_buffer_brdf_symbol,
+            .raw_direct_irradiance_render_target = _direct_irradiance_raw_render_target_symbol,
             .framebuffer_size = framebuffer_size,
             .frame_number = _frame_number,
           });

@@ -68,6 +68,10 @@ void Direct_sample_gen_pass::declare(render_graph::Builder &builder) {
     _inputs.sky_sample_buffer, render_graph::access::compute_storage_write);
   _brdf_sample_handle = builder.write(
     _inputs.brdf_sample_buffer, render_graph::access::compute_storage_write);
+  // Initializes pixels skipped by the environment traces.
+  _raw_direct_irradiance_handle = builder.write(
+    _inputs.raw_direct_irradiance_render_target,
+    render_graph::access::compute_storage_write);
 }
 
 void Direct_sample_gen_pass::execute(
@@ -97,6 +101,10 @@ void Direct_sample_gen_pass::execute(
   recorder.push_buffer_reference(24, sun_sample_buffer, 12);
   recorder.push_buffer_reference(32, sky_sample_buffer, 12);
   recorder.push_data(40, std::as_bytes(std::span{&_inputs.frame_number, 1}));
+  recorder.push_descriptors(
+    44,
+    {{.image = resources.get_image(_raw_direct_irradiance_handle),
+      .kind = graphics::Descriptor_kind::storage}});
   recorder.push_buffer_reference(48, brdf_sample_buffer, 12);
   auto const group_count = dispatch_group_count(_inputs.framebuffer_size);
   recorder.dispatch(group_count.x(), group_count.y(), 1);
