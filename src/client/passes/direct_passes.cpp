@@ -1,4 +1,5 @@
 #include "client/passes/direct_passes.hpp"
+#include "client/direct_sample_layout.hpp"
 #include "client/scene_uniform_layout.hpp"
 #include "render_graph/access.hpp"
 #include <span>
@@ -33,18 +34,18 @@ void Direct_sample_clear_pass::execute(
   // Records beyond the count are ignored by the trace shaders.
   recorder.fill_buffer(
     resources.get_buffer(_sun_sample_handle),
-    12,
-    4,
+    direct_sample_count_offset,
+    direct_sample_count_size,
     0u);
   recorder.fill_buffer(
     resources.get_buffer(_sky_sample_handle),
-    12,
-    4,
+    direct_sample_count_offset,
+    direct_sample_count_size,
     0u);
   recorder.fill_buffer(
     resources.get_buffer(_brdf_sample_handle),
-    12,
-    4,
+    direct_sample_count_offset,
+    direct_sample_count_size,
     0u);
 }
 
@@ -98,14 +99,17 @@ void Direct_sample_gen_pass::execute(
     16,
     scene_uniform_buffer,
     _inputs.scene_uniform_offset + scene_sky_irradiance_offset);
-  recorder.push_buffer_reference(24, sun_sample_buffer, 12);
-  recorder.push_buffer_reference(32, sky_sample_buffer, 12);
+  recorder
+    .push_buffer_reference(24, sun_sample_buffer, direct_sample_count_offset);
+  recorder
+    .push_buffer_reference(32, sky_sample_buffer, direct_sample_count_offset);
   recorder.push_data(40, std::as_bytes(std::span{&_inputs.frame_number, 1}));
   recorder.push_descriptors(
     44,
     {{.image = resources.get_image(_raw_direct_irradiance_handle),
       .kind = graphics::Descriptor_kind::storage}});
-  recorder.push_buffer_reference(48, brdf_sample_buffer, 12);
+  recorder
+    .push_buffer_reference(48, brdf_sample_buffer, direct_sample_count_offset);
   auto const group_count = dispatch_group_count(_inputs.framebuffer_size);
   recorder.dispatch(group_count.x(), group_count.y(), 1);
 }
@@ -215,7 +219,7 @@ void Direct_trace_pass::execute(
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_normal_handle),
       .kind = graphics::Descriptor_kind::sampled}});
-  recorder.push_buffer_reference(24, sample_buffer, 12);
+  recorder.push_buffer_reference(24, sample_buffer, direct_sample_count_offset);
   recorder.push_buffer_reference(32, _inputs.rt_block_grid_buffer);
   recorder.push_buffer_reference(40, _inputs.rt_entity_buffer);
   recorder.push_buffer_reference(

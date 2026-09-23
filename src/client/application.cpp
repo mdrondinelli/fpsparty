@@ -42,6 +42,7 @@
 #include "client.hpp"
 #include "grid_mesh.hpp"
 #include "passes/direct_passes.hpp"
+#include "direct_sample_layout.hpp"
 #include "passes/composite_pass.hpp"
 #include "passes/crosshair_pass.hpp"
 #include "passes/gbuffer_pass.hpp"
@@ -1168,7 +1169,7 @@ private:
         static_cast<std::size_t>(extent.x()) *
         static_cast<std::size_t>(extent.y());
       auto const buffer_size =
-        std::size_t{16} + pixel_count * std::size_t{12};
+        direct_sample_data_offset + pixel_count * direct_sample_stride;
       auto const create_sample_buffer = [&] {
         return _graphics.create_buffer({
           .size = buffer_size,
