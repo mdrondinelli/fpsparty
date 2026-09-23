@@ -42,8 +42,9 @@ struct Direct_sample {
 // everywhere plus sunlight inside the disc. Making p_cone per-pixel is
 // what that buys: mass follows the sun only where the sun can be seen.
 //
-// P(emitter) is part of the pair density, not a sample count. Here it is
-// 1: the distant environment is the only emitter estimated.
+// P(emitter) is part of the pair density, not a sample count. It is 1 for
+// the environment; nothing names an emissive surface by index yet, so
+// there P * p is 0 -- see direct_emitted_contribution.
 bool direct_in_sun_disc(vec3 w_i, vec3 sun_direction) {
   return dot(w_i, sun_direction) >= cos_sun_angular_radius;
 }
@@ -142,6 +143,19 @@ vec3 direct_environment_contribution(
   }
   return visibility * integrand /
     direct_environment_mis_density(p_cone, cos_theta, in_sun_disc);
+}
+
+// The (surface, w_i) pair, which only the BRDF technique can produce:
+// no sampler names an emissive surface by index yet, so P * p is 0 and
+// the denominator is p_brdf alone, whose cosine cancels the integrand's.
+// Giving surfaces a sampler puts P * p back and this stops being a
+// special case.
+vec3 direct_emitted_contribution(
+    vec3 emissivity, float cos_theta) {
+  if (cos_theta <= 0.0) {
+    return vec3(0.0);
+  }
+  return emissivity * pi;
 }
 
 const float direct_history_depth_reject_ratio = 0.03;
