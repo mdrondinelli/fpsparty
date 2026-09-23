@@ -46,7 +46,7 @@ struct Direct_sample {
 // the environment; nothing names an emissive surface by index yet, so
 // there P * p is 0 -- see direct_emitted_contribution.
 bool direct_in_sun_disc(vec3 w_i, vec3 sun_direction) {
-  return dot(w_i, sun_direction) >= cos_sun_angular_radius;
+  return dot(normalize(w_i), normalize(sun_direction)) >= cos_sun_angular_radius;
 }
 
 // Summed density of both techniques at a pair naming the environment.
@@ -125,12 +125,16 @@ vec3 direct_environment_contribution(
     float visibility,
     float p_cone,
     uint transmittance_texture,
-    uint sky_view_lut) {
+    uint sky_view_lut,
+    bool sampled_sun_cone) {
   const float cos_theta = max(dot(n, w_i), 0.0);
   if (cos_theta <= 0.0) {
     return vec3(0.0);
   }
-  const bool in_sun_disc =
+  // Cone samples are inside by construction. Rechecking their transformed
+  // direction can round outside the disc and drop both sunlight and the
+  // generating lobe's PDF. Other samplers still need the geometric check.
+  const bool in_sun_disc = sampled_sun_cone ||
     direct_in_sun_disc(w_i, scene.sun_direction);
   vec3 integrand = eval_incident_irradiance_sky(w_i, n, scene, sky_view_lut);
   if (in_sun_disc) {

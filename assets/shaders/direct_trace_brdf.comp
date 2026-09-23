@@ -67,8 +67,9 @@ void main() {
         1.0,
         light_sample.p_cone,
         push_constants.transmittance_texture,
-        push_constants.sky_view_lut);
-  // The environment traces have initialized this texel.
+        push_constants.sky_view_lut,
+        false);
+  // Environment traces or sample generation have initialized this texel.
   const vec3 environment_term =
     imageLoad(storage_images[push_constants.direct_irradiance_image], pixel).rgb;
   imageStore(

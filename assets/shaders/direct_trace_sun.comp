@@ -42,7 +42,7 @@ void main() {
       size);
   const vec3 n = shading_point.normal;
   const vec3 w_i =
-    make_basis(push_constants.scene.sun_direction) *
+    make_basis(normalize(push_constants.scene.sun_direction)) *
     square_to_cone(unpackUnorm2x16(light_sample.uv), cos_sun_angular_radius);
   const bool occluded = trace_ray(
     push_constants.rt_block_shape_grid,
@@ -62,7 +62,8 @@ void main() {
     occluded ? 0.0 : 1.0,
     light_sample.p_cone,
     push_constants.transmittance_texture,
-    push_constants.sky_view_lut);
+    push_constants.sky_view_lut,
+    true);
   imageStore(
     storage_images[push_constants.direct_irradiance_image], pixel, vec4(E, 1.0));
 }
