@@ -1,5 +1,5 @@
-#ifndef FPSPARTY_DISTANT_IRRADIANCE_SPATIAL_FILTER_GLSL
-#define FPSPARTY_DISTANT_IRRADIANCE_SPATIAL_FILTER_GLSL
+#ifndef FPSPARTY_DIRECT_SPATIAL_FILTER_GLSL
+#define FPSPARTY_DIRECT_SPATIAL_FILTER_GLSL
 
 // The three edge-stopping weights are all of the form exp(-x), so each is
 // split into the exponent it contributes. The caller sums the exponents
@@ -52,7 +52,7 @@ const float luminance_weight_sigma_l = 4.0;
 const float luminance_weight_epsilon = 1e-4;
 
 // Reciprocal luminance tolerance at p, scaled by the blurred variance
-// there (distant_irradiance_variance.comp's output). Depends only on p, so
+// there (direct_variance.comp's output). Depends only on p, so
 // the sqrt and the divide are paid once per pixel, not once per tap.
 float luminance_weight_rcp_scale(float blurred_variance_p) {
   return 1.0 / (luminance_weight_sigma_l * sqrt(blurred_variance_p) +

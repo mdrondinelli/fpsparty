@@ -2,14 +2,14 @@
 
 #include "color.glsl"
 #include "descriptors.glsl"
-#include "distant_irradiance_common.glsl"
+#include "direct_common.glsl"
 #include "gbuffer.glsl"
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
 // Sums the MIS techniques' raw per-pixel estimates, then reprojects and
 // temporally accumulates the result against last frame's history via
-// apply_distant_irradiance_history, writing this frame's accumulated color
+// apply_direct_history, writing this frame's accumulated color
 // and luminance moments.
 //
 // A full-screen pass of its own so the a-trous spatial filter downstream
@@ -21,21 +21,21 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 4) float z_near;
   layout(offset = 8) uint16_t depth_texture;
   layout(offset = 10) uint16_t normal_texture;
-  layout(offset = 12) uint16_t raw_distant_irradiance_texture;
-  layout(offset = 14) uint16_t raw_brdf_distant_irradiance_texture;
+  layout(offset = 12) uint16_t raw_direct_irradiance_texture;
+  layout(offset = 14) uint16_t raw_brdf_direct_irradiance_texture;
   layout(offset = 16) uint16_t previous_depth_texture;
   layout(offset = 18) uint16_t previous_normal_texture;
-  layout(offset = 20) uint16_t previous_distant_irradiance_texture;
-  layout(offset = 22) uint16_t previous_distant_irradiance_luminance_texture;
+  layout(offset = 20) uint16_t previous_direct_irradiance_texture;
+  layout(offset = 22) uint16_t previous_direct_luminance_texture;
   layout(offset = 24) uint16_t motion_vector_texture;
-  layout(offset = 26) uint16_t distant_irradiance_image;
-  layout(offset = 28) uint16_t distant_irradiance_luminance_image;
+  layout(offset = 26) uint16_t direct_irradiance_image;
+  layout(offset = 28) uint16_t direct_luminance_image;
 } push_constants;
 
 void main() {
   const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
   const ivec2 size = imageSize(
-    storage_images[push_constants.distant_irradiance_image]);
+    storage_images[push_constants.direct_irradiance_image]);
   if (pixel.x >= size.x || pixel.y >= size.y) {
     return;
   }
@@ -46,9 +46,9 @@ void main() {
     0.0);
   if (g.linear_depth == 0.0) {
     imageStore(
-      storage_images[push_constants.distant_irradiance_image], pixel, vec4(0.0));
+      storage_images[push_constants.direct_irradiance_image], pixel, vec4(0.0));
     imageStore(
-      storage_images[push_constants.distant_irradiance_luminance_image],
+      storage_images[push_constants.direct_luminance_image],
       pixel,
       vec4(0.0));
     return;
@@ -58,18 +58,18 @@ void main() {
   // technique B's BRDF ray.
   const vec3 raw_color =
     texelFetch(
-      sampled_images[push_constants.raw_distant_irradiance_texture],
+      sampled_images[push_constants.raw_direct_irradiance_texture],
       pixel,
       0).rgb +
     texelFetch(
-      sampled_images[push_constants.raw_brdf_distant_irradiance_texture],
+      sampled_images[push_constants.raw_brdf_direct_irradiance_texture],
       pixel,
       0).rgb;
   // Moments describe the summed estimate, so they are taken after the sum.
   const float raw_luminance = luminance(raw_color);
   const vec2 raw_luminance_moments =
     vec2(raw_luminance, raw_luminance * raw_luminance);
-  const Distant_irradiance_history result = apply_distant_irradiance_history(
+  const Direct_history result = apply_direct_history(
     raw_color,
     raw_luminance_moments,
     g.normal,
@@ -79,15 +79,15 @@ void main() {
     push_constants.previous_depth_texture,
     push_constants.previous_normal_texture,
     push_constants.z_near,
-    push_constants.previous_distant_irradiance_texture,
-    push_constants.previous_distant_irradiance_luminance_texture,
+    push_constants.previous_direct_irradiance_texture,
+    push_constants.previous_direct_luminance_texture,
     push_constants.history_valid);
   imageStore(
-    storage_images[push_constants.distant_irradiance_image],
+    storage_images[push_constants.direct_irradiance_image],
     pixel,
     vec4(result.color, result.history_length));
   imageStore(
-    storage_images[push_constants.distant_irradiance_luminance_image],
+    storage_images[push_constants.direct_luminance_image],
     pixel,
     vec4(result.luminance_moments, 0.0, 0.0));
 }

@@ -177,7 +177,7 @@ add_library(
   src/client/local_player.cpp
   src/client/passes/composite_pass.cpp
   src/client/passes/crosshair_pass.cpp
-  src/client/passes/distant_irradiance_passes.cpp
+  src/client/passes/direct_passes.cpp
   src/client/passes/gbuffer_pass.cpp
   src/client/passes/radiance_pass.cpp
   src/client/passes/rt_entity_binning_pass.cpp

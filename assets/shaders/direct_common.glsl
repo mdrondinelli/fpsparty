@@ -1,5 +1,5 @@
-#ifndef FPSPARTY_DISTANT_IRRADIANCE_COMMON_GLSL
-#define FPSPARTY_DISTANT_IRRADIANCE_COMMON_GLSL
+#ifndef FPSPARTY_DIRECT_COMMON_GLSL
+#define FPSPARTY_DIRECT_COMMON_GLSL
 
 #include "descriptors.glsl"
 #include "gbuffer.glsl"
@@ -14,7 +14,7 @@ const float cos_sun_angular_radius = cos(sun_angular_radius);
 const float sun_solid_angle = 2.0 * pi * (1.0 - cos_sun_angular_radius);
 
 // Represents either a sun or sky sample.
-struct Distant_light_sample {
+struct Direct_sample {
   // The pixel index of the sample.
   uint pixel;
   // The random variables generated for the sample, packed via packUnorm2x16.
@@ -42,10 +42,10 @@ struct Distant_light_sample {
 //
 // for the emitter l a term is evaluating, V its visibility, and D_l the
 // density below. A contributes one term, written by
-// distant_irradiance_trace_sun.comp or distant_irradiance_trace_sky.comp
+// direct_trace_sun.comp or direct_trace_sky.comp
 // according to the pick. B contributes one per emitter, both written by
-// distant_irradiance_trace_brdf.comp. The two techniques write separate
-// render targets, and distant_irradiance_temporal.comp sums them.
+// direct_trace_brdf.comp. The two techniques write separate
+// render targets, and direct_temporal.comp sums them.
 //
 // Under the balance heuristic a technique's weight divided by its own
 // sampling density collapses to one over the summed density of every
@@ -58,13 +58,13 @@ struct Distant_light_sample {
 
 // A contributes p_sun / sun_solid_angle inside the cone (and cannot produce
 // the direction otherwise); B contributes the cosine density.
-float distant_irradiance_sun_density(float p_sun, float cos_theta) {
+float direct_sun_density(float p_sun, float cos_theta) {
   return p_sun / sun_solid_angle + cos_theta / pi;
 }
 
 // Both techniques cosine-sample the sky, so their densities differ only in
 // how often each fires: p_sky for A against 1 for B.
-float distant_irradiance_sky_density(float p_sun, float cos_theta) {
+float direct_sky_density(float p_sun, float cos_theta) {
   const float p_sky = 1.0 - p_sun;
   return (1.0 + p_sky) * cos_theta / pi;
 }
@@ -72,7 +72,7 @@ float distant_irradiance_sky_density(float p_sun, float cos_theta) {
 // Where the primary ray landed for one pixel, rebuilt from the G-buffer:
 // the three traces all start here and differ only in the direction they
 // pick and the term they contribute.
-struct Distant_irradiance_shading_point {
+struct Direct_shading_point {
   // World-space position on the surface, and the normal the cosine factor
   // is taken against.
   vec3 position;
@@ -83,14 +83,14 @@ struct Distant_irradiance_shading_point {
 };
 
 // A sample's pixel field is a flat row-major index into the frame.
-ivec2 distant_light_sample_pixel(
-    Distant_light_sample light_sample, ivec2 size) {
+ivec2 direct_sample_pixel(
+    Direct_sample light_sample, ivec2 size) {
   return ivec2(
     int(light_sample.pixel % uint(size.x)),
     int(light_sample.pixel / uint(size.x)));
 }
 
-Distant_irradiance_shading_point distant_irradiance_shading_point(
+Direct_shading_point direct_shading_point(
     Scene scene,
     uint depth_texture,
     uint normal_texture,
@@ -108,14 +108,14 @@ Distant_irradiance_shading_point distant_irradiance_shading_point(
   const vec3 position =
     view_ray_origin +
     mat3(scene.camera_basis) * (view_ray_direction * g.linear_depth);
-  return Distant_irradiance_shading_point(
+  return Direct_shading_point(
     position, g.normal, offset_ray_origin(position, g.normal));
 }
 
 layout(scalar, buffer_reference, buffer_reference_align = 4)
-restrict buffer Distant_light_samples {
+restrict buffer Direct_samples {
   uint count;
-  Distant_light_sample samples[];
+  Direct_sample samples[];
 };
 
 vec3 eval_incident_irradiance_sun(
@@ -134,29 +134,29 @@ vec3 eval_incident_irradiance_sky(vec3 w_i, vec3 n, Scene scene, uint sky_view_l
   return L_i * max(dot(n, w_i), 0.0);
 }
 
-const float distant_irradiance_history_depth_reject_ratio = 0.03;
+const float direct_history_depth_reject_ratio = 0.03;
 
-const float distant_irradiance_history_normal_reject_cos = 0.9659;
+const float direct_history_normal_reject_cos = 0.9659;
 
 // History-length counter (frames survived reprojection, capped) drives the
 // blend weight -- alpha = 1 / history_length -- instead of a fixed
 // constant, so freshly-established history isn't over-blended and
 // long-lived history converges to a lower noise floor. Stored in the
-// distant irradiance color texture's otherwise-unused alpha channel.
-const float max_distant_irradiance_history_length = 30.0;
+// direct irradiance color texture's otherwise-unused alpha channel.
+const float max_direct_history_length = 30.0;
 
-// Applies temporal accumulation to the distant irradiance color and
+// Applies temporal accumulation to the direct irradiance color and
 // luminance moments (R = luminance, G = luminance^2, for a future variance
 // estimate). Manual 4-tap bilinear (not hardware-filtered) so each tap can
 // be depth/normal-rejected individually, with its weight redistributed
 // among the survivors rather than corrupting the blend.
-struct Distant_irradiance_history {
+struct Direct_history {
   vec3 color;
   vec2 luminance_moments;
   float history_length;
 };
 
-Distant_irradiance_history apply_distant_irradiance_history(
+Direct_history apply_direct_history(
     vec3 current_color,
     vec2 current_luminance_moments,
     vec3 n,
@@ -166,11 +166,11 @@ Distant_irradiance_history apply_distant_irradiance_history(
     uint previous_depth_texture,
     uint previous_normal_texture,
     float z_near,
-    uint previous_distant_irradiance_texture,
-    uint previous_distant_irradiance_luminance_texture,
+    uint previous_direct_irradiance_texture,
+    uint previous_direct_luminance_texture,
     uint history_valid) {
   if (history_valid == 0u) {
-    return Distant_irradiance_history(
+    return Direct_history(
       current_color, current_luminance_moments, 1.0);
   }
   const vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
@@ -179,7 +179,7 @@ Distant_irradiance_history apply_distant_irradiance_history(
   const vec2 previous_uv = uv + motion_and_previous_depth.xy;
   if (any(lessThan(previous_uv, vec2(0.0))) ||
       any(greaterThan(previous_uv, vec2(1.0)))) {
-    return Distant_irradiance_history(
+    return Direct_history(
       current_color, current_luminance_moments, 1.0);
   }
   // motion_and_previous_depth.z is already linear -- see motion_vector().
@@ -209,34 +209,34 @@ Distant_irradiance_history apply_distant_irradiance_history(
       texelFetch(sampled_images[previous_normal_texture], coord, 0).xy,
       0.0);
     if (abs(previous_linear_depth - history.linear_depth) >
-        distant_irradiance_history_depth_reject_ratio * previous_linear_depth) {
+        direct_history_depth_reject_ratio * previous_linear_depth) {
       continue;
     }
-    if (dot(n, history.normal) < distant_irradiance_history_normal_reject_cos) {
+    if (dot(n, history.normal) < direct_history_normal_reject_cos) {
       continue;
     }
     weight_sum += weights[i];
     const vec4 previous_color =
       texelFetch(
-        sampled_images[previous_distant_irradiance_texture], coord, 0);
+        sampled_images[previous_direct_irradiance_texture], coord, 0);
     color_sum += weights[i] * previous_color.rgb;
     history_length_sum += weights[i] * previous_color.a;
     luminance_sum +=
       weights[i] *
       texelFetch(
-        sampled_images[previous_distant_irradiance_luminance_texture],
+        sampled_images[previous_direct_luminance_texture],
         coord,
         0).rg;
   }
   if (weight_sum <= 0.0) {
-    return Distant_irradiance_history(
+    return Direct_history(
       current_color, current_luminance_moments, 1.0);
   }
   const float history_length = min(
     history_length_sum / weight_sum + 1.0,
-    max_distant_irradiance_history_length);
+    max_direct_history_length);
   const float alpha = 1.0 / history_length;
-  return Distant_irradiance_history(
+  return Direct_history(
     mix(color_sum / weight_sum, current_color, alpha),
     mix(luminance_sum / weight_sum, current_luminance_moments, alpha),
     history_length);

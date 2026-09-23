@@ -1,10 +1,10 @@
-// Sun half of the trace stage (distant_irradiance_trace_sky.comp is the
+// Sun half of the trace stage (direct_trace_sky.comp is the
 // other half).
 
 #version 450
 
 #include "color.glsl"
-#include "distant_irradiance_common.glsl"
+#include "direct_common.glsl"
 #include "gbuffer.glsl"
 #include "rt.glsl"
 #include "sampling.glsl"
@@ -14,10 +14,10 @@ layout(local_size_x = 64) in;
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
   layout(offset = 8) uint16_t depth_texture;
-  layout(offset = 10) uint16_t distant_irradiance_image;
+  layout(offset = 10) uint16_t direct_irradiance_image;
   layout(offset = 12) uint16_t transmittance_texture;
   layout(offset = 14) uint16_t normal_texture;
-  layout(offset = 24) Distant_light_samples sun_samples;
+  layout(offset = 24) Direct_samples sun_samples;
   layout(offset = 32) Rt_block_shape_grid rt_block_shape_grid;
   layout(offset = 40) Rt_entities entities;
   layout(offset = 48) Rt_entity_head_grid entity_head_grid;
@@ -31,13 +31,13 @@ void main() {
   if (gl_GlobalInvocationID.x >= push_constants.sun_samples.count) {
     return;
   }
-  const Distant_light_sample light_sample =
+  const Direct_sample light_sample =
     push_constants.sun_samples.samples[gl_GlobalInvocationID.x];
   const ivec2 size =
-    imageSize(storage_images[push_constants.distant_irradiance_image]);
-  const ivec2 pixel = distant_light_sample_pixel(light_sample, size);
-  const Distant_irradiance_shading_point shading_point =
-    distant_irradiance_shading_point(
+    imageSize(storage_images[push_constants.direct_irradiance_image]);
+  const ivec2 pixel = direct_sample_pixel(light_sample, size);
+  const Direct_shading_point shading_point =
+    direct_shading_point(
       push_constants.scene,
       push_constants.depth_texture,
       push_constants.normal_texture,
@@ -74,8 +74,8 @@ void main() {
       (shadow_ray_hit ? 0.0 : 1.0) *
       eval_incident_irradiance_sun(w_i, n, sun_irradiance, transmittance);
     E = integrand /
-      distant_irradiance_sun_density(light_sample.p_sun, cos_theta);
+      direct_sun_density(light_sample.p_sun, cos_theta);
   }
   imageStore(
-    storage_images[push_constants.distant_irradiance_image], pixel, vec4(E, 1.0));
+    storage_images[push_constants.direct_irradiance_image], pixel, vec4(E, 1.0));
 }

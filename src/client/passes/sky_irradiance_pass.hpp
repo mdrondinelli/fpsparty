@@ -13,7 +13,7 @@ namespace fpsparty::client::passes {
 // gives it (see Sky_irradiance_offset below) -- the CPU-side write to the
 // rest of that frame's Scene happens later (Gbuffer_pass), on disjoint
 // bytes, so no dependency between them; but later GPU reads of this
-// pass's output (distant irradiance) do need the barrier Graph::execute
+// pass's output (direct irradiance) do need the barrier Graph::execute
 // now inserts automatically from the declared write/read.
 class Sky_irradiance_pass : public render_graph::Node {
 public:

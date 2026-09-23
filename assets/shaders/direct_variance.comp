@@ -4,7 +4,7 @@
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
-// Runs after distant_irradiance_trace_sun.comp / distant_irradiance_trace_
+// Runs after direct_trace_sun.comp / direct_trace_
 // sky.comp (temporal accumulation done): reads this frame's luminance
 // moments, blurs them with a 3x3 (1,2,1) gaussian, then derives variance
 // from the blurred moments. No edge-stopping weights -- just a plain
@@ -15,14 +15,14 @@ layout(local_size_x = 8, local_size_y = 8) in;
 // texelFetch taps.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) uint16_t depth_texture;
-  layout(offset = 2) uint16_t distant_irradiance_luminance_texture;
-  layout(offset = 4) uint16_t distant_irradiance_variance_image;
+  layout(offset = 2) uint16_t direct_luminance_texture;
+  layout(offset = 4) uint16_t direct_variance_image;
 } push_constants;
 
 void main() {
   const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
   const ivec2 size = imageSize(
-    storage_images[push_constants.distant_irradiance_variance_image]);
+    storage_images[push_constants.direct_variance_image]);
   if (pixel.x >= size.x || pixel.y >= size.y) {
     return;
   }
@@ -33,7 +33,7 @@ void main() {
     sampled_images[push_constants.depth_texture], pixel, 0).x;
   if (depth == 0.0) {
     imageStore(
-      storage_images[push_constants.distant_irradiance_variance_image],
+      storage_images[push_constants.direct_variance_image],
       pixel,
       vec4(0.0));
     return;
@@ -46,13 +46,13 @@ void main() {
       (i & 1) == 0 ? -0.5 : 0.5, (i & 2) == 0 ? -0.5 : 0.5) * texel_size;
     moments += 0.25 * texture(
       sampler2D(
-        sampled_images[push_constants.distant_irradiance_luminance_texture],
+        sampled_images[push_constants.direct_luminance_texture],
         SAMPLER_LINEAR_CLAMP),
       center + corner).rg;
   }
   const float variance = max(moments.y - moments.x * moments.x, 0.0);
   imageStore(
-    storage_images[push_constants.distant_irradiance_variance_image],
+    storage_images[push_constants.direct_variance_image],
     pixel,
     vec4(variance, 0.0, 0.0, 0.0));
 }

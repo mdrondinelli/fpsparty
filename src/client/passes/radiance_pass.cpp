@@ -31,9 +31,9 @@ void Radiance_pass::declare(render_graph::Builder &builder) {
     // by Sky_view_pass, if it ran this frame (its own gating -- camera &&
     // sun -- can be true even when this pass's gating -- camera &&
     // grid_mesh uploaded -- is, without sun; declaring the read
-    // regardless is harmless, see Distant_irradiance_light_pick_pass::declare's
-    // comment). distant_irradiance_filtered: written by the last
-    // Distant_irradiance_spatial_filter_pass iteration.
+    // regardless is harmless, see Direct_light_pick_pass::declare's
+    // comment). direct_irradiance_filtered: written by the last
+    // Direct_spatial_filter_pass iteration.
     _albedo_handle = builder.read(
       _inputs.albedo_render_target, render_graph::access::compute_sampled_read);
     _depth_handle = builder.read(
@@ -41,8 +41,8 @@ void Radiance_pass::declare(render_graph::Builder &builder) {
       render_graph::access::compute_sampled_read);
     _sky_view_lut_handle = builder.read(
       _inputs.sky_view_lut, render_graph::access::compute_sampled_read);
-    _distant_irradiance_filtered_handle = builder.read(
-      _inputs.distant_irradiance_filtered,
+    _direct_irradiance_filtered_handle = builder.read(
+      _inputs.direct_irradiance_filtered,
       render_graph::access::compute_sampled_read);
   }
   _radiance_handle = builder.write(
@@ -101,7 +101,7 @@ void Radiance_pass::execute(
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_radiance_handle),
       .kind = graphics::Descriptor_kind::storage},
-     {.image = resources.get_image(_distant_irradiance_filtered_handle),
+     {.image = resources.get_image(_direct_irradiance_filtered_handle),
       .kind = graphics::Descriptor_kind::sampled}});
   auto const group_count_x =
     static_cast<std::uint32_t>((_inputs.framebuffer_size.x() + 7) / 8);

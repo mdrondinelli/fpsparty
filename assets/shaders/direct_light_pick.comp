@@ -2,7 +2,7 @@
 
 #include "atmosphere/sky_irradiance.glsl"
 #include "color.glsl"
-#include "distant_irradiance_common.glsl"
+#include "direct_common.glsl"
 #include "gbuffer.glsl"
 #include "random.glsl"
 
@@ -15,10 +15,10 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 12) uint16_t sky_view_lut;
   layout(offset = 14) uint16_t normal_texture;
   layout(offset = 16) Sky_irradiance sky_irradiance;
-  layout(offset = 24) Distant_light_samples sun_samples;
-  layout(offset = 32) Distant_light_samples sky_samples;
+  layout(offset = 24) Direct_samples sun_samples;
+  layout(offset = 32) Direct_samples sky_samples;
   layout(offset = 40) uint seed;
-  layout(offset = 48) Distant_light_samples brdf_samples;
+  layout(offset = 48) Direct_samples brdf_samples;
 } push_constants;
 
 shared uint sun_offset;
