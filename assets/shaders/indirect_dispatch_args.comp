@@ -18,9 +18,9 @@ restrict buffer Indirect_dispatch_args {
   uint count;
 };
 
-// The consuming dispatch_indirect's local_size_x -- direct_
-// trace_sun.comp / direct_trace_sky.comp are both 64 today, the
-// only callers of this shader.
+// The consuming dispatch_indirect's local_size_x. direct_trace_sun.comp
+// and direct_trace_sky.comp are 64, and direct_trace_brdf.comp's
+// continuation passes are 8x8, so all callers agree.
 const uint group_size = 64;
 
 layout(push_constant) uniform Push_constants {

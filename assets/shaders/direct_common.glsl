@@ -70,6 +70,50 @@ vec2 direct_load_uv(uint uv_image, ivec2 pixel) {
   return unpackUnorm2x16(imageLoad(storage_uimages[uv_image], pixel).x);
 }
 
+// A ray put down mid-traversal, to be resumed in a later pass. Shading
+// data is not carried: it is cheaper to re-read the G-buffer for the few
+// rays that survive than to widen every record.
+struct Direct_ray_state {
+  vec3 origin;
+  vec3 dir;
+  vec3 t_max;
+  ivec3 cell_coords;
+  float entry_t;
+  // The normal only ever reaches the integrand as this cosine, so the
+  // cosine is what gets carried -- recovering the normal would mean two
+  // scattered G-buffer fetches per ray that terminates here.
+  float cos_theta;
+  uint pixel;
+  // steps in the low 16 bits, entry axes above. Packing them is what
+  // makes room for cos_theta without growing the record past 64 bytes,
+  // which is two cache sectors and keeps every record aligned to them.
+  uint steps_and_axes;
+};
+
+uint direct_pack_steps(uint steps, uint entry_axes) {
+  return steps | (entry_axes << 16u);
+}
+
+layout(scalar, buffer_reference, buffer_reference_align = 4)
+restrict buffer Direct_ray_states {
+  uint dispatch_x;
+  uint dispatch_y;
+  uint dispatch_z;
+  uint count;
+  Direct_ray_state states[];
+};
+
+// Steps between coherence checks. Shorter reacts sooner to a warp
+// thinning out; longer spends less on ballots.
+const uint direct_traverse_check_interval = 16u;
+
+// A warp puts its rays down once live lanes fall to this fraction of the
+// subgroup, written as a divisor: 2 is half, 4 a quarter. Suspending
+// earlier moves work into the later passes, which is worth doing while
+// they stay cheap. It costs nothing in correctness -- the final pass
+// never suspends, so rays always finish against trace_max_steps.
+const uint direct_traverse_suspend_divisor = 2u;
+
 // Primary surface reconstructed from the G-buffer, in world space.
 struct Direct_shading_point {
   vec3 position;
@@ -100,20 +144,24 @@ Direct_shading_point direct_shading_point(
     position, g.normal, offset_ray_origin(position, g.normal));
 }
 
+// The surface normal reaches these only as the cosine against w_i, so
+// they take that directly: callers already have it, and it saves each of
+// them recomputing the same dot product two or three times per ray.
 vec3 eval_incident_irradiance_sun(
-    vec3 w_i, vec3 n, vec3 integrated_irradiance, vec3 transmittance) {
+    float cos_theta, vec3 integrated_irradiance, vec3 transmittance) {
   const vec3 L_i = integrated_irradiance / sun_solid_angle * transmittance;
-  return L_i * max(dot(n, w_i), 0.0);
+  return L_i * cos_theta;
 }
 
-vec3 eval_incident_irradiance_sky(vec3 w_i, vec3 n, Scene scene, uint sky_view_lut) {
+vec3 eval_incident_irradiance_sky(
+    vec3 w_i, float cos_theta, Scene scene, uint sky_view_lut) {
   const vec3 L_i =
     textureLod(
       sampler2D(sampled_images[sky_view_lut], SAMPLER_LAT_LONG),
       pack_sky_view_lut_params(
         longitude(w_i), scene.camera_basis[3][1], zenith(w_i)),
       0.0).rgb;
-  return L_i * max(dot(n, w_i), 0.0);
+  return L_i * cos_theta;
 }
 
 // The cone lobe's mixture weight, and whether the environment is worth a
@@ -137,7 +185,9 @@ Direct_environment_weight direct_environment_weight(
     sun_direction);
   const float l_sun = luminance(
     eval_incident_irradiance_sun(
-      sun_direction, n, scene.sun_irradiance, sun_transmittance) *
+      max(dot(n, sun_direction), 0.0),
+      scene.sun_irradiance,
+      sun_transmittance) *
     sun_solid_angle);
   const float l_sky = luminance(sample_sky_irradiance(sky_irradiance, n));
   const float total = l_sun + l_sky;
@@ -184,20 +234,21 @@ bool direct_in_sun_disc(vec3 w_i, vec3 sun_direction) {
 // never sees it.
 vec3 direct_environment_integrand(
     Scene scene,
-    vec3 n,
+    float cos_theta,
     float shading_altitude,
     vec3 w_i,
     bool in_sun_disc,
     uint transmittance_texture,
     uint sky_view_lut) {
-  vec3 integrand = eval_incident_irradiance_sky(w_i, n, scene, sky_view_lut);
+  vec3 integrand =
+    eval_incident_irradiance_sky(w_i, cos_theta, scene, sky_view_lut);
   if (in_sun_disc) {
     const vec3 transmittance = transmittance_along_ray(
       transmittance_texture,
       vec3(0.0, r_ground + shading_altitude, 0.0),
       w_i);
-    integrand +=
-      eval_incident_irradiance_sun(w_i, n, scene.sun_irradiance, transmittance);
+    integrand += eval_incident_irradiance_sun(
+      cos_theta, scene.sun_irradiance, transmittance);
   }
   return integrand;
 }

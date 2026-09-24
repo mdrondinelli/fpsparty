@@ -5,16 +5,25 @@
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
-// Cosine BRDF sample, one per surface pixel. Dispatched full screen with a
-// depth early-out rather than from a queue: its rays are incoherent by
-// construction, so a queue would buy compaction only, and 2D workgroups
-// keep neighbouring rays in the same warp, which their traversal does
-// benefit from.
+// Cosine BRDF sample, one per surface pixel, traversed in bounded rounds.
 //
-// Writes the unweighted integrand. Alpha carries whether the ray escaped,
-// which is what tells the combination pass whether the environment's
-// density belongs in the denominator: a ray that ends on emissive
-// geometry names an emitter nothing samples by index, so there P * p is 0.
+// A warp runs until its last lane terminates, and DDA trip counts vary by
+// orders of magnitude, so a warp whose lanes have mostly finished burns
+// issue slots on masked-off threads. Measured lane utilization is ~27%
+// here against 95% for the sun's mutually parallel rays, and forcing the
+// directions parallel cut this pass from 1.9ms to 0.5ms.
+//
+// So every direct_traverse_check_interval steps the warp counts its live
+// lanes, and once they fall below direct_traverse_suspend_divisor it puts
+// them down: their
+// traversal state goes to a continuation queue and a later pass resumes
+// them packed together. Sorting by direction was tried first and lost --
+// it fixed lane utilization but scattered every lane's memory access,
+// which cost more. Compaction keeps the screen ordering the survivors
+// arrived in.
+//
+// The final pass does not suspend; whatever is still running there
+// terminates against trace_max_steps as it always did.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
   layout(offset = 8) uint16_t depth_texture;
@@ -30,52 +39,138 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 48) Rt_entity_nodes entity_nodes;
   layout(offset = 56) Rt_block_material_grid rt_block_material_grid;
   layout(offset = 64) Rt_entity_mask_grid entity_mask_grid;
+  layout(offset = 72) Direct_ray_states in_states;
+  layout(offset = 80) Direct_ray_states out_states;
+  // Bit 0: resume from in_states rather than starting from the screen.
+  // Bit 1: last pass, so never suspend.
+  layout(offset = 88) uint flags;
 } push_constants;
 
+shared uint append_count;
+shared uint append_base;
+
 void main() {
-  const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  const bool continuation = (push_constants.flags & 1u) != 0u;
+  const bool final_pass = (push_constants.flags & 2u) != 0u;
   const ivec2 size =
     imageSize(storage_images[push_constants.brdf_numerator_image]);
-  if (pixel.x >= size.x || pixel.y >= size.y) {
-    return;
+  ivec2 pixel = ivec2(0);
+  uint pixel_index = 0u;
+  bool traversing = false;
+  float cos_theta = 0.0;
+  Rt_traversal traversal;
+  if (continuation) {
+    const uint index = gl_WorkGroupID.x * 64u + gl_LocalInvocationIndex;
+    if (index < push_constants.in_states.count) {
+      const Direct_ray_state state = push_constants.in_states.states[index];
+      traversal.origin = state.origin;
+      traversal.dir = state.dir;
+      traversal.t_max = state.t_max;
+      traversal.cell_coords = state.cell_coords;
+      traversal.entry_t = state.entry_t;
+      traversal.entry_axes = state.steps_and_axes >> 16u;
+      traversal.steps = state.steps_and_axes & 0xffffu;
+      cos_theta = state.cos_theta;
+      pixel_index = state.pixel;
+      pixel = direct_queue_pixel(pixel_index, size);
+      traversing = true;
+    }
+  } else {
+    pixel = ivec2(gl_GlobalInvocationID.xy);
+    pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
+    if (pixel.x < size.x && pixel.y < size.y &&
+        texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).x !=
+          0.0) {
+      const Direct_shading_point shading_point =
+        direct_shading_point(
+          push_constants.scene,
+          push_constants.depth_texture,
+          push_constants.normal_texture,
+          pixel,
+          size);
+      const vec3 w_i = direct_brdf_direction(
+        shading_point.normal,
+        direct_load_uv(push_constants.brdf_uv_image, pixel));
+      cos_theta = max(dot(shading_point.normal, w_i), 0.0);
+      traversal = rt_traversal_begin(shading_point.ray_origin, w_i);
+      traversing = true;
+    }
   }
-  // No geometry here. The combination pass skips this texel on the same
-  // test, so leaving it stale costs nothing.
-  if (texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).x ==
-      0.0) {
-    return;
-  }
-  const Direct_shading_point shading_point =
-    direct_shading_point(
-      push_constants.scene,
-      push_constants.depth_texture,
-      push_constants.normal_texture,
-      pixel,
-      size);
-  const vec3 n = shading_point.normal;
-  const vec3 w_i = direct_brdf_direction(
-    n, direct_load_uv(push_constants.brdf_uv_image, pixel));
-  const float cos_theta = max(dot(n, w_i), 0.0);
   Rt_hit hit;
-  const bool hit_surface = trace_ray(
-    push_constants.rt_block_shape_grid,
-    push_constants.rt_block_material_grid,
-    push_constants.entities,
-    push_constants.entity_head_grid,
-    push_constants.entity_mask_grid,
-    push_constants.entity_nodes,
-    shading_point.ray_origin,
-    w_i,
-    true,
-    hit);
+  uint result = rt_traverse_miss;
+  bool suspended = false;
+  if (traversing) {
+    while (true) {
+      result = rt_traverse(
+        push_constants.rt_block_shape_grid,
+        push_constants.rt_block_material_grid,
+        push_constants.entities,
+        push_constants.entity_head_grid,
+        push_constants.entity_mask_grid,
+        push_constants.entity_nodes,
+        true,
+        direct_traverse_check_interval,
+        traversal,
+        hit);
+      if (result != rt_traverse_suspended) {
+        break;
+      }
+      if (final_pass) {
+        continue;
+      }
+      // Only lanes still traversing reach the ballot, so this counts them.
+      const uint live = subgroupBallotBitCount(subgroupBallot(true));
+      if (live * direct_traverse_suspend_divisor <= gl_SubgroupSize) {
+        suspended = true;
+        break;
+      }
+    }
+  }
+  if (gl_LocalInvocationIndex == 0u) {
+    append_count = 0u;
+  }
+  barrier();
+  uint rank = 0u;
+  if (suspended) {
+    rank = atomicAdd(append_count, 1u);
+  }
+  barrier();
+  if (gl_LocalInvocationIndex == 0u && append_count != 0u) {
+    append_base = atomicAdd(push_constants.out_states.count, append_count);
+    // Grow the next pass's dispatch to cover what this workgroup just
+    // appended. Monotonic, so the last writer leaves the right answer and
+    // no separate pass is needed to turn the count into a command.
+    atomicMax(
+      push_constants.out_states.dispatch_x,
+      (append_base + append_count + 63u) / 64u);
+  }
+  barrier();
+  if (suspended) {
+    Direct_ray_state state;
+    state.origin = traversal.origin;
+    state.dir = traversal.dir;
+    state.t_max = traversal.t_max;
+    state.cell_coords = traversal.cell_coords;
+    state.entry_t = traversal.entry_t;
+    state.cos_theta = cos_theta;
+    state.pixel = pixel_index;
+    state.steps_and_axes =
+      direct_pack_steps(traversal.steps, traversal.entry_axes);
+    push_constants.out_states.states[append_base + rank] = state;
+  }
+  if (!traversing || suspended) {
+    return;
+  }
+  const vec3 w_i = traversal.dir;
+  const bool hit_surface = result == rt_traverse_hit;
   vec3 numerator = vec3(0.0);
   if (cos_theta > 0.0) {
     numerator = hit_surface
       ? hit.emissivity * cos_theta
       : direct_environment_integrand(
           push_constants.scene,
-          n,
-          shading_point.position.y,
+          cos_theta,
+          traversal.origin.y,
           w_i,
           direct_in_sun_disc(w_i, push_constants.scene.sun_direction),
           push_constants.transmittance_texture,

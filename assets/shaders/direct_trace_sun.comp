@@ -44,7 +44,7 @@ void main() {
     if (!occluded) {
       numerator = direct_environment_integrand(
         push_constants.scene,
-        n,
+        cos_theta,
         shading_point.position.y,
         w_i,
         true,

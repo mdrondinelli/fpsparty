@@ -17,6 +17,8 @@ namespace fpsparty::client::passes {
 struct Direct_sample_clear_pass_inputs {
   render_graph::Symbolic_buffer sun_queue_buffer;
   render_graph::Symbolic_buffer sky_queue_buffer;
+  render_graph::Symbolic_buffer first_state_buffer;
+  render_graph::Symbolic_buffer second_state_buffer;
 };
 
 class Direct_sample_clear_pass : public render_graph::Node {
@@ -33,6 +35,8 @@ private:
   Direct_sample_clear_pass_inputs _inputs;
   render_graph::Resource_handle _sun_queue_handle{};
   render_graph::Resource_handle _sky_queue_handle{};
+  render_graph::Resource_handle _first_state_handle{};
+  render_graph::Resource_handle _second_state_handle{};
 };
 
 // Writes both samples' random variables to a per-pixel payload image and
@@ -191,6 +195,14 @@ struct Direct_brdf_trace_pass_inputs {
   std::size_t scene_uniform_offset;
   Direct_rt_inputs rt;
   math::ivec2 framebuffer_size;
+  // Rays put down by the previous pass, and where this one puts its own.
+  // The first pass starts from the screen and ignores in_state_buffer.
+  render_graph::Symbolic_buffer in_state_buffer;
+  render_graph::Symbolic_buffer out_state_buffer;
+  bool is_continuation;
+  // The last pass never suspends: whatever is still running terminates
+  // against trace_max_steps.
+  bool is_final;
 };
 
 class Direct_brdf_trace_pass : public render_graph::Node {
@@ -208,6 +220,8 @@ public:
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Direct_brdf_trace_pass_inputs _inputs;
+  render_graph::Resource_handle _in_state_handle{};
+  render_graph::Resource_handle _out_state_handle{};
   render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _uv_handle{};
