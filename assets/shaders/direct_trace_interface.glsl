@@ -12,7 +12,6 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 12) uint16_t transmittance_texture;
   layout(offset = 14) uint16_t sky_view_lut;
   layout(offset = 16) uint16_t normal_texture;
-  // offset 18: 6 bytes unused (buffer references need 8-byte alignment).
   layout(offset = 24) Direct_samples samples;
   layout(offset = 32) Rt_block_shape_grid rt_block_shape_grid;
   layout(offset = 40) Rt_entities entities;
