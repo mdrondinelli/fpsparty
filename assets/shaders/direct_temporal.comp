@@ -1,0 +1,76 @@
+#version 450
+
+#include "color.glsl"
+#include "descriptors.glsl"
+#include "direct_history.glsl"
+#include "gbuffer.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// Reproject and accumulate irradiance and luminance moments. Spatial
+// filtering reads this history without modifying it.
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) uint history_valid;
+  layout(offset = 4) float z_near;
+  layout(offset = 8) uint16_t depth_texture;
+  layout(offset = 10) uint16_t normal_texture;
+  layout(offset = 12) uint16_t raw_direct_irradiance_texture;
+  layout(offset = 14) uint16_t previous_depth_texture;
+  layout(offset = 16) uint16_t previous_normal_texture;
+  layout(offset = 18) uint16_t previous_direct_irradiance_texture;
+  layout(offset = 20) uint16_t previous_direct_luminance_texture;
+  layout(offset = 22) uint16_t motion_vector_texture;
+  layout(offset = 24) uint16_t direct_irradiance_image;
+  layout(offset = 26) uint16_t direct_luminance_image;
+} push_constants;
+
+void main() {
+  const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  const ivec2 size = imageSize(
+    storage_images[push_constants.direct_irradiance_image]);
+  if (pixel.x >= size.x || pixel.y >= size.y) {
+    return;
+  }
+  const Gbuffer_sample g = gbuffer_decode(
+    texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).x,
+    push_constants.z_near,
+    texelFetch(sampled_images[push_constants.normal_texture], pixel, 0).xy,
+    0.0);
+  if (g.linear_depth == 0.0) {
+    imageStore(
+      storage_images[push_constants.direct_irradiance_image], pixel, vec4(0.0));
+    imageStore(
+      storage_images[push_constants.direct_luminance_image],
+      pixel,
+      vec4(0.0));
+    return;
+  }
+  const vec3 raw_color = texelFetch(
+    sampled_images[push_constants.raw_direct_irradiance_texture],
+    pixel,
+    0).rgb;
+  const float raw_luminance = luminance(raw_color);
+  const vec2 raw_luminance_moments =
+    vec2(raw_luminance, raw_luminance * raw_luminance);
+  const Direct_history result = apply_direct_history(
+    raw_color,
+    raw_luminance_moments,
+    g.normal,
+    pixel,
+    size,
+    push_constants.motion_vector_texture,
+    push_constants.previous_depth_texture,
+    push_constants.previous_normal_texture,
+    push_constants.z_near,
+    push_constants.previous_direct_irradiance_texture,
+    push_constants.previous_direct_luminance_texture,
+    push_constants.history_valid);
+  imageStore(
+    storage_images[push_constants.direct_irradiance_image],
+    pixel,
+    vec4(result.color, result.history_length));
+  imageStore(
+    storage_images[push_constants.direct_luminance_image],
+    pixel,
+    vec4(result.luminance_moments, 0.0, 0.0));
+}

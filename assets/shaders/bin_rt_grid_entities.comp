@@ -5,20 +5,23 @@
 layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
 layout(push_constant) uniform Push_constants {
-  layout(offset = 0) Rt_block_grid block_grid;
+  layout(offset = 0) Rt_block_shape_grid block_shape_grid;
   layout(offset = 8) Rt_entities entities;
-  layout(offset = 16) Rt_entity_grid entity_grid;
+  layout(offset = 16) Rt_entity_head_grid entity_head_grid;
   layout(offset = 24) Rt_entity_nodes entity_nodes;
+  layout(offset = 32) Rt_entity_mask_grid entity_mask_grid;
 } push_constants;
+
+shared uint chunk_mask_words[2];
 
 const uint node_capacity_per_chunk = 1000;
 
 void main() {
   const uint invocation = gl_LocalInvocationIndex;
   const uvec3 chunk_counts = uvec3(
-    push_constants.block_grid.chunk_count_x,
-    push_constants.block_grid.chunk_count_y,
-    push_constants.block_grid.chunk_count_z);
+    push_constants.block_shape_grid.chunk_count_x,
+    push_constants.block_shape_grid.chunk_count_y,
+    push_constants.block_shape_grid.chunk_count_z);
   const uint chunk_index = gl_WorkGroupID.x;
   const uint chunk_count =
     chunk_counts.x * chunk_counts.y * chunk_counts.z;
@@ -34,9 +37,9 @@ void main() {
     4 * (
       ivec3(local_chunk) +
       ivec3(
-        push_constants.block_grid.min_chunk_x,
-        push_constants.block_grid.min_chunk_y,
-        push_constants.block_grid.min_chunk_z)
+        push_constants.block_shape_grid.min_chunk_x,
+        push_constants.block_shape_grid.min_chunk_y,
+        push_constants.block_shape_grid.min_chunk_z)
     ) +
     ivec3(gl_LocalInvocationID);
   int local_head = -1;
@@ -64,5 +67,20 @@ void main() {
     }
   }
   const uint cell_index = chunk_index * 64 + invocation;
-  push_constants.entity_grid.heads[cell_index] = local_head;
+  push_constants.entity_head_grid.heads[cell_index] = local_head;
+  // Summarize the chunk's heads into one bit per cell, so traversal can
+  // rule out a cell without reading the head grid. The workgroup is
+  // exactly one chunk, so the reduction is two shared words.
+  if (invocation < 2u) {
+    chunk_mask_words[invocation] = 0u;
+  }
+  barrier();
+  if (local_head != -1) {
+    atomicOr(chunk_mask_words[invocation >> 5u], 1u << (invocation & 31u));
+  }
+  barrier();
+  if (invocation < 2u) {
+    push_constants.entity_mask_grid.chunks[chunk_index].words[invocation] =
+      chunk_mask_words[invocation];
+  }
 }

@@ -16,18 +16,30 @@ namespace fpsparty::client {
 
 namespace {
 
-struct Rt_block_grid_cell {
-  Rt_block_shape shape;
+// Mirrors rt.glsl. Shapes and materials are separate arrays because only
+// the shape is read while stepping the grid: one byte per cell keeps a
+// chunk's shapes to 64 bytes, so a ray crossing it touches two 32-byte
+// sectors whatever direction it runs. The material is read at most once
+// per ray, at the hit.
+struct Rt_block_shape_chunk {
+  std::array<Rt_block_shape, 64> shapes;
+};
+
+static_assert(sizeof(Rt_block_shape_chunk) == 64);
+
+struct Rt_block_material {
+  _Float16 emissivity_scale;
   Rt_color color;
-  float emissivity_scale;
 };
 
-static_assert(sizeof(Rt_block_grid_cell) == 8);
-static_assert(offsetof(Rt_block_grid_cell, emissivity_scale) == 4);
+static_assert(sizeof(Rt_block_material) == 4);
+static_assert(offsetof(Rt_block_material, color) == 2);
 
-struct Rt_block_grid_chunk {
-  std::array<Rt_block_grid_cell, 64> cells;
+struct Rt_block_material_chunk {
+  std::array<Rt_block_material, 64> materials;
 };
+
+static_assert(sizeof(Rt_block_material_chunk) == 256);
 
 } // namespace
 
@@ -44,10 +56,14 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
   auto const grid_empty = info.grid->empty();
   auto const chunk_counts =
     grid_empty ? math::ivec3::Zero().eval() : info.grid->get_chunk_counts();
-  auto rt_block_grid_chunks = std::vector<Rt_block_grid_chunk>(
+  auto const rt_block_chunk_count =
     static_cast<std::size_t>(chunk_counts.x()) *
     static_cast<std::size_t>(chunk_counts.y()) *
-    static_cast<std::size_t>(chunk_counts.z()));
+    static_cast<std::size_t>(chunk_counts.z());
+  auto rt_block_shape_chunks =
+    std::vector<Rt_block_shape_chunk>(rt_block_chunk_count);
+  auto rt_block_material_chunks =
+    std::vector<Rt_block_material_chunk>(rt_block_chunk_count);
   for (auto const &[chunk_coords, chunk] : info.grid->get_chunks()) {
     auto const chunk_index = info.grid->get_chunk_index(chunk_coords);
     auto chunk_vertices =
@@ -104,10 +120,12 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
           if (chunk->is_solid({rel_x, rel_y, rel_z})) {
             auto const block_index =
               game::Chunk::get_block_index({rel_x, rel_y, rel_z});
-            rt_block_grid_chunks[chunk_index].cells[block_index] = {
-              .shape = block_model->rt_shape,
+            rt_block_shape_chunks[chunk_index].shapes[block_index] =
+              block_model->rt_shape;
+            rt_block_material_chunks[chunk_index].materials[block_index] = {
+              .emissivity_scale =
+                static_cast<_Float16>(block_model->emissivity_scale),
               .color = block_model->rt_color,
-              .emissivity_scale = block_model->emissivity_scale,
             };
           }
         }
@@ -153,10 +171,22 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
   };
   static_assert(sizeof(rt_block_grid_header) == 24);
   _rt_block_grid_chunk_count =
-    static_cast<std::uint32_t>(rt_block_grid_chunks.size());
-  auto const rt_block_grid_buffer_size =
+    static_cast<std::uint32_t>(rt_block_chunk_count);
+  // One allocation, three regions: header, then the shape chunks the
+  // traversal walks, then the material chunks a hit reads. The material
+  // region's offset is pushed as a second buffer reference, so it must
+  // satisfy rt.glsl's buffer_reference_align of 4 -- it does
+  // unconditionally, the header being 24 bytes and each shape chunk 64.
+  auto const rt_block_material_grid_offset =
     sizeof(rt_block_grid_header) +
-    sizeof(Rt_block_grid_chunk) * rt_block_grid_chunks.size();
+    sizeof(Rt_block_shape_chunk) * rt_block_chunk_count;
+  static_assert(sizeof(rt_block_grid_header) % 4 == 0);
+  static_assert(sizeof(Rt_block_shape_chunk) % 4 == 0);
+  _rt_block_material_grid_offset =
+    static_cast<std::uint32_t>(rt_block_material_grid_offset);
+  auto const rt_block_grid_buffer_size =
+    rt_block_material_grid_offset +
+    sizeof(Rt_block_material_chunk) * rt_block_chunk_count;
   if (vertex_buffer_size > 0 && index_buffer_size > 0 && draw_buffer_size > 0) {
     auto const staging_buffer = info.graphics->create_staging_buffer(
       vertex_buffer_size + index_buffer_size + draw_buffer_size +
@@ -180,7 +210,9 @@ Grid_mesh::Grid_mesh(Grid_mesh_create_info const &info) {
     }
     auto const rt_block_grid_buffer_offset = staging_buffer_writer.offset();
     staging_buffer_writer.write(std::as_bytes(std::span{rt_block_grid_header}));
-    staging_buffer_writer.write(std::as_bytes(std::span{rt_block_grid_chunks}));
+    staging_buffer_writer.write(std::as_bytes(std::span{rt_block_shape_chunks}));
+    staging_buffer_writer
+      .write(std::as_bytes(std::span{rt_block_material_chunks}));
     _vertex_buffer = info.graphics->create_buffer({
       .size = vertex_buffer_size,
       .usage = graphics::Buffer_usage_flag_bits::transfer_dst |
@@ -285,6 +317,10 @@ Grid_mesh::get_index_buffer() const noexcept {
 rc::Strong<graphics::Buffer> const &
 Grid_mesh::get_rt_block_grid_buffer() const noexcept {
   return _rt_block_grid_buffer;
+}
+
+u32 Grid_mesh::get_rt_block_material_grid_offset() const noexcept {
+  return _rt_block_material_grid_offset;
 }
 
 std::uint32_t Grid_mesh::get_rt_chunk_count() const noexcept {

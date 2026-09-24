@@ -21,28 +21,21 @@ bool Radiance_pass::has_camera() const {
   return session && _inputs.local_player &&
          _inputs.local_player->player_entity_id &&
          _inputs.local_player->humanoid_entity_id &&
-         session->get_scene().get_camera(*_inputs.local_player->player_entity_id) &&
+         session->get_scene()
+           .get_camera(*_inputs.local_player->player_entity_id) &&
          _inputs.grid_mesh && _inputs.grid_mesh->is_uploaded();
 }
 
 void Radiance_pass::declare(render_graph::Builder &builder) {
   if (has_camera()) {
-    // albedo/depth: written by Gbuffer_pass. sky_view_lut: written
-    // by Sky_view_pass, if it ran this frame (its own gating -- camera &&
-    // sun -- can be true even when this pass's gating -- camera &&
-    // grid_mesh uploaded -- is, without sun; declaring the read
-    // regardless is harmless, see Distant_irradiance_light_pick_pass::declare's
-    // comment). distant_irradiance_filtered: written by the last
-    // Distant_irradiance_spatial_filter_pass iteration.
     _albedo_handle = builder.read(
       _inputs.albedo_render_target, render_graph::access::compute_sampled_read);
     _depth_handle = builder.read(
-      _inputs.depth_render_target,
-      render_graph::access::compute_sampled_read);
+      _inputs.depth_render_target, render_graph::access::compute_sampled_read);
     _sky_view_lut_handle = builder.read(
       _inputs.sky_view_lut, render_graph::access::compute_sampled_read);
-    _distant_irradiance_filtered_handle = builder.read(
-      _inputs.distant_irradiance_filtered,
+    _direct_irradiance_filtered_handle = builder.read(
+      _inputs.direct_irradiance_filtered,
       render_graph::access::compute_sampled_read);
   }
   _radiance_handle = builder.write(
@@ -66,16 +59,16 @@ void Radiance_pass::execute(
     // valid view or grid to light with.
     auto const radiance_color_attachments = std::array{
       graphics::Color_attachment_info{
-        .image = resources.get_image(_radiance_handle), .clear_value = sky_color},
+        .image = resources.get_image(_radiance_handle),
+        .clear_value = sky_color},
     };
     recorder.begin_rendering({.color_attachments = radiance_color_attachments});
     recorder.end_rendering();
     return;
   }
   auto constexpr zoom = 1.125f;
-  auto const aspect_ratio =
-    static_cast<float>(_inputs.framebuffer_size.x()) /
-    static_cast<float>(_inputs.framebuffer_size.y());
+  auto const aspect_ratio = static_cast<float>(_inputs.framebuffer_size.x()) /
+                            static_cast<float>(_inputs.framebuffer_size.y());
   auto const zoom_vec = math::vec2{
     aspect_ratio > 1.0f ? zoom : zoom * aspect_ratio,
     aspect_ratio > 1.0f ? zoom / aspect_ratio : zoom,
@@ -101,7 +94,7 @@ void Radiance_pass::execute(
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_radiance_handle),
       .kind = graphics::Descriptor_kind::storage},
-     {.image = resources.get_image(_distant_irradiance_filtered_handle),
+     {.image = resources.get_image(_direct_irradiance_filtered_handle),
       .kind = graphics::Descriptor_kind::sampled}});
   auto const group_count_x =
     static_cast<std::uint32_t>((_inputs.framebuffer_size.x() + 7) / 8);
