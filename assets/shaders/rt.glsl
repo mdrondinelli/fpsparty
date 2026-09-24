@@ -26,12 +26,7 @@ vec3 rt_color_palette[] = {
   color_code(0x5a4336), // dirt
 };
 
-// Everything a cell needs for shading, but not for traversal. Split out of
-// the shape index so that stepping the grid touches as little memory as
-// possible: traversal reads one byte per cell, so a whole 4x4x4 chunk's
-// shapes are 64 bytes whatever direction the ray runs. Materials are read
-// at most once per ray, at the hit, so paying a second fetch there is
-// cheap next to the up-to-trace_max_steps shape fetches.
+// Held separately from shape indices for cache coherence (measured big win).
 struct Rt_block_material {
   float16_t emissivity_scale;
   uint8_t color_index;
@@ -49,16 +44,12 @@ struct Rt_entity_node {
   int next;
 };
 
-// One chunk's shape indices, the traversal's whole working set for that
-// chunk: 64 bytes, so a chunk occupies two 32-byte sectors and a ray
-// crossing it touches those two whatever direction it runs. Keeping the
-// chunk a type rather than a stride means the 64 cannot drift apart from
-// the 4x4x4 the index math assumes.
+// One chunk's shape indices
 struct Rt_block_shape_chunk {
   uint8_t shapes[64];
 };
 
-// Same chunking for the materials, so a hit reads one chunk's worth.
+// Same chunking for block materials
 struct Rt_block_material_chunk {
   Rt_block_material materials[64];
 };
