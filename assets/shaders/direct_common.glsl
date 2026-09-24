@@ -57,21 +57,17 @@ ivec2 direct_queue_pixel(uint pixel_index, ivec2 size) {
     int(pixel_index % uint(size.x)), int(pixel_index / uint(size.x)));
 }
 
-// Per-pixel payload: both samples' random variables, r32g32_uint.
-void direct_store_payload(
-    uint payload_image, ivec2 pixel, vec2 environment_uv, vec2 brdf_uv) {
+// One sample's random variables, r32_uint. The two samples live in
+// separate images because their consumers are separate: a trace reads one
+// of them and would otherwise pull the other into cache with it, halving
+// the useful texels per sector.
+void direct_store_uv(uint uv_image, ivec2 pixel, vec2 uv) {
   imageStore(
-    storage_uimages[payload_image],
-    pixel,
-    uvec4(packUnorm2x16(environment_uv), packUnorm2x16(brdf_uv), 0u, 0u));
+    storage_uimages[uv_image], pixel, uvec4(packUnorm2x16(uv), 0u, 0u, 0u));
 }
 
-vec2 direct_load_environment_uv(uint payload_image, ivec2 pixel) {
-  return unpackUnorm2x16(imageLoad(storage_uimages[payload_image], pixel).x);
-}
-
-vec2 direct_load_brdf_uv(uint payload_image, ivec2 pixel) {
-  return unpackUnorm2x16(imageLoad(storage_uimages[payload_image], pixel).y);
+vec2 direct_load_uv(uint uv_image, ivec2 pixel) {
+  return unpackUnorm2x16(imageLoad(storage_uimages[uv_image], pixel).x);
 }
 
 // Primary surface reconstructed from the G-buffer, in world space.

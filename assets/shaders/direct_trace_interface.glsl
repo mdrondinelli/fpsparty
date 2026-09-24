@@ -11,7 +11,7 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
   layout(offset = 8) uint16_t depth_texture;
   layout(offset = 10) uint16_t normal_texture;
-  layout(offset = 12) uint16_t payload_image;
+  layout(offset = 12) uint16_t environment_uv_image;
   layout(offset = 14) uint16_t environment_numerator_image;
   layout(offset = 16) uint16_t transmittance_texture;
   layout(offset = 18) uint16_t sky_view_lut;

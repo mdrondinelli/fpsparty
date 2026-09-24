@@ -16,11 +16,13 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 8) uint16_t depth_texture;
   layout(offset = 10) uint16_t normal_texture;
   layout(offset = 12) uint16_t transmittance_texture;
-  layout(offset = 14) uint16_t payload_image;
-  layout(offset = 16) Sky_irradiance sky_irradiance;
-  layout(offset = 24) Direct_queue sun_queue;
-  layout(offset = 32) Direct_queue sky_queue;
-  layout(offset = 40) uint seed;
+  layout(offset = 14) uint16_t environment_uv_image;
+  layout(offset = 16) uint16_t brdf_uv_image;
+  // offset 18: 6 bytes unused (buffer references need 8-byte alignment).
+  layout(offset = 24) Sky_irradiance sky_irradiance;
+  layout(offset = 32) Direct_queue sun_queue;
+  layout(offset = 40) Direct_queue sky_queue;
+  layout(offset = 48) uint seed;
 } push_constants;
 
 shared uint sun_offset;
@@ -55,8 +57,9 @@ void main() {
       push_constants.sky_irradiance);
     const Direct_draw draw =
       direct_draw(pixel_index, push_constants.seed, weight.p_cone);
-    direct_store_payload(
-      push_constants.payload_image, pixel, draw.environment_uv, draw.brdf_uv);
+    direct_store_uv(
+      push_constants.environment_uv_image, pixel, draw.environment_uv);
+    direct_store_uv(push_constants.brdf_uv_image, pixel, draw.brdf_uv);
     is_cone = draw.is_cone;
     // A black environment is worth no ray, but the pixel still gets its
     // BRDF ray, and the combination recomputes this rather than reading a

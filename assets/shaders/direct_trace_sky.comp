@@ -27,7 +27,7 @@ void main() {
     false,
     n,
     push_constants.scene.sun_direction,
-    direct_load_environment_uv(push_constants.payload_image, pixel));
+    direct_load_uv(push_constants.environment_uv_image, pixel));
   const float cos_theta = max(dot(n, w_i), 0.0);
   vec3 numerator = vec3(0.0);
   if (cos_theta > 0.0) {

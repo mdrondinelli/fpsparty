@@ -54,8 +54,11 @@ void Direct_sample_gen_pass::declare(render_graph::Builder &builder) {
     _inputs.normal_render_target, render_graph::access::compute_sampled_read);
   _scene_uniform_handle = builder.read(
     _inputs.scene_uniform_buffer, render_graph::access::compute_storage_read);
-  _payload_handle = builder.write(
-    _inputs.payload_render_target,
+  _environment_uv_handle = builder.write(
+    _inputs.environment_uv_render_target,
+    render_graph::access::compute_storage_write);
+  _brdf_uv_handle = builder.write(
+    _inputs.brdf_uv_render_target,
     render_graph::access::compute_storage_write);
   _sun_queue_handle = builder.write(
     _inputs.sun_queue_buffer, render_graph::access::compute_storage_write);
@@ -78,17 +81,19 @@ void Direct_sample_gen_pass::execute(
       .kind = graphics::Descriptor_kind::sampled},
      {.image = _inputs.transmittance_lut,
       .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_payload_handle),
+     {.image = resources.get_image(_environment_uv_handle),
+      .kind = graphics::Descriptor_kind::storage},
+     {.image = resources.get_image(_brdf_uv_handle),
       .kind = graphics::Descriptor_kind::storage}});
   recorder.push_buffer_reference(
-    16,
+    24,
     scene_uniform_buffer,
     _inputs.scene_uniform_offset + scene_sky_irradiance_offset);
   recorder.push_buffer_reference(
-    24, resources.get_buffer(_sun_queue_handle), direct_sample_count_offset);
+    32, resources.get_buffer(_sun_queue_handle), direct_sample_count_offset);
   recorder.push_buffer_reference(
-    32, resources.get_buffer(_sky_queue_handle), direct_sample_count_offset);
-  recorder.push_data(40, std::as_bytes(std::span{&_inputs.frame_number, 1}));
+    40, resources.get_buffer(_sky_queue_handle), direct_sample_count_offset);
+  recorder.push_data(48, std::as_bytes(std::span{&_inputs.frame_number, 1}));
   auto const group_count = dispatch_group_count(_inputs.framebuffer_size);
   recorder.dispatch(group_count.x(), group_count.y(), 1);
 }
@@ -164,8 +169,8 @@ void Direct_trace_pass::declare(render_graph::Builder &builder) {
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);
   _normal_handle = builder.read(
     _inputs.normal_render_target, render_graph::access::compute_sampled_read);
-  _payload_handle = builder.read(
-    _inputs.payload_render_target,
+  _uv_handle = builder.read(
+    _inputs.environment_uv_render_target,
     render_graph::access::compute_storage_read);
   _sky_view_lut_handle = builder.read(
     _inputs.sky_view_lut, render_graph::access::compute_sampled_read);
@@ -194,7 +199,7 @@ void Direct_trace_pass::execute(
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_normal_handle),
       .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_payload_handle),
+     {.image = resources.get_image(_uv_handle),
       .kind = graphics::Descriptor_kind::storage},
      {.image = resources.get_image(_numerator_handle),
       .kind = graphics::Descriptor_kind::storage},
@@ -222,8 +227,8 @@ void Direct_brdf_trace_pass::declare(render_graph::Builder &builder) {
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);
   _normal_handle = builder.read(
     _inputs.normal_render_target, render_graph::access::compute_sampled_read);
-  _payload_handle = builder.read(
-    _inputs.payload_render_target,
+  _uv_handle = builder.read(
+    _inputs.brdf_uv_render_target,
     render_graph::access::compute_storage_read);
   _sky_view_lut_handle = builder.read(
     _inputs.sky_view_lut, render_graph::access::compute_sampled_read);
@@ -250,7 +255,7 @@ void Direct_brdf_trace_pass::execute(
       .kind = graphics::Descriptor_kind::sampled},
      {.image = resources.get_image(_normal_handle),
       .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_payload_handle),
+     {.image = resources.get_image(_uv_handle),
       .kind = graphics::Descriptor_kind::storage},
      {.image = resources.get_image(_numerator_handle),
       .kind = graphics::Descriptor_kind::storage},
@@ -277,8 +282,11 @@ void Direct_combine_pass::declare(render_graph::Builder &builder) {
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);
   _normal_handle = builder.read(
     _inputs.normal_render_target, render_graph::access::compute_sampled_read);
-  _payload_handle = builder.read(
-    _inputs.payload_render_target,
+  _environment_uv_handle = builder.read(
+    _inputs.environment_uv_render_target,
+    render_graph::access::compute_storage_read);
+  _brdf_uv_handle = builder.read(
+    _inputs.brdf_uv_render_target,
     render_graph::access::compute_storage_read);
   _environment_numerator_handle = builder.read(
     _inputs.environment_numerator_render_target,
@@ -308,7 +316,9 @@ void Direct_combine_pass::execute(
       .kind = graphics::Descriptor_kind::sampled},
      {.image = _inputs.transmittance_lut,
       .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_payload_handle),
+     {.image = resources.get_image(_environment_uv_handle),
+      .kind = graphics::Descriptor_kind::storage},
+     {.image = resources.get_image(_brdf_uv_handle),
       .kind = graphics::Descriptor_kind::storage},
      {.image = resources.get_image(_environment_numerator_handle),
       .kind = graphics::Descriptor_kind::storage},

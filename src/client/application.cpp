@@ -556,7 +556,9 @@ private:
             .transmittance_lut = _transmittance_lut,
             .scene_uniform_buffer = _scene_uniform_buffer_symbol,
             .scene_uniform_offset = scene_uniform_offset,
-            .payload_render_target = _direct_payload_render_target_symbol,
+            .environment_uv_render_target =
+              _direct_environment_uv_render_target_symbol,
+            .brdf_uv_render_target = _direct_brdf_uv_render_target_symbol,
             .sun_queue_buffer = _direct_sample_buffer_sun_symbol,
             .sky_queue_buffer = _direct_sample_buffer_sky_symbol,
             .framebuffer_size = framebuffer_size,
@@ -584,7 +586,8 @@ private:
           .depth_render_target = _depth_attachment_symbols[_frame_number % 2],
           .normal_render_target =
             _normal_render_target_symbols[_frame_number % 2],
-          .payload_render_target = _direct_payload_render_target_symbol,
+          .environment_uv_render_target =
+            _direct_environment_uv_render_target_symbol,
           .environment_numerator_render_target =
             _direct_environment_numerator_render_target_symbol,
           .transmittance_lut = _transmittance_lut,
@@ -620,7 +623,7 @@ private:
             .depth_render_target = _depth_attachment_symbols[_frame_number % 2],
             .normal_render_target =
               _normal_render_target_symbols[_frame_number % 2],
-            .payload_render_target = _direct_payload_render_target_symbol,
+            .brdf_uv_render_target = _direct_brdf_uv_render_target_symbol,
             .brdf_numerator_render_target =
               _direct_brdf_numerator_render_target_symbol,
             .transmittance_lut = _transmittance_lut,
@@ -638,7 +641,9 @@ private:
             .normal_render_target =
               _normal_render_target_symbols[_frame_number % 2],
             .transmittance_lut = _transmittance_lut,
-            .payload_render_target = _direct_payload_render_target_symbol,
+            .environment_uv_render_target =
+              _direct_environment_uv_render_target_symbol,
+            .brdf_uv_render_target = _direct_brdf_uv_render_target_symbol,
             .environment_numerator_render_target =
               _direct_environment_numerator_render_target_symbol,
             .brdf_numerator_render_target =
@@ -796,8 +801,10 @@ private:
         {_swapchain_image_symbol, swapchain_image},
         {_direct_irradiance_raw_render_target_symbol,
          _direct_irradiance_raw_render_target},
-        {_direct_payload_render_target_symbol,
-         _direct_payload_render_target},
+        {_direct_environment_uv_render_target_symbol,
+         _direct_environment_uv_render_target},
+        {_direct_brdf_uv_render_target_symbol,
+         _direct_brdf_uv_render_target},
         {_direct_environment_numerator_render_target_symbol,
          _direct_environment_numerator_render_target},
         {_direct_brdf_numerator_render_target_symbol,
@@ -1122,22 +1129,27 @@ private:
         graphics::Image_layout::undefined,
         graphics::Image_layout::general,
         _direct_irradiance_raw_render_target);
-      // Both samples' random variables, keyed by pixel. The traces and the
-      // combination read it; nothing else does.
-      _direct_payload_render_target = _graphics.create_image({
-        .dimensionality = 2,
-        .format = graphics::Image_format::r32g32_uint,
-        .extent = extent,
-        .mip_level_count = 1,
-        .array_layer_count = 1,
-        .usage = graphics::Image_usage_flag_bits::storage,
-      });
-      work_recorder.transition_image_layout(
-        {},
-        compute_shader_storage_write_scope,
-        graphics::Image_layout::undefined,
-        graphics::Image_layout::general,
-        _direct_payload_render_target);
+      // Each sample's random variables, keyed by pixel and kept apart so
+      // that a trace reading one does not pull the other into cache with
+      // it. Only the combination reads both.
+      for (auto *target :
+           {&_direct_environment_uv_render_target,
+            &_direct_brdf_uv_render_target}) {
+        *target = _graphics.create_image({
+          .dimensionality = 2,
+          .format = graphics::Image_format::r32_uint,
+          .extent = extent,
+          .mip_level_count = 1,
+          .array_layer_count = 1,
+          .usage = graphics::Image_usage_flag_bits::storage,
+        });
+        work_recorder.transition_image_layout(
+          {},
+          compute_shader_storage_write_scope,
+          graphics::Image_layout::undefined,
+          graphics::Image_layout::general,
+          *target);
+      }
       // Unweighted integrands. 32-bit because these are undivided: sun
       // radiance is sun_irradiance / sun_solid_angle, around 1.9e7, which
       // overflows a half.
@@ -1628,7 +1640,8 @@ private:
   // Spatial irradiance, ping-ponged across the five a-trous iterations.
   std::array<rc::Strong<graphics::Image>, 2>
     _direct_irradiance_filtered_render_targets{};
-  rc::Strong<graphics::Image> _direct_payload_render_target{};
+  rc::Strong<graphics::Image> _direct_environment_uv_render_target{};
+  rc::Strong<graphics::Image> _direct_brdf_uv_render_target{};
   rc::Strong<graphics::Image> _direct_environment_numerator_render_target{};
   rc::Strong<graphics::Image> _direct_brdf_numerator_render_target{};
   rc::Strong<graphics::Buffer> _direct_sample_buffer_sun{};
@@ -1703,7 +1716,9 @@ private:
     _graph.allocate_image_symbol()};
   render_graph::Symbolic_buffer _scene_uniform_buffer_symbol{
     _graph.allocate_buffer_symbol()};
-  render_graph::Symbolic_image _direct_payload_render_target_symbol{
+  render_graph::Symbolic_image _direct_environment_uv_render_target_symbol{
+    _graph.allocate_image_symbol()};
+  render_graph::Symbolic_image _direct_brdf_uv_render_target_symbol{
     _graph.allocate_image_symbol()};
   render_graph::Symbolic_image
     _direct_environment_numerator_render_target_symbol{

@@ -51,7 +51,8 @@ struct Direct_sample_gen_pass_inputs {
   rc::Strong<graphics::Image const> transmittance_lut;
   render_graph::Symbolic_buffer scene_uniform_buffer;
   std::size_t scene_uniform_offset;
-  render_graph::Symbolic_image payload_render_target;
+  render_graph::Symbolic_image environment_uv_render_target;
+  render_graph::Symbolic_image brdf_uv_render_target;
   render_graph::Symbolic_buffer sun_queue_buffer;
   render_graph::Symbolic_buffer sky_queue_buffer;
   math::ivec2 framebuffer_size;
@@ -76,7 +77,8 @@ private:
   render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _scene_uniform_handle{};
-  render_graph::Resource_handle _payload_handle{};
+  render_graph::Resource_handle _environment_uv_handle{};
+  render_graph::Resource_handle _brdf_uv_handle{};
   render_graph::Resource_handle _sun_queue_handle{};
   render_graph::Resource_handle _sky_queue_handle{};
 };
@@ -136,7 +138,7 @@ struct Direct_trace_variants {
 struct Direct_trace_pass_inputs {
   render_graph::Symbolic_image depth_render_target;
   render_graph::Symbolic_image normal_render_target;
-  render_graph::Symbolic_image payload_render_target;
+  render_graph::Symbolic_image environment_uv_render_target;
   render_graph::Symbolic_image environment_numerator_render_target;
   rc::Strong<graphics::Image const> transmittance_lut;
   render_graph::Symbolic_image sky_view_lut;
@@ -167,7 +169,7 @@ private:
   render_graph::Symbolic_buffer _queue;
   render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _normal_handle{};
-  render_graph::Resource_handle _payload_handle{};
+  render_graph::Resource_handle _uv_handle{};
   render_graph::Resource_handle _sky_view_lut_handle{};
   render_graph::Resource_handle _scene_uniform_handle{};
   render_graph::Resource_handle _rt_entity_binning_handle{};
@@ -181,7 +183,7 @@ private:
 struct Direct_brdf_trace_pass_inputs {
   render_graph::Symbolic_image depth_render_target;
   render_graph::Symbolic_image normal_render_target;
-  render_graph::Symbolic_image payload_render_target;
+  render_graph::Symbolic_image brdf_uv_render_target;
   render_graph::Symbolic_image brdf_numerator_render_target;
   rc::Strong<graphics::Image const> transmittance_lut;
   render_graph::Symbolic_image sky_view_lut;
@@ -208,7 +210,7 @@ private:
   Direct_brdf_trace_pass_inputs _inputs;
   render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _normal_handle{};
-  render_graph::Resource_handle _payload_handle{};
+  render_graph::Resource_handle _uv_handle{};
   render_graph::Resource_handle _sky_view_lut_handle{};
   render_graph::Resource_handle _scene_uniform_handle{};
   render_graph::Resource_handle _rt_entity_binning_handle{};
@@ -221,7 +223,8 @@ struct Direct_combine_pass_inputs {
   render_graph::Symbolic_image depth_render_target;
   render_graph::Symbolic_image normal_render_target;
   rc::Strong<graphics::Image const> transmittance_lut;
-  render_graph::Symbolic_image payload_render_target;
+  render_graph::Symbolic_image environment_uv_render_target;
+  render_graph::Symbolic_image brdf_uv_render_target;
   render_graph::Symbolic_image environment_numerator_render_target;
   render_graph::Symbolic_image brdf_numerator_render_target;
   render_graph::Symbolic_image raw_direct_irradiance_render_target;
@@ -248,7 +251,8 @@ private:
   Direct_combine_pass_inputs _inputs;
   render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _normal_handle{};
-  render_graph::Resource_handle _payload_handle{};
+  render_graph::Resource_handle _environment_uv_handle{};
+  render_graph::Resource_handle _brdf_uv_handle{};
   render_graph::Resource_handle _environment_numerator_handle{};
   render_graph::Resource_handle _brdf_numerator_handle{};
   render_graph::Resource_handle _raw_direct_irradiance_handle{};
