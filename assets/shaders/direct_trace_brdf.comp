@@ -1,21 +1,50 @@
 #version 450
 
-#include "direct_trace_interface.glsl"
-#include "sampling.glsl"
+#include "direct_common.glsl"
+#include "rt.glsl"
 
-layout(local_size_x = 64) in;
+layout(local_size_x = 8, local_size_y = 8) in;
 
-// Cosine BRDF sample: accumulate surface emission or environment irradiance.
+// Cosine BRDF sample, one per surface pixel. Dispatched full screen with a
+// depth early-out rather than from a queue: its rays are incoherent by
+// construction, so a queue would buy compaction only, and 2D workgroups
+// keep neighbouring rays in the same warp, which their traversal does
+// benefit from.
+//
+// Writes the unweighted integrand. Alpha carries whether the ray escaped,
+// which is what tells the combination pass whether the environment's
+// density belongs in the denominator: a ray that ends on emissive
+// geometry names an emitter nothing samples by index, so there P * p is 0.
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) Scene scene;
+  layout(offset = 8) uint16_t depth_texture;
+  layout(offset = 10) uint16_t normal_texture;
+  layout(offset = 12) uint16_t payload_image;
+  layout(offset = 14) uint16_t brdf_numerator_image;
+  layout(offset = 16) uint16_t transmittance_texture;
+  layout(offset = 18) uint16_t sky_view_lut;
+  // offset 20: 4 bytes unused (buffer references need 8-byte alignment).
+  layout(offset = 24) Rt_block_shape_grid rt_block_shape_grid;
+  layout(offset = 32) Rt_entities entities;
+  layout(offset = 40) Rt_entity_head_grid entity_head_grid;
+  layout(offset = 48) Rt_entity_nodes entity_nodes;
+  layout(offset = 56) Rt_block_material_grid rt_block_material_grid;
+  layout(offset = 64) Rt_entity_mask_grid entity_mask_grid;
+} push_constants;
 
 void main() {
-  if (gl_GlobalInvocationID.x >= push_constants.samples.count) {
+  const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+  const ivec2 size =
+    imageSize(storage_images[push_constants.brdf_numerator_image]);
+  if (pixel.x >= size.x || pixel.y >= size.y) {
     return;
   }
-  const Direct_sample light_sample =
-    push_constants.samples.samples[gl_GlobalInvocationID.x];
-  const ivec2 size =
-    imageSize(storage_images[push_constants.direct_irradiance_image]);
-  const ivec2 pixel = direct_sample_pixel(light_sample, size);
+  // No geometry here. The combination pass skips this texel on the same
+  // test, so leaving it stale costs nothing.
+  if (texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).x ==
+      0.0) {
+    return;
+  }
   const Direct_shading_point shading_point =
     direct_shading_point(
       push_constants.scene,
@@ -24,9 +53,9 @@ void main() {
       pixel,
       size);
   const vec3 n = shading_point.normal;
-  const vec3 w_i =
-    make_basis(n) *
-    square_to_cosine_hemisphere(unpackUnorm2x16(light_sample.uv));
+  const vec3 w_i = direct_brdf_direction(
+    n, direct_load_brdf_uv(push_constants.payload_image, pixel));
+  const float cos_theta = max(dot(n, w_i), 0.0);
   Rt_hit hit;
   const bool hit_surface = trace_ray(
     push_constants.rt_block_shape_grid,
@@ -39,24 +68,21 @@ void main() {
     w_i,
     true,
     hit);
-  const vec3 E = hit_surface
-    ? direct_emitted_contribution(
-        hit.emissivity, max(dot(n, w_i), 0.0))
-    : direct_environment_contribution(
-        push_constants.scene,
-        n,
-        shading_point.position.y,
-        w_i,
-        1.0,
-        light_sample.p_cone,
-        push_constants.transmittance_texture,
-        push_constants.sky_view_lut,
-        false);
-  // Environment traces or sample generation have initialized this texel.
-  const vec3 environment_term =
-    imageLoad(storage_images[push_constants.direct_irradiance_image], pixel).rgb;
+  vec3 numerator = vec3(0.0);
+  if (cos_theta > 0.0) {
+    numerator = hit_surface
+      ? hit.emissivity * cos_theta
+      : direct_environment_integrand(
+          push_constants.scene,
+          n,
+          shading_point.position.y,
+          w_i,
+          direct_in_sun_disc(w_i, push_constants.scene.sun_direction),
+          push_constants.transmittance_texture,
+          push_constants.sky_view_lut);
+  }
   imageStore(
-    storage_images[push_constants.direct_irradiance_image],
+    storage_images[push_constants.brdf_numerator_image],
     pixel,
-    vec4(environment_term + E, 1.0));
+    vec4(numerator, hit_surface ? 0.0 : 1.0));
 }

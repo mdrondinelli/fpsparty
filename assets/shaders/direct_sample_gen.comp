@@ -1,30 +1,30 @@
 #version 450
 
-#include "atmosphere/sky_irradiance.glsl"
-#include "color.glsl"
 #include "direct_common.glsl"
-#include "gbuffer.glsl"
-#include "random.glsl"
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
+// Writes the per-pixel payload and bins the environment ray. Only the
+// random variables are handed forward; p_cone and the lobe choice are
+// recomputed by whoever needs them, so nothing here has to stay in sync
+// with the traces except through direct_common.glsl.
+//
+// The BRDF ray needs no queue: it is unconditional over surface pixels
+// and its directions are incoherent anyway.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
   layout(offset = 8) uint16_t depth_texture;
-  layout(offset = 10) uint16_t transmittance_texture;
-  layout(offset = 12) uint16_t sky_view_lut;
-  layout(offset = 14) uint16_t normal_texture;
+  layout(offset = 10) uint16_t normal_texture;
+  layout(offset = 12) uint16_t transmittance_texture;
+  layout(offset = 14) uint16_t payload_image;
   layout(offset = 16) Sky_irradiance sky_irradiance;
-  layout(offset = 24) Direct_samples sun_samples;
-  layout(offset = 32) Direct_samples sky_samples;
+  layout(offset = 24) Direct_queue sun_queue;
+  layout(offset = 32) Direct_queue sky_queue;
   layout(offset = 40) uint seed;
-  layout(offset = 44) uint16_t raw_direct_irradiance_image;
-  layout(offset = 48) Direct_samples brdf_samples;
 } push_constants;
 
 shared uint sun_offset;
 shared uint sky_offset;
-shared uint brdf_offset;
 
 void main() {
   const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
@@ -32,63 +32,40 @@ void main() {
     textureSize(sampled_images[push_constants.depth_texture], 0);
   const uint pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
   bool valid = pixel.x < size.x && pixel.y < size.y;
-  Gbuffer_sample g;
+  if (valid) {
+    valid =
+      texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).x !=
+      0.0;
+  }
   bool is_cone = false;
   bool sample_environment = false;
-  vec2 environment_uv = vec2(0.0);
-  vec2 brdf_uv = vec2(0.0);
-  float p_cone = 0.0;
   if (valid) {
-    g = gbuffer_decode(
-      texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).x,
-      push_constants.scene.z_near,
-      texelFetch(sampled_images[push_constants.normal_texture], pixel, 0).xy,
-      0.0);
-    valid = g.linear_depth != 0.0;
-  }
-  if (valid) {
-    const vec2 ndc = (vec2(pixel) + 0.5) / vec2(size) * 2.0 - 1.0;
-    const vec3 view_ray = vec3(
-      -ndc.x * push_constants.scene.zoom.x,
-      -ndc.y * push_constants.scene.zoom.y,
-      1.0);
-    const vec3 camera_position = push_constants.scene.camera_basis[3].xyz;
-    const vec3 world_position =
-      camera_position +
-      mat3(push_constants.scene.camera_basis) * (view_ray * g.linear_depth);
-    const vec3 n = g.normal;
-    const vec3 sun_direction = normalize(push_constants.scene.sun_direction);
-    const vec3 sun_irradiance = push_constants.scene.sun_irradiance;
-    const vec3 sun_transmittance =
-      transmittance_along_ray(
-        push_constants.transmittance_texture,
-        vec3(0.0, r_ground + world_position.y, 0.0),
-        sun_direction);
-    const vec3 integrated_unshadowed_sun =
-      eval_incident_irradiance_sun(
-        sun_direction,
-        n,
-        sun_irradiance,
-        sun_transmittance) *
-      sun_solid_angle;
-    const vec3 integrated_unshadowed_sky =
-      sample_sky_irradiance(push_constants.sky_irradiance, n);
-    const float l_sun = luminance(integrated_unshadowed_sun);
-    const float l_sky = luminance(integrated_unshadowed_sky);
-    const float total = l_sun + l_sky;
-    sample_environment = total > 0.0;
-    // Estimate the cone mixture weight from unshadowed sun and sky irradiance.
-    p_cone = sample_environment ? l_sun / total : 0.0;
-    Random random;
-    random.state = lowbias32(pixel_index) ^ lowbias32(push_constants.seed);
-    is_cone = random_float(random) < p_cone;
-    environment_uv = vec2(random_float(random), random_float(random));
-    brdf_uv = vec2(random_float(random), random_float(random));
+    const Direct_shading_point shading_point =
+      direct_shading_point(
+        push_constants.scene,
+        push_constants.depth_texture,
+        push_constants.normal_texture,
+        pixel,
+        size);
+    const Direct_environment_weight weight = direct_environment_weight(
+      push_constants.scene,
+      shading_point.normal,
+      shading_point.position.y,
+      push_constants.transmittance_texture,
+      push_constants.sky_irradiance);
+    const Direct_draw draw =
+      direct_draw(pixel_index, push_constants.seed, weight.p_cone);
+    direct_store_payload(
+      push_constants.payload_image, pixel, draw.environment_uv, draw.brdf_uv);
+    is_cone = draw.is_cone;
+    // A black environment is worth no ray, but the pixel still gets its
+    // BRDF ray, and the combination recomputes this rather than reading a
+    // flag.
+    sample_environment = weight.valid;
   }
   if (gl_LocalInvocationIndex == 0u) {
     sun_offset = 0u;
     sky_offset = 0u;
-    brdf_offset = 0u;
   }
   barrier();
   if (sample_environment) {
@@ -98,40 +75,17 @@ void main() {
       atomicAdd(sky_offset, 1u);
     }
   }
-  if (valid) {
-    atomicAdd(brdf_offset, 1u);
-  }
   barrier();
   if (gl_LocalInvocationIndex == 0u) {
-    sun_offset = atomicAdd(push_constants.sun_samples.count, sun_offset);
-    sky_offset = atomicAdd(push_constants.sky_samples.count, sky_offset);
-    brdf_offset = atomicAdd(push_constants.brdf_samples.count, brdf_offset);
+    sun_offset = atomicAdd(push_constants.sun_queue.count, sun_offset);
+    sky_offset = atomicAdd(push_constants.sky_queue.count, sky_offset);
   }
   barrier();
   if (sample_environment) {
     if (is_cone) {
-      const uint slot = atomicAdd(sun_offset, 1u);
-      push_constants.sun_samples.samples[slot].uv =
-        packUnorm2x16(environment_uv);
-      push_constants.sun_samples.samples[slot].pixel = pixel_index;
-      push_constants.sun_samples.samples[slot].p_cone = p_cone;
+      push_constants.sun_queue.pixels[atomicAdd(sun_offset, 1u)] = pixel_index;
     } else {
-      const uint slot = atomicAdd(sky_offset, 1u);
-      push_constants.sky_samples.samples[slot].uv =
-        packUnorm2x16(environment_uv);
-      push_constants.sky_samples.samples[slot].pixel = pixel_index;
-      push_constants.sky_samples.samples[slot].p_cone = p_cone;
+      push_constants.sky_queue.pixels[atomicAdd(sky_offset, 1u)] = pixel_index;
     }
-  }
-  if (valid) {
-    const uint brdf_slot = atomicAdd(brdf_offset, 1u);
-    push_constants.brdf_samples.samples[brdf_slot].uv = packUnorm2x16(brdf_uv);
-    push_constants.brdf_samples.samples[brdf_slot].pixel = pixel_index;
-    push_constants.brdf_samples.samples[brdf_slot].p_cone = p_cone;
-  }
-  // BRDF accumulation requires an initialized texel even without an environment ray.
-  if (valid && !sample_environment) {
-    imageStore(
-      storage_images[push_constants.raw_direct_irradiance_image], pixel, vec4(0.0));
   }
 }
