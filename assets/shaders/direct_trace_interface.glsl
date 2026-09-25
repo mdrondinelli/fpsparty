@@ -23,6 +23,9 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 56) Rt_entity_nodes entity_nodes;
   layout(offset = 64) Rt_block_material_grid rt_block_material_grid;
   layout(offset = 72) Rt_entity_mask_grid entity_mask_grid;
+  // Used only by the persistent sky trace; the sun trace takes one ray
+  // per invocation and ignores it.
+  layout(offset = 80) Direct_ray_cursor cursor;
 } push_constants;
 
 #endif

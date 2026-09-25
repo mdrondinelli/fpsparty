@@ -25,8 +25,10 @@ void Direct_sample_clear_pass::declare(render_graph::Builder &builder) {
     _inputs.sun_queue_buffer, render_graph::access::transfer_write);
   _sky_queue_handle = builder.write(
     _inputs.sky_queue_buffer, render_graph::access::transfer_write);
-  _cursor_handle = builder.write(
-    _inputs.cursor_buffer, render_graph::access::transfer_write);
+  _sky_cursor_handle = builder.write(
+    _inputs.sky_cursor_buffer, render_graph::access::transfer_write);
+  _brdf_cursor_handle = builder.write(
+    _inputs.brdf_cursor_buffer, render_graph::access::transfer_write);
 }
 
 void Direct_sample_clear_pass::execute(
@@ -42,8 +44,10 @@ void Direct_sample_clear_pass::execute(
     direct_sample_count_offset,
     direct_sample_count_size,
     0u);
-  // The persistent BRDF trace draws pixels from this counter.
-  recorder.fill_buffer(resources.get_buffer(_cursor_handle), 0, 4, 0u);
+  // The persistent traces draw from these counters.
+  for (auto const handle : {_sky_cursor_handle, _brdf_cursor_handle}) {
+    recorder.fill_buffer(resources.get_buffer(handle), 0, 4, 0u);
+  }
 }
 
 Direct_sample_gen_pass::Direct_sample_gen_pass(
@@ -166,7 +170,8 @@ Direct_trace_pass::Direct_trace_pass(
       _inputs{std::move(inputs)},
       _queue{
         kind == Direct_trace_kind::sun ? variants.sun.queue
-                                       : variants.sky.queue} {}
+                                       : variants.sky.queue},
+      _persistent{kind == Direct_trace_kind::sky} {}
 
 void Direct_trace_pass::declare(render_graph::Builder &builder) {
   _depth_handle = builder.read(
@@ -187,6 +192,12 @@ void Direct_trace_pass::declare(render_graph::Builder &builder) {
   _numerator_handle = builder.write(
     _inputs.environment_numerator_render_target,
     render_graph::access::compute_storage_write);
+  if (_persistent) {
+    builder.read(
+      _inputs.cursor_buffer, render_graph::access::compute_storage_read);
+    _cursor_handle = builder.write(
+      _inputs.cursor_buffer, render_graph::access::compute_storage_write);
+  }
 }
 
 void Direct_trace_pass::execute(
@@ -218,7 +229,15 @@ void Direct_trace_pass::execute(
     _inputs.rt,
     resources.get_buffer(_rt_entity_binning_handle),
     32);
-  recorder.dispatch_indirect({.buffer = queue_buffer, .offset = 0});
+  if (_persistent) {
+    recorder.push_buffer_reference(80, resources.get_buffer(_cursor_handle));
+    // Fixed pool: the warps loop until the queue is drained, so the
+    // dispatch does not scale with it.
+    recorder.dispatch(
+      static_cast<u32>(direct_persistent_workgroup_count), 1, 1);
+  } else {
+    recorder.dispatch_indirect({.buffer = queue_buffer, .offset = 0});
+  }
 }
 
 Direct_brdf_trace_pass::Direct_brdf_trace_pass(

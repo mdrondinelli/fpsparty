@@ -4,56 +4,113 @@
 
 layout(local_size_x = 64) in;
 
-// Environment cosine lobe. Writes the unweighted integrand; the
-// combination pass divides.
+// Environment cosine lobe, traced by a fixed pool of persistent warps that
+// pull from the queue through a shared cursor.
+//
+// Its directions are cosine-sampled, so its lanes disagree about DDA trip
+// counts exactly as the BRDF trace's do -- both measured about 27% active
+// threads per warp against the sun's 95%. A lane whose ray ends takes the
+// next queue entry and keeps going, so the straggler never leaves
+// registers. See direct_trace_brdf.comp for why this needs no
+// forward-progress guarantee.
+//
+// The sun trace deliberately does not do this: its rays are mutually
+// parallel and it has no stragglers to refill around, so the per-iteration
+// subgroup bookkeeping would be pure cost.
+//
+// Writes the unweighted integrand; the combination pass divides.
 
 void main() {
-  if (gl_GlobalInvocationID.x >= push_constants.queue.count) {
-    return;
-  }
-  const uint pixel_index = push_constants.queue.pixels[gl_GlobalInvocationID.x];
   const ivec2 size =
     imageSize(storage_images[push_constants.environment_numerator_image]);
-  const ivec2 pixel = direct_queue_pixel(pixel_index, size);
-  const Direct_shading_point shading_point =
-    direct_shading_point(
-      push_constants.scene,
-      push_constants.depth_texture,
-      push_constants.normal_texture,
-      pixel,
-      size);
-  const vec3 n = shading_point.normal;
-  const vec3 w_i = direct_environment_direction(
-    false,
-    n,
-    push_constants.scene.sun_direction,
-    direct_load_uv(push_constants.environment_uv_image, pixel));
-  const float cos_theta = max(dot(n, w_i), 0.0);
-  vec3 numerator = vec3(0.0);
-  if (cos_theta > 0.0) {
-    const bool occluded = trace_ray(
+  bool traversing = false;
+  bool drained = false;
+  Rt_traversal traversal;
+  ivec2 pixel = ivec2(0);
+  float cos_theta = 0.0;
+  while (true) {
+    // Deferred until half the warp is idle: the work below only runs on
+    // idle lanes, so refilling two at a time wastes most of the width.
+    const uvec4 idle_ballot = subgroupBallot(!traversing && !drained);
+    const uint idle_count = subgroupBallotBitCount(idle_ballot);
+    const bool refill = idle_count != 0u &&
+      (idle_count * 2u >= gl_SubgroupSize || !subgroupAny(traversing));
+    if (refill && !traversing && !drained) {
+      const uint rank = subgroupBallotExclusiveBitCount(idle_ballot);
+      uint base = 0u;
+      if (subgroupElect()) {
+        base = atomicAdd(push_constants.cursor.next, idle_count);
+      }
+      base = subgroupBroadcastFirst(base);
+      const uint index = base + rank;
+      if (index >= push_constants.queue.count) {
+        drained = true;
+      } else {
+        const uint pixel_index = push_constants.queue.pixels[index];
+        pixel = direct_queue_pixel(pixel_index, size);
+        const Direct_shading_point shading_point =
+          direct_shading_point(
+            push_constants.scene,
+            push_constants.depth_texture,
+            push_constants.normal_texture,
+            pixel,
+            size);
+        const vec3 n = shading_point.normal;
+        const vec3 w_i = direct_environment_direction(
+          false,
+          n,
+          push_constants.scene.sun_direction,
+          direct_load_uv(push_constants.environment_uv_image, pixel));
+        cos_theta = max(dot(n, w_i), 0.0);
+        if (cos_theta > 0.0) {
+          traversal = rt_traversal_begin(shading_point.ray_origin, w_i);
+          traversing = true;
+        } else {
+          // Below the horizon: nothing to trace, but the texel still has
+          // to be written.
+          imageStore(
+            storage_images[push_constants.environment_numerator_image],
+            pixel,
+            vec4(0.0, 0.0, 0.0, 1.0));
+        }
+      }
+    }
+    if (!subgroupAny(traversing) && subgroupAll(drained)) {
+      break;
+    }
+    if (!traversing) {
+      continue;
+    }
+    Rt_hit hit;
+    const uint result = rt_traverse(
       push_constants.rt_block_shape_grid,
       push_constants.rt_block_material_grid,
       push_constants.entities,
       push_constants.entity_head_grid,
       push_constants.entity_mask_grid,
       push_constants.entity_nodes,
-      shading_point.ray_origin,
-      w_i,
-      true);
-    if (!occluded) {
+      true,
+      direct_traverse_step_budget,
+      traversal,
+      hit);
+    if (result == rt_traverse_suspended) {
+      continue;
+    }
+    vec3 numerator = vec3(0.0);
+    if (result == rt_traverse_miss) {
       numerator = direct_environment_integrand(
         push_constants.scene,
         cos_theta,
-        shading_point.position.y,
-        w_i,
-        direct_in_sun_disc(w_i, push_constants.scene.sun_direction),
+        traversal.origin.y,
+        traversal.dir,
+        direct_in_sun_disc(traversal.dir, push_constants.scene.sun_direction),
         push_constants.transmittance_texture,
         push_constants.sky_view_lut);
     }
+    imageStore(
+      storage_images[push_constants.environment_numerator_image],
+      pixel,
+      vec4(numerator, 1.0));
+    traversing = false;
   }
-  imageStore(
-    storage_images[push_constants.environment_numerator_image],
-    pixel,
-    vec4(numerator, 1.0));
 }

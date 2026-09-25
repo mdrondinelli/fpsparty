@@ -544,7 +544,8 @@ private:
           passes::Direct_sample_clear_pass_inputs{
             .sun_queue_buffer = _direct_sample_buffer_sun_symbol,
             .sky_queue_buffer = _direct_sample_buffer_sky_symbol,
-            .cursor_buffer = _direct_cursor_buffer_symbol,
+            .sky_cursor_buffer = _direct_cursor_buffer_symbols[0],
+            .brdf_cursor_buffer = _direct_cursor_buffer_symbols[1],
           });
         _graph.add_pass(*direct_sample_clear_pass);
         direct_sample_gen_pass.emplace(
@@ -595,6 +596,7 @@ private:
           .scene_uniform_buffer = _scene_uniform_buffer_symbol,
           .scene_uniform_offset = scene_uniform_offset,
           .rt = rt_inputs,
+          .cursor_buffer = _direct_cursor_buffer_symbols[0],
         };
         auto const trace_variants = passes::Direct_trace_variants{
           .sun = {_direct_trace_sun_pipeline, _direct_sample_buffer_sun_symbol},
@@ -631,7 +633,7 @@ private:
             .scene_uniform_buffer = _scene_uniform_buffer_symbol,
             .scene_uniform_offset = scene_uniform_offset,
             .rt = rt_inputs,
-            .cursor_buffer = _direct_cursor_buffer_symbol,
+            .cursor_buffer = _direct_cursor_buffer_symbols[1],
           });
         _graph.add_pass(*direct_brdf_trace_pass);
         direct_combine_pass.emplace(
@@ -831,7 +833,8 @@ private:
         {_scene_uniform_buffer_symbol, _scene_uniform_buffer},
         {_direct_sample_buffer_sun_symbol, _direct_sample_buffer_sun},
         {_direct_sample_buffer_sky_symbol, _direct_sample_buffer_sky},
-        {_direct_cursor_buffer_symbol, _direct_cursor_buffer},
+        {_direct_cursor_buffer_symbols[0], _direct_cursor_buffers[0]},
+        {_direct_cursor_buffer_symbols[1], _direct_cursor_buffers[1]},
         {_rt_entity_binning_buffer_symbols[0], _rt_entity_binning_buffers[0]},
         {_rt_entity_binning_buffer_symbols[1], _rt_entity_binning_buffers[1]},
       });
@@ -1280,13 +1283,15 @@ private:
       };
       _direct_sample_buffer_sun = create_sample_buffer();
       _direct_sample_buffer_sky = create_sample_buffer();
-      _direct_cursor_buffer = _graphics.create_buffer({
-        .size = 4,
-        .usage = graphics::Buffer_usage_flag_bits::shader_device_address |
-                 graphics::Buffer_usage_flag_bits::transfer_dst,
-        .mapping_mode = graphics::Mapping_mode::none,
-        .min_alignment = 4,
-      });
+      for (auto &buffer : _direct_cursor_buffers) {
+        buffer = _graphics.create_buffer({
+          .size = 4,
+          .usage = graphics::Buffer_usage_flag_bits::shader_device_address |
+                   graphics::Buffer_usage_flag_bits::transfer_dst,
+          .mapping_mode = graphics::Mapping_mode::none,
+          .min_alignment = 4,
+        });
+      }
       _direct_sample_buffer_extent = extent;
     }
   }
@@ -1654,8 +1659,8 @@ private:
   rc::Strong<graphics::Image> _direct_brdf_numerator_render_target{};
   rc::Strong<graphics::Buffer> _direct_sample_buffer_sun{};
   rc::Strong<graphics::Buffer> _direct_sample_buffer_sky{};
-  // One counter the persistent BRDF warps draw pixels from.
-  rc::Strong<graphics::Buffer> _direct_cursor_buffer{};
+  // Counters the persistent sky and BRDF warps draw from, in that order.
+  std::array<rc::Strong<graphics::Buffer>, 2> _direct_cursor_buffers{};
   math::ivec3 _direct_sample_buffer_extent{};
   rc::Strong<graphics::Image> _crosshair_mask_render_target{};
   graphics::Shader _grid_vertex_shader;
@@ -1739,8 +1744,8 @@ private:
     _graph.allocate_buffer_symbol()};
   render_graph::Symbolic_buffer _direct_sample_buffer_sky_symbol{
     _graph.allocate_buffer_symbol()};
-  render_graph::Symbolic_buffer _direct_cursor_buffer_symbol{
-    _graph.allocate_buffer_symbol()};
+  std::array<render_graph::Symbolic_buffer, 2> _direct_cursor_buffer_symbols{
+    _graph.allocate_buffer_symbol(), _graph.allocate_buffer_symbol()};
   std::array<render_graph::Symbolic_buffer, max_frames_in_flight>
     _rt_entity_binning_buffer_symbols{
       _graph.allocate_buffer_symbol(), _graph.allocate_buffer_symbol()};

@@ -17,7 +17,8 @@ namespace fpsparty::client::passes {
 struct Direct_sample_clear_pass_inputs {
   render_graph::Symbolic_buffer sun_queue_buffer;
   render_graph::Symbolic_buffer sky_queue_buffer;
-  render_graph::Symbolic_buffer cursor_buffer;
+  render_graph::Symbolic_buffer sky_cursor_buffer;
+  render_graph::Symbolic_buffer brdf_cursor_buffer;
 };
 
 class Direct_sample_clear_pass : public render_graph::Node {
@@ -34,7 +35,8 @@ private:
   Direct_sample_clear_pass_inputs _inputs;
   render_graph::Resource_handle _sun_queue_handle{};
   render_graph::Resource_handle _sky_queue_handle{};
-  render_graph::Resource_handle _cursor_handle{};
+  render_graph::Resource_handle _sky_cursor_handle{};
+  render_graph::Resource_handle _brdf_cursor_handle{};
 };
 
 // Writes both samples' random variables to a per-pixel payload image and
@@ -147,6 +149,10 @@ struct Direct_trace_pass_inputs {
   render_graph::Symbolic_buffer scene_uniform_buffer;
   std::size_t scene_uniform_offset;
   Direct_rt_inputs rt;
+  // Read only by the sky lobe, which draws from its queue through a
+  // persistent pool -- see direct_trace_sky.comp. The sun lobe takes one
+  // ray per invocation and leaves it alone.
+  render_graph::Symbolic_buffer cursor_buffer;
 };
 
 // One environment lobe's trace, over its coherence bin. Writes the
@@ -169,6 +175,8 @@ private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Direct_trace_pass_inputs _inputs;
   render_graph::Symbolic_buffer _queue;
+  bool _persistent{};
+  render_graph::Resource_handle _cursor_handle{};
   render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _normal_handle{};
   render_graph::Resource_handle _uv_handle{};
