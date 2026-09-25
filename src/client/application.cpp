@@ -506,10 +506,7 @@ private:
       direct_trace_sun_pass;
     std::optional<passes::Direct_trace_pass>
       direct_trace_sky_pass;
-    std::array<
-      std::optional<passes::Direct_brdf_trace_pass>,
-      direct_brdf_trace_pass_count>
-      direct_brdf_trace_passes;
+    std::optional<passes::Direct_brdf_trace_pass> direct_brdf_trace_pass;
     std::optional<passes::Direct_combine_pass> direct_combine_pass;
     std::optional<passes::Direct_temporal_pass>
       direct_temporal_pass;
@@ -547,8 +544,7 @@ private:
           passes::Direct_sample_clear_pass_inputs{
             .sun_queue_buffer = _direct_sample_buffer_sun_symbol,
             .sky_queue_buffer = _direct_sample_buffer_sky_symbol,
-            .first_state_buffer = _direct_ray_state_buffer_symbols[0],
-            .second_state_buffer = _direct_ray_state_buffer_symbols[1],
+            .cursor_buffer = _direct_cursor_buffer_symbol,
           });
         _graph.add_pass(*direct_sample_clear_pass);
         direct_sample_gen_pass.emplace(
@@ -621,39 +617,23 @@ private:
           _direct_environment_numerator_render_target_symbol);
         // Writes its own target, so it is ordered against neither of the
         // two above.
-        // Each pass puts down the rays whose warps have thinned out and
-        // the next resumes them packed together -- see
-        // direct_trace_brdf.comp.
-        auto const brdf_trace_inputs = passes::Direct_brdf_trace_pass_inputs{
-          .depth_render_target = _depth_attachment_symbols[_frame_number % 2],
-          .normal_render_target =
-            _normal_render_target_symbols[_frame_number % 2],
-          .brdf_uv_render_target = _direct_brdf_uv_render_target_symbol,
-          .brdf_numerator_render_target =
-            _direct_brdf_numerator_render_target_symbol,
-          .transmittance_lut = _transmittance_lut,
-          .sky_view_lut = _sky_view_lut_symbol,
-          .scene_uniform_buffer = _scene_uniform_buffer_symbol,
-          .scene_uniform_offset = scene_uniform_offset,
-          .rt = rt_inputs,
-          .framebuffer_size = framebuffer_size,
-          .in_state_buffer = {},
-          .out_state_buffer = {},
-          .is_continuation = false,
-          .is_final = false,
-        };
-        for (auto pass = std::size_t{}; pass != direct_brdf_trace_pass_count;
-             ++pass) {
-          auto inputs = brdf_trace_inputs;
-          inputs.is_continuation = pass != 0;
-          inputs.is_final = pass + 1 == direct_brdf_trace_pass_count;
-          inputs.in_state_buffer =
-            _direct_ray_state_buffer_symbols[(pass + 1) % 2];
-          inputs.out_state_buffer = _direct_ray_state_buffer_symbols[pass % 2];
-          direct_brdf_trace_passes[pass].emplace(
-            _direct_trace_brdf_pipeline, std::move(inputs));
-          _graph.add_pass(*direct_brdf_trace_passes[pass]);
-        }
+        direct_brdf_trace_pass.emplace(
+          _direct_trace_brdf_pipeline,
+          passes::Direct_brdf_trace_pass_inputs{
+            .depth_render_target = _depth_attachment_symbols[_frame_number % 2],
+            .normal_render_target =
+              _normal_render_target_symbols[_frame_number % 2],
+            .brdf_uv_render_target = _direct_brdf_uv_render_target_symbol,
+            .brdf_numerator_render_target =
+              _direct_brdf_numerator_render_target_symbol,
+            .transmittance_lut = _transmittance_lut,
+            .sky_view_lut = _sky_view_lut_symbol,
+            .scene_uniform_buffer = _scene_uniform_buffer_symbol,
+            .scene_uniform_offset = scene_uniform_offset,
+            .rt = rt_inputs,
+            .cursor_buffer = _direct_cursor_buffer_symbol,
+          });
+        _graph.add_pass(*direct_brdf_trace_pass);
         direct_combine_pass.emplace(
           _direct_combine_pipeline,
           passes::Direct_combine_pass_inputs{
@@ -851,8 +831,7 @@ private:
         {_scene_uniform_buffer_symbol, _scene_uniform_buffer},
         {_direct_sample_buffer_sun_symbol, _direct_sample_buffer_sun},
         {_direct_sample_buffer_sky_symbol, _direct_sample_buffer_sky},
-        {_direct_ray_state_buffer_symbols[0], _direct_ray_state_buffers[0]},
-        {_direct_ray_state_buffer_symbols[1], _direct_ray_state_buffers[1]},
+        {_direct_cursor_buffer_symbol, _direct_cursor_buffer},
         {_rt_entity_binning_buffer_symbols[0], _rt_entity_binning_buffers[0]},
         {_rt_entity_binning_buffer_symbols[1], _rt_entity_binning_buffers[1]},
       });
@@ -1301,18 +1280,13 @@ private:
       };
       _direct_sample_buffer_sun = create_sample_buffer();
       _direct_sample_buffer_sky = create_sample_buffer();
-      auto const state_buffer_size =
-        direct_ray_state_data_offset + pixel_count * direct_ray_state_stride;
-      for (auto &buffer : _direct_ray_state_buffers) {
-        buffer = _graphics.create_buffer({
-          .size = state_buffer_size,
-          .usage = graphics::Buffer_usage_flag_bits::shader_device_address |
-                   graphics::Buffer_usage_flag_bits::transfer_dst |
-                   graphics::Buffer_usage_flag_bits::indirect_buffer,
-          .mapping_mode = graphics::Mapping_mode::none,
-          .min_alignment = 4,
-        });
-      }
+      _direct_cursor_buffer = _graphics.create_buffer({
+        .size = 4,
+        .usage = graphics::Buffer_usage_flag_bits::shader_device_address |
+                 graphics::Buffer_usage_flag_bits::transfer_dst,
+        .mapping_mode = graphics::Mapping_mode::none,
+        .min_alignment = 4,
+      });
       _direct_sample_buffer_extent = extent;
     }
   }
@@ -1680,9 +1654,8 @@ private:
   rc::Strong<graphics::Image> _direct_brdf_numerator_render_target{};
   rc::Strong<graphics::Buffer> _direct_sample_buffer_sun{};
   rc::Strong<graphics::Buffer> _direct_sample_buffer_sky{};
-  // Ping-ponged: rays suspended by one BRDF trace pass, resumed by the
-  // next.
-  std::array<rc::Strong<graphics::Buffer>, 2> _direct_ray_state_buffers{};
+  // One counter the persistent BRDF warps draw pixels from.
+  rc::Strong<graphics::Buffer> _direct_cursor_buffer{};
   math::ivec3 _direct_sample_buffer_extent{};
   rc::Strong<graphics::Image> _crosshair_mask_render_target{};
   graphics::Shader _grid_vertex_shader;
@@ -1766,8 +1739,8 @@ private:
     _graph.allocate_buffer_symbol()};
   render_graph::Symbolic_buffer _direct_sample_buffer_sky_symbol{
     _graph.allocate_buffer_symbol()};
-  std::array<render_graph::Symbolic_buffer, 2> _direct_ray_state_buffer_symbols{
-    _graph.allocate_buffer_symbol(), _graph.allocate_buffer_symbol()};
+  render_graph::Symbolic_buffer _direct_cursor_buffer_symbol{
+    _graph.allocate_buffer_symbol()};
   std::array<render_graph::Symbolic_buffer, max_frames_in_flight>
     _rt_entity_binning_buffer_symbols{
       _graph.allocate_buffer_symbol(), _graph.allocate_buffer_symbol()};

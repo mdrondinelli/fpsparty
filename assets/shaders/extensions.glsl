@@ -11,5 +11,6 @@
 #extension GL_EXT_shader_image_load_formatted : enable
 #extension GL_KHR_shader_subgroup_basic : enable
 #extension GL_KHR_shader_subgroup_ballot : enable
+#extension GL_KHR_shader_subgroup_vote : enable
 
 #endif

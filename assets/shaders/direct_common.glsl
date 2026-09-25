@@ -70,49 +70,18 @@ vec2 direct_load_uv(uint uv_image, ivec2 pixel) {
   return unpackUnorm2x16(imageLoad(storage_uimages[uv_image], pixel).x);
 }
 
-// A ray put down mid-traversal, to be resumed in a later pass. Shading
-// data is not carried: it is cheaper to re-read the G-buffer for the few
-// rays that survive than to widen every record.
-struct Direct_ray_state {
-  vec3 origin;
-  vec3 dir;
-  vec3 t_max;
-  ivec3 cell_coords;
-  float entry_t;
-  // The normal only ever reaches the integrand as this cosine, so the
-  // cosine is what gets carried -- recovering the normal would mean two
-  // scattered G-buffer fetches per ray that terminates here.
-  float cos_theta;
-  uint pixel;
-  // steps in the low 16 bits, entry axes above. Packing them is what
-  // makes room for cos_theta without growing the record past 64 bytes,
-  // which is two cache sectors and keeps every record aligned to them.
-  uint steps_and_axes;
-};
-
-uint direct_pack_steps(uint steps, uint entry_axes) {
-  return steps | (entry_axes << 16u);
-}
-
+// The persistent BRDF trace pulls pixels from here instead of getting one
+// per invocation, so a warp whose lanes finish early refills them rather
+// than idling. One counter for the whole frame.
 layout(scalar, buffer_reference, buffer_reference_align = 4)
-restrict buffer Direct_ray_states {
-  uint dispatch_x;
-  uint dispatch_y;
-  uint dispatch_z;
-  uint count;
-  Direct_ray_state states[];
+restrict buffer Direct_ray_cursor {
+  uint next;
 };
 
-// Steps between coherence checks. Shorter reacts sooner to a warp
-// thinning out; longer spends less on ballots.
-const uint direct_traverse_check_interval = 16u;
-
-// A warp puts its rays down once live lanes fall to this fraction of the
-// subgroup, written as a divisor: 2 is half, 4 a quarter. Suspending
-// earlier moves work into the later passes, which is worth doing while
-// they stay cheap. It costs nothing in correctness -- the final pass
-// never suspends, so rays always finish against trace_max_steps.
-const uint direct_traverse_suspend_divisor = 2u;
+// Steps a lane advances between refills. Larger amortizes the subgroup
+// bookkeeping and rt_traverse's per-call setup; smaller returns a
+// finished lane to the pool sooner.
+const uint direct_traverse_step_budget = 8u;
 
 // Primary surface reconstructed from the G-buffer, in world space.
 struct Direct_shading_point {

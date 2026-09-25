@@ -3,27 +3,28 @@
 #include "direct_common.glsl"
 #include "rt.glsl"
 
-layout(local_size_x = 8, local_size_y = 8) in;
+layout(local_size_x = 64) in;
 
-// Cosine BRDF sample, one per surface pixel, traversed in bounded rounds.
+// Cosine BRDF sample, one per surface pixel, traced by a fixed pool of
+// persistent warps that pull work from a global cursor.
 //
 // A warp runs until its last lane terminates, and DDA trip counts vary by
-// orders of magnitude, so a warp whose lanes have mostly finished burns
-// issue slots on masked-off threads. Measured lane utilization is ~27%
-// here against 95% for the sun's mutually parallel rays, and forcing the
-// directions parallel cut this pass from 1.9ms to 0.5ms.
+// orders of magnitude, so a warp with one lane still traversing spends
+// full instruction issue on masked-off threads. Measured lane utilization
+// is ~27% against 95% for the sun's mutually parallel rays, and forcing
+// the directions parallel -- wrong image, thrown away -- cut this pass
+// from 1.9ms to 0.5ms.
 //
-// So every direct_traverse_check_interval steps the warp counts its live
-// lanes, and once they fall below direct_traverse_suspend_divisor it puts
-// them down: their
-// traversal state goes to a continuation queue and a later pass resumes
-// them packed together. Sorting by direction was tried first and lost --
-// it fixed lane utilization but scattered every lane's memory access,
-// which cost more. Compaction keeps the screen ordering the survivors
-// arrived in.
+// Rather than suspend the stragglers and resume them in a later pass,
+// which costs writing and re-reading their traversal state, a lane that
+// finishes takes a new pixel and keeps going. The straggler never leaves
+// registers. This is Aila and Laine's persistent-threads scheme (HPG
+// 2009), and it works here without the usual deadlock hazard because the
+// cursor only ever counts up: no warp waits on work another must produce,
+// so no forward-progress guarantee between workgroups is needed.
 //
-// The final pass does not suspend; whatever is still running there
-// terminates against trace_max_steps as it always did.
+// Refills are aggregated per subgroup, not per workgroup, so they need no
+// barriers: one atomic serves every idle lane in the warp.
 layout(push_constant) uniform Push_constants {
   layout(offset = 0) Scene scene;
   layout(offset = 8) uint16_t depth_texture;
@@ -39,145 +40,105 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 48) Rt_entity_nodes entity_nodes;
   layout(offset = 56) Rt_block_material_grid rt_block_material_grid;
   layout(offset = 64) Rt_entity_mask_grid entity_mask_grid;
-  layout(offset = 72) Direct_ray_states in_states;
-  layout(offset = 80) Direct_ray_states out_states;
-  // Bit 0: resume from in_states rather than starting from the screen.
-  // Bit 1: last pass, so never suspend.
-  layout(offset = 88) uint flags;
+  layout(offset = 72) Direct_ray_cursor cursor;
 } push_constants;
 
-shared uint append_count;
-shared uint append_base;
-
 void main() {
-  const bool continuation = (push_constants.flags & 1u) != 0u;
-  const bool final_pass = (push_constants.flags & 2u) != 0u;
   const ivec2 size =
     imageSize(storage_images[push_constants.brdf_numerator_image]);
-  ivec2 pixel = ivec2(0);
-  uint pixel_index = 0u;
+  const uint pixel_total = uint(size.x) * uint(size.y);
+  // Per-lane ray, held in registers for its whole life.
   bool traversing = false;
-  float cos_theta = 0.0;
+  // Set once this lane has drawn past the end of the frame. Until every
+  // lane in the subgroup has, there may still be work to pull.
+  bool drained = false;
   Rt_traversal traversal;
-  if (continuation) {
-    const uint index = gl_WorkGroupID.x * 64u + gl_LocalInvocationIndex;
-    if (index < push_constants.in_states.count) {
-      const Direct_ray_state state = push_constants.in_states.states[index];
-      traversal.origin = state.origin;
-      traversal.dir = state.dir;
-      traversal.t_max = state.t_max;
-      traversal.cell_coords = state.cell_coords;
-      traversal.entry_t = state.entry_t;
-      traversal.entry_axes = state.steps_and_axes >> 16u;
-      traversal.steps = state.steps_and_axes & 0xffffu;
-      cos_theta = state.cos_theta;
-      pixel_index = state.pixel;
-      pixel = direct_queue_pixel(pixel_index, size);
-      traversing = true;
-    }
-  } else {
-    pixel = ivec2(gl_GlobalInvocationID.xy);
-    pixel_index = uint(pixel.y) * uint(size.x) + uint(pixel.x);
-    if (pixel.x < size.x && pixel.y < size.y &&
-        texelFetch(sampled_images[push_constants.depth_texture], pixel, 0).x !=
-          0.0) {
-      const Direct_shading_point shading_point =
-        direct_shading_point(
-          push_constants.scene,
-          push_constants.depth_texture,
-          push_constants.normal_texture,
-          pixel,
-          size);
-      const vec3 w_i = direct_brdf_direction(
-        shading_point.normal,
-        direct_load_uv(push_constants.brdf_uv_image, pixel));
-      cos_theta = max(dot(shading_point.normal, w_i), 0.0);
-      traversal = rt_traversal_begin(shading_point.ray_origin, w_i);
-      traversing = true;
-    }
-  }
-  Rt_hit hit;
-  uint result = rt_traverse_miss;
-  bool suspended = false;
-  if (traversing) {
-    while (true) {
-      result = rt_traverse(
-        push_constants.rt_block_shape_grid,
-        push_constants.rt_block_material_grid,
-        push_constants.entities,
-        push_constants.entity_head_grid,
-        push_constants.entity_mask_grid,
-        push_constants.entity_nodes,
-        true,
-        direct_traverse_check_interval,
-        traversal,
-        hit);
-      if (result != rt_traverse_suspended) {
-        break;
+  ivec2 pixel = ivec2(0);
+  float cos_theta = 0.0;
+  while (true) {
+    // Refilling costs a depth fetch, a G-buffer decode, a direction and a
+    // DDA init, and only idle lanes run it. Doing that with two lanes live
+    // wastes most of the warp's width, so it waits until enough have
+    // finished to be worth the issue slots -- unless nothing is traversing
+    // at all, which would otherwise never refill.
+    const uvec4 idle_ballot = subgroupBallot(!traversing && !drained);
+    const uint idle_count = subgroupBallotBitCount(idle_ballot);
+    const bool refill = idle_count != 0u &&
+      (idle_count * 2u >= gl_SubgroupSize || !subgroupAny(traversing));
+    if (refill && !traversing && !drained) {
+      const uint rank = subgroupBallotExclusiveBitCount(idle_ballot);
+      uint base = 0u;
+      if (subgroupElect()) {
+        base = atomicAdd(push_constants.cursor.next, idle_count);
       }
-      if (final_pass) {
-        continue;
-      }
-      // Only lanes still traversing reach the ballot, so this counts them.
-      const uint live = subgroupBallotBitCount(subgroupBallot(true));
-      if (live * direct_traverse_suspend_divisor <= gl_SubgroupSize) {
-        suspended = true;
-        break;
+      base = subgroupBroadcastFirst(base);
+      const uint index = base + rank;
+      if (index >= pixel_total) {
+        drained = true;
+      } else {
+        pixel = ivec2(
+          int(index % uint(size.x)), int(index / uint(size.x)));
+        // Background pixels cost a draw and nothing more: the lane simply
+        // stays idle and draws again next round.
+        if (texelFetch(
+              sampled_images[push_constants.depth_texture], pixel, 0).x !=
+            0.0) {
+          const Direct_shading_point shading_point =
+            direct_shading_point(
+              push_constants.scene,
+              push_constants.depth_texture,
+              push_constants.normal_texture,
+              pixel,
+              size);
+          const vec3 w_i = direct_brdf_direction(
+            shading_point.normal,
+            direct_load_uv(push_constants.brdf_uv_image, pixel));
+          cos_theta = max(dot(shading_point.normal, w_i), 0.0);
+          traversal = rt_traversal_begin(shading_point.ray_origin, w_i);
+          traversing = true;
+        }
       }
     }
+    // Nothing left to pull and nothing still running.
+    if (!subgroupAny(traversing) && subgroupAll(drained)) {
+      break;
+    }
+    if (!traversing) {
+      continue;
+    }
+    Rt_hit hit;
+    const uint result = rt_traverse(
+      push_constants.rt_block_shape_grid,
+      push_constants.rt_block_material_grid,
+      push_constants.entities,
+      push_constants.entity_head_grid,
+      push_constants.entity_mask_grid,
+      push_constants.entity_nodes,
+      true,
+      direct_traverse_step_budget,
+      traversal,
+      hit);
+    if (result == rt_traverse_suspended) {
+      continue;
+    }
+    const bool hit_surface = result == rt_traverse_hit;
+    vec3 numerator = vec3(0.0);
+    if (cos_theta > 0.0) {
+      numerator = hit_surface
+        ? hit.emissivity * cos_theta
+        : direct_environment_integrand(
+            push_constants.scene,
+            cos_theta,
+            traversal.origin.y,
+            traversal.dir,
+            direct_in_sun_disc(traversal.dir, push_constants.scene.sun_direction),
+            push_constants.transmittance_texture,
+            push_constants.sky_view_lut);
+    }
+    imageStore(
+      storage_images[push_constants.brdf_numerator_image],
+      pixel,
+      vec4(numerator, hit_surface ? 0.0 : 1.0));
+    traversing = false;
   }
-  if (gl_LocalInvocationIndex == 0u) {
-    append_count = 0u;
-  }
-  barrier();
-  uint rank = 0u;
-  if (suspended) {
-    rank = atomicAdd(append_count, 1u);
-  }
-  barrier();
-  if (gl_LocalInvocationIndex == 0u && append_count != 0u) {
-    append_base = atomicAdd(push_constants.out_states.count, append_count);
-    // Grow the next pass's dispatch to cover what this workgroup just
-    // appended. Monotonic, so the last writer leaves the right answer and
-    // no separate pass is needed to turn the count into a command.
-    atomicMax(
-      push_constants.out_states.dispatch_x,
-      (append_base + append_count + 63u) / 64u);
-  }
-  barrier();
-  if (suspended) {
-    Direct_ray_state state;
-    state.origin = traversal.origin;
-    state.dir = traversal.dir;
-    state.t_max = traversal.t_max;
-    state.cell_coords = traversal.cell_coords;
-    state.entry_t = traversal.entry_t;
-    state.cos_theta = cos_theta;
-    state.pixel = pixel_index;
-    state.steps_and_axes =
-      direct_pack_steps(traversal.steps, traversal.entry_axes);
-    push_constants.out_states.states[append_base + rank] = state;
-  }
-  if (!traversing || suspended) {
-    return;
-  }
-  const vec3 w_i = traversal.dir;
-  const bool hit_surface = result == rt_traverse_hit;
-  vec3 numerator = vec3(0.0);
-  if (cos_theta > 0.0) {
-    numerator = hit_surface
-      ? hit.emissivity * cos_theta
-      : direct_environment_integrand(
-          push_constants.scene,
-          cos_theta,
-          traversal.origin.y,
-          w_i,
-          direct_in_sun_disc(w_i, push_constants.scene.sun_direction),
-          push_constants.transmittance_texture,
-          push_constants.sky_view_lut);
-  }
-  imageStore(
-    storage_images[push_constants.brdf_numerator_image],
-    pixel,
-    vec4(numerator, hit_surface ? 0.0 : 1.0));
 }

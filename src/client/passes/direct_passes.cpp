@@ -25,10 +25,8 @@ void Direct_sample_clear_pass::declare(render_graph::Builder &builder) {
     _inputs.sun_queue_buffer, render_graph::access::transfer_write);
   _sky_queue_handle = builder.write(
     _inputs.sky_queue_buffer, render_graph::access::transfer_write);
-  _first_state_handle = builder.write(
-    _inputs.first_state_buffer, render_graph::access::transfer_write);
-  _second_state_handle = builder.write(
-    _inputs.second_state_buffer, render_graph::access::transfer_write);
+  _cursor_handle = builder.write(
+    _inputs.cursor_buffer, render_graph::access::transfer_write);
 }
 
 void Direct_sample_clear_pass::execute(
@@ -44,16 +42,8 @@ void Direct_sample_clear_pass::execute(
     direct_sample_count_offset,
     direct_sample_count_size,
     0u);
-  // The continuation queues write their own dispatch command as they
-  // fill, by growing x monotonically, so x starts at zero and y and z are
-  // simply held at one. States past the count are never read.
-  for (auto const handle : {_first_state_handle, _second_state_handle}) {
-    auto const &buffer = resources.get_buffer(handle);
-    recorder.fill_buffer(buffer, 0, 4, 0u);
-    recorder.fill_buffer(buffer, 4, 8, 1u);
-    recorder.fill_buffer(
-      buffer, direct_sample_count_offset, direct_sample_count_size, 0u);
-  }
+  // The persistent BRDF trace draws pixels from this counter.
+  recorder.fill_buffer(resources.get_buffer(_cursor_handle), 0, 4, 0u);
 }
 
 Direct_sample_gen_pass::Direct_sample_gen_pass(
@@ -254,11 +244,10 @@ void Direct_brdf_trace_pass::declare(render_graph::Builder &builder) {
   _numerator_handle = builder.write(
     _inputs.brdf_numerator_render_target,
     render_graph::access::compute_storage_write);
-  if (_inputs.is_continuation) {
-    _in_state_handle = builder.read(_inputs.in_state_buffer, trace_read_access);
-  }
-  _out_state_handle = builder.write(
-    _inputs.out_state_buffer, render_graph::access::compute_storage_write);
+  builder.read(
+    _inputs.cursor_buffer, render_graph::access::compute_storage_read);
+  _cursor_handle = builder.write(
+    _inputs.cursor_buffer, render_graph::access::compute_storage_write);
 }
 
 void Direct_brdf_trace_pass::execute(
@@ -287,21 +276,11 @@ void Direct_brdf_trace_pass::execute(
     _inputs.rt,
     resources.get_buffer(_rt_entity_binning_handle),
     24);
-  auto const &out_state_buffer = resources.get_buffer(_out_state_handle);
-  auto const &in_state_buffer = _inputs.is_continuation
-    ? resources.get_buffer(_in_state_handle)
-    : out_state_buffer;
-  recorder.push_buffer_reference(72, in_state_buffer);
-  recorder.push_buffer_reference(80, out_state_buffer);
-  auto const flags = static_cast<u32>(
-    (_inputs.is_continuation ? 1u : 0u) | (_inputs.is_final ? 2u : 0u));
-  recorder.push_data(88, std::as_bytes(std::span{&flags, 1}));
-  if (_inputs.is_continuation) {
-    recorder.dispatch_indirect({.buffer = in_state_buffer, .offset = 0});
-  } else {
-    auto const group_count = dispatch_group_count(_inputs.framebuffer_size);
-    recorder.dispatch(group_count.x(), group_count.y(), 1);
-  }
+  recorder.push_buffer_reference(72, resources.get_buffer(_cursor_handle));
+  // Fixed pool: the warps loop until the cursor is drained, so the
+  // dispatch does not scale with the frame.
+  recorder.dispatch(
+    static_cast<u32>(direct_persistent_workgroup_count), 1, 1);
 }
 
 Direct_combine_pass::Direct_combine_pass(

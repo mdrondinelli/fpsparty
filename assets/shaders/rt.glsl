@@ -158,12 +158,18 @@ struct Rt_hit {
 struct Rt_traversal {
   vec3 origin;
   vec3 dir;
+  // All derived from dir, and all carried rather than recomputed per
+  // call: with a small step budget rt_traverse is entered often enough
+  // that its setup cost more than a step. Costs registers and no memory,
+  // the state never being serialized.
+  vec3 inv_dir;
+  vec3 t_delta;
+  ivec3 step_dir;
+  // The face the ray entered the current cell through.
+  vec3 entry_normal;
   vec3 t_max;
   ivec3 cell_coords;
   float entry_t;
-  // Which axes advanced on the last step, one bit each. Zero means the
-  // ray has not stepped yet, where the entry normal opposes the ray.
-  uint entry_axes;
   uint steps;
 };
 
@@ -171,20 +177,29 @@ Rt_traversal rt_traversal_begin(vec3 origin, vec3 dir) {
   Rt_traversal traversal;
   traversal.origin = origin;
   traversal.dir = dir;
+  traversal.inv_dir = 1.0 / dir;
   traversal.cell_coords = ivec3(floor(origin));
   const vec3 cell_offset = origin - vec3(traversal.cell_coords);
-  const vec3 inv_dir = 1.0 / dir;
+  const vec3 inv_dir = traversal.inv_dir;
   for (int axis = 0; axis < 3; ++axis) {
     if (dir[axis] > 0.0) {
+      traversal.step_dir[axis] = 1;
+      traversal.t_delta[axis] = inv_dir[axis];
       traversal.t_max[axis] = (1.0 - cell_offset[axis]) * inv_dir[axis];
     } else if (dir[axis] < 0.0) {
+      traversal.step_dir[axis] = -1;
+      traversal.t_delta[axis] = -inv_dir[axis];
       traversal.t_max[axis] = cell_offset[axis] * -inv_dir[axis];
     } else {
+      traversal.step_dir[axis] = 0;
+      traversal.t_delta[axis] = 1.0 / 0.0;
       traversal.t_max[axis] = 1.0 / 0.0;
     }
   }
   traversal.entry_t = 0.0;
-  traversal.entry_axes = 0u;
+  // origin starts inside the first cell, so fall back to a normal
+  // opposing the ray until the first step
+  traversal.entry_normal = -dir;
   traversal.steps = 0u;
   return traversal;
 }
@@ -206,30 +221,9 @@ uint rt_traverse(
     out Rt_hit hit) {
   const vec3 origin = traversal.origin;
   const vec3 dir = traversal.dir;
-  const vec3 inv_dir = 1.0 / dir;
-  ivec3 step_dir;
-  vec3 t_delta;
-  for (int axis = 0; axis < 3; ++axis) {
-    if (dir[axis] > 0.0) {
-      step_dir[axis] = 1;
-      t_delta[axis] = inv_dir[axis];
-    } else if (dir[axis] < 0.0) {
-      step_dir[axis] = -1;
-      t_delta[axis] = -inv_dir[axis];
-    } else {
-      step_dir[axis] = 0;
-      t_delta[axis] = 1.0 / 0.0;
-    }
-  }
-  vec3 entry_normal = -dir;
-  if (traversal.entry_axes != 0u) {
-    entry_normal = vec3(0.0);
-    for (int axis = 0; axis < 3; ++axis) {
-      if ((traversal.entry_axes & (1u << uint(axis))) != 0u) {
-        entry_normal[axis] = float(-step_dir[axis]);
-      }
-    }
-  }
+  const vec3 inv_dir = traversal.inv_dir;
+  const ivec3 step_dir = traversal.step_dir;
+  const vec3 t_delta = traversal.t_delta;
   for (uint budget = 0u; budget < step_budget; ++budget) {
     if (traversal.steps >= uint(trace_max_steps)) {
       return rt_traverse_miss;
@@ -251,7 +245,7 @@ uint rt_traverse(
     if (shape_index == 1) {
       hit.t = traversal.entry_t;
       // ties between axes can leave a diagonal entry normal
-      hit.normal = normalize(entry_normal);
+      hit.normal = normalize(traversal.entry_normal);
       const Rt_block_material material =
         block_material_grid.chunks[chunk_index].materials[cell_index];
       const vec3 color = rt_color_palette[material.color_index];
@@ -332,25 +326,21 @@ uint rt_traverse(
       return rt_traverse_miss;
     }
     traversal.entry_t = next_t;
-    traversal.entry_axes = 0u;
-    entry_normal = vec3(0.0);
+    traversal.entry_normal = vec3(0.0);
     if (traversal.t_max.x == next_t) {
       traversal.cell_coords.x += step_dir.x;
       traversal.t_max.x += t_delta.x;
-      entry_normal.x = float(-step_dir.x);
-      traversal.entry_axes |= 1u;
+      traversal.entry_normal.x = float(-step_dir.x);
     }
     if (traversal.t_max.y == next_t) {
       traversal.cell_coords.y += step_dir.y;
       traversal.t_max.y += t_delta.y;
-      entry_normal.y = float(-step_dir.y);
-      traversal.entry_axes |= 2u;
+      traversal.entry_normal.y = float(-step_dir.y);
     }
     if (traversal.t_max.z == next_t) {
       traversal.cell_coords.z += step_dir.z;
       traversal.t_max.z += t_delta.z;
-      entry_normal.z = float(-step_dir.z);
-      traversal.entry_axes |= 4u;
+      traversal.entry_normal.z = float(-step_dir.z);
     }
     ++traversal.steps;
   }
