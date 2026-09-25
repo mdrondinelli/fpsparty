@@ -15,9 +15,10 @@ namespace fpsparty::client::passes {
 
 // Separate transfer pass so the graph orders count clearing before appends.
 struct Direct_sample_clear_pass_inputs {
-  render_graph::Symbolic_buffer sun_sample_buffer;
-  render_graph::Symbolic_buffer sky_sample_buffer;
-  render_graph::Symbolic_buffer brdf_sample_buffer;
+  render_graph::Symbolic_buffer sun_queue_buffer;
+  render_graph::Symbolic_buffer sky_queue_buffer;
+  render_graph::Symbolic_buffer sky_cursor_buffer;
+  render_graph::Symbolic_buffer brdf_cursor_buffer;
 };
 
 class Direct_sample_clear_pass : public render_graph::Node {
@@ -32,13 +33,19 @@ public:
 
 private:
   Direct_sample_clear_pass_inputs _inputs;
-  render_graph::Resource_handle _sun_sample_handle{};
-  render_graph::Resource_handle _sky_sample_handle{};
-  render_graph::Resource_handle _brdf_sample_handle{};
+  render_graph::Resource_handle _sun_queue_handle{};
+  render_graph::Resource_handle _sky_queue_handle{};
+  render_graph::Resource_handle _sky_cursor_handle{};
+  render_graph::Resource_handle _brdf_cursor_handle{};
 };
 
-// Generate one environment sample and one BRDF sample per surface pixel.
-// Pixels without an environment sample have their raw irradiance cleared here.
+// Writes both samples' random variables to a per-pixel payload image and
+// bins the environment ray by the lobe that drew it. The payload is all
+// that is handed forward: p_cone and the lobe choice are recomputed by
+// whoever needs them, so nothing downstream can read a stale weight.
+//
+// The BRDF ray gets no queue. It is unconditional over surface pixels and
+// its directions are incoherent, so compaction is all a queue would buy.
 struct Direct_sample_gen_pass_inputs {
   // Reverse-Z depth and oct-encoded normal; see gbuffer.glsl.
   render_graph::Symbolic_image depth_render_target;
@@ -46,13 +53,12 @@ struct Direct_sample_gen_pass_inputs {
   // Never written within any frame's graph (created once at startup) --
   // no symbol, held directly.
   rc::Strong<graphics::Image const> transmittance_lut;
-  render_graph::Symbolic_image sky_view_lut;
   render_graph::Symbolic_buffer scene_uniform_buffer;
   std::size_t scene_uniform_offset;
-  render_graph::Symbolic_buffer sun_sample_buffer;
-  render_graph::Symbolic_buffer sky_sample_buffer;
-  render_graph::Symbolic_buffer brdf_sample_buffer;
-  render_graph::Symbolic_image raw_direct_irradiance_render_target;
+  render_graph::Symbolic_image environment_uv_render_target;
+  render_graph::Symbolic_image brdf_uv_render_target;
+  render_graph::Symbolic_buffer sun_queue_buffer;
+  render_graph::Symbolic_buffer sky_queue_buffer;
   math::ivec2 framebuffer_size;
   u32 frame_number;
 };
@@ -74,21 +80,17 @@ private:
   Direct_sample_gen_pass_inputs _inputs;
   render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _normal_handle{};
-  render_graph::Resource_handle _sky_view_lut_handle{};
   render_graph::Resource_handle _scene_uniform_handle{};
-  render_graph::Resource_handle _sun_sample_handle{};
-  render_graph::Resource_handle _sky_sample_handle{};
-  render_graph::Resource_handle _brdf_sample_handle{};
-  render_graph::Resource_handle _raw_direct_irradiance_handle{};
+  render_graph::Resource_handle _environment_uv_handle{};
+  render_graph::Resource_handle _brdf_uv_handle{};
+  render_graph::Resource_handle _sun_queue_handle{};
+  render_graph::Resource_handle _sky_queue_handle{};
 };
 
-// Turns the sample-generation pass's atomic sample counts into indirect
-// dispatch args for the trace passes below, in place in the same three
-// buffers.
+// Turns the queues' atomic counts into indirect dispatch args, in place.
 struct Direct_indirect_args_pass_inputs {
-  render_graph::Symbolic_buffer sun_sample_buffer;
-  render_graph::Symbolic_buffer sky_sample_buffer;
-  render_graph::Symbolic_buffer brdf_sample_buffer;
+  render_graph::Symbolic_buffer sun_queue_buffer;
+  render_graph::Symbolic_buffer sky_queue_buffer;
 };
 
 class Direct_indirect_args_pass : public render_graph::Node {
@@ -106,46 +108,56 @@ public:
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Direct_indirect_args_pass_inputs _inputs;
-  render_graph::Resource_handle _sun_sample_handle{};
-  render_graph::Resource_handle _sky_sample_handle{};
-  render_graph::Resource_handle _brdf_sample_handle{};
+  render_graph::Resource_handle _sun_queue_handle{};
+  render_graph::Resource_handle _sky_queue_handle{};
 };
 
-enum class Direct_trace_kind { sun, sky, brdf };
+// Grid and entity data the traces walk. Unsymbolized: never written
+// within any frame's graph, apart from the binning buffer.
+struct Direct_rt_inputs {
+  rc::Strong<graphics::Buffer> block_grid_buffer;
+  // Byte offset of the material chunks within block_grid_buffer; the
+  // shapes start at 0. See rt.glsl.
+  std::size_t block_material_grid_offset;
+  rc::Strong<graphics::Buffer> entity_buffer;
+  render_graph::Symbolic_buffer entity_binning_buffer;
+  std::size_t entity_binning_mask_offset;
+  std::size_t entity_binning_grid_offset;
+  std::size_t entity_binning_nodes_offset;
+};
+
+enum class Direct_trace_kind { sun, sky };
 
 struct Direct_trace_variant {
   rc::Strong<graphics::Compute_pipeline> pipeline;
-  render_graph::Symbolic_buffer samples;
+  render_graph::Symbolic_buffer queue;
 };
 
 struct Direct_trace_variants {
   Direct_trace_variant sun;
   Direct_trace_variant sky;
-  Direct_trace_variant brdf;
 };
 
-// Resources common to all trace variants.
+// Resources common to both environment traces.
 struct Direct_trace_pass_inputs {
   render_graph::Symbolic_image depth_render_target;
   render_graph::Symbolic_image normal_render_target;
-  render_graph::Symbolic_image raw_direct_irradiance_render_target;
+  render_graph::Symbolic_image environment_uv_render_target;
+  render_graph::Symbolic_image environment_numerator_render_target;
   rc::Strong<graphics::Image const> transmittance_lut;
   render_graph::Symbolic_image sky_view_lut;
   render_graph::Symbolic_buffer scene_uniform_buffer;
   std::size_t scene_uniform_offset;
-  rc::Strong<graphics::Buffer> rt_block_grid_buffer;
-  // Byte offset of the material chunks within rt_block_grid_buffer; the
-  // shapes start at 0. See rt.glsl.
-  std::size_t rt_block_material_grid_offset;
-  rc::Strong<graphics::Buffer> rt_entity_buffer;
-  render_graph::Symbolic_buffer rt_entity_binning_buffer;
-  std::size_t rt_entity_binning_mask_offset;
-  std::size_t rt_entity_binning_grid_offset;
-  std::size_t rt_entity_binning_nodes_offset;
+  Direct_rt_inputs rt;
+  // Read only by the sky lobe, which draws from its queue through a
+  // persistent pool -- see direct_trace_sky.comp. The sun lobe takes one
+  // ray per invocation and leaves it alone.
+  render_graph::Symbolic_buffer cursor_buffer;
 };
 
-// The trace kind selects its pipeline, sample queue, and resource access.
-// Environment traces initialize irradiance; the BRDF trace adds to it.
+// One environment lobe's trace, over its coherence bin. Writes the
+// unweighted integrand; Direct_combine_pass does the division, so the two
+// lobes partition the pixels and neither reads what the other wrote.
 class Direct_trace_pass : public render_graph::Node {
 public:
   Direct_trace_pass(
@@ -162,15 +174,102 @@ public:
 private:
   rc::Strong<graphics::Compute_pipeline> _pipeline;
   Direct_trace_pass_inputs _inputs;
-  Direct_trace_kind _kind;
-  render_graph::Symbolic_buffer _samples;
+  render_graph::Symbolic_buffer _queue;
+  bool _persistent{};
+  render_graph::Resource_handle _cursor_handle{};
   render_graph::Resource_handle _depth_handle{};
   render_graph::Resource_handle _normal_handle{};
+  render_graph::Resource_handle _uv_handle{};
   render_graph::Resource_handle _sky_view_lut_handle{};
   render_graph::Resource_handle _scene_uniform_handle{};
   render_graph::Resource_handle _rt_entity_binning_handle{};
-  render_graph::Resource_handle _sample_handle{};
-  render_graph::Resource_handle _direct_irradiance_handle{};
+  render_graph::Resource_handle _queue_handle{};
+  render_graph::Resource_handle _numerator_handle{};
+};
+
+// The BRDF trace. Dispatched over the whole screen rather than a queue --
+// see direct_trace_brdf.comp -- and writes its own numerator target, so
+// nothing orders it against the environment traces.
+struct Direct_brdf_trace_pass_inputs {
+  render_graph::Symbolic_image depth_render_target;
+  render_graph::Symbolic_image normal_render_target;
+  render_graph::Symbolic_image brdf_uv_render_target;
+  render_graph::Symbolic_image brdf_numerator_render_target;
+  rc::Strong<graphics::Image const> transmittance_lut;
+  render_graph::Symbolic_image sky_view_lut;
+  render_graph::Symbolic_buffer scene_uniform_buffer;
+  std::size_t scene_uniform_offset;
+  Direct_rt_inputs rt;
+  // Pixels are drawn from here rather than assigned one per invocation --
+  // see direct_trace_brdf.comp.
+  render_graph::Symbolic_buffer cursor_buffer;
+};
+
+class Direct_brdf_trace_pass : public render_graph::Node {
+public:
+  Direct_brdf_trace_pass(
+    rc::Strong<graphics::Compute_pipeline> pipeline,
+    Direct_brdf_trace_pass_inputs inputs);
+
+  void declare(render_graph::Builder &builder) override;
+
+  void execute(
+    graphics::Work_recorder &recorder,
+    render_graph::Resources &resources) override;
+
+private:
+  rc::Strong<graphics::Compute_pipeline> _pipeline;
+  Direct_brdf_trace_pass_inputs _inputs;
+  render_graph::Resource_handle _cursor_handle{};
+  render_graph::Resource_handle _depth_handle{};
+  render_graph::Resource_handle _normal_handle{};
+  render_graph::Resource_handle _uv_handle{};
+  render_graph::Resource_handle _sky_view_lut_handle{};
+  render_graph::Resource_handle _scene_uniform_handle{};
+  render_graph::Resource_handle _rt_entity_binning_handle{};
+  render_graph::Resource_handle _numerator_handle{};
+};
+
+// Rebuilds both samples' directions and densities per pixel and applies
+// the MIS division the traces skipped -- see direct_combine.comp.
+struct Direct_combine_pass_inputs {
+  render_graph::Symbolic_image depth_render_target;
+  render_graph::Symbolic_image normal_render_target;
+  rc::Strong<graphics::Image const> transmittance_lut;
+  render_graph::Symbolic_image environment_uv_render_target;
+  render_graph::Symbolic_image brdf_uv_render_target;
+  render_graph::Symbolic_image environment_numerator_render_target;
+  render_graph::Symbolic_image brdf_numerator_render_target;
+  render_graph::Symbolic_image raw_direct_irradiance_render_target;
+  render_graph::Symbolic_buffer scene_uniform_buffer;
+  std::size_t scene_uniform_offset;
+  math::ivec2 framebuffer_size;
+  u32 frame_number;
+};
+
+class Direct_combine_pass : public render_graph::Node {
+public:
+  Direct_combine_pass(
+    rc::Strong<graphics::Compute_pipeline> pipeline,
+    Direct_combine_pass_inputs inputs);
+
+  void declare(render_graph::Builder &builder) override;
+
+  void execute(
+    graphics::Work_recorder &recorder,
+    render_graph::Resources &resources) override;
+
+private:
+  rc::Strong<graphics::Compute_pipeline> _pipeline;
+  Direct_combine_pass_inputs _inputs;
+  render_graph::Resource_handle _depth_handle{};
+  render_graph::Resource_handle _normal_handle{};
+  render_graph::Resource_handle _environment_uv_handle{};
+  render_graph::Resource_handle _brdf_uv_handle{};
+  render_graph::Resource_handle _environment_numerator_handle{};
+  render_graph::Resource_handle _brdf_numerator_handle{};
+  render_graph::Resource_handle _raw_direct_irradiance_handle{};
+  render_graph::Resource_handle _scene_uniform_handle{};
 };
 
 // Accumulate irradiance against previous-frame history. Previous images

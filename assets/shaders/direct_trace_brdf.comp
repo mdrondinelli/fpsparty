@@ -1,62 +1,144 @@
 #version 450
 
-#include "direct_trace_interface.glsl"
-#include "sampling.glsl"
+#include "direct_common.glsl"
+#include "rt.glsl"
 
 layout(local_size_x = 64) in;
 
-// Cosine BRDF sample: accumulate surface emission or environment irradiance.
+// Cosine BRDF sample, one per surface pixel, traced by a fixed pool of
+// persistent warps that pull work from a global cursor.
+//
+// A warp runs until its last lane terminates, and DDA trip counts vary by
+// orders of magnitude, so a warp with one lane still traversing spends
+// full instruction issue on masked-off threads. Measured lane utilization
+// is ~27% against 95% for the sun's mutually parallel rays, and forcing
+// the directions parallel -- wrong image, thrown away -- cut this pass
+// from 1.9ms to 0.5ms.
+//
+// Rather than suspend the stragglers and resume them in a later pass,
+// which costs writing and re-reading their traversal state, a lane that
+// finishes takes a new pixel and keeps going. The straggler never leaves
+// registers. This is Aila and Laine's persistent-threads scheme (HPG
+// 2009), and it works here without the usual deadlock hazard because the
+// cursor only ever counts up: no warp waits on work another must produce,
+// so no forward-progress guarantee between workgroups is needed.
+//
+// Refills are aggregated per subgroup, not per workgroup, so they need no
+// barriers: one atomic serves every idle lane in the warp.
+layout(push_constant) uniform Push_constants {
+  layout(offset = 0) Scene scene;
+  layout(offset = 8) uint16_t depth_texture;
+  layout(offset = 10) uint16_t normal_texture;
+  layout(offset = 12) uint16_t brdf_uv_image;
+  layout(offset = 14) uint16_t brdf_numerator_image;
+  layout(offset = 16) uint16_t transmittance_texture;
+  layout(offset = 18) uint16_t sky_view_lut;
+  // offset 20: 4 bytes unused (buffer references need 8-byte alignment).
+  layout(offset = 24) Rt_block_shape_grid rt_block_shape_grid;
+  layout(offset = 32) Rt_entities entities;
+  layout(offset = 40) Rt_entity_head_grid entity_head_grid;
+  layout(offset = 48) Rt_entity_nodes entity_nodes;
+  layout(offset = 56) Rt_block_material_grid rt_block_material_grid;
+  layout(offset = 64) Rt_entity_mask_grid entity_mask_grid;
+  layout(offset = 72) Direct_ray_cursor cursor;
+} push_constants;
 
 void main() {
-  if (gl_GlobalInvocationID.x >= push_constants.samples.count) {
-    return;
-  }
-  const Direct_sample light_sample =
-    push_constants.samples.samples[gl_GlobalInvocationID.x];
   const ivec2 size =
-    imageSize(storage_images[push_constants.direct_irradiance_image]);
-  const ivec2 pixel = direct_sample_pixel(light_sample, size);
-  const Direct_shading_point shading_point =
-    direct_shading_point(
-      push_constants.scene,
-      push_constants.depth_texture,
-      push_constants.normal_texture,
+    imageSize(storage_images[push_constants.brdf_numerator_image]);
+  const uint pixel_total = uint(size.x) * uint(size.y);
+  // Per-lane ray, held in registers for its whole life.
+  bool traversing = false;
+  // Set once this lane has drawn past the end of the frame. Until every
+  // lane in the subgroup has, there may still be work to pull.
+  bool drained = false;
+  Rt_traversal traversal;
+  ivec2 pixel = ivec2(0);
+  float cos_theta = 0.0;
+  while (true) {
+    // Refilling costs a depth fetch, a G-buffer decode, a direction and a
+    // DDA init, and only idle lanes run it. Doing that with two lanes live
+    // wastes most of the warp's width, so it waits until enough have
+    // finished to be worth the issue slots -- unless nothing is traversing
+    // at all, which would otherwise never refill.
+    const uvec4 idle_ballot = subgroupBallot(!traversing && !drained);
+    const uint idle_count = subgroupBallotBitCount(idle_ballot);
+    const bool refill = idle_count != 0u &&
+      (idle_count * 2u >= gl_SubgroupSize || !subgroupAny(traversing));
+    if (refill && !traversing && !drained) {
+      const uint rank = subgroupBallotExclusiveBitCount(idle_ballot);
+      uint base = 0u;
+      if (subgroupElect()) {
+        base = atomicAdd(push_constants.cursor.next, idle_count);
+      }
+      base = subgroupBroadcastFirst(base);
+      const uint index = base + rank;
+      if (index >= pixel_total) {
+        drained = true;
+      } else {
+        pixel = ivec2(
+          int(index % uint(size.x)), int(index / uint(size.x)));
+        // Background pixels cost a draw and nothing more: the lane simply
+        // stays idle and draws again next round.
+        if (texelFetch(
+              sampled_images[push_constants.depth_texture], pixel, 0).x !=
+            0.0) {
+          const Direct_shading_point shading_point =
+            direct_shading_point(
+              push_constants.scene,
+              push_constants.depth_texture,
+              push_constants.normal_texture,
+              pixel,
+              size);
+          const vec3 w_i = direct_brdf_direction(
+            shading_point.normal,
+            direct_load_uv(push_constants.brdf_uv_image, pixel));
+          cos_theta = max(dot(shading_point.normal, w_i), 0.0);
+          traversal = rt_traversal_begin(shading_point.ray_origin, w_i);
+          traversing = true;
+        }
+      }
+    }
+    // Nothing left to pull and nothing still running.
+    if (!subgroupAny(traversing) && subgroupAll(drained)) {
+      break;
+    }
+    if (!traversing) {
+      continue;
+    }
+    Rt_hit hit;
+    const uint result = rt_traverse(
+      push_constants.rt_block_shape_grid,
+      push_constants.rt_block_material_grid,
+      push_constants.entities,
+      push_constants.entity_head_grid,
+      push_constants.entity_mask_grid,
+      push_constants.entity_nodes,
+      true,
+      direct_traverse_step_budget,
+      traversal,
+      hit);
+    if (result == rt_traverse_suspended) {
+      continue;
+    }
+    const bool hit_surface = result == rt_traverse_hit;
+    vec3 numerator = vec3(0.0);
+    if (cos_theta > 0.0) {
+      numerator = hit_surface
+        ? hit.emissivity * cos_theta
+        : direct_environment_integrand(
+            push_constants.scene,
+            cos_theta,
+            traversal.origin.y,
+            traversal.dir,
+            direct_in_sun_disc(traversal.dir, push_constants.scene.sun_direction),
+            push_constants.transmittance_texture,
+            push_constants.sky_view_lut);
+    }
+    imageStore(
+      storage_images[push_constants.brdf_numerator_image],
       pixel,
-      size);
-  const vec3 n = shading_point.normal;
-  const vec3 w_i =
-    make_basis(n) *
-    square_to_cosine_hemisphere(unpackUnorm2x16(light_sample.uv));
-  Rt_hit hit;
-  const bool hit_surface = trace_ray(
-    push_constants.rt_block_shape_grid,
-    push_constants.rt_block_material_grid,
-    push_constants.entities,
-    push_constants.entity_head_grid,
-    push_constants.entity_mask_grid,
-    push_constants.entity_nodes,
-    shading_point.ray_origin,
-    w_i,
-    true,
-    hit);
-  const vec3 E = hit_surface
-    ? direct_emitted_contribution(
-        hit.emissivity, max(dot(n, w_i), 0.0))
-    : direct_environment_contribution(
-        push_constants.scene,
-        n,
-        shading_point.position.y,
-        w_i,
-        1.0,
-        light_sample.p_cone,
-        push_constants.transmittance_texture,
-        push_constants.sky_view_lut,
-        false);
-  // Environment traces or sample generation have initialized this texel.
-  const vec3 environment_term =
-    imageLoad(storage_images[push_constants.direct_irradiance_image], pixel).rgb;
-  imageStore(
-    storage_images[push_constants.direct_irradiance_image],
-    pixel,
-    vec4(environment_term + E, 1.0));
+      vec4(numerator, hit_surface ? 0.0 : 1.0));
+    traversing = false;
+  }
 }

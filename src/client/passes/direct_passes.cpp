@@ -21,32 +21,33 @@ Direct_sample_clear_pass::Direct_sample_clear_pass(
     : _inputs{std::move(inputs)} {}
 
 void Direct_sample_clear_pass::declare(render_graph::Builder &builder) {
-  _sun_sample_handle = builder.write(
-    _inputs.sun_sample_buffer, render_graph::access::transfer_write);
-  _sky_sample_handle = builder.write(
-    _inputs.sky_sample_buffer, render_graph::access::transfer_write);
-  _brdf_sample_handle = builder.write(
-    _inputs.brdf_sample_buffer, render_graph::access::transfer_write);
+  _sun_queue_handle = builder.write(
+    _inputs.sun_queue_buffer, render_graph::access::transfer_write);
+  _sky_queue_handle = builder.write(
+    _inputs.sky_queue_buffer, render_graph::access::transfer_write);
+  _sky_cursor_handle = builder.write(
+    _inputs.sky_cursor_buffer, render_graph::access::transfer_write);
+  _brdf_cursor_handle = builder.write(
+    _inputs.brdf_cursor_buffer, render_graph::access::transfer_write);
 }
 
 void Direct_sample_clear_pass::execute(
   graphics::Work_recorder &recorder, render_graph::Resources &resources) {
-  // Records beyond the count are ignored by the trace shaders.
+  // Entries beyond the count are ignored by the trace shaders.
   recorder.fill_buffer(
-    resources.get_buffer(_sun_sample_handle),
+    resources.get_buffer(_sun_queue_handle),
     direct_sample_count_offset,
     direct_sample_count_size,
     0u);
   recorder.fill_buffer(
-    resources.get_buffer(_sky_sample_handle),
+    resources.get_buffer(_sky_queue_handle),
     direct_sample_count_offset,
     direct_sample_count_size,
     0u);
-  recorder.fill_buffer(
-    resources.get_buffer(_brdf_sample_handle),
-    direct_sample_count_offset,
-    direct_sample_count_size,
-    0u);
+  // The persistent traces draw from these counters.
+  for (auto const handle : {_sky_cursor_handle, _brdf_cursor_handle}) {
+    recorder.fill_buffer(resources.get_buffer(handle), 0, 4, 0u);
+  }
 }
 
 Direct_sample_gen_pass::Direct_sample_gen_pass(
@@ -59,29 +60,24 @@ void Direct_sample_gen_pass::declare(render_graph::Builder &builder) {
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);
   _normal_handle = builder.read(
     _inputs.normal_render_target, render_graph::access::compute_sampled_read);
-  _sky_view_lut_handle = builder.read(
-    _inputs.sky_view_lut, render_graph::access::compute_sampled_read);
   _scene_uniform_handle = builder.read(
     _inputs.scene_uniform_buffer, render_graph::access::compute_storage_read);
-  _sun_sample_handle = builder.write(
-    _inputs.sun_sample_buffer, render_graph::access::compute_storage_write);
-  _sky_sample_handle = builder.write(
-    _inputs.sky_sample_buffer, render_graph::access::compute_storage_write);
-  _brdf_sample_handle = builder.write(
-    _inputs.brdf_sample_buffer, render_graph::access::compute_storage_write);
-  // Initializes pixels skipped by the environment traces.
-  _raw_direct_irradiance_handle = builder.write(
-    _inputs.raw_direct_irradiance_render_target,
+  _environment_uv_handle = builder.write(
+    _inputs.environment_uv_render_target,
     render_graph::access::compute_storage_write);
+  _brdf_uv_handle = builder.write(
+    _inputs.brdf_uv_render_target,
+    render_graph::access::compute_storage_write);
+  _sun_queue_handle = builder.write(
+    _inputs.sun_queue_buffer, render_graph::access::compute_storage_write);
+  _sky_queue_handle = builder.write(
+    _inputs.sky_queue_buffer, render_graph::access::compute_storage_write);
 }
 
 void Direct_sample_gen_pass::execute(
   graphics::Work_recorder &recorder, render_graph::Resources &resources) {
   auto const &scene_uniform_buffer =
     resources.get_buffer(_scene_uniform_handle);
-  auto const &sun_sample_buffer = resources.get_buffer(_sun_sample_handle);
-  auto const &sky_sample_buffer = resources.get_buffer(_sky_sample_handle);
-  auto const &brdf_sample_buffer = resources.get_buffer(_brdf_sample_handle);
   recorder.bind_compute_pipeline(_pipeline);
   recorder.push_buffer_reference(
     0, scene_uniform_buffer, _inputs.scene_uniform_offset);
@@ -89,27 +85,23 @@ void Direct_sample_gen_pass::execute(
     8,
     {{.image = resources.get_image(_depth_handle),
       .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_normal_handle),
+      .kind = graphics::Descriptor_kind::sampled},
      {.image = _inputs.transmittance_lut,
       .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_sky_view_lut_handle),
-      .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_normal_handle),
-      .kind = graphics::Descriptor_kind::sampled}});
+     {.image = resources.get_image(_environment_uv_handle),
+      .kind = graphics::Descriptor_kind::storage},
+     {.image = resources.get_image(_brdf_uv_handle),
+      .kind = graphics::Descriptor_kind::storage}});
   recorder.push_buffer_reference(
-    16,
+    24,
     scene_uniform_buffer,
     _inputs.scene_uniform_offset + scene_sky_irradiance_offset);
-  recorder
-    .push_buffer_reference(24, sun_sample_buffer, direct_sample_count_offset);
-  recorder
-    .push_buffer_reference(32, sky_sample_buffer, direct_sample_count_offset);
-  recorder.push_data(40, std::as_bytes(std::span{&_inputs.frame_number, 1}));
-  recorder.push_descriptors(
-    44,
-    {{.image = resources.get_image(_raw_direct_irradiance_handle),
-      .kind = graphics::Descriptor_kind::storage}});
-  recorder
-    .push_buffer_reference(48, brdf_sample_buffer, direct_sample_count_offset);
+  recorder.push_buffer_reference(
+    32, resources.get_buffer(_sun_queue_handle), direct_sample_count_offset);
+  recorder.push_buffer_reference(
+    40, resources.get_buffer(_sky_queue_handle), direct_sample_count_offset);
+  recorder.push_data(48, std::as_bytes(std::span{&_inputs.frame_number, 1}));
   auto const group_count = dispatch_group_count(_inputs.framebuffer_size);
   recorder.dispatch(group_count.x(), group_count.y(), 1);
 }
@@ -121,27 +113,21 @@ Direct_indirect_args_pass::Direct_indirect_args_pass(
 
 void Direct_indirect_args_pass::declare(render_graph::Builder &builder) {
   builder.read(
-    _inputs.sun_sample_buffer, render_graph::access::compute_storage_read);
+    _inputs.sun_queue_buffer, render_graph::access::compute_storage_read);
   builder.read(
-    _inputs.sky_sample_buffer, render_graph::access::compute_storage_read);
-  _sun_sample_handle = builder.write(
-    _inputs.sun_sample_buffer, render_graph::access::compute_storage_write);
-  _sky_sample_handle = builder.write(
-    _inputs.sky_sample_buffer, render_graph::access::compute_storage_write);
-  builder.read(
-    _inputs.brdf_sample_buffer, render_graph::access::compute_storage_read);
-  _brdf_sample_handle = builder.write(
-    _inputs.brdf_sample_buffer, render_graph::access::compute_storage_write);
+    _inputs.sky_queue_buffer, render_graph::access::compute_storage_read);
+  _sun_queue_handle = builder.write(
+    _inputs.sun_queue_buffer, render_graph::access::compute_storage_write);
+  _sky_queue_handle = builder.write(
+    _inputs.sky_queue_buffer, render_graph::access::compute_storage_write);
 }
 
 void Direct_indirect_args_pass::execute(
   graphics::Work_recorder &recorder, render_graph::Resources &resources) {
   recorder.bind_compute_pipeline(_pipeline);
-  recorder.push_buffer_reference(0, resources.get_buffer(_sun_sample_handle));
+  recorder.push_buffer_reference(0, resources.get_buffer(_sun_queue_handle));
   recorder.dispatch(1, 1, 1);
-  recorder.push_buffer_reference(0, resources.get_buffer(_sky_sample_handle));
-  recorder.dispatch(1, 1, 1);
-  recorder.push_buffer_reference(0, resources.get_buffer(_brdf_sample_handle));
+  recorder.push_buffer_reference(0, resources.get_buffer(_sky_queue_handle));
   recorder.dispatch(1, 1, 1);
 }
 
@@ -152,58 +138,203 @@ auto constexpr trace_read_access = render_graph::Access{
   .access_mask = render_graph::access::indirect_command_read.access_mask |
                  render_graph::access::compute_storage_read.access_mask,
 };
+
+// Both traces push the grid and entity references at the same offsets,
+// counted from the first one -- the two blocks differ only in whether a
+// queue reference sits ahead of them.
+void push_rt_inputs(
+  graphics::Work_recorder &recorder,
+  Direct_rt_inputs const &rt,
+  rc::Strong<graphics::Buffer> const &entity_binning_buffer,
+  std::size_t base) {
+  recorder.push_buffer_reference(base, rt.block_grid_buffer);
+  recorder.push_buffer_reference(base + 8, rt.entity_buffer);
+  recorder.push_buffer_reference(
+    base + 16, entity_binning_buffer, rt.entity_binning_grid_offset);
+  recorder.push_buffer_reference(
+    base + 24, entity_binning_buffer, rt.entity_binning_nodes_offset);
+  recorder.push_buffer_reference(
+    base + 32, rt.block_grid_buffer, rt.block_material_grid_offset);
+  recorder.push_buffer_reference(
+    base + 40, entity_binning_buffer, rt.entity_binning_mask_offset);
+}
 } // namespace
 
 Direct_trace_pass::Direct_trace_pass(
   Direct_trace_kind kind,
   Direct_trace_variants const &variants,
   Direct_trace_pass_inputs inputs)
-    : _inputs{std::move(inputs)}, _kind{kind} {
-  auto const &variant = [&]() -> Direct_trace_variant const & {
-    switch (kind) {
-    case Direct_trace_kind::sun:
-      return variants.sun;
-    case Direct_trace_kind::sky:
-      return variants.sky;
-    case Direct_trace_kind::brdf:
-      return variants.brdf;
-    }
-    std::unreachable();
-  }();
-  _pipeline = variant.pipeline;
-  _samples = variant.samples;
-}
+    : _pipeline{
+        kind == Direct_trace_kind::sun ? variants.sun.pipeline
+                                       : variants.sky.pipeline},
+      _inputs{std::move(inputs)},
+      _queue{
+        kind == Direct_trace_kind::sun ? variants.sun.queue
+                                       : variants.sky.queue},
+      _persistent{kind == Direct_trace_kind::sky} {}
 
 void Direct_trace_pass::declare(render_graph::Builder &builder) {
   _depth_handle = builder.read(
     _inputs.depth_render_target, render_graph::access::compute_sampled_read);
   _normal_handle = builder.read(
     _inputs.normal_render_target, render_graph::access::compute_sampled_read);
+  _uv_handle = builder.read(
+    _inputs.environment_uv_render_target,
+    render_graph::access::compute_storage_read);
   _sky_view_lut_handle = builder.read(
     _inputs.sky_view_lut, render_graph::access::compute_sampled_read);
   _scene_uniform_handle = builder.read(
     _inputs.scene_uniform_buffer, render_graph::access::compute_storage_read);
   _rt_entity_binning_handle = builder.read(
-    _inputs.rt_entity_binning_buffer,
+    _inputs.rt.entity_binning_buffer,
     render_graph::access::compute_storage_read);
-  _sample_handle = builder.read(_samples, trace_read_access);
-  if (_kind == Direct_trace_kind::brdf) {
-    builder.read(
-      _inputs.raw_direct_irradiance_render_target,
-      render_graph::access::compute_storage_read);
-  }
-  _direct_irradiance_handle = builder.write(
-    _inputs.raw_direct_irradiance_render_target,
+  _queue_handle = builder.read(_queue, trace_read_access);
+  _numerator_handle = builder.write(
+    _inputs.environment_numerator_render_target,
     render_graph::access::compute_storage_write);
+  if (_persistent) {
+    builder.read(
+      _inputs.cursor_buffer, render_graph::access::compute_storage_read);
+    _cursor_handle = builder.write(
+      _inputs.cursor_buffer, render_graph::access::compute_storage_write);
+  }
 }
 
 void Direct_trace_pass::execute(
   graphics::Work_recorder &recorder, render_graph::Resources &resources) {
+  auto const &queue_buffer = resources.get_buffer(_queue_handle);
+  recorder.bind_compute_pipeline(_pipeline);
+  recorder.push_buffer_reference(
+    0,
+    resources.get_buffer(_scene_uniform_handle),
+    _inputs.scene_uniform_offset);
+  recorder.push_descriptors(
+    8,
+    {{.image = resources.get_image(_depth_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_normal_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_uv_handle),
+      .kind = graphics::Descriptor_kind::storage},
+     {.image = resources.get_image(_numerator_handle),
+      .kind = graphics::Descriptor_kind::storage},
+     {.image = _inputs.transmittance_lut,
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_sky_view_lut_handle),
+      .kind = graphics::Descriptor_kind::sampled}});
+  recorder.push_buffer_reference(
+    24, queue_buffer, direct_sample_count_offset);
+  push_rt_inputs(
+    recorder,
+    _inputs.rt,
+    resources.get_buffer(_rt_entity_binning_handle),
+    32);
+  if (_persistent) {
+    recorder.push_buffer_reference(80, resources.get_buffer(_cursor_handle));
+    // Fixed pool: the warps loop until the queue is drained, so the
+    // dispatch does not scale with it.
+    recorder.dispatch(
+      static_cast<u32>(direct_persistent_workgroup_count), 1, 1);
+  } else {
+    recorder.dispatch_indirect({.buffer = queue_buffer, .offset = 0});
+  }
+}
+
+Direct_brdf_trace_pass::Direct_brdf_trace_pass(
+  rc::Strong<graphics::Compute_pipeline> pipeline,
+  Direct_brdf_trace_pass_inputs inputs)
+    : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
+
+void Direct_brdf_trace_pass::declare(render_graph::Builder &builder) {
+  _depth_handle = builder.read(
+    _inputs.depth_render_target, render_graph::access::compute_sampled_read);
+  _normal_handle = builder.read(
+    _inputs.normal_render_target, render_graph::access::compute_sampled_read);
+  _uv_handle = builder.read(
+    _inputs.brdf_uv_render_target,
+    render_graph::access::compute_storage_read);
+  _sky_view_lut_handle = builder.read(
+    _inputs.sky_view_lut, render_graph::access::compute_sampled_read);
+  _scene_uniform_handle = builder.read(
+    _inputs.scene_uniform_buffer, render_graph::access::compute_storage_read);
+  _rt_entity_binning_handle = builder.read(
+    _inputs.rt.entity_binning_buffer,
+    render_graph::access::compute_storage_read);
+  _numerator_handle = builder.write(
+    _inputs.brdf_numerator_render_target,
+    render_graph::access::compute_storage_write);
+  builder.read(
+    _inputs.cursor_buffer, render_graph::access::compute_storage_read);
+  _cursor_handle = builder.write(
+    _inputs.cursor_buffer, render_graph::access::compute_storage_write);
+}
+
+void Direct_brdf_trace_pass::execute(
+  graphics::Work_recorder &recorder, render_graph::Resources &resources) {
+  recorder.bind_compute_pipeline(_pipeline);
+  recorder.push_buffer_reference(
+    0,
+    resources.get_buffer(_scene_uniform_handle),
+    _inputs.scene_uniform_offset);
+  recorder.push_descriptors(
+    8,
+    {{.image = resources.get_image(_depth_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_normal_handle),
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_uv_handle),
+      .kind = graphics::Descriptor_kind::storage},
+     {.image = resources.get_image(_numerator_handle),
+      .kind = graphics::Descriptor_kind::storage},
+     {.image = _inputs.transmittance_lut,
+      .kind = graphics::Descriptor_kind::sampled},
+     {.image = resources.get_image(_sky_view_lut_handle),
+      .kind = graphics::Descriptor_kind::sampled}});
+  push_rt_inputs(
+    recorder,
+    _inputs.rt,
+    resources.get_buffer(_rt_entity_binning_handle),
+    24);
+  recorder.push_buffer_reference(72, resources.get_buffer(_cursor_handle));
+  // Fixed pool: the warps loop until the cursor is drained, so the
+  // dispatch does not scale with the frame.
+  recorder.dispatch(
+    static_cast<u32>(direct_persistent_workgroup_count), 1, 1);
+}
+
+Direct_combine_pass::Direct_combine_pass(
+  rc::Strong<graphics::Compute_pipeline> pipeline,
+  Direct_combine_pass_inputs inputs)
+    : _pipeline{std::move(pipeline)}, _inputs{std::move(inputs)} {}
+
+void Direct_combine_pass::declare(render_graph::Builder &builder) {
+  _depth_handle = builder.read(
+    _inputs.depth_render_target, render_graph::access::compute_sampled_read);
+  _normal_handle = builder.read(
+    _inputs.normal_render_target, render_graph::access::compute_sampled_read);
+  _environment_uv_handle = builder.read(
+    _inputs.environment_uv_render_target,
+    render_graph::access::compute_storage_read);
+  _brdf_uv_handle = builder.read(
+    _inputs.brdf_uv_render_target,
+    render_graph::access::compute_storage_read);
+  _environment_numerator_handle = builder.read(
+    _inputs.environment_numerator_render_target,
+    render_graph::access::compute_storage_read);
+  _brdf_numerator_handle = builder.read(
+    _inputs.brdf_numerator_render_target,
+    render_graph::access::compute_storage_read);
+  _scene_uniform_handle = builder.read(
+    _inputs.scene_uniform_buffer, render_graph::access::compute_storage_read);
+  _raw_direct_irradiance_handle = builder.write(
+    _inputs.raw_direct_irradiance_render_target,
+    render_graph::access::compute_storage_write);
+}
+
+void Direct_combine_pass::execute(
+  graphics::Work_recorder &recorder, render_graph::Resources &resources) {
   auto const &scene_uniform_buffer =
     resources.get_buffer(_scene_uniform_handle);
-  auto const &sample_buffer = resources.get_buffer(_sample_handle);
-  auto const &rt_entity_binning_buffer =
-    resources.get_buffer(_rt_entity_binning_handle);
   recorder.bind_compute_pipeline(_pipeline);
   recorder.push_buffer_reference(
     0, scene_uniform_buffer, _inputs.scene_uniform_offset);
@@ -211,26 +342,27 @@ void Direct_trace_pass::execute(
     8,
     {{.image = resources.get_image(_depth_handle),
       .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_direct_irradiance_handle),
-      .kind = graphics::Descriptor_kind::storage},
+     {.image = resources.get_image(_normal_handle),
+      .kind = graphics::Descriptor_kind::sampled},
      {.image = _inputs.transmittance_lut,
       .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_sky_view_lut_handle),
-      .kind = graphics::Descriptor_kind::sampled},
-     {.image = resources.get_image(_normal_handle),
-      .kind = graphics::Descriptor_kind::sampled}});
-  recorder.push_buffer_reference(24, sample_buffer, direct_sample_count_offset);
-  recorder.push_buffer_reference(32, _inputs.rt_block_grid_buffer);
-  recorder.push_buffer_reference(40, _inputs.rt_entity_buffer);
+     {.image = resources.get_image(_environment_uv_handle),
+      .kind = graphics::Descriptor_kind::storage},
+     {.image = resources.get_image(_brdf_uv_handle),
+      .kind = graphics::Descriptor_kind::storage},
+     {.image = resources.get_image(_environment_numerator_handle),
+      .kind = graphics::Descriptor_kind::storage},
+     {.image = resources.get_image(_brdf_numerator_handle),
+      .kind = graphics::Descriptor_kind::storage},
+     {.image = resources.get_image(_raw_direct_irradiance_handle),
+      .kind = graphics::Descriptor_kind::storage}});
   recorder.push_buffer_reference(
-    48, rt_entity_binning_buffer, _inputs.rt_entity_binning_grid_offset);
-  recorder.push_buffer_reference(
-    56, rt_entity_binning_buffer, _inputs.rt_entity_binning_nodes_offset);
-  recorder.push_buffer_reference(
-    64, _inputs.rt_block_grid_buffer, _inputs.rt_block_material_grid_offset);
-  recorder.push_buffer_reference(
-    72, rt_entity_binning_buffer, _inputs.rt_entity_binning_mask_offset);
-  recorder.dispatch_indirect({.buffer = sample_buffer, .offset = 0});
+    24,
+    scene_uniform_buffer,
+    _inputs.scene_uniform_offset + scene_sky_irradiance_offset);
+  recorder.push_data(32, std::as_bytes(std::span{&_inputs.frame_number, 1}));
+  auto const group_count = dispatch_group_count(_inputs.framebuffer_size);
+  recorder.dispatch(group_count.x(), group_count.y(), 1);
 }
 
 Direct_temporal_pass::Direct_temporal_pass(

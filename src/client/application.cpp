@@ -227,6 +227,8 @@ public:
           "./assets/shaders/direct_trace_sky.comp.spv")},
         _direct_trace_brdf_compute_shader{graphics::load_shader(
           "./assets/shaders/direct_trace_brdf.comp.spv")},
+        _direct_combine_compute_shader{graphics::load_shader(
+          "./assets/shaders/direct_combine.comp.spv")},
         _direct_temporal_compute_shader{graphics::load_shader(
           "./assets/shaders/direct_temporal.comp.spv")},
         _direct_variance_compute_shader{graphics::load_shader(
@@ -259,6 +261,10 @@ public:
           _graphics.create_compute_pipeline(
             {.shader = &_direct_trace_brdf_compute_shader,
              .debug_name = "direct_trace_brdf"})},
+        _direct_combine_pipeline{
+          _graphics.create_compute_pipeline(
+            {.shader = &_direct_combine_compute_shader,
+             .debug_name = "direct_combine"})},
         _direct_temporal_pipeline{
           _graphics.create_compute_pipeline(
             {.shader = &_direct_temporal_compute_shader, .debug_name = "direct_temporal"})},
@@ -500,8 +506,8 @@ private:
       direct_trace_sun_pass;
     std::optional<passes::Direct_trace_pass>
       direct_trace_sky_pass;
-    std::optional<passes::Direct_trace_pass>
-      direct_trace_brdf_pass;
+    std::optional<passes::Direct_brdf_trace_pass> direct_brdf_trace_pass;
+    std::optional<passes::Direct_combine_pass> direct_combine_pass;
     std::optional<passes::Direct_temporal_pass>
       direct_temporal_pass;
     std::optional<passes::Direct_variance_pass>
@@ -536,9 +542,10 @@ private:
           make_rt_entity_binning_buffer_layout(_grid_mesh->get_rt_chunk_count());
         direct_sample_clear_pass.emplace(
           passes::Direct_sample_clear_pass_inputs{
-            .sun_sample_buffer = _direct_sample_buffer_sun_symbol,
-            .sky_sample_buffer = _direct_sample_buffer_sky_symbol,
-            .brdf_sample_buffer = _direct_sample_buffer_brdf_symbol,
+            .sun_queue_buffer = _direct_sample_buffer_sun_symbol,
+            .sky_queue_buffer = _direct_sample_buffer_sky_symbol,
+            .sky_cursor_buffer = _direct_cursor_buffer_symbols[0],
+            .brdf_cursor_buffer = _direct_cursor_buffer_symbols[1],
           });
         _graph.add_pass(*direct_sample_clear_pass);
         direct_sample_gen_pass.emplace(
@@ -548,13 +555,13 @@ private:
             .normal_render_target =
               _normal_render_target_symbols[_frame_number % 2],
             .transmittance_lut = _transmittance_lut,
-            .sky_view_lut = _sky_view_lut_symbol,
             .scene_uniform_buffer = _scene_uniform_buffer_symbol,
             .scene_uniform_offset = scene_uniform_offset,
-            .sun_sample_buffer = _direct_sample_buffer_sun_symbol,
-            .sky_sample_buffer = _direct_sample_buffer_sky_symbol,
-            .brdf_sample_buffer = _direct_sample_buffer_brdf_symbol,
-            .raw_direct_irradiance_render_target = _direct_irradiance_raw_render_target_symbol,
+            .environment_uv_render_target =
+              _direct_environment_uv_render_target_symbol,
+            .brdf_uv_render_target = _direct_brdf_uv_render_target_symbol,
+            .sun_queue_buffer = _direct_sample_buffer_sun_symbol,
+            .sky_queue_buffer = _direct_sample_buffer_sky_symbol,
             .framebuffer_size = framebuffer_size,
             .frame_number = _frame_number,
           });
@@ -562,34 +569,38 @@ private:
         direct_indirect_args_pass.emplace(
           _indirect_dispatch_args_pipeline,
           passes::Direct_indirect_args_pass_inputs{
-            .sun_sample_buffer = _direct_sample_buffer_sun_symbol,
-            .sky_sample_buffer = _direct_sample_buffer_sky_symbol,
-            .brdf_sample_buffer = _direct_sample_buffer_brdf_symbol,
+            .sun_queue_buffer = _direct_sample_buffer_sun_symbol,
+            .sky_queue_buffer = _direct_sample_buffer_sky_symbol,
           });
         _graph.add_pass(*direct_indirect_args_pass);
+        auto const rt_inputs = passes::Direct_rt_inputs{
+          .block_grid_buffer = _grid_mesh->get_rt_block_grid_buffer(),
+          .block_material_grid_offset =
+            _grid_mesh->get_rt_block_material_grid_offset(),
+          .entity_buffer = _rt_entity_buffers[frame],
+          .entity_binning_buffer = _rt_entity_binning_buffer_symbols[frame],
+          .entity_binning_mask_offset = layout.mask_offset,
+          .entity_binning_grid_offset = layout.grid_offset,
+          .entity_binning_nodes_offset = layout.nodes_offset,
+        };
         auto const shared_trace_inputs = passes::Direct_trace_pass_inputs{
           .depth_render_target = _depth_attachment_symbols[_frame_number % 2],
           .normal_render_target =
             _normal_render_target_symbols[_frame_number % 2],
-          .raw_direct_irradiance_render_target =
-            _direct_irradiance_raw_render_target_symbol,
+          .environment_uv_render_target =
+            _direct_environment_uv_render_target_symbol,
+          .environment_numerator_render_target =
+            _direct_environment_numerator_render_target_symbol,
           .transmittance_lut = _transmittance_lut,
           .sky_view_lut = _sky_view_lut_symbol,
           .scene_uniform_buffer = _scene_uniform_buffer_symbol,
           .scene_uniform_offset = scene_uniform_offset,
-          .rt_block_grid_buffer = _grid_mesh->get_rt_block_grid_buffer(),
-          .rt_block_material_grid_offset =
-            _grid_mesh->get_rt_block_material_grid_offset(),
-          .rt_entity_buffer = _rt_entity_buffers[frame],
-          .rt_entity_binning_buffer = _rt_entity_binning_buffer_symbols[frame],
-          .rt_entity_binning_mask_offset = layout.mask_offset,
-          .rt_entity_binning_grid_offset = layout.grid_offset,
-          .rt_entity_binning_nodes_offset = layout.nodes_offset,
+          .rt = rt_inputs,
+          .cursor_buffer = _direct_cursor_buffer_symbols[0],
         };
         auto const trace_variants = passes::Direct_trace_variants{
           .sun = {_direct_trace_sun_pipeline, _direct_sample_buffer_sun_symbol},
           .sky = {_direct_trace_sky_pipeline, _direct_sample_buffer_sky_symbol},
-          .brdf = {_direct_trace_brdf_pipeline, _direct_sample_buffer_brdf_symbol},
         };
         auto const add_trace =
           [&](std::optional<passes::Direct_trace_pass> &pass,
@@ -601,12 +612,52 @@ private:
           direct_trace_sun_pass, passes::Direct_trace_kind::sun);
         auto const sky_trace_handle = add_trace(
           direct_trace_sky_pass, passes::Direct_trace_kind::sky);
-        add_trace(direct_trace_brdf_pass, passes::Direct_trace_kind::brdf);
         // Each environment sample belongs to exactly one of these queues.
         _graph.set_disjoint(
           sun_trace_handle,
           sky_trace_handle,
-          _direct_irradiance_raw_render_target_symbol);
+          _direct_environment_numerator_render_target_symbol);
+        // Writes its own target, so it is ordered against neither of the
+        // two above.
+        direct_brdf_trace_pass.emplace(
+          _direct_trace_brdf_pipeline,
+          passes::Direct_brdf_trace_pass_inputs{
+            .depth_render_target = _depth_attachment_symbols[_frame_number % 2],
+            .normal_render_target =
+              _normal_render_target_symbols[_frame_number % 2],
+            .brdf_uv_render_target = _direct_brdf_uv_render_target_symbol,
+            .brdf_numerator_render_target =
+              _direct_brdf_numerator_render_target_symbol,
+            .transmittance_lut = _transmittance_lut,
+            .sky_view_lut = _sky_view_lut_symbol,
+            .scene_uniform_buffer = _scene_uniform_buffer_symbol,
+            .scene_uniform_offset = scene_uniform_offset,
+            .rt = rt_inputs,
+            .cursor_buffer = _direct_cursor_buffer_symbols[1],
+          });
+        _graph.add_pass(*direct_brdf_trace_pass);
+        direct_combine_pass.emplace(
+          _direct_combine_pipeline,
+          passes::Direct_combine_pass_inputs{
+            .depth_render_target = _depth_attachment_symbols[_frame_number % 2],
+            .normal_render_target =
+              _normal_render_target_symbols[_frame_number % 2],
+            .transmittance_lut = _transmittance_lut,
+            .environment_uv_render_target =
+              _direct_environment_uv_render_target_symbol,
+            .brdf_uv_render_target = _direct_brdf_uv_render_target_symbol,
+            .environment_numerator_render_target =
+              _direct_environment_numerator_render_target_symbol,
+            .brdf_numerator_render_target =
+              _direct_brdf_numerator_render_target_symbol,
+            .raw_direct_irradiance_render_target =
+              _direct_irradiance_raw_render_target_symbol,
+            .scene_uniform_buffer = _scene_uniform_buffer_symbol,
+            .scene_uniform_offset = scene_uniform_offset,
+            .framebuffer_size = framebuffer_size,
+            .frame_number = _frame_number,
+          });
+        _graph.add_pass(*direct_combine_pass);
         direct_temporal_pass.emplace(
           _direct_temporal_pipeline,
           passes::Direct_temporal_pass_inputs{
@@ -752,6 +803,14 @@ private:
         {_swapchain_image_symbol, swapchain_image},
         {_direct_irradiance_raw_render_target_symbol,
          _direct_irradiance_raw_render_target},
+        {_direct_environment_uv_render_target_symbol,
+         _direct_environment_uv_render_target},
+        {_direct_brdf_uv_render_target_symbol,
+         _direct_brdf_uv_render_target},
+        {_direct_environment_numerator_render_target_symbol,
+         _direct_environment_numerator_render_target},
+        {_direct_brdf_numerator_render_target_symbol,
+         _direct_brdf_numerator_render_target},
         {_direct_irradiance_render_target_symbols[0],
          _direct_irradiance_render_targets[0]},
         {_direct_irradiance_render_target_symbols[1],
@@ -774,8 +833,8 @@ private:
         {_scene_uniform_buffer_symbol, _scene_uniform_buffer},
         {_direct_sample_buffer_sun_symbol, _direct_sample_buffer_sun},
         {_direct_sample_buffer_sky_symbol, _direct_sample_buffer_sky},
-        {_direct_sample_buffer_brdf_symbol,
-         _direct_sample_buffer_brdf},
+        {_direct_cursor_buffer_symbols[0], _direct_cursor_buffers[0]},
+        {_direct_cursor_buffer_symbols[1], _direct_cursor_buffers[1]},
         {_rt_entity_binning_buffer_symbols[0], _rt_entity_binning_buffers[0]},
         {_rt_entity_binning_buffer_symbols[1], _rt_entity_binning_buffers[1]},
       });
@@ -1074,6 +1133,48 @@ private:
         graphics::Image_layout::undefined,
         graphics::Image_layout::general,
         _direct_irradiance_raw_render_target);
+      // Each sample's random variables, keyed by pixel and kept apart so
+      // that a trace reading one does not pull the other into cache with
+      // it. Only the combination reads both.
+      for (auto *target :
+           {&_direct_environment_uv_render_target,
+            &_direct_brdf_uv_render_target}) {
+        *target = _graphics.create_image({
+          .dimensionality = 2,
+          .format = graphics::Image_format::r32_uint,
+          .extent = extent,
+          .mip_level_count = 1,
+          .array_layer_count = 1,
+          .usage = graphics::Image_usage_flag_bits::storage,
+        });
+        work_recorder.transition_image_layout(
+          {},
+          compute_shader_storage_write_scope,
+          graphics::Image_layout::undefined,
+          graphics::Image_layout::general,
+          *target);
+      }
+      // Unweighted integrands. 32-bit because these are undivided: sun
+      // radiance is sun_irradiance / sun_solid_angle, around 1.9e7, which
+      // overflows a half.
+      for (auto *target :
+           {&_direct_environment_numerator_render_target,
+            &_direct_brdf_numerator_render_target}) {
+        *target = _graphics.create_image({
+          .dimensionality = 2,
+          .format = graphics::Image_format::r32g32b32a32_sfloat,
+          .extent = extent,
+          .mip_level_count = 1,
+          .array_layer_count = 1,
+          .usage = graphics::Image_usage_flag_bits::storage,
+        });
+        work_recorder.transition_image_layout(
+          {},
+          compute_shader_storage_write_scope,
+          graphics::Image_layout::undefined,
+          graphics::Image_layout::general,
+          *target);
+      }
       for (auto i = std::size_t{}; i != 2; ++i) {
         _direct_irradiance_render_targets[i] = _graphics.create_image({
           .dimensionality = 2,
@@ -1182,7 +1283,15 @@ private:
       };
       _direct_sample_buffer_sun = create_sample_buffer();
       _direct_sample_buffer_sky = create_sample_buffer();
-      _direct_sample_buffer_brdf = create_sample_buffer();
+      for (auto &buffer : _direct_cursor_buffers) {
+        buffer = _graphics.create_buffer({
+          .size = 4,
+          .usage = graphics::Buffer_usage_flag_bits::shader_device_address |
+                   graphics::Buffer_usage_flag_bits::transfer_dst,
+          .mapping_mode = graphics::Mapping_mode::none,
+          .min_alignment = 4,
+        });
+      }
       _direct_sample_buffer_extent = extent;
     }
   }
@@ -1544,9 +1653,14 @@ private:
   // Spatial irradiance, ping-ponged across the five a-trous iterations.
   std::array<rc::Strong<graphics::Image>, 2>
     _direct_irradiance_filtered_render_targets{};
+  rc::Strong<graphics::Image> _direct_environment_uv_render_target{};
+  rc::Strong<graphics::Image> _direct_brdf_uv_render_target{};
+  rc::Strong<graphics::Image> _direct_environment_numerator_render_target{};
+  rc::Strong<graphics::Image> _direct_brdf_numerator_render_target{};
   rc::Strong<graphics::Buffer> _direct_sample_buffer_sun{};
   rc::Strong<graphics::Buffer> _direct_sample_buffer_sky{};
-  rc::Strong<graphics::Buffer> _direct_sample_buffer_brdf{};
+  // Counters the persistent sky and BRDF warps draw from, in that order.
+  std::array<rc::Strong<graphics::Buffer>, 2> _direct_cursor_buffers{};
   math::ivec3 _direct_sample_buffer_extent{};
   rc::Strong<graphics::Image> _crosshair_mask_render_target{};
   graphics::Shader _grid_vertex_shader;
@@ -1563,6 +1677,7 @@ private:
   graphics::Shader _direct_trace_sun_compute_shader;
   graphics::Shader _direct_trace_sky_compute_shader;
   graphics::Shader _direct_trace_brdf_compute_shader;
+  graphics::Shader _direct_combine_compute_shader;
   graphics::Shader _direct_temporal_compute_shader;
   graphics::Shader _direct_variance_compute_shader;
   graphics::Shader _direct_spatial_filter_compute_shader;
@@ -1616,12 +1731,21 @@ private:
     _graph.allocate_image_symbol()};
   render_graph::Symbolic_buffer _scene_uniform_buffer_symbol{
     _graph.allocate_buffer_symbol()};
+  render_graph::Symbolic_image _direct_environment_uv_render_target_symbol{
+    _graph.allocate_image_symbol()};
+  render_graph::Symbolic_image _direct_brdf_uv_render_target_symbol{
+    _graph.allocate_image_symbol()};
+  render_graph::Symbolic_image
+    _direct_environment_numerator_render_target_symbol{
+      _graph.allocate_image_symbol()};
+  render_graph::Symbolic_image _direct_brdf_numerator_render_target_symbol{
+    _graph.allocate_image_symbol()};
   render_graph::Symbolic_buffer _direct_sample_buffer_sun_symbol{
-    _graph.allocate_buffer_symbol()};
-  render_graph::Symbolic_buffer _direct_sample_buffer_brdf_symbol{
     _graph.allocate_buffer_symbol()};
   render_graph::Symbolic_buffer _direct_sample_buffer_sky_symbol{
     _graph.allocate_buffer_symbol()};
+  std::array<render_graph::Symbolic_buffer, 2> _direct_cursor_buffer_symbols{
+    _graph.allocate_buffer_symbol(), _graph.allocate_buffer_symbol()};
   std::array<render_graph::Symbolic_buffer, max_frames_in_flight>
     _rt_entity_binning_buffer_symbols{
       _graph.allocate_buffer_symbol(), _graph.allocate_buffer_symbol()};
@@ -1630,6 +1754,7 @@ private:
   rc::Strong<graphics::Compute_pipeline> _direct_trace_sky_pipeline{};
   rc::Strong<graphics::Compute_pipeline>
     _direct_trace_brdf_pipeline{};
+  rc::Strong<graphics::Compute_pipeline> _direct_combine_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _direct_temporal_pipeline{};
   rc::Strong<graphics::Compute_pipeline> _direct_variance_pipeline{};
   rc::Strong<graphics::Compute_pipeline>

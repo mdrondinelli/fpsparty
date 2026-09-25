@@ -147,62 +147,111 @@ struct Rt_hit {
   vec3 emissivity;
 };
 
-bool trace_ray(
+// Traversal that can be put down and picked up again. A warp runs until
+// the last of its lanes terminates, and DDA trip counts vary by orders of
+// magnitude, so a warp whose lanes have mostly finished is burning issue
+// slots on masked-off threads. Carrying the state lets a caller stop and
+// resume the survivors somewhere denser -- see direct_trace_brdf.comp.
+//
+// step_dir, t_delta and inv_dir are all derived from dir, so they are
+// recomputed on resume rather than carried.
+struct Rt_traversal {
+  vec3 origin;
+  vec3 dir;
+  // All derived from dir, and all carried rather than recomputed per
+  // call: with a small step budget rt_traverse is entered often enough
+  // that its setup cost more than a step. Costs registers and no memory,
+  // the state never being serialized.
+  vec3 inv_dir;
+  vec3 t_delta;
+  ivec3 step_dir;
+  // The face the ray entered the current cell through.
+  vec3 entry_normal;
+  vec3 t_max;
+  ivec3 cell_coords;
+  float entry_t;
+  uint steps;
+};
+
+Rt_traversal rt_traversal_begin(vec3 origin, vec3 dir) {
+  Rt_traversal traversal;
+  traversal.origin = origin;
+  traversal.dir = dir;
+  traversal.inv_dir = 1.0 / dir;
+  traversal.cell_coords = ivec3(floor(origin));
+  const vec3 cell_offset = origin - vec3(traversal.cell_coords);
+  const vec3 inv_dir = traversal.inv_dir;
+  for (int axis = 0; axis < 3; ++axis) {
+    if (dir[axis] > 0.0) {
+      traversal.step_dir[axis] = 1;
+      traversal.t_delta[axis] = inv_dir[axis];
+      traversal.t_max[axis] = (1.0 - cell_offset[axis]) * inv_dir[axis];
+    } else if (dir[axis] < 0.0) {
+      traversal.step_dir[axis] = -1;
+      traversal.t_delta[axis] = -inv_dir[axis];
+      traversal.t_max[axis] = cell_offset[axis] * -inv_dir[axis];
+    } else {
+      traversal.step_dir[axis] = 0;
+      traversal.t_delta[axis] = 1.0 / 0.0;
+      traversal.t_max[axis] = 1.0 / 0.0;
+    }
+  }
+  traversal.entry_t = 0.0;
+  // origin starts inside the first cell, so fall back to a normal
+  // opposing the ray until the first step
+  traversal.entry_normal = -dir;
+  traversal.steps = 0u;
+  return traversal;
+}
+
+const uint rt_traverse_hit = 0u;
+const uint rt_traverse_miss = 1u;
+const uint rt_traverse_suspended = 2u;
+
+uint rt_traverse(
     Rt_block_shape_grid block_shape_grid,
     Rt_block_material_grid block_material_grid,
     Rt_entities entities,
     Rt_entity_head_grid entity_head_grid,
     Rt_entity_mask_grid entity_mask_grid,
     Rt_entity_nodes entity_nodes,
-    vec3 origin,
-    vec3 dir,
     bool trace_entities,
+    uint step_budget,
+    inout Rt_traversal traversal,
     out Rt_hit hit) {
-  ivec3 cell_coords = ivec3(floor(origin));
-  const vec3 cell_offset = origin - vec3(cell_coords);
-  const vec3 inv_dir = 1.0 / dir;
-  ivec3 step_dir;
-  vec3 t_max;
-  vec3 t_delta;
-  for (int axis = 0; axis < 3; ++axis) {
-    if (dir[axis] > 0.0) {
-      step_dir[axis] = 1;
-      t_delta[axis] = inv_dir[axis];
-      t_max[axis] = (1.0 - cell_offset[axis]) * t_delta[axis];
-    } else if (dir[axis] < 0.0) {
-      step_dir[axis] = -1;
-      t_delta[axis] = -inv_dir[axis];
-      t_max[axis] = cell_offset[axis] * t_delta[axis];
-    } else {
-      step_dir[axis] = 0;
-      t_delta[axis] = 1.0 / 0.0;
-      t_max[axis] = 1.0 / 0.0;
+  const vec3 origin = traversal.origin;
+  const vec3 dir = traversal.dir;
+  const vec3 inv_dir = traversal.inv_dir;
+  const ivec3 step_dir = traversal.step_dir;
+  const vec3 t_delta = traversal.t_delta;
+  for (uint budget = 0u; budget < step_budget; ++budget) {
+    if (traversal.steps >= uint(trace_max_steps)) {
+      return rt_traverse_miss;
     }
-  }
-  // entry face of the current cell; origin starts inside the first cell, so
-  // fall back to a normal opposing the ray until the first step
-  float entry_t = 0.0;
-  vec3 entry_normal = -dir;
-  for (int i = 0; i < trace_max_steps; ++i) {
     uint shape_index;
     uint chunk_index;
     uint cell_index;
     if (!rt_block_shape_grid_get(
-        block_shape_grid, cell_coords, shape_index, chunk_index, cell_index)) {
+        block_shape_grid,
+        traversal.cell_coords,
+        shape_index,
+        chunk_index,
+        cell_index)) {
       // oob -> terminate ray
-      return false;
+      return rt_traverse_miss;
     }
-    const float next_t = min(t_max.x, min(t_max.y, t_max.z));
+    const float next_t =
+      min(traversal.t_max.x, min(traversal.t_max.y, traversal.t_max.z));
     if (shape_index == 1) {
-      hit.t = entry_t;
+      hit.t = traversal.entry_t;
       // ties between axes can leave a diagonal entry normal
-      hit.normal = normalize(entry_normal);
+      hit.normal = normalize(traversal.entry_normal);
       const Rt_block_material material =
         block_material_grid.chunks[chunk_index].materials[cell_index];
       const vec3 color = rt_color_palette[material.color_index];
       hit.albedo = color;
       hit.emissivity = color * float(material.emissivity_scale);
-      return true;
+      return rt_traverse_hit;
     }
     float closest_t = 1.0 / 0.0;
     vec3 closest_normal;
@@ -211,7 +260,7 @@ bool trace_ray(
     if (shape_index > 1) {
       const Rt_block_shape shape = rt_block_shapes[shape_index];
       const vec3 shape_space_center = mix(shape.min, shape.max, 0.5);
-      const vec3 world_space_center = cell_coords + shape_space_center;
+      const vec3 world_space_center = traversal.cell_coords + shape_space_center;
       const vec3 half_extents = (shape.max - shape.min) * 0.5;
       vec3 hit_normal;
       const float t_hit =
@@ -233,8 +282,7 @@ bool trace_ray(
       // Bounded by entities.count (not just `!= -1`): a valid, acyclic list
       // can't have more distinct nodes than there are entities, so this
       // guarantees termination even if a corrupted `next` pointer ever
-      // formed a cycle -- an unbounded loop here previously showed up as
-      // an Nvidia Xid 109 (context switch timeout / GPU hang).
+      // formed a cycle.
       for (uint node_count = 0u;
           node_index != -1 && node_count < entities.count;
           ++node_count) {
@@ -272,30 +320,56 @@ bool trace_ray(
       hit.normal = closest_normal;
       hit.albedo = closest_albedo;
       hit.emissivity = closest_emissivity;
-      return true;
+      return rt_traverse_hit;
     }
     if (next_t > trace_max_distance) {
-      return false;
+      return rt_traverse_miss;
     }
-    entry_t = next_t;
-    entry_normal = vec3(0.0);
-    if (t_max.x == next_t) {
-      cell_coords.x += step_dir.x;
-      t_max.x += t_delta.x;
-      entry_normal.x = float(-step_dir.x);
+    traversal.entry_t = next_t;
+    traversal.entry_normal = vec3(0.0);
+    if (traversal.t_max.x == next_t) {
+      traversal.cell_coords.x += step_dir.x;
+      traversal.t_max.x += t_delta.x;
+      traversal.entry_normal.x = float(-step_dir.x);
     }
-    if (t_max.y == next_t) {
-      cell_coords.y += step_dir.y;
-      t_max.y += t_delta.y;
-      entry_normal.y = float(-step_dir.y);
+    if (traversal.t_max.y == next_t) {
+      traversal.cell_coords.y += step_dir.y;
+      traversal.t_max.y += t_delta.y;
+      traversal.entry_normal.y = float(-step_dir.y);
     }
-    if (t_max.z == next_t) {
-      cell_coords.z += step_dir.z;
-      t_max.z += t_delta.z;
-      entry_normal.z = float(-step_dir.z);
+    if (traversal.t_max.z == next_t) {
+      traversal.cell_coords.z += step_dir.z;
+      traversal.t_max.z += t_delta.z;
+      traversal.entry_normal.z = float(-step_dir.z);
     }
+    ++traversal.steps;
   }
-  return false;
+  return rt_traverse_suspended;
+}
+
+bool trace_ray(
+    Rt_block_shape_grid block_shape_grid,
+    Rt_block_material_grid block_material_grid,
+    Rt_entities entities,
+    Rt_entity_head_grid entity_head_grid,
+    Rt_entity_mask_grid entity_mask_grid,
+    Rt_entity_nodes entity_nodes,
+    vec3 origin,
+    vec3 dir,
+    bool trace_entities,
+    out Rt_hit hit) {
+  Rt_traversal traversal = rt_traversal_begin(origin, dir);
+  return rt_traverse(
+    block_shape_grid,
+    block_material_grid,
+    entities,
+    entity_head_grid,
+    entity_mask_grid,
+    entity_nodes,
+    trace_entities,
+    uint(trace_max_steps),
+    traversal,
+    hit) == rt_traverse_hit;
 }
 
 bool trace_ray(
