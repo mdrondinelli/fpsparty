@@ -34,7 +34,8 @@ void main() [[maximally_reconverges]] {
     const uvec4 idle_ballot = subgroupBallot(!traversing && !drained);
     const uint idle_count = subgroupBallotBitCount(idle_ballot);
     const bool refill = idle_count != 0u &&
-      (idle_count * 2u >= gl_SubgroupSize || !subgroupAny(traversing));
+      (idle_count * direct_refill_idle_denominator >=
+        gl_SubgroupSize * direct_refill_idle_numerator || !subgroupAny(traversing));
     if (refill && !traversing && !drained) {
       const uint rank = subgroupBallotExclusiveBitCount(idle_ballot);
       uint base = 0u;

@@ -81,7 +81,20 @@ restrict buffer Direct_ray_cursor {
 // Steps a lane advances between refills. Larger amortizes the subgroup
 // bookkeeping and rt_traverse's per-call setup; smaller returns a
 // finished lane to the pool sooner.
-const uint direct_traverse_step_budget = 8u;
+const uint direct_traverse_step_budget = 16u;
+
+// Refill fires once this fraction of the warp is idle. It sets how often
+// the loop pays its subgroup ops against how long a finished lane waits.
+// 1/1 would refill only when the whole warp is idle, which is the
+// one-ray-per-invocation behaviour the persistent pool exists to avoid;
+// a high fraction leans on the nothing-traversing escape below it, since
+// drained lanes can otherwise hold the count short of the threshold.
+// Swept at step budget 16 on the BRDF trace: 1/4 measured 1.49ms, 3/4
+// measured worse still, 1/2 measured 1.35ms. Both directions cost more, so
+// this is at its optimum and is not worth re-exploring without a change to
+// the step budget or the pool size.
+const uint direct_refill_idle_numerator = 1u;
+const uint direct_refill_idle_denominator = 2u;
 
 // Primary surface reconstructed from the G-buffer, in world space.
 struct Direct_shading_point {
