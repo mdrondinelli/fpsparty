@@ -1,7 +1,9 @@
 #include "client/passes/direct_passes.hpp"
 #include "client/direct_sample_layout.hpp"
 #include "client/scene_uniform_layout.hpp"
+#include "graphics/global_vulkan_state.hpp"
 #include "render_graph/access.hpp"
+#include <algorithm>
 #include <span>
 #include <utility>
 
@@ -13,6 +15,33 @@ math::ivec2 dispatch_group_count(math::ivec2 framebuffer_size) {
     (framebuffer_size.x() + 7) / 8,
     (framebuffer_size.y() + 7) / 8,
   };
+}
+
+// Workgroups for a persistent-pool trace. These loop until a shared cursor
+// drains instead of mapping one invocation to one pixel, so the pool has to
+// be big enough to fill the device -- anything less leaves hardware idle for
+// the whole pass, and no later workgroup can make up for it. Scaling with
+// the device is the point: a hardcoded constant undershoots the moment a
+// part has more cores than it was written for.
+//
+// This overshoots, which is the safe direction. The capacity it divides is
+// the architectural warp count, but a register-hungry shader is resident at
+// fewer warps than that, so the pool still exceeds what fits -- and extra
+// workgroups only pay their own launch and exit on finding the cursor
+// drained, measured as no change between 1024 and 2048 on an RTX 5060 Ti.
+//
+// Core Vulkan reports no core or warp-slot count, so this falls back to a
+// generous constant on any device that does not answer.
+u32 persistent_workgroup_count() {
+  auto const capacity =
+    graphics::Global_vulkan_state::get().resident_invocation_capacity();
+  if (!capacity) {
+    return direct_persistent_workgroup_count_fallback;
+  }
+  return std::max(
+    1u,
+    (*capacity + direct_persistent_workgroup_size - 1) /
+      direct_persistent_workgroup_size);
 }
 } // namespace
 
@@ -233,8 +262,7 @@ void Direct_trace_pass::execute(
     recorder.push_buffer_reference(80, resources.get_buffer(_cursor_handle));
     // Fixed pool: the warps loop until the queue is drained, so the
     // dispatch does not scale with it.
-    recorder.dispatch(
-      static_cast<u32>(direct_persistent_workgroup_count), 1, 1);
+    recorder.dispatch(persistent_workgroup_count(), 1, 1);
   } else {
     recorder.dispatch_indirect({.buffer = queue_buffer, .offset = 0});
   }
@@ -298,8 +326,7 @@ void Direct_brdf_trace_pass::execute(
   recorder.push_buffer_reference(72, resources.get_buffer(_cursor_handle));
   // Fixed pool: the warps loop until the cursor is drained, so the
   // dispatch does not scale with the frame.
-  recorder.dispatch(
-    static_cast<u32>(direct_persistent_workgroup_count), 1, 1);
+  recorder.dispatch(persistent_workgroup_count(), 1, 1);
 }
 
 Direct_combine_pass::Direct_combine_pass(

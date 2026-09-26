@@ -3,6 +3,7 @@
 
 #include "vma.hpp"
 #include <memory>
+#include <optional>
 #include <mutex>
 #include <vulkan/vulkan.hpp>
 
@@ -21,6 +22,22 @@ public:
   physical_device_properties() const noexcept {
     return _physical_device_properties;
   };
+
+  /**
+   * @return how many shader invocations the device can hold resident at
+   * once, or nullopt if it does not say.
+   *
+   * Only persistent-pool dispatches need this: they launch a fixed number
+   * of workgroups that loop until a shared queue drains, so a pool smaller
+   * than the device leaves hardware idle for the whole pass. Core Vulkan
+   * exposes no core or warp-slot count, so this comes from whichever vendor
+   * properties extension is present and is empty elsewhere. Callers must
+   * have a fallback.
+   */
+  std::optional<std::uint32_t>
+  resident_invocation_capacity() const noexcept {
+    return _resident_invocation_capacity;
+  }
 
   std::uint32_t queue_family_index() const noexcept {
     return _queue_family_index;
@@ -57,6 +74,7 @@ private:
   std::mutex _queue_mutex{};
   vma::Unique_allocator _allocator{};
   vk::PhysicalDeviceProperties2 _physical_device_properties{};
+  std::optional<std::uint32_t> _resident_invocation_capacity{};
 };
 
 class Global_vulkan_state_guard {

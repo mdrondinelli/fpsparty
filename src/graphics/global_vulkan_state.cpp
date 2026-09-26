@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <volk.h>
 #include <vulkan/vulkan_handles.hpp>
 
@@ -57,6 +58,58 @@ vk::UniqueInstance make_vk_instance() {
   VULKAN_HPP_DEFAULT_DISPATCHER.init(*instance, vkGetInstanceProcAddr);
   std::cout << "Created VkInstance.\n";
   return instance;
+}
+
+bool has_device_extension(
+  vk::PhysicalDevice physical_device, char const *name) {
+  for (auto const &available :
+       physical_device.enumerateDeviceExtensionProperties()) {
+    if (std::strcmp(available.extensionName, name) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * @return resident shader invocations, or nullopt when the device does not
+ * say.
+ *
+ * Neither count is in core Vulkan, so this asks each vendor in turn. These
+ * are properties extensions: being supported is enough to read them through
+ * getProperties2, so neither has to be enabled at device creation.
+ */
+std::optional<std::uint32_t>
+query_resident_invocation_capacity(vk::PhysicalDevice physical_device) {
+  if (has_device_extension(physical_device, vk::NVShaderSmBuiltinsExtensionName)) {
+    auto sm = vk::PhysicalDeviceShaderSMBuiltinsPropertiesNV{};
+    auto subgroup = vk::PhysicalDeviceSubgroupProperties{.pNext = &sm};
+    auto properties = vk::PhysicalDeviceProperties2{.pNext = &subgroup};
+    physical_device.getProperties2(&properties);
+    return sm.shaderSMCount * sm.shaderWarpsPerSM * subgroup.subgroupSize;
+  }
+  if (has_device_extension(
+        physical_device, vk::AMDShaderCorePropertiesExtensionName)) {
+    auto core = vk::PhysicalDeviceShaderCorePropertiesAMD{};
+    auto properties = vk::PhysicalDeviceProperties2{.pNext = &core};
+    // Harvested parts have fewer compute units than the topology implies,
+    // so prefer the count that accounts for that when it is available.
+    auto core_2 = vk::PhysicalDeviceShaderCoreProperties2AMD{};
+    auto const has_core_2 = has_device_extension(
+      physical_device, vk::AMDShaderCoreProperties2ExtensionName);
+    if (has_core_2) {
+      core.pNext = &core_2;
+    }
+    physical_device.getProperties2(&properties);
+    auto const compute_units =
+      has_core_2 && core_2.activeComputeUnitCount != 0
+        ? core_2.activeComputeUnitCount
+        : core.shaderEngineCount * core.shaderArraysPerEngineCount *
+            core.computeUnitsPerShaderArray;
+    return compute_units * core.simdPerComputeUnit * core.wavefrontsPerSimd *
+      core.wavefrontSize;
+  }
+  return std::nullopt;
 }
 
 /**
@@ -265,6 +318,14 @@ Global_vulkan_state::Global_vulkan_state() {
     make_vk_device(_physical_device, _queue_family_index);
   _allocator = make_vma_allocator(*_instance, _physical_device, *_device);
   _physical_device.getProperties2(&_physical_device_properties);
+  _resident_invocation_capacity =
+    query_resident_invocation_capacity(_physical_device);
+  if (_resident_invocation_capacity) {
+    std::cout << "Device holds " << *_resident_invocation_capacity
+              << " resident shader invocations.\n";
+  } else {
+    std::cout << "Device does not report a resident invocation count.\n";
+  }
 }
 
 Global_vulkan_state_guard::Global_vulkan_state_guard(Create_info const &)
