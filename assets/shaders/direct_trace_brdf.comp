@@ -43,7 +43,7 @@ layout(push_constant) uniform Push_constants {
   layout(offset = 72) Direct_ray_cursor cursor;
 } push_constants;
 
-void main() {
+void main() [[maximally_reconverges]] {
   const ivec2 size =
     imageSize(storage_images[push_constants.brdf_numerator_image]);
   const uint pixel_total = uint(size.x) * uint(size.y);

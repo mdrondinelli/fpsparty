@@ -20,7 +20,7 @@ layout(local_size_x = 64) in;
 //
 // Writes the unweighted integrand; the combination pass divides.
 
-void main() {
+void main() [[maximally_reconverges]] {
   const ivec2 size =
     imageSize(storage_images[push_constants.environment_numerator_image]);
   bool traversing = false;

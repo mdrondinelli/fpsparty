@@ -13,6 +13,7 @@ namespace {
 auto const vk_device_extensions = std::array{
   vk::KHRSwapchainExtensionName,
   vk::KHRShaderUntypedPointersExtensionName,
+  vk::KHRShaderMaximalReconvergenceExtensionName,
 };
 
 vk::UniqueInstance make_vk_instance() {
@@ -128,8 +129,17 @@ std::tuple<vk::UniqueDevice, vk::Queue> make_vk_device(
     .queueCount = 1,
     .pQueuePriorities = &queue_priority,
   };
+  // The persistent trace pools decide refills from a subgroupBallot taken
+  // at the top of their loop, so every lane still inside the loop has to
+  // take part in it. Without this the set of lanes a ballot sees is
+  // whatever the implementation happened to keep together.
+  auto shader_maximal_reconvergence_features =
+    vk::PhysicalDeviceShaderMaximalReconvergenceFeaturesKHR{
+      .shaderMaximalReconvergence = true,
+    };
   auto extended_dynamic_state_features =
     vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT{
+      .pNext = &shader_maximal_reconvergence_features,
       .extendedDynamicState = true,
     };
   auto vulkan_1_3_features = vk::PhysicalDeviceVulkan13Features{
